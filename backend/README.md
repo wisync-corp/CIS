@@ -1,17 +1,36 @@
-# CIS Backend — Laravel
+# Backend Laravel — CIS (pré-produção)
 
-**Estado:** módulo de integração, não aplicação Laravel instalável isoladamente.
+Estrutura mínima de aplicação Laravel 11, com API Sanctum e migrações de autenticação próprias. **Ainda não foi testada contra o servidor MySQL do cliente**.
 
-## Preparação
-1. Criar projecto Laravel estável numa pasta `backend` e integrar os ficheiros em `app/` e `routes/api.php`.
-2. Instalar/configurar Sanctum e habilitar middleware `auth:sanctum` com utilizadores web novos e hashes seguros — **não usar `Usuarios.Password`**.
-3. Utilizar credenciais MySQL de um utilizador estritamente **SELECT** ligado a uma cópia isolada dos dados.
-4. Configurar ligação `mysql_legacy` em `config/database.php` (exemplo em `config/legacy-connection.example.php`).
-5. Validar autorizações de acesso por perfil e visibilidade de registos antes de abrir as rotas.
+## Preparação local
 
-## Rotas planejadas
-- `GET /api/cis/clientes` — paginação de clientes, protegida.
-- `GET /api/cis/contractos` — paginação de prestações, protegida.
-- `GET /api/cis/contractos/{numero}/prestacoes` — prestações de contrato, protegida.
+Necessário PHP 8.2+, Composer e extensões habituais do Laravel (incluindo SQLite e MySQL).
 
-**Aviso:** os ficheiros PHP publicados são componentes a integrar no projecto Laravel, não um backend em funcionamento. Nenhuma rota de pagamento/alteração foi publicada.
+```bash
+cd backend
+composer install
+cp .env.example .env
+# Retire DB_DATABASE do .env para usar o caminho SQLite padrão
+touch database/database.sqlite
+php artisan key:generate
+php artisan migrate
+php artisan cis:bootstrap-admin administrador@exemplo.test
+php artisan serve
+```
+
+Definir `FRONTEND_URL=http://localhost:5173` para a origem React. As contas CIS usam o SQLite configurado por `DB_CONNECTION`, nunca a tabela `Usuarios` legada.
+
+## MySQL legado
+
+Configurar `LEGACY_DB_*` em `.env` para **réplica de testes**, utilizando conta de base de dados com privilégio exclusivamente SELECT. `mysql_legacy` é configurada separadamente no provider Laravel. Não executar migrations na base de dados legada.
+
+As rotas GET de Clientes e Contractos aceitam apenas utilizadores **administrador** e **gestor**, enquanto não estiver implementada autorização por carteira. Agentes/cobradores recebem 403. Todas as rotas são autenticadas. Não existem rotas de escrita financeira.
+
+## Testes e limitações
+
+```bash
+php tests/domain_smoke.php
+php artisan route:list --path=api
+```
+
+O teste financeiro apenas valida a aritmética e invariantes. Não determina as prioridades de imputação nem substitui os testes contra o VBA. A integração com uma instância real não foi validada.
