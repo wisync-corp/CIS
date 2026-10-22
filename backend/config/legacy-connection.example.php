@@ -12,4 +12,9 @@ return [
     'collation' => 'utf8mb4_unicode_ci',
     'prefix' => '',
     'strict' => false,
+    // Configure com certificado CA oficial do fornecedor. Sem CA, manter desligada a consulta de dados reais.
+    'options' => env('LEGACY_DB_SSL_CA') ? [
+        \PDO::MYSQL_ATTR_SSL_CA => env('LEGACY_DB_SSL_CA'),
+        \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
+    ] : [],
 ];
