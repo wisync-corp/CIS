@@ -1,9 +1,10 @@
 import {useState} from 'react';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays} from 'lucide-react';
 import LegacyTable from './LegacyTable';
+import ClientDrafts from './ClientDrafts';
 
 const nav=[
- {label:'Visão geral',icon:LayoutDashboard},{label:'Clientes',icon:Users},
+ {label:'Visão geral',icon:LayoutDashboard},{label:'Clientes',icon:Users},{label:'Cadastro (teste)',icon:Users},
  {label:'Contratos e prestações',icon:FileText},{label:'Cobranças',icon:Wallet},
  {label:'Extractos',icon:ReceiptText},{label:'Relatórios',icon:BarChart3},
  {label:'Administração',icon:Settings}
@@ -29,8 +30,8 @@ export default function Dashboard({token, name, role, onLogout}:{token:string;na
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly"><LockKeyhole size={15}/> Só leitura</span></div>
     {active==='Visão geral'?<><section className="cis-banner"><ShieldCheck size={21}/><div><b>Ligação aos dados em validação</b><p>Os indicadores financeiros permanecem indisponíveis até reconciliar capital, amortização, juros e multas com o sistema VBA.</p></div></section>
     <div className="cis-stat-grid">{stats.map(({name,icon:Icon,hint})=><article className="cis-stat" key={name}><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>—</strong><small>{hint}</small></article>)}</div>
-    <div className="cis-home-grid"><section className="cis-panel"><div className="cis-panel-head"><div><h2>Registos do sistema</h2><p>Comece por consultar os dados existentes na base MySQL.</p></div></div><div className="cis-action-row"><button type="button" onClick={()=>setActive('Clientes')}><Users size={20}/><span><b>Clientes</b><small>Consultar o cadastro</small></span><ArrowUpRight size={18}/></button><button type="button" onClick={()=>setActive('Contratos e prestações')}><FileText size={20}/><span><b>Contratos</b><small>Consultar prestações e saldos</small></span><ArrowUpRight size={18}/></button></div></section>
-    <section className="cis-panel"><h2>Distribuição dos pagamentos</h2><p>Componentes financeiros separados e rastreáveis.</p><div className="cis-ledger">{[['Capital','Saldo de principal'],['Amortização','Recuperação de capital'],['Juros','Receita financeira'],['Multa','Encargo por atraso'],['Prestação','Obrigação contratual']].map(([title,sub])=><div key={title}><span className="cis-ledger-dot"/><span><b>{title}</b><small>{sub}</small></span><strong>—</strong></div>)}</div></section></div></>:<LegacyTable module={active} token={token}/>}
+    <div className="cis-home-grid"><section className="cis-panel"><div className="cis-panel-head"><div><h2>Registos do sistema</h2><p>Comece por consultar os dados existentes na base MySQL.</p></div></div><div className="cis-action-row"><button type="button" onClick={()=>setActive('Cadastro (teste)')}><Users size={20}/><span><b>Clientes</b><small>Consultar o cadastro</small></span><ArrowUpRight size={18}/></button><button type="button" onClick={()=>setActive('Contratos e prestações')}><FileText size={20}/><span><b>Contratos</b><small>Consultar prestações e saldos</small></span><ArrowUpRight size={18}/></button></div></section>
+    <section className="cis-panel"><h2>Distribuição dos pagamentos</h2><p>Componentes financeiros separados e rastreáveis.</p><div className="cis-ledger">{[['Capital','Saldo de principal'],['Amortização','Recuperação de capital'],['Juros','Receita financeira'],['Multa','Encargo por atraso'],['Prestação','Obrigação contratual']].map(([title,sub])=><div key={title}><span className="cis-ledger-dot"/><span><b>{title}</b><small>{sub}</small></span><strong>—</strong></div>)}</div></section></div></>:active==='Cadastro (teste)'?<ClientDrafts token={token}/>:<LegacyTable module={active} token={token}/>}
    </main>
   </div>
  </div>;
