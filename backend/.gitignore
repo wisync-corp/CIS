@@ -1,0 +1,9 @@
+/vendor
+/.env
+/.phpunit.result.cache
+/database/*.sqlite
+/database/*.sqlite-*
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
