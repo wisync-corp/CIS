@@ -26,3 +26,17 @@ streamlit run app.py
 As linhas da tabela `Contractos` representam prestações, não necessariamente empréstimos. O volume de empréstimos e a quantia creditada são apurados **uma vez por Nr do Contracto** para não duplicar capital. `Valor de Juros` representa **juros previstos/contratuais**, não necessariamente juros recebidos. `Valor Pago` representa **recebimentos registados**, não lucro. `Amortização`, `Juros` e `Multa` só devem alimentar saldos de cobrança reais após reconciliação com o VBA.
 
 O dashboard *não* apresenta lucro, juros recebidos ou dívida de capital calculada por suposições; nesses casos, mostra uma nota de validação pendente.
+
+
+## Barreira obrigatória de validação SQL
+
+O `streamlit/app.py` chama `validate_schema` antes de qualquer consulta aos dados. Essa função executa somente SELECT em `INFORMATION_SCHEMA.COLUMNS` e interrompe o carregamento se faltarem tabelas/campos essenciais. As consultas e a validação não alteram a base.
+
+Ficheiros SQL disponíveis:
+- `sql/00_sandbox_dados_sinteticos.sql`: **CREATE/INSERT exclusivamente num MySQL sandbox isolado**, com dois clientes fictícios, dois contratos e três prestações para testes.
+- `sql/01_validar_estrutura.sql`: consulta prévia da estrutura SQL, exclusivamente SELECT.
+- `sql/02_verificar_dados.sql`: verificações de contagens e estados, exclusivamente SELECT.
+
+**Nunca executar o script 00 na base existente da Capta.** Configure a conexão `LEGACY_DB_DATABASE=cis_dashboard_sandbox` apenas para os testes, com utilizador limitado a SELECT. A criação inicial das tabelas fictícias deve ser feita por um administrador da sandbox. A autenticação de sessão continua a depender da API Laravel; a validação SQL não substitui login, permissões nem testes de reconciliação financeira.
+
+Testes unitários sem MySQL: `cd streamlit && PYTHONPATH=. python -m pytest tests/test_schema_validation.py -q` (pytest instalado no ambiente).
