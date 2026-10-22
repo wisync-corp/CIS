@@ -14,7 +14,7 @@ RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framewor
  && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-progress --no-scripts \
  && php artisan package:discover --ansi
 COPY docker/entrypoint.sh /usr/local/bin/cis-entrypoint
-RUN chmod +x /usr/local/bin/cis-entrypoint
+RUN sed -i 's/\r$//' /usr/local/bin/cis-entrypoint && chmod +x /usr/local/bin/cis-entrypoint
 EXPOSE 8000
-ENTRYPOINT ["cis-entrypoint"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/cis-entrypoint"]
 CMD ["php","artisan","serve","--host=0.0.0.0","--port=8000"]
