@@ -1,20 +1,37 @@
+import {useState} from 'react';
+import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays} from 'lucide-react';
 import LegacyTable from './LegacyTable';
-import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Wallet, Receipt, BarChart3, Settings, ShieldAlert, Landmark, Bell, Search, Menu } from 'lucide-react';
 
-const navigation = [
-  {label:'Visão geral', icon:LayoutDashboard}, {label:'Clientes', icon:Users},
-  {label:'Contratos e prestações', icon:FileText}, {label:'Cobranças', icon:Wallet},
-  {label:'Extractos', icon:Receipt}, {label:'Relatórios', icon:BarChart3},
-  {label:'Administração', icon:Settings}
+const nav=[
+ {label:'Visão geral',icon:LayoutDashboard},{label:'Clientes',icon:Users},
+ {label:'Contratos e prestações',icon:FileText},{label:'Cobranças',icon:Wallet},
+ {label:'Extractos',icon:ReceiptText},{label:'Relatórios',icon:BarChart3},
+ {label:'Administração',icon:Settings}
 ];
-const mockStats = [
-  {label:'Capital em carteira', value:'—', help:'Sem ligação à base de dados'},
-  {label:'Juros recebidos', value:'—', help:'Requer distribuição validada'},
-  {label:'Multas recebidas', value:'—', help:'Requer distribuição validada'},
-  {label:'Prestações em atraso', value:'—', help:'Sem ligação à base de dados'}
+const stats=[
+ {name:'Capital em carteira',icon:Landmark,hint:'Depende da reconciliação financeira'},
+ {name:'Juros efectivamente recebidos',icon:ArrowUpRight,hint:'Separados da amortização'},
+ {name:'Multas recebidas',icon:ArrowDownRight,hint:'Exclui multas dispensadas'},
+ {name:'Prestações vencidas',icon:CalendarDays,hint:'Aguardam consulta e validação'}
 ];
-export default function Dashboard({token}:{token:string}){
- const [active,setActive]=useState('Visão geral'); const [open,setOpen]=useState(false);
- return <div className="shell"><aside className={open?'sidebar open':'sidebar'}><div className="brand"><div className="brand-icon"><Landmark size={23}/></div><div><strong>CAPTA</strong><span>MICROCRÉDITO · CIS</span></div></div><div className="side-label">PLATAFORMA</div><nav>{navigation.map(item=><button key={item.label} className={active===item.label?'selected':''} onClick={()=>{setActive(item.label);setOpen(false)}}><item.icon size={19}/>{item.label}</button>)}</nav><div className="sidebar-foot"><ShieldAlert size={18}/><span>Ambiente de desenvolvimento<br/>Sem dados reais</span></div></aside><div className="content"><header><button className="menu" onClick={()=>setOpen(!open)} aria-label="Abrir menu"><Menu/></button><div className="crumb">Capta Microcrédito <span>/</span> <b>{active}</b></div><div className="header-actions"><Search size={18}/><Bell size={18}/><div className="avatar">C</div></div></header><main><div className="eyebrow">CIS · CENTRO OPERACIONAL</div><div className="page-head"><div><h1>{active}</h1><p>Gestão segura de crédito e acompanhamento financeiro da Capta.</p></div><span className="badge"><span className="dot"/> Estrutura inicial</span></div>{active==='Visão geral'?<><div className="notice"><ShieldAlert size={20}/><div><strong>Modo seguro: não existem dados de produção ligados.</strong><span>Os indicadores serão apresentados quando a autenticação e o acesso apenas de leitura estiverem validados.</span></div></div><div className="cards">{mockStats.map(s=><section className="card" key={s.label}><div className="stat-label">{s.label}</div><div className="stat-value">{s.value}</div><div className="hint">{s.help}</div></section>)}</div><div className="panels"><section className="panel"><h2>Operações recentes</h2><p>Histórico de movimentos e pagamentos.</p><div className="empty"><Receipt size={30}/><strong>Nenhum movimento apresentado</strong><span>A base de dados não está ligada a esta interface.</span></div></section><section className="panel"><h2>Composição dos pagamentos</h2><p>Distribuição por componente financeiro.</p><div className="component-lines">{['Amortização','Juros','Multa'].map(x=><div key={x}><span className="small-dot"/><span>{x}</span><b>—</b></div>)}</div><div className="panel-note">Capital, amortização, juros e multas serão apurados separadamente, sem presumir uma prioridade de distribuição.</div></section></div></>:<LegacyTable module={active} token={token}/>}</main></div></div>
+export default function Dashboard({token, name, role, onLogout}:{token:string;name:string;role:string;onLogout:()=>void}){
+ const [active,setActive]=useState('Visão geral'),[open,setOpen]=useState(false);
+ return <div className="cis-layout">
+  <aside className={'cis-side '+(open?'visible':'')}>
+   <div className="cis-brand"><div className="cis-logo">C<span>·</span></div><div><strong>CAPTA</strong><small>MICROCRÉDITO</small></div></div>
+   <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
+   <nav aria-label="Navegação principal">{nav.map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
+   <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}</small></div><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
+  </aside>
+  <div className="cis-stage">
+   <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right"><span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
+   <main className="cis-main"><div className="cis-kicker">CAPTA · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
+    <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly"><LockKeyhole size={15}/> Só leitura</span></div>
+    {active==='Visão geral'?<><section className="cis-banner"><ShieldCheck size={21}/><div><b>Ligação aos dados em validação</b><p>Os indicadores financeiros permanecem indisponíveis até reconciliar capital, amortização, juros e multas com o sistema VBA.</p></div></section>
+    <div className="cis-stat-grid">{stats.map(({name,icon:Icon,hint})=><article className="cis-stat" key={name}><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>—</strong><small>{hint}</small></article>)}</div>
+    <div className="cis-home-grid"><section className="cis-panel"><div className="cis-panel-head"><div><h2>Registos do sistema</h2><p>Comece por consultar os dados existentes na base MySQL.</p></div></div><div className="cis-action-row"><button type="button" onClick={()=>setActive('Clientes')}><Users size={20}/><span><b>Clientes</b><small>Consultar o cadastro</small></span><ArrowUpRight size={18}/></button><button type="button" onClick={()=>setActive('Contratos e prestações')}><FileText size={20}/><span><b>Contratos</b><small>Consultar prestações e saldos</small></span><ArrowUpRight size={18}/></button></div></section>
+    <section className="cis-panel"><h2>Distribuição dos pagamentos</h2><p>Componentes financeiros separados e rastreáveis.</p><div className="cis-ledger">{[['Capital','Saldo de principal'],['Amortização','Recuperação de capital'],['Juros','Receita financeira'],['Multa','Encargo por atraso'],['Prestação','Obrigação contratual']].map(([title,sub])=><div key={title}><span className="cis-ledger-dot"/><span><b>{title}</b><small>{sub}</small></span><strong>—</strong></div>)}</div></section></div></>:<LegacyTable module={active} token={token}/>}
+   </main>
+  </div>
+ </div>;
 }
