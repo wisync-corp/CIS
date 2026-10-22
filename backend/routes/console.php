@@ -84,7 +84,7 @@ Artisan::command('cis:check-db-safety', function () {
     try {
         $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
         $grants = $db->select('SHOW GRANTS');
-        $stat = $db->select("SHOW STATUS LIKE 'Ssl_cipher'");
+        $stat = $db->select("SHOW SESSION STATUS LIKE 'Ssl_cipher'");
         $cipher = '';
         foreach ($stat as $row) {
             $arr = (array) $row;
@@ -103,9 +103,10 @@ Artisan::command('cis:check-db-safety', function () {
                 $hasSelect = true;
             }
         }
-        $this->line('Ligação TLS: '.($cipher !== '' ? 'activa' : 'não confirmada'));
+        $this->line('Ligação TLS (SSL cipher da sessão): '.($cipher !== '' ? 'activa' : 'não confirmada / ausente'));
         $this->line('SELECT explícito nos privilégios: '.($hasSelect ? 'sim' : 'não identificado'));
         $this->line('Privilégios de escrita/perigosos detectados: '.($hasWrites ? 'sim' : 'não identificados'));
+        $this->warn('TLS activo não é suficiente: é preciso validar o certificado com CA confiável.');
         $this->warn('Inspecção indicativa dos grants, não certifica isolamento, identidade da réplica ou conformidade.');
         return $cipher !== '' && $hasSelect && !$hasWrites ? 0 : 1;
     } catch (\Throwable $e) {
