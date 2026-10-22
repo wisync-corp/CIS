@@ -46,3 +46,35 @@ Artisan::command('cis:test-db', function () {
         return 1;
     }
 })->purpose('Testar ligação MySQL legado por SELECT 1, sem expor dados');
+
+Artisan::command('cis:inspect-schema', function () {
+    // Compatível com servidores MySQL antigos: não depende de generation_expression.
+    // Apenas metadados; não devolve registos dos clientes.
+    try {
+        $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+        $tables = ['Clientes', 'Contractos', 'Extracto'];
+        $rows = $db->select(
+            'SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?, ?) ORDER BY TABLE_NAME, ORDINAL_POSITION',
+            $tables
+        );
+        $found = [];
+        foreach ($rows as $row) {
+            $found[$row->TABLE_NAME][] = $row->COLUMN_NAME.' ('.$row->DATA_TYPE.')';
+        }
+        foreach ($tables as $table) {
+            $columns = $found[$table] ?? [];
+            $this->line($table.': '.count($columns).' campos');
+            if ($columns) {
+                foreach ($columns as $column) { $this->line('  - '.$column); }
+            } else {
+                $this->warn('  Não encontrada ou sem acesso a metadados.');
+            }
+        }
+        $this->warn('A consulta de metadados não comprova permissão SELECT, TLS ou isolamento de uma réplica.');
+        return count($found) === count($tables) ? 0 : 1;
+    } catch (\Throwable $e) {
+        $this->error('Não foi possível consultar metadados básicos das tabelas.');
+        $this->line('Tipo de erro: '.class_basename($e));
+        return 1;
+    }
+})->purpose('Inspeccionar colunas de Clientes, Contractos e Extracto sem comandos db:table');
