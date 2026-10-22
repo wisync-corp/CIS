@@ -1,0 +1,23 @@
+# Ambiente local de validação do backend, SEM base financeira de produção.
+services:
+  cis-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: cis-api:dev
+    env_file:
+      - path: ./backend/.env
+        required: true
+    environment:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /srv/cis/database/database.sqlite
+      APP_ENV: local
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - cis_auth_sqlite:/srv/cis/database
+    restart: unless-stopped
+volumes:
+  cis_auth_sqlite:
