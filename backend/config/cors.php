@@ -1,6 +1,6 @@
 <?php
 return [
- 'paths'=>['api/*','sanctum/csrf-cookie'],
+ 'paths'=>['api/*','sanctum/csrf-cookie','up'],
  'allowed_methods'=>['GET','POST','OPTIONS'],
  'allowed_origins'=>[env('FRONTEND_URL','http://localhost:5173')],
  'allowed_origins_patterns'=>[], 'allowed_headers'=>['*'],
