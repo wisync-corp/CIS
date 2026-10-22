@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
 from schema_validation import validate_schema
 
-st.set_page_config(page_title="CIS | Capta Microcrédito", page_icon="📊", layout="wide",
+st.set_page_config(page_title="CIS — Credit Insight Shift | Powered by WiSync", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
 
 st.markdown("""
@@ -47,7 +47,7 @@ def api_request(method: str, path: str, **kwargs):
 
 
 def login_screen() -> None:
-    st.markdown("## CAPTA · MICROCRÉDITO")
+    st.markdown("## CIS · CREDIT INSIGHT SHIFT")
     st.title("Aceder ao dashboard CIS")
     st.caption("Acesso reservado ao administrador e gestor. Autenticação via API CIS.")
     with st.form("login", clear_on_submit=False):
@@ -158,8 +158,8 @@ def clean_contracts(frame: pd.DataFrame) -> pd.DataFrame:
 
 def sidebar_filters(frame: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
-        st.markdown("## CAPTA")
-        st.caption("CIS · Dashboard de gestão")
+        st.markdown("## CIS — Credit Insight Shift")
+        st.caption("Powered by WiSync · Dashboard de gestão")
         section = st.selectbox("Painel", SECTIONS, key="cis_section")
         st.divider()
         years = sorted(frame["Data de Inicio"].dt.year.dropna().astype(int).unique().tolist())
