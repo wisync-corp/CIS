@@ -10,6 +10,7 @@ import requests
 import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
+from schema_validation import validate_schema
 
 st.set_page_config(page_title="CIS | Capta Microcrédito", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
@@ -123,6 +124,9 @@ def db_engine():
 @st.cache_data(ttl=90, show_spinner=False)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     # Conta SQL deve estar limitada a SELECT por configuração do servidor MySQL.
+    validation = validate_schema(db_engine())
+    if not validation.ok:
+        raise RuntimeError("SQL_SCHEMA_VALIDATION_FAILED: " + " | ".join(validation.details))
     with db_engine().connect() as connection:
         # Colunas explicitamente seleccionadas para limitar informação pessoal exposta.
         contracts = pd.read_sql(text("""
@@ -281,8 +285,10 @@ def main() -> None:
         return
     try:
         contracts, clients=load_data()
-    except Exception:
-        st.error("Não foi possível consultar a base de testes. Confirme a configuração e as permissões SELECT.")
+    except Exception as exc:
+        st.error("Consulta bloqueada: a validação da estrutura SQL ou a ligação à base de testes falhou.")
+        if str(exc).startswith("SQL_SCHEMA_VALIDATION_FAILED"):
+            st.warning("Pré-validação SQL: " + str(exc).split(":", 1)[1].strip())
         return
     contracts=clean_contracts(contracts)
     section, filtered=sidebar_filters(contracts)
