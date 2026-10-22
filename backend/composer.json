@@ -4,7 +4,7 @@
   "description": "CIS — Credit Insight Shift API | Powered by WiSync",
   "require": {
     "php": "^8.2",
-    "laravel/framework": "^11.0",
+    "laravel/framework": "^12.70",
     "laravel/sanctum": "^4.0"
   },
   "require-dev": {
