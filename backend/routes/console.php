@@ -26,3 +26,23 @@ Artisan::command('cis:reset-password {email}', function (string $email) {
     $this->info('Palavra-passe actualizada. Sessões anteriores revogadas.');
     return 0;
 })->purpose('Redefinir palavra-passe de administrador de forma interactiva');
+
+Artisan::command('cis:test-db', function () {
+    // Apenas verifica conectividade. Não consulta dados financeiros nem imprime segredos.
+    try {
+        $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+        $result = $db->selectOne('SELECT 1 AS connection_ok');
+        if ((int) ($result->connection_ok ?? 0) !== 1) {
+            $this->error('O servidor respondeu de forma inesperada.');
+            return 1;
+        }
+        $this->info('Ligação MySQL estabelecida. SELECT 1 executado com sucesso.');
+        $this->warn('Isto não valida permissões nas tabelas, TLS, nem autorização para dados reais.');
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('Não foi possível executar SELECT 1 na ligação mysql_legacy.');
+        $this->line('Tipo de erro: '.class_basename($e));
+        $this->warn('Consulte host, rede, TLS e permissões localmente. Não publique logs com credenciais.');
+        return 1;
+    }
+})->purpose('Testar ligação MySQL legado por SELECT 1, sem expor dados');
