@@ -9,6 +9,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes']);
         Route::get('contractos',[CisConsultaController::class,'contractos']);
+        Route::get('extracto',[CisConsultaController::class,'extracto']);
         Route::get('contractos/{numero}/prestacoes',[CisConsultaController::class,'prestacoes']);
     });
 });
