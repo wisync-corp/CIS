@@ -26,3 +26,12 @@ Projecto da Capta Microcrédito para migração gradual do sistema Excel/VBA par
 
 ## Como contribuir
 Consultar `docs/legado.md` e `docs/financeiro.md` antes de implementar operações financeiras. Não inferir regras não confirmadas.
+
+
+## Dashboard Streamlit (adicionado em 22/10/2026)
+
+A pedido da Capta, os painéis analíticos utilizam **Python + Streamlit** em `streamlit/app.py`, seguindo a organização do `Dashboard.py` fornecido. Mantêm-se **React** para os módulos transaccionais e **Laravel** como serviço de autenticação. Não existem credenciais SQL no código publicado.
+
+Aceder às instruções em [streamlit/README.md](streamlit/README.md). A aplicação encontra-se em fase de desenvolvimento: para executar é necessário o backend Laravel, uma conta CIS e uma cópia da base MySQL com permissões apenas SELECT.
+
+**Segurança urgente:** o ficheiro legado `Dashboard.py` fornecido contém uma password MySQL embutida. Recomenda-se rotacionar/revogar essa credencial antes de alojar qualquer nova versão. Não publicar o ficheiro original com segredos.
