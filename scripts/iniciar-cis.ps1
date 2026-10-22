@@ -21,7 +21,12 @@ if ($content -match '(?m)^APP_KEY=\s*$') {
   Write-Host 'Chave de aplicação gerada no .env privado.'
 }
 docker compose up --build -d
-if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar a API. Consulte: docker compose logs cis-api' }
+if ($LASTEXITCODE -ne 0) {
+  Write-Host 'Falhou a construção ou arranque dos serviços. A apresentar estado e registos:' -ForegroundColor Yellow
+  docker compose ps -a
+  docker compose logs --tail=100 cis-api
+  throw 'Não foi possível iniciar a API. Partilhe a mensagem de erro acima, sem credenciais.'
+}
 Write-Host ''
 Write-Host 'API CIS local: http://127.0.0.1:8000/api'
 Write-Host 'Saúde Laravel: http://127.0.0.1:8000/up'
