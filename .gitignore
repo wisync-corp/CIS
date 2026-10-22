@@ -1,0 +1,16 @@
+# Segredos e dados financeiros
+.env
+.env.*
+!.env.example
+*.sql
+*.csv
+*.xlsx
+*.xlsm
+*.zip
+*.bak
+*.dump
+*.sqlite
+/node_modules/
+/vendor/
+/dist/
+/build/
