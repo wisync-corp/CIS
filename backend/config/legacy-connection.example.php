@@ -1,6 +1,6 @@
 <?php
-// Incorporar como entrada 'mysql_legacy' em config/database.php num projecto Laravel.
-// A conta deve ter APENAS SELECT numa base de testes ou réplica.
+// Ligação separada somente para consultas de uma cópia de desenvolvimento do sistema legado.
+// A restrição SELECT DEVE ser garantida pelos privilégios MySQL do utilizador configurado.
 return [
     'driver' => 'mysql',
     'host' => env('LEGACY_DB_HOST', '127.0.0.1'),
