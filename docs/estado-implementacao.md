@@ -1,25 +1,21 @@
-# Marco de implementação — 22/10/2026
+# Estado técnico — 22 de Outubro de 2026
 
-## Entregue no código
-- Frontend React com formulário de login, estado de sessão e menu.
-- Consulta paginada de Clientes e Contractos, dependente de API autenticada.
-- Projecto Laravel inicial com rotas de autenticação Sanctum, migrations de contas web separadas dos utilizadores do VBA.
-- Integração MySQL legado em ligação separada e apenas para consulta.
-- Acesso aos listados restrito a administrador/gestor até existirem políticas por carteira para agente/cobrador.
-- Núcleo de validação da distribuição entre amortização, juros e multa, sem assumir prioridade de imputação.
+## Publicado
+- Frontend React/TypeScript, login, logout, navegação, dashboard sem dados e listagens de clientes/contratos via API.
+- Backend mínimo Laravel 11: bootstrap, rotas, autenticação Sanctum, migrations independentes do legado, autorização por perfil.
+- Ligação MySQL legada separada, com desenho de acesso apenas para leitura numa réplica.
+- Núcleo financeiro que valida pagamentos já distribuídos em amortização, juros e multa, com centavos inteiros.
+- GitHub Actions CI para instalar dependências, compilar frontend, executar smoke financeiro e migrations SQLite.
 
-## Não concluído / sem validação
-- Dependências PHP não instaladas neste ambiente; aplicação ainda não foi testada end-to-end.
-- Base MySQL de desenvolvimento não ligada.
-- Comparação com VBA para juros, renovações, pagamento parcial e multas não concluída.
-- Políticas de acesso por cliente/carteira, gestão de utilizadores e dashboard com indicadores reais não implementados.
-- Não existe qualquer funcionalidade de escrita de pagamentos.
-- Nenhum dado pessoal ou ficheiro de exportação SQL foi publicado.
+## Não validado/concluído
+- O ambiente actual não tinha Composer nem acesso de rede para instalar dependências; portanto não foi possível confirmar a execução fim-a-fim.
+- GitHub Actions: workflow publicado, resultados ainda não verificados.
+- Não foi ligada base MySQL, nem existem dados reais exibidos.
+- Não há implementação de escrita financeira nem autorização de carteiras/agências.
+- A engenharia inversa da distribuição de pagamentos do VBA continua necessária.
+- O backend e as rotas devem ser testados antes de qualquer utilização real.
 
-## Requisitos para execução local
-- PHP 8.2+ e extensões exigidas pelo Laravel, Composer e Node 20+.
-- Criar `backend/database/database.sqlite` vazio ou configurar base de autenticação independente.
-- Executar `composer install`, `cp .env.example .env`, `php artisan key:generate`, `php artisan migrate`, `php artisan cis:bootstrap-admin email@empresa.local` e `php artisan serve`.
-- Definir `FRONTEND_URL` para o frontend e uma ligação MySQL de testes com permissões SELECT.
-- No frontend: `npm install`, `npm run dev`.
-- O sistema ainda requer validação técnica antes de qualquer utilização com informação sensível.
+## Segurança
+- Não colocar credenciais nos ficheiros versionados.
+- Nunca usar exportações de clientes em ambientes públicos.
+- Não executar migrations na base legada de produção.
