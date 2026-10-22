@@ -18,14 +18,14 @@ export default function Dashboard({token, name, role, onLogout}:{token:string;na
  const [active,setActive]=useState('Visão geral'),[open,setOpen]=useState(false);
  return <div className="cis-layout">
   <aside className={'cis-side '+(open?'visible':'')}>
-   <div className="cis-brand"><div className="cis-logo">C<span>·</span></div><div><strong>CAPTA</strong><small>MICROCRÉDITO</small></div></div>
+   <div className="cis-brand"><div className="cis-logo">C<span>·</span></div><div><strong>CIS</strong><small>CREDIT INSIGHT SHIFT</small></div></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
    <nav aria-label="Navegação principal">{nav.map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}</small></div><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
    <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right"><span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
-   <main className="cis-main"><div className="cis-kicker">CAPTA · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
+   <main className="cis-main"><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly"><LockKeyhole size={15}/> Só leitura</span></div>
     {active==='Visão geral'?<><section className="cis-banner"><ShieldCheck size={21}/><div><b>Ligação aos dados em validação</b><p>Os indicadores financeiros permanecem indisponíveis até reconciliar capital, amortização, juros e multas com o sistema VBA.</p></div></section>
     <div className="cis-stat-grid">{stats.map(({name,icon:Icon,hint})=><article className="cis-stat" key={name}><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>—</strong><small>{hint}</small></article>)}</div>
