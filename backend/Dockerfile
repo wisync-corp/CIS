@@ -5,11 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip libzi
  && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /srv/cis
-COPY composer.json ./
 COPY . .
-RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-progress \
- && mkdir -p storage/framework/{cache,sessions,views} bootstrap/cache database \
- && chmod -R u+rwX storage bootstrap/cache database
+# Criar as pastas do Laravel ANTES do Composer: post-autoload-dump executa Artisan.
+# /bin/sh (dash) não suporta expansão por chavetas: usar caminhos explícitos.
+RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views \
+    storage/logs bootstrap/cache database \
+ && chmod -R u+rwX storage bootstrap/cache database \
+ && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-progress --no-scripts \
+ && php artisan package:discover --ansi
 COPY docker/entrypoint.sh /usr/local/bin/cis-entrypoint
 RUN chmod +x /usr/local/bin/cis-entrypoint
 EXPOSE 8000
