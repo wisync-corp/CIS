@@ -78,3 +78,39 @@ Artisan::command('cis:inspect-schema', function () {
         return 1;
     }
 })->purpose('Inspeccionar colunas de Clientes, Contractos e Extracto sem comandos db:table');
+
+Artisan::command('cis:check-db-safety', function () {
+    // Diagnóstico sem ler linhas financeiras nem mostrar identificadores ou segredos.
+    try {
+        $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+        $grants = $db->select('SHOW GRANTS');
+        $stat = $db->select("SHOW STATUS LIKE 'Ssl_cipher'");
+        $cipher = '';
+        foreach ($stat as $row) {
+            $arr = (array) $row;
+            if (($arr['Variable_name'] ?? '') === 'Ssl_cipher') {
+                $cipher = trim((string) ($arr['Value'] ?? ''));
+            }
+        }
+        $grantStrings = array_map(fn ($row) => strtoupper(implode(' ', array_values((array) $row))), $grants);
+        $hasWrites = false;
+        $hasSelect = false;
+        foreach ($grantStrings as $grant) {
+            if (preg_match('/\\b(ALL PRIVILEGES|INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|GRANT OPTION|SUPER|FILE)\\b/', $grant)) {
+                $hasWrites = true;
+            }
+            if (preg_match('/\\bSELECT\\b/', $grant)) {
+                $hasSelect = true;
+            }
+        }
+        $this->line('Ligação TLS: '.($cipher !== '' ? 'activa' : 'não confirmada'));
+        $this->line('SELECT explícito nos privilégios: '.($hasSelect ? 'sim' : 'não identificado'));
+        $this->line('Privilégios de escrita/perigosos detectados: '.($hasWrites ? 'sim' : 'não identificados'));
+        $this->warn('Inspecção indicativa dos grants, não certifica isolamento, identidade da réplica ou conformidade.');
+        return $cipher !== '' && $hasSelect && !$hasWrites ? 0 : 1;
+    } catch (\Throwable $e) {
+        $this->error('Não foi possível validar privilégios e TLS nesta ligação.');
+        $this->line('Tipo de erro: '.class_basename($e));
+        return 1;
+    }
+})->purpose('Verificação inicial de TLS e privilégios SELECT sem mostrar dados');
