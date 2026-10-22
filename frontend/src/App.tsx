@@ -24,6 +24,7 @@ export default function App(){
  }
  async function logout(){if(token)await fetch(API+'/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+token}}).catch(()=>{});
  sessionStorage.removeItem('cis_token');setToken(null);setUser(null);}
+ if(token&&!user)return <div className="cis-auth-pending" role="status">A validar a sessão do CIS…</div>;
  if(token&&user)return <Dashboard token={token} name={user.name} role={user.role} onLogout={logout}/>;
  return <div className="cis-login"><div className="cis-login-left"><div className="cis-login-brand"><div>C<span>·</span></div><strong>CAPTA<small>MICROCRÉDITO</small></strong></div><div className="cis-login-story"><div className="cis-login-eyebrow">PLATAFORMA DE GESTÃO FINANCEIRA</div><h1>Crédito com<br/>mais <em>clareza.</em><br/>Gestão com<br/>mais confiança.</h1><p>Um só espaço para acompanhar clientes, contratos, prestações e operações de microcrédito.</p><div className="cis-login-feature"><ShieldCheck size={21}/><span>Protecção de dados e controlo de acessos</span></div></div><div className="cis-login-caption">CIS · Sistema de Informação de Crédito</div></div>
  <div className="cis-login-right"><form className="cis-login-form" onSubmit={login}><div className="cis-login-mobile-mark"><Landmark size={19}/> CAPTA</div><div className="cis-form-caption">ÁREA RESERVADA</div><h2>Entrar na plataforma</h2><p>Introduza as credenciais do CIS Web para continuar.</p>
