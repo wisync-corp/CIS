@@ -18,6 +18,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - cis_auth_sqlite:/srv/cis/database
+      - ./backend/certs:/run/cis-db-certs:ro
     restart: unless-stopped
 volumes:
   cis_auth_sqlite:
