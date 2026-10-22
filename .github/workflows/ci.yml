@@ -38,6 +38,16 @@ jobs:
       - run: php artisan key:generate
       - run: php artisan migrate --force
       - run: php artisan route:list --path=api
+      - name: HTTP smoke test (Laravel local)
+        run: |
+          php artisan serve --host=127.0.0.1 --port=8000 > /tmp/cis-laravel.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/up >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8000/up >/dev/null || { cat /tmp/cis-laravel.log; exit 1; }
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/auth/me)
+          test "$status" = 401 || { echo "Expected auth 401, got $status"; exit 1; }
 
   streamlit:
     runs-on: ubuntu-latest
