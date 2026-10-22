@@ -11,3 +11,10 @@ ok($r['saldo_amortizacao'] === 150000 && $r['saldo_juros'] === 0 && $r['saldo_mu
 try { DistribuicaoPagamento::validar(150000,150000,1000,0,200000,80000,20000); throw new RuntimeException('Expected rejection'); }
 catch (DomainException $e) {}
 echo "Smoke tests OK\n";
+
+// Regression: a legacy Extracto movement marked 'Receita de Juros' can include principal repayment.
+constLegacyReconciliation();
+function constLegacyReconciliation(): void {
+    $r = \App\Domain\DistribuicaoPagamento::validar(1250000, 1000000, 250000, 0, 1000000, 250000, 0);
+    if ($r['juros'] !== 250000 || $r['saldo_amortizacao'] !== 0) throw new RuntimeException('Legacy reconciliation failure');
+}
