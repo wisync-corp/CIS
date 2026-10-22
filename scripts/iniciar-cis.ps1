@@ -11,8 +11,11 @@ if (-not (Test-Path 'backend/.env')) {
 $envPath = (Resolve-Path 'backend/.env').Path
 $content = [System.IO.File]::ReadAllText($envPath)
 if ($content -match '(?m)^APP_KEY=\s*$') {
-  $key = (& docker run --rm php:8.3-cli php -r 'echo "base64:".base64_encode(random_bytes(32));')
-  if ($LASTEXITCODE -ne 0 -or -not $key.StartsWith('base64:')) { throw 'Falha ao criar a chave de aplicação.' }
+  # Gerar 32 bytes criptograficamente seguros usando .NET, sem depender do comando PHP/Docker.
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+  $key = 'base64:' + [Convert]::ToBase64String($bytes)
   $content = [regex]::Replace($content, '(?m)^APP_KEY=\s*$', 'APP_KEY=' + $key)
   [System.IO.File]::WriteAllText($envPath, $content)
   Write-Host 'Chave de aplicação gerada no .env privado.'
