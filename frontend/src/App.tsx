@@ -36,5 +36,5 @@ export default function App() {
      <button type="submit" disabled={busy}>{busy?'A autenticar…':'Entrar no CIS'}</button>
      <small>A primeira conta é criada pelo administrador do servidor. Nunca utilize a senha do Excel.</small>
    </form></div>;
-  return <><div className="session-strip"><span>{user.name} · {user.role}</span><button onClick={logout}>Terminar sessão</button></div><Dashboard /></>;
+  return <><div className="session-strip"><span>{user.name} · {user.role}</span><button onClick={logout}>Terminar sessão</button></div><Dashboard token={token}/></>;
 }
