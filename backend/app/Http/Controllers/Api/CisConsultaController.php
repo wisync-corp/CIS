@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\LegacyCliente;
 use App\Models\LegacyPrestacao;
+use App\Models\LegacyExtracto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -63,4 +64,28 @@ class CisConsultaController extends Controller
                 'Valor a Pagar', 'Valor Pago', 'Data de Cobrança', 'Estado'
             ])->orderBy('Nº da Parcela')->get();
     }
+    public function extracto(Request $request)
+    {
+        $this->autorizar();
+        $filters = $request->validate([
+            'contracto' => ['sometimes', 'string', 'max:155'],
+            'inicio' => ['sometimes', 'date_format:Y-m-d'],
+            'fim' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+        $query = LegacyExtracto::query()->select([
+            'Nr', 'Contracto', 'Parcela', 'Tipo de Movimento',
+            'Descrição', 'Data da Operação', 'Valor'
+        ]);
+        if (isset($filters['contracto']) && trim($filters['contracto']) !== '') {
+            $query->where('Contracto', trim($filters['contracto']));
+        }
+        if (isset($filters['inicio'])) {
+            $query->where('Data da Operação', '>=', $filters['inicio']);
+        }
+        if (isset($filters['fim'])) {
+            $query->where('Data da Operação', '<=', $filters['fim']);
+        }
+        return $query->orderByDesc('Data da Operação')->orderByDesc('Nr')->paginate(20);
+    }
+
 }
