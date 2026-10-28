@@ -1,0 +1,27 @@
+# Apenas testes locais com dados fictícios. NÃO liga ao MySQL Cloud.
+services:
+  cis-api:
+    environment:
+      LEGACY_DB_HOST: cis-test-mysql
+      LEGACY_DB_PORT: "3306"
+      LEGACY_DB_DATABASE: cis_test_replica
+      LEGACY_DB_USERNAME: cis_test_reader
+      LEGACY_DB_PASSWORD: cis_test_only_password
+      LEGACY_DB_SSL_CA: ""
+      CIS_FINANCIAL_TEST_APPROVED: "true"
+    depends_on:
+      cis-test-mysql:
+        condition: service_healthy
+  cis-test-mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: cis_test_replica
+      MYSQL_ROOT_PASSWORD: local_test_root_only_password
+    volumes:
+      - ./tests/mysql-fixture:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -plocal_test_root_only_password --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 25
+    # Sem ports: MySQL acessível apenas na rede Docker local.
