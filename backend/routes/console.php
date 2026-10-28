@@ -159,7 +159,7 @@ Artisan::command('cis:diagnose-tls', function () {
     }
     foreach (['have_ssl', 'require_secure_transport'] as $variable) {
         try {
-            $row = $db->selectOne('SHOW VARIABLES LIKE ?', [$variable]);
+            $row = $db->selectOne("SHOW VARIABLES LIKE '".$variable."'");
             $value = $row ? (string) (array_values((array) $row)[1] ?? 'indisponível') : 'não disponível neste servidor';
             $this->line($variable.': '.$value);
         } catch (\Throwable $e) {
@@ -182,3 +182,48 @@ Artisan::command('cis:diagnose-tls', function () {
     $this->warn('Só TLS com certificado validado e privilégios restritos permite avaliar autorização de dados reais.');
     return 0;
 })->purpose('Diagnosticar suporte TLS MySQL sem consultar dados pessoais');
+
+Artisan::command('cis:probe-verified-tls', function () {
+    // Prova ligação autenticada e TLS verificado sem executar consultas a clientes.
+    // Nunca altera a conexão normal, os dados nem a configuração do CIS.
+    $host = (string) env('LEGACY_DB_HOST', '');
+    $database = (string) env('LEGACY_DB_DATABASE', '');
+    $username = (string) env('LEGACY_DB_USERNAME', '');
+    $password = (string) env('LEGACY_DB_PASSWORD', '');
+    $port = (int) env('LEGACY_DB_PORT', 3306);
+    $ca = (string) env('LEGACY_DB_SSL_CA', '');
+    if ($ca === '') {
+        $ca = '/etc/ssl/certs/ca-certificates.crt';
+        $this->line('A testar com as autoridades certificadoras do sistema.');
+    }
+    if (!is_readable($ca)) {
+        $this->error('Certificado CA não disponível no contentor.');
+        return 1;
+    }
+    try {
+        $pdo = new \PDO(
+            'mysql:host='.$host.';port='.$port.';dbname='.$database.';charset=utf8mb4',
+            $username, $password, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                \PDO::ATTR_TIMEOUT => 8,
+                \PDO::MYSQL_ATTR_SSL_CA => $ca,
+                \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
+            ]
+        );
+        $row = $pdo->query("SHOW SESSION STATUS LIKE 'Ssl_cipher'")->fetch(\PDO::FETCH_ASSOC);
+        $cipher = trim((string) ($row['Value'] ?? ''));
+        if ($cipher === '') {
+            $this->error('Ligação estabelecida, mas sem cifra TLS activa. Não aprovada.');
+            return 1;
+        }
+        $this->info('Ligação TLS com verificação de certificado estabelecida com sucesso.');
+        $this->line('Cifra TLS negociada: '.$cipher);
+        $this->warn('Ainda é necessário validar privilégios SELECT-only e autorização dos dados.');
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('Não foi possível estabelecer TLS com certificado verificado.');
+        $this->line('Tipo de erro: '.class_basename($e));
+        $this->warn('Não desactive a verificação do certificado. Confirme suporte TLS e CA com o fornecedor.');
+        return 1;
+    }
+})->purpose('Testar TLS verificado no MySQL original sem consultar dados de clientes');
