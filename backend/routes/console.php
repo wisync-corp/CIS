@@ -147,3 +147,38 @@ Artisan::command('cis:check-clients', function () {
         return 1;
     }
 })->purpose('Verificar o estado da tabela clients sem apresentar dados pessoais');
+
+Artisan::command('cis:diagnose-tls', function () {
+    // Metadados TLS apenas: não lê Clientes, Contractos ou Extracto.
+    $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+    try {
+        $db->selectOne('SELECT 1');
+    } catch (\Throwable $e) {
+        $this->error('Ligação MySQL falhou ('.class_basename($e).').');
+        return 1;
+    }
+    foreach (['have_ssl', 'require_secure_transport'] as $variable) {
+        try {
+            $row = $db->selectOne('SHOW VARIABLES LIKE ?', [$variable]);
+            $value = $row ? (string) (array_values((array) $row)[1] ?? 'indisponível') : 'não disponível neste servidor';
+            $this->line($variable.': '.$value);
+        } catch (\Throwable $e) {
+            $this->warn($variable.': consulta não permitida pelo servidor.');
+        }
+    }
+    try {
+        $row = $db->selectOne("SHOW SESSION STATUS LIKE 'Ssl_cipher'");
+        $cipher = $row ? trim((string) (array_values((array) $row)[1] ?? '')) : '';
+        $this->line('TLS da sessão: '.($cipher !== '' ? 'activo' : 'não detectado'));
+    } catch (\Throwable $e) {
+        $this->warn('TLS da sessão: não foi possível verificar.');
+    }
+    $ca = (string) env('LEGACY_DB_SSL_CA', '');
+    $this->line('CA configurada: '.($ca !== '' ? 'sim' : 'não'));
+    if ($ca !== '' && !is_readable($ca)) {
+        $this->error('CA configurada, mas o ficheiro não pode ser lido pelo contentor.');
+        return 1;
+    }
+    $this->warn('Só TLS com certificado validado e privilégios restritos permite avaliar autorização de dados reais.');
+    return 0;
+})->purpose('Diagnosticar suporte TLS MySQL sem consultar dados pessoais');
