@@ -22,7 +22,11 @@ class ClientController extends Controller {
  public function index(Request $request) {
   $this->allowed();
   $input=$request->validate(['q'=>['nullable','string','max:155']]);
-  $query=DB::connection('sqlite')->table('clients')->where('created_by',$request->user()->id);
+  $query=DB::connection('sqlite')->table('clients');
+  // Administradores activos consultam todos os clientes locais; outros perfis mantêm escopo próprio.
+  if ($request->user()->role !== 'administrador') {
+   $query->where('created_by',$request->user()->id);
+  }
   if(!empty($input['q'])) { $term=str_replace(['%','_'],['\\%','\\_'],trim($input['q']));$query->where('nome_completo','like','%'.$term.'%'); }
   return $query->orderByDesc('id')->paginate(20);
  }
