@@ -35,6 +35,17 @@ class CisConsultaController extends Controller
         return $query->orderBy('ID')->paginate(20)->withQueryString();
     }
 
+
+    public function cliente(Request $request, int $id)
+    {
+        $this->autorizar();
+        // Apenas campos cadastrais essenciais, sem BI, contacto ou email.
+        return LegacyCliente::query()
+            ->select(['ID', 'Numeração', 'Nome Completo', 'Bairro', 'Cidade', 'Provincia'])
+            ->where('ID', $id)
+            ->firstOrFail();
+    }
+
     public function contractos(Request $request)
     {
         $this->autorizar();
