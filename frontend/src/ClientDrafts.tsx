@@ -5,26 +5,26 @@ const fields=[['nome_completo','Nome completo'],['numero_bi','Número de BI'],['
 type Key=typeof fields[number][0];
 type Form=Record<Key,string>;
 type Client=Form & {id:number};
-type Page={data:Client[];total:number};
+type Page={data:Client[];total:number;current_page:number;last_page:number};
 const empty=Object.fromEntries(fields.map(([k])=>[k,''])) as Form;
 export default function ClientDrafts({token}:{token:string}){
  const [form,setForm]=useState<Form>({...empty}),[items,setItems]=useState<Client[]>([]);
  const [editing,setEditing]=useState<number|null>(null),[busy,setBusy]=useState(false);
  const [message,setMessage]=useState(''),[error,setError]=useState(''),[search,setSearch]=useState('');
- const [reload,setReload]=useState(0);
+ const [reload,setReload]=useState(0),[page,setPage]=useState(1),[pageInfo,setPageInfo]=useState({total:0,current_page:1,last_page:1});
  useEffect(()=>{const ctrl=new AbortController();setError('');
- const params=new URLSearchParams();if(search.trim())params.set('q',search.trim());
+ const params=new URLSearchParams({page:String(page)});if(search.trim())params.set('q',search.trim());
  fetch(API+'/cis/clients?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
  .then(async res=>{if(!res.ok)throw new Error('Não foi possível consultar os clientes locais.');return res.json();})
- .then((data:Page)=>setItems(data.data)).catch(e=>{if(e.name!=='AbortError')setError(e.message);});
- return ()=>ctrl.abort();},[token,search,reload]);
+ .then((data:Page)=>{setItems(data.data);setPageInfo({total:data.total,current_page:data.current_page,last_page:data.last_page});}).catch(e=>{if(e.name!=='AbortError')setError(e.message);});
+ return ()=>ctrl.abort();},[token,search,page,reload]);
  async function save(ev:FormEvent){ev.preventDefault();setBusy(true);setError('');setMessage('');
  try{const path=editing===null?'/cis/clients':'/cis/clients/'+editing;
  const res=await fetch(API+path,{method:editing===null?'POST':'PUT',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(form)});
  const body=await res.json();
  if(!res.ok){const first=body.errors?Object.values(body.errors)[0]:null;throw new Error(Array.isArray(first)?String(first[0]):body.message||'Não foi possível guardar.');}
  setMessage(editing===null?'Cliente registado com sucesso na base local do CIS.':'Dados do cliente actualizados.');
- setForm({...empty});setEditing(null);setReload(n=>n+1);
+ setForm({...empty});setEditing(null);setPage(1);setReload(n=>n+1);
  }catch(e){setError(e instanceof Error?e.message:'Falha ao guardar');}finally{setBusy(false);}}
  function edit(row:Client){setEditing(row.id);setForm(Object.fromEntries(fields.map(([k])=>[k,String(row[k]??'')])) as Form);setMessage('');window.scrollTo({top:0,behavior:'smooth'});}
  return <section className="cis-panel cis-list-panel">
@@ -36,9 +36,10 @@ export default function ClientDrafts({token}:{token:string}){
  {message&&<div className="cis-draft-ok" role="status"><CheckCircle2 size={18}/>{message}</div>}
  {error&&<div className="cis-table-error" role="alert"><AlertCircle size={18}/>{error}</div>}
  <div className="cis-panel-head cis-draft-list-head"><h2>Clientes registados</h2><button type="button" onClick={()=>setReload(n=>n+1)} aria-label="Actualizar clientes"><RefreshCw size={18}/></button></div>
- <div className="cis-table-controls"><input aria-label="Pesquisar clientes locais" placeholder="Pesquisar nome do cliente" value={search} onChange={e=>setSearch(e.target.value)}/></div>
+ <div className="cis-table-controls"><input aria-label="Pesquisar clientes locais" placeholder="Pesquisar nome do cliente" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
  <div className="cis-table-scroll"><table><thead><tr><th>ID</th><th>Nome</th><th>Contacto</th><th>Cidade</th><th>Província</th><th>Acção</th></tr></thead><tbody>
  {items.map(item=><tr key={item.id}><td>{item.id}</td><td>{item.nome_completo}</td><td>{item.contacto||'—'}</td><td>{item.cidade||'—'}</td><td>{item.provincia||'—'}</td><td><button type="button" onClick={()=>edit(item)} className="cis-client-edit">Editar</button></td></tr>)}
- </tbody></table>{items.length===0&&<div className="cis-table-none">Ainda não existem clientes registados.</div>}</div>
+ </tbody></table>{items.length===0&&<div className="cis-table-none">Ainda não existem clientes registados nesta pesquisa.</div>}</div>
+ <div className="cis-table-footer"><span>{pageInfo.total} clientes locais · Página {pageInfo.current_page} de {pageInfo.last_page}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(n=>Math.max(1,n-1))}>Anterior</button><button type="button" disabled={page>=pageInfo.last_page} onClick={()=>setPage(n=>n+1)}>Seguinte</button></div></div>
  </section>;
 }
