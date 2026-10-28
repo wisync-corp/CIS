@@ -12,6 +12,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::put('cis/clients/{id}',[ClientController::class,'update'])->whereNumber('id')->middleware('throttle:20,1');
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes']);
+        Route::get('clientes/{id}',[CisConsultaController::class,'cliente'])->whereNumber('id');
         Route::get('contractos',[CisConsultaController::class,'contractos']);
         Route::get('extracto',[CisConsultaController::class,'extracto']);
         Route::get('contractos/{numero}/prestacoes',[CisConsultaController::class,'prestacoes']);
