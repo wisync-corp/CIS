@@ -115,3 +115,8 @@ Artisan::command('cis:check-db-safety', function () {
         return 1;
     }
 })->purpose('Verificação inicial de TLS e privilégios SELECT sem mostrar dados');
+
+Artisan::command('cis:list-admins', function () {
+    $admins = \App\Models\User::query()->where('role', 'administrador')->get(['id', 'name', 'email', 'active']);
+    $this->table(['ID', 'Nome', 'Email', 'Activo'], $admins->map(fn ($u) => [$u->id, $u->name, $u->email, $u->active ? 'Sim' : 'Não'])->all());
+})->purpose('Consultar administradores locais do CIS');
