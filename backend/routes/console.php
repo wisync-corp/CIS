@@ -120,3 +120,30 @@ Artisan::command('cis:list-admins', function () {
     $admins = \App\Models\User::query()->where('role', 'administrador')->get(['id', 'name', 'email', 'active']);
     $this->table(['ID', 'Nome', 'Email', 'Activo'], $admins->map(fn ($u) => [$u->id, $u->name, $u->email, $u->active ? 'Sim' : 'Não'])->all());
 })->purpose('Consultar administradores locais do CIS');
+
+Artisan::command('cis:check-clients', function () {
+    // Diagnóstico local: não imprime dados pessoais nem modifica tabelas.
+    try {
+        $db = \Illuminate\Support\Facades\DB::connection('sqlite');
+        $this->line('Tabela users: '.($db->getSchemaBuilder()->hasTable('users') ? 'presente' : 'ausente'));
+        $exists = $db->getSchemaBuilder()->hasTable('clients');
+        $this->line('Tabela clients: '.($exists ? 'presente' : 'ausente'));
+        if (!$exists) {
+            $this->warn('Execute: docker compose exec cis-api php artisan migrate --force');
+            return 1;
+        }
+        $columns = ['id','created_by','nome_completo','created_at'];
+        foreach ($columns as $column) {
+            if (!$db->getSchemaBuilder()->hasColumn('clients', $column)) {
+                $this->error('Falta a coluna: '.$column);
+                return 1;
+            }
+        }
+        $this->info('Estrutura de clientes local disponível.');
+        $this->line('Total de clientes locais: '.$db->table('clients')->count());
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('Falha na consulta SQLite: '.class_basename($e));
+        return 1;
+    }
+})->purpose('Verificar o estado da tabela clients sem apresentar dados pessoais');
