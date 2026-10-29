@@ -1,5 +1,32 @@
 # CIS — autenticação integrada com Usuarios (preparação)
 
+## Estrutura real confirmada em 29/10/2026
+
+O comando `cis:inspect-legacy-users` confirmou a tabela `Usuarios` com:
+
+| Campo | Tipo |
+|---|---|
+| Id_cli | int |
+| Nome_cli | varchar |
+| T_Sistema | varchar |
+| D_Inicio | date |
+| D_Final | date |
+| Password | **int** |
+| Username | varchar |
+| T_Usuario | varchar |
+| Status | varchar |
+| Last_Seen | datetime |
+| Email | varchar |
+
+**Conclusão:** `Password` é inteiro, não uma coluna de hash bcrypt/Argon2; não é seguro assumir equivalência com palavras-passe web. A integração de hashes implementada é deliberadamente incompatível com este campo. NÃO introduzir `LEGACY_AUTH_PASSWORD_HASH_COLUMN=Password` para tentar activar o login, NÃO comparar diretamente inteiros ou imitar a autenticação VBA na Internet.
+
+O procedimento adequado é **migração de identidade com redefinição de palavra-passe** para contas CIS persistentes, mantendo a coluna `legacy_username` ligada a `Usuarios.Username` e o email correspondente apenas após verificar unicidade e autorização. `T_Usuario`, `T_Sistema`, `Status` e `D_Final` devem ser revistos antes de mapear permissões e contas activas. Não promover automaticamente administradores.
+
+A ligação ao MySQL original permanece sem TLS e com privilégios de escrita; nenhuma leitura de dados pessoais nem de `Password` foi executada para elaborar este diagnóstico (apenas metadados de colunas).
+
+---
+
+
 ## Implementado na branch main
 
 O endpoint `POST /api/auth/login` mantém o login CIS habitual e dispõe de uma alternativa **desactivada por defeito**, que valida uma palavra-passe armazenada na tabela MySQL legada `Usuarios`.
