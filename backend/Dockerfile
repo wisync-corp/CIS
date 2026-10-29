@@ -1,7 +1,7 @@
 # Ambiente de desenvolvimento/testes; não é um servidor web de produção.
 FROM php:8.3-cli-bookworm
-RUN apt-get update && apt-get install -y --no-install-recommends git unzip libzip-dev libsqlite3-dev libonig-dev \
- && docker-php-ext-install pdo_mysql pdo_sqlite mbstring zip \
+RUN apt-get update && apt-get install -y --no-install-recommends git unzip libzip-dev libsqlite3-dev libonig-dev libpq-dev \
+ && docker-php-ext-install pdo_mysql pdo_sqlite pdo_pgsql mbstring zip \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /srv/cis
