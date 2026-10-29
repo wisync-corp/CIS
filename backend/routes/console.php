@@ -274,3 +274,56 @@ Artisan::command('cis:activate-imported-user {email}', function (string $email) 
     $this->info('Conta CIS activada com nova palavra-passe. Nunca reutilize a senha numérica do VBA.');
     return 0;
 })->purpose('Activar individualmente uma conta migrada com identidade verificada');
+
+
+Artisan::command('cis:legacy-auth-readiness', function () {
+    // Apenas avalia metadados/ligação: NÃO lê linhas de Usuarios nem passwords.
+    $this->info('Diagnóstico de prontidão para migração dos utilizadores VBA');
+    $ca = (string) env('LEGACY_DB_SSL_CA', '');
+    $this->line('CA legível: '.($ca !== '' && is_readable($ca) ? 'sim' : 'não'));
+    $this->line('Base CIS: '.config('database.default'));
+    $this->line('Importação autorizada: '.(filter_var(env('CIS_LEGACY_IMPORT_APPROVED', false), FILTER_VALIDATE_BOOLEAN) ? 'sim' : 'não'));
+    if ($ca === '' || !is_readable($ca)) {
+        $this->error('BLOQUEADO: certificado CA MySQL verificado é obrigatório.');
+        return 1;
+    }
+    try {
+        $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+        $result = $db->selectOne("SHOW SESSION STATUS LIKE 'Ssl_cipher'");
+        $cipher = trim((string) (array_values((array) $result)[1] ?? ''));
+        if ($cipher === '') {
+            $this->error('BLOQUEADO: sessão MySQL sem TLS.');
+            return 1;
+        }
+        $grantRows = $db->select('SHOW GRANTS');
+        $grants = strtoupper(implode(' ', array_map(fn ($r) => implode(' ', (array) $r), $grantRows)));
+        $readOnly = preg_match('/\\bSELECT\\b/', $grants) &&
+            !preg_match('/\\b(ALL PRIVILEGES|INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|GRANT OPTION|SUPER|FILE)\\b/', $grants);
+        $this->line('Privilégios somente leitura: '.($readOnly ? 'compatíveis' : 'não confirmados'));
+        if (!$readOnly) {
+            $this->error('BLOQUEADO: usar conta MySQL SELECT-only.');
+            return 1;
+        }
+        $rows = $db->select(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+            ['Usuarios']
+        );
+        $columns = array_map(fn ($r) => (string) $r->COLUMN_NAME, $rows);
+        $required = ['Username','Email','Nome_cli','T_Usuario','Status','Password'];
+        $missing = array_values(array_diff($required, $columns));
+        if ($missing) {
+            $this->error('BLOQUEADO: faltam campos esperados: '.implode(', ', $missing));
+            return 1;
+        }
+        if (app()->environment('production') && config('database.default') === 'sqlite') {
+            $this->error('BLOQUEADO: autenticação CIS sem persistência no Render Free.');
+            return 1;
+        }
+        $this->info('Pré-requisitos técnicos básicos presentes. Requer ainda validação de permissões por instituição e autorização formal.');
+        $this->warn('Não valida nem reutiliza a coluna numérica Password da tabela Usuarios.');
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('BLOQUEADO: não foi possível validar TLS, privilégios e estrutura.');
+        return 1;
+    }
+})->purpose('Diagnosticar integração Usuarios sem ler dados ou credenciais');
