@@ -227,3 +227,26 @@ Artisan::command('cis:probe-verified-tls', function () {
         return 1;
     }
 })->purpose('Testar TLS verificado no MySQL original sem consultar dados de clientes');
+
+
+Artisan::command('cis:inspect-legacy-users', function () {
+    // Metadados apenas; nunca lê nomes, hashes nem palavras-passe.
+    try {
+        $rows = \Illuminate\Support\Facades\DB::connection('mysql_legacy')->select(
+            'SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) IN (?, ?) ORDER BY TABLE_NAME, ORDINAL_POSITION',
+            ['usuarios', 'users']
+        );
+        if (!$rows) {
+            $this->warn('Tabela Usuarios/Users não encontrada ou metadados inacessíveis.');
+            return 1;
+        }
+        foreach ($rows as $row) {
+            $this->line($row->TABLE_NAME.' · '.$row->COLUMN_NAME.' ('.$row->DATA_TYPE.')');
+        }
+        $this->warn('Apenas nomes de colunas; não comprova TLS, privilégio SELECT-only nem tipo dos hashes.');
+        return 0;
+    } catch (\Throwable $exception) {
+        $this->error('Não foi possível verificar a estrutura da tabela de utilizadores.');
+        return 1;
+    }
+})->purpose('Inspeccionar apenas os nomes e tipos das colunas Usuarios do legado');
