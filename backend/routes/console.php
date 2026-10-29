@@ -250,3 +250,27 @@ Artisan::command('cis:inspect-legacy-users', function () {
         return 1;
     }
 })->purpose('Inspeccionar apenas os nomes e tipos das colunas Usuarios do legado');
+
+
+Artisan::command('cis:activate-imported-user {email}', function (string $email) {
+    $user = \App\Models\User::query()->where('email', $email)->first();
+    if (!$user || !$user->legacy_username || $user->active || $user->role !== 'agente') {
+        $this->error('Conta importada inactiva e sem privilégios elevados não encontrada.');
+        return 1;
+    }
+    if (!$this->confirm('Identidade, email e autorização foram verificados fora do sistema?', false)) {
+        return 1;
+    }
+    $password = $this->secret('Nova palavra-passe CIS (mínimo 12 caracteres)');
+    $again = $this->secret('Confirme a nova palavra-passe');
+    if (!is_string($password) || mb_strlen($password) < 12 || $password !== $again) {
+        $this->error('Palavra-passe insuficiente ou confirmação diferente.');
+        return 1;
+    }
+    $user->password = $password;
+    $user->active = true;
+    $user->save();
+    $user->tokens()->delete();
+    $this->info('Conta CIS activada com nova palavra-passe. Nunca reutilize a senha numérica do VBA.');
+    return 0;
+})->purpose('Activar individualmente uma conta migrada com identidade verificada');
