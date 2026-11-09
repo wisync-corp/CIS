@@ -1,0 +1,81 @@
+# VPS RackNerd — ambiente de preparação. NÃO importar dados financeiros antes das verificações.
+# Executar da raiz: sudo docker compose --env-file deploy/.env -f deploy/compose.vps.yaml up -d --build
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD no ficheiro privado deploy/.env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cis}
+      MYSQL_USER: ${MYSQL_USER:-cis_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD no ficheiro privado deploy/.env}
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    volumes:
+      - cis_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+    networks: [private]
+    # Sem ports: MySQL não é acessível da Internet.
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_NAME: CIS
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Defina APP_KEY no ficheiro privado deploy/.env}
+      APP_URL: https://${CIS_DOMAIN:?Defina CIS_DOMAIN}
+      FRONTEND_URL: https://${CIS_DOMAIN:?Defina CIS_DOMAIN}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-cis}
+      DB_USERNAME: ${MYSQL_USER:-cis_app}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD}
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      CIS_FINANCIAL_TEST_APPROVED: "false"
+      CIS_LEGACY_LOGIN_ENABLED: "false"
+      CIS_LEGACY_IMPORT_APPROVED: "false"
+    networks: [private]
+    # Sem ports; só o proxy HTTPS pode chegar à API.
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.vps
+      args:
+        VITE_API_URL: /api
+    image: cis-web:vps
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      CIS_DOMAIN: ${CIS_DOMAIN:?Defina CIS_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Defina ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - cis_caddy_data:/data
+      - cis_caddy_config:/config
+    networks: [private, public]
+
+networks:
+  private:
+    internal: true
+  public:
+
+volumes:
+  cis_mysql_data:
+  cis_caddy_data:
+  cis_caddy_config:
