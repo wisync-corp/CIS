@@ -378,3 +378,91 @@ Artisan::command('cis:verify-admin-login {email}', function (string $email) {
     $this->warn('A rota HTTP de login e a emissão de tokens ainda não foram testadas.');
     return 0;
 })->purpose('Validar em privado a palavra-passe do administrador, sem tokens nem portas abertas');
+
+
+Artisan::command('cis:test-http-login {email}', function (string $email) {
+    // Teste de integração da rota real /api/auth/login, sem abrir portas públicas.
+    // O token criado será revogado no fim; o login também revoga tokens anteriores.
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $this->error('Email inválido.');
+        return 1;
+    }
+    $user = \App\Models\User::query()->where('email', $email)->first();
+    if (!$user || !$user->active || $user->role !== 'administrador') {
+        $this->error('Administrador activo não encontrado.');
+        return 1;
+    }
+    if (!$this->confirm('O login de teste revoga sessões anteriores desta conta. Continuar?', false)) {
+        $this->warn('Teste cancelado.');
+        return 1;
+    }
+    $password = $this->secret('Palavra-passe do administrador CIS');
+    if (!is_string($password) || $password === '') {
+        $this->error('Palavra-passe em falta.');
+        return 1;
+    }
+    $kernel = app(\Illuminate\Contracts\Http\Kernel::class);
+    $token = null;
+    try {
+        $request = \Illuminate\Http\Request::create(
+            '/api/auth/login', 'POST',
+            [], [], [], ['HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'],
+            json_encode(['email' => $email, 'password' => $password], JSON_THROW_ON_ERROR)
+        );
+        unset($password);
+        $response = $kernel->handle($request);
+        $kernel->terminate($request, $response);
+        if ($response->getStatusCode() !== 200) {
+            $this->error('Endpoint de login falhou (HTTP '.$response->getStatusCode().').');
+            return 1;
+        }
+        $payload = json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $token = $payload['token'] ?? null;
+        if (!is_string($token) || $token === '') {
+            $this->error('Resposta do login sem token.');
+            return 1;
+        }
+        $this->info('POST /api/auth/login: HTTP 200, token Sanctum emitido (não mostrado).');
+        $auth = \Illuminate\Http\Request::create(
+            '/api/auth/me', 'GET', [], [], [],
+            ['HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer '.$token]
+        );
+        $me = $kernel->handle($auth);
+        $kernel->terminate($auth, $me);
+        $meData = json_decode((string) $me->getContent(), true);
+        if ($me->getStatusCode() !== 200 || ($meData['email'] ?? '') !== $email
+            || ($meData['role'] ?? '') !== 'administrador') {
+            $this->error('GET /api/auth/me: erro de autenticação ou perfil.');
+            return 1;
+        }
+        $this->info('GET /api/auth/me: HTTP 200, administrador identificado.');
+        $logout = \Illuminate\Http\Request::create(
+            '/api/auth/logout', 'POST', [], [], [],
+            ['HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer '.$token]
+        );
+        $loggedOut = $kernel->handle($logout);
+        $kernel->terminate($logout, $loggedOut);
+        if ($loggedOut->getStatusCode() !== 204) {
+            $this->error('POST /api/auth/logout: HTTP '.$loggedOut->getStatusCode().'.');
+            return 1;
+        }
+        $this->info('POST /api/auth/logout: HTTP 204, token revogado.');
+        $this->info('Teste HTTP da autenticação concluído, sem portas públicas.');
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('Teste HTTP interrompido ('.class_basename($e).'). Consulte logs privados.');
+        return 1;
+    } finally {
+        unset($password);
+        if (is_string($token) && str_contains($token, '|')) {
+            // Defesa extra: revogar token gerado caso o teste tenha falhado antes do logout.
+            $id = explode('|', $token, 2)[0];
+            if (ctype_digit($id)) {
+                \Laravel\Sanctum\PersonalAccessToken::query()
+                    ->whereKey((int) $id)->where('tokenable_type', $user->getMorphClass())
+                    ->where('tokenable_id', $user->getKey())->delete();
+            }
+        }
+    }
+})->purpose('Testar login, perfil e logout Sanctum na rota HTTP, sem publicação pública');
