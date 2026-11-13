@@ -1,11 +1,18 @@
 :8080 {
     encode gzip
-    @api path /api/*
-    reverse_proxy @api api-preview:8000
-    reverse_proxy /up api-preview:8000
-    root * /srv/cis
-    try_files {path} /index.html
-    file_server
+
+    # handle blocks are mutually exclusive: never rewrite /api/* or /up to SPA.
+    handle /api/* {
+        reverse_proxy api-preview:8000
+    }
+    handle /up {
+        reverse_proxy api-preview:8000
+    }
+    handle {
+        root * /srv/cis
+        try_files {path} /index.html
+        file_server
+    }
     header {
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
