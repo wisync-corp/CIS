@@ -352,3 +352,29 @@ Artisan::command('cis:legacy-auth-readiness', function () {
         return 1;
     }
 })->purpose('Diagnosticar integração Usuarios sem ler dados ou credenciais');
+
+
+Artisan::command('cis:verify-admin-login {email}', function (string $email) {
+    // Verificação local e privada, sem gerar token ou exibir credenciais.
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $this->error('Email inválido.');
+        return 1;
+    }
+    $password = $this->secret('Palavra-passe do administrador CIS');
+    if (!is_string($password) || $password === '') {
+        $this->error('Palavra-passe não fornecida.');
+        return 1;
+    }
+    $user = \App\Models\User::query()->where('email', $email)->first();
+    $valid = $user && $user->active && $user->role === 'administrador'
+        && \Illuminate\Support\Facades\Hash::check($password, $user->password);
+    unset($password);
+    if (!$valid) {
+        $this->error('Verificação falhou: email, estado, perfil ou palavra-passe incorrectos.');
+        return 1;
+    }
+    $this->info('Autenticação local validada. Conta activa com perfil administrador.');
+    $this->warn('A rota HTTP de login e a emissão de tokens ainda não foram testadas.');
+    return 0;
+})->purpose('Validar em privado a palavra-passe do administrador, sem tokens nem portas abertas');
