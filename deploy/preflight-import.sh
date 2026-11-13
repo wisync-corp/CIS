@@ -22,11 +22,12 @@ COMPOSE=(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml)
 "${COMPOSE[@]}" ps
 SQL="SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('Usuarios','Clientes','Contractos','Extracto') ORDER BY TABLE_NAME;"
 # As credenciais permanecem no ambiente interno do contentor.
-"${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$SQL" |
-while IFS= read -r table; do
-  if [[ -n "$table" ]]; then
-    echo "AVISO: tabela existente na base de destino: $table"
-  fi
-done
+existing=$("${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$SQL")
+if [[ -n "$existing" ]]; then
+  echo "BLOQUEADO: existem tabelas originais no destino; não executar uma importação por cima."
+  printf '%s\n' "$existing"
+  exit 1
+fi
+echo "Nenhuma das quatro tabelas originais existe ainda no destino."
 echo "PRÉ-VERIFICAÇÃO CONCLUÍDA. NENHUMA IMPORTAÇÃO EXECUTADA."
 echo "Antes de restaurar, confirmar manualmente a ausência de colisões, backup e compatibilidade SQL 5.5 -> 8.0."
