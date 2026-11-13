@@ -16,6 +16,16 @@ if [[ ! -d "$backups" ]] || ! find "$backups" -maxdepth 1 -type f -name 'cis-bef
  echo "ERRO: criar antes um backup novo com: bash deploy/backup-before-auth.sh"
  exit 1
 fi
+# Integridade transaccional e identificador seguro são obrigatórios para editar dados reais.
+# Não alterar o motor MySQL nem criar índice automaticamente.
+meta_sql="SELECT CONCAT(COALESCE((SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes'),'MISSING'),':',COALESCE((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND INDEX_NAME='PRIMARY' AND COLUMN_NAME='ID' AND SEQ_IN_INDEX=1),0),':',COALESCE((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_client_edit_audit'),0));"
+meta="$(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$meta_sql")"
+if [[ "$meta" != "InnoDB:1:0" ]]; then
+ echo "BLOQUEADO: Clientes deve usar InnoDB, ter PRIMARY KEY em ID e não existir auditoria anterior." >&2
+ echo "Metadados (motor:PK_ID:auditoria) = $meta" >&2
+ echo "Não foi realizada nenhuma alteração; precisamos rever o esquema antes de activar edição directa." >&2
+ exit 1
+fi
 read -r -p "Confirma edicao DIRECTA de Nome, Bairro, Cidade, Provincia e Rua na base original? Escreva ACTIVAR: " confirm
 [[ "$confirm" == "ACTIVAR" ]] || { echo "Cancelado."; exit 1; }
 umask 077
@@ -23,7 +33,7 @@ editor_pass="$(openssl rand -hex 32)"
 sql_tmp="$(mktemp "$HOME/cis-private/editor-setup.XXXXXXXX.sql")"
 trap 'rm -f "$sql_tmp"' EXIT
 cat > "$sql_tmp" <<SQL
-CREATE TABLE IF NOT EXISTS \`cis_client_edit_audit\` (
+CREATE TABLE \`cis_client_edit_audit\` (
  \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
  \`client_id\` INT NOT NULL,
  \`actor_user_id\` BIGINT UNSIGNED NOT NULL,
