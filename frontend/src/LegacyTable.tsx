@@ -21,7 +21,7 @@ export default function LegacyTable({module,token}:Props){
  useEffect(()=>{if(!endpoint)return;const controller=new AbortController();setLoading(true);setError('');
  const query=new URLSearchParams({page:String(page)});if(term.trim())query.set(endpoint==='extracto'?'contracto':'q',term.trim());if(endpoint==='extracto'){if(appliedDates.inicio)query.set('inicio',appliedDates.inicio);if(appliedDates.fim)query.set('fim',appliedDates.fim);}
  fetch(API+'/cis/'+endpoint+'?'+query.toString(),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
- .then(async response=>{if(response.status===403)throw new Error('O seu perfil ainda não tem acesso a estes dados.');if(response.status===503)throw new Error('A consulta financeira está bloqueada: configure apenas uma réplica de testes autorizada e uma conta MySQL de leitura.');if(!response.ok)throw new Error('A consulta não está disponível. Confirme a ligação à API e à base de testes.');return response.json();})
+ .then(async response=>{if(response.status===403)throw new Error('O seu perfil ainda não tem acesso a estes dados.');if(response.status===503)throw new Error('A consulta está bloqueada neste ambiente. A pré-visualização de Clientes exige aprovação explícita; Contratos e Extractos continuam indisponíveis.');if(!response.ok)throw new Error('A consulta não está disponível. Confirme a ligação à API e à base de testes.');return response.json();})
  .then((result:Paged)=>setData(result)).catch(e=>{if(e.name!=='AbortError'){setData(null);setError(e.message);}})
  .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
  return ()=>controller.abort();},[endpoint,token,page,term,appliedDates,refresh]);
