@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CisConsultaController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ConnectionStatusController;
+use App\Http\Controllers\Api\LegacyClienteEditController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -15,6 +16,8 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateClientPreview::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes'])->middleware('throttle:30,1');
         Route::get('clientes/{id}',[CisConsultaController::class,'cliente'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::get('clientes/{id}/editar',[LegacyClienteEditController::class,'show'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::patch('clientes/{id}',[LegacyClienteEditController::class,'update'])->whereNumber('id')->middleware('throttle:10,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
         Route::get('contractos',[CisConsultaController::class,'contractos']);
