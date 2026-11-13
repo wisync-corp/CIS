@@ -6,6 +6,33 @@ Código no GitHub, VPS Ubuntu 24.04 com Docker. A configuração em `deploy/comp
 
 A base MySQL usa volume persistente `cis_mysql_data`, não publica 3306, e o Laravel só é alcançável pelo proxy HTTPS. A aplicação utiliza a **mesma instância MySQL**, sem PostgreSQL. O banco `cis` criado no arranque começa vazio; não se deve confundir com a base original.
 
+## Instalação inicial: apenas MySQL, sem domínio
+
+O ficheiro `deploy/mysql-only.yaml` inicia apenas a base MySQL com rede privada Docker, volume persistente `cis_mysql_data` e **sem publicação da porta 3306**. Usa o mesmo nome de projecto e volume da composição completa, para preservar os dados ao evoluir a instalação.
+
+```bash
+cd /opt/cis
+git pull origin main
+test -f deploy/.env || cp deploy/.env.example deploy/.env
+chmod 600 deploy/.env
+nano deploy/.env
+```
+
+No ficheiro privado, preencher apenas agora `MYSQL_ROOT_PASSWORD` e `MYSQL_PASSWORD` com segredos fortes e diferentes. Deixar `MYSQL_DATABASE=cis` e `MYSQL_USER=cis_app` conforme o exemplo; **não é necessário domínio nem APP_KEY nesta fase**. Não copiar segredos para mensagens ou GitHub.
+
+```bash
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml config --quiet
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml up -d
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml ps
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml exec mysql mysql -ucis_app -p -e "SELECT VERSION();"
+```
+
+O comando final solicita a password do utilizador MySQL criada no primeiro arranque. **Não adicionar a password directamente à linha de comandos.** O `ps` deve indicar `healthy` após a inicialização. O volume só é inicializado no primeiro arranque: alterações posteriores a `MYSQL_PASSWORD` não alteram automaticamente credenciais já criadas.
+
+Confirmar que `sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'` não mostra `0.0.0.0:3306`. Não executar `docker compose down -v`, `docker volume rm` ou `docker system prune --volumes`.
+
+**Esta fase instala apenas um MySQL vazio.** A exportação/restauro da base original do FreeSQLDatabase será uma operação posterior e controlada, com backup cifrado, reconciliação e revisão de compatibilidade MySQL 5.5 → 8.0.
+
 ## Antes de iniciar
 
 - Confirmar que o administrador `cisadmin` tem sudo e acesso SSH por chave; manter sessão alternativa até confirmar firewall.
