@@ -38,3 +38,38 @@
 .cis-secondary-confirm input{width:auto!important;flex:none;margin-top:4px}
 .cis-secondary-success{color:#17643b;background:#e9f6ee;border-radius:8px;padding:10px 12px;margin:0!important}
 .cis-table-scroll td .cis-edit-action+.cis-edit-action{margin-left:6px}
+
+/* Ficha completa de cliente — página dedicada (não modal). */
+.cis-profile-page{display:grid;gap:22px;min-width:0}
+.cis-profile-back{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#7d9384;font-size:12px}
+.cis-profile-back button{display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;color:#20523d;font-weight:750;cursor:pointer;padding:6px 0}
+.cis-profile-hero{background:linear-gradient(125deg,#123f35,#23654c);color:#fff;border-radius:15px;padding:26px 30px;display:flex;align-items:center;gap:22px;box-shadow:0 12px 35px #0d3f2d18}
+.cis-profile-avatar{background:#ffffff22;border:1px solid #ffffff33;width:72px;height:72px;display:grid;place-items:center;border-radius:18px;flex:none}
+.cis-profile-heading{flex:1;min-width:0}.cis-profile-heading>span{font-size:11px;letter-spacing:1.9px;color:#c1e0cd;font-weight:800}
+.cis-profile-heading h2{font-size:clamp(20px,3vw,29px);color:#fff;margin:5px 0;line-height:1.25}
+.cis-profile-heading p{color:#e2f0e7;margin:0;font-size:13px}.cis-profile-heading p span{padding:0 8px}
+.cis-profile-hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cis-profile-hero-actions button{display:inline-flex;align-items:center;gap:8px;padding:11px 15px;border:1px solid #def0e6;background:#e5f5e9;color:#194936;font-weight:750;border-radius:9px;cursor:pointer}
+.cis-profile-hero-actions button.secondary{background:transparent;color:#fff;border-color:#96bca7}
+.cis-profile-hero-actions button:disabled{opacity:.55;cursor:not-allowed}
+.cis-profile-layout{display:grid;grid-template-columns:220px minmax(0,1fr);align-items:start;gap:20px}
+.cis-profile-tabs{display:grid;background:white;border:1px solid #e0eae2;border-radius:13px;padding:9px;gap:3px}
+.cis-profile-tabs button{display:flex;align-items:center;text-align:left;gap:11px;padding:12px 13px;border:none;background:transparent;border-radius:8px;color:#587363;cursor:pointer;font-weight:650;font-size:13px}
+.cis-profile-tabs button.selected{background:#e8f4ed;color:#15563b}
+.cis-profile-tabs button:hover:not(.selected){background:#f6faf7}
+.cis-profile-content{background:#fff;border:1px solid #e0eae2;border-radius:13px;padding:28px;min-width:0;min-height:330px}
+.cis-profile-section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #eef1ed;padding-bottom:17px;margin-bottom:21px}
+.cis-profile-section-title h3{font-size:19px;color:#1c4836;margin:0 0 5px}
+.cis-profile-section-title p{font-size:12px;color:#83978a;margin:0}
+.cis-profile-section-title>span{font-size:11px;color:#356c52;font-weight:700}
+.cis-profile-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.cis-profile-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.cis-profile-field>span{font-size:12px;color:#748b7b;font-weight:700}
+.cis-profile-field-value{padding:12px 14px;border:1px solid #edf2ed;border-radius:8px;background:#f8fbf9;font-size:14px;color:#284c3a;min-height:44px;overflow-wrap:anywhere}
+.cis-profile-field-value.muted{color:#809689;font-style:italic}
+.cis-profile-field input{padding:12px 14px;border-radius:8px;border:1px solid #accdb8;background:#fff;font:inherit;color:#224b35;min-height:44px;width:100%;min-width:0}
+.cis-profile-field input:focus{outline:2px solid #9ccfac}
+.cis-profile-field small{display:flex;gap:4px;align-items:center;color:#8b9c90;font-size:10px}
+.cis-profile-safety{display:flex;align-items:center;gap:8px;margin:25px 0 0;color:#5b856c;font-size:12px}
+@media(max-width:900px){.cis-profile-layout{grid-template-columns:1fr}.cis-profile-tabs{display:flex;overflow-x:auto;gap:4px}.cis-profile-tabs button{white-space:nowrap}.cis-profile-hero{flex-wrap:wrap}}
+@media(max-width:560px){.cis-profile-hero{padding:20px;gap:14px}.cis-profile-avatar{height:56px;width:56px}.cis-profile-hero-actions{width:100%}.cis-profile-hero-actions button{flex:1;justify-content:center}.cis-profile-content{padding:18px}.cis-profile-fields{grid-template-columns:1fr}.cis-profile-back>span{display:none}}
