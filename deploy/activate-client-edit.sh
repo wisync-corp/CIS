@@ -18,11 +18,11 @@ if [[ ! -d "$backups" ]] || ! find "$backups" -maxdepth 1 -type f -name 'cis-bef
 fi
 # Integridade transaccional e identificador seguro são obrigatórios para editar dados reais.
 # Não alterar o motor MySQL nem criar índice automaticamente.
-meta_sql="SELECT CONCAT(COALESCE((SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes'),'MISSING'),':',COALESCE((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND INDEX_NAME='PRIMARY' AND COLUMN_NAME='ID' AND SEQ_IN_INDEX=1),0),':',COALESCE((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_client_edit_audit'),0));"
+meta_sql="SELECT CONCAT(COALESCE((SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes'),'MISSING'),':',COALESCE((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND INDEX_NAME='PRIMARY' AND COLUMN_NAME='ID' AND SEQ_IN_INDEX=1),0),':',COALESCE((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND INDEX_NAME='PRIMARY'),0),':',COALESCE((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_client_edit_audit'),0));"
 meta="$(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$meta_sql")"
-if [[ "$meta" != "InnoDB:1:0" ]]; then
+if [[ "$meta" != "InnoDB:1:1:0" ]]; then
  echo "BLOQUEADO: Clientes deve usar InnoDB, ter PRIMARY KEY em ID e não existir auditoria anterior." >&2
- echo "Metadados (motor:PK_ID:auditoria) = $meta" >&2
+ echo "Metadados (motor:PK_ID:total_colunas_PK:auditoria) = $meta" >&2
  echo "Não foi realizada nenhuma alteração; precisamos rever o esquema antes de activar edição directa." >&2
  exit 1
 fi
