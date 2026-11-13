@@ -1,0 +1,13 @@
+# Pré-visualização privada do React, apenas acessível via túnel SSH.
+FROM node:22-alpine AS builder
+WORKDIR /web
+COPY package*.json ./
+RUN npm install --no-audit --no-fund
+COPY . .
+ENV VITE_API_URL=/api
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY --from=builder /web/dist /srv/cis
+COPY Caddyfile.preview /etc/caddy/Caddyfile
+EXPOSE 8080
