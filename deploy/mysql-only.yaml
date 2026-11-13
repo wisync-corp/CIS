@@ -1,0 +1,26 @@
+# Instalação inicial APENAS MySQL. Sem domínio, Laravel ou acesso público.
+name: cis
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Preencha MYSQL_ROOT_PASSWORD em deploy/.env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cis}
+      MYSQL_USER: ${MYSQL_USER:-cis_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Preencha MYSQL_PASSWORD em deploy/.env}
+    volumes:
+      - cis_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+    networks: [private]
+    # Intencionalmente NÃO publica a porta 3306.
+networks:
+  private:
+    internal: true
+volumes:
+  cis_mysql_data:
+    name: cis_mysql_data
