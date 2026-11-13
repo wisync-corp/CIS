@@ -1,11 +1,36 @@
 <?php
 use Illuminate\Support\Facades\Artisan;
 Artisan::command('cis:bootstrap-admin {email}', function (string $email) {
-    if (\App\Models\User::query()->exists()) { $this->error('Bootstrap disponível apenas quando não existem utilizadores.'); return 1; }
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $this->error('Email inválido.');
+        return 1;
+    }
+    if (\App\Models\User::query()->exists()) {
+        $this->error('Bootstrap disponível apenas quando não existem utilizadores.');
+        return 1;
+    }
+    if (!$this->confirm('A identidade e autorização do primeiro administrador foram confirmadas?', false)) {
+        $this->warn('Criação cancelada.');
+        return 1;
+    }
     $password = $this->secret('Nova palavra-passe (mínimo 12 caracteres)');
-    if (!is_string($password) || mb_strlen($password) < 12) { $this->error('Palavra-passe insuficiente'); return 1; }
-    \App\Models\User::create(['name'=>'Administrador CIS','email'=>$email,'password'=>$password,'role'=>'administrador','active'=>true]);
-    $this->info('Administrador criado'); return 0;
+    $confirm = $this->secret('Confirma a nova palavra-passe');
+    if (!is_string($password) || mb_strlen($password) < 12 || $password !== $confirm) {
+        $this->error('Palavra-passe insuficiente ou confirmação diferente.');
+        return 1;
+    }
+    \Illuminate\Support\Facades\DB::transaction(function () use ($email, $password) {
+        if (\App\Models\User::query()->lockForUpdate()->exists()) {
+            throw new \RuntimeException('Já existe uma conta CIS. Criação cancelada.');
+        }
+        \App\Models\User::create([
+            'name' => 'Administrador CIS', 'email' => $email, 'password' => $password,
+            'role' => 'administrador', 'active' => true,
+        ]);
+    });
+    $this->info('Primeiro administrador CIS criado. A API continua sem publicação pública.');
+    return 0;
 })->purpose('Criar primeiro administrador do CIS com palavra-passe segura');
 
 Artisan::command('cis:reset-password {email}', function (string $email) {
