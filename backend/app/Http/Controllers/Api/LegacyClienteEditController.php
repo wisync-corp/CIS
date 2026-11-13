@@ -39,8 +39,12 @@ final class LegacyClienteEditController extends Controller
             'changes' => ['required', 'array', 'min:1'],
             'changes.*' => ['nullable', 'string', 'max:'.self::MAX],
             'original' => ['required', 'array'],
+            'original.*' => ['nullable', 'string', 'max:'.self::MAX],
         ]);
         $changes = $validated['changes'];
+        if (count($changes) > count(self::FIELDS)) {
+            throw ValidationException::withMessages(['changes' => 'Demasiados campos para edição.']);
+        }
         $original = $validated['original'];
         foreach ($changes as $field => $value) {
             if (!in_array($field, self::FIELDS, true) || !array_key_exists($field, $original)) {
