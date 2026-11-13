@@ -30,3 +30,11 @@
 .cis-edit-actions button{border:1px solid #d3e1d7;border-radius:8px;padding:11px 14px;background:#fff;color:#315b45;font-weight:700;cursor:pointer}
 .cis-edit-actions button[type=submit]{background:#17513d;color:#fff;border-color:#17513d}
 .cis-edit-actions button:disabled{opacity:.6;cursor:wait}
+
+.cis-edit-dialog .cis-secondary-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.cis-edit-dialog .cis-secondary-title h3{display:flex;align-items:center;gap:9px;margin:0;font-size:18px}
+.cis-edit-dialog .cis-secondary-title button{background:transparent;border:0;cursor:pointer;color:#315b45;padding:5px}
+.cis-secondary-confirm{display:flex!important;flex-direction:row;align-items:flex-start;gap:10px!important;font-weight:500!important;line-height:1.5}
+.cis-secondary-confirm input{width:auto!important;flex:none;margin-top:4px}
+.cis-secondary-success{color:#17643b;background:#e9f6ee;border-radius:8px;padding:10px 12px;margin:0!important}
+.cis-table-scroll td .cis-edit-action+.cis-edit-action{margin-left:6px}
