@@ -1,0 +1,31 @@
+# Sobrepor a mysql-only.yaml para testar a API sem publicar portas ou iniciar web.
+services:
+  api-test:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?O script de teste deve fornecer APP_KEY temporária}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-cis}
+      DB_USERNAME: ${MYSQL_USER:-cis_app}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Falta MYSQL_PASSWORD}
+      LEGACY_DB_HOST: mysql
+      LEGACY_DB_PORT: "3306"
+      LEGACY_DB_DATABASE: ${MYSQL_DATABASE:-cis}
+      LEGACY_DB_USERNAME: ${LEGACY_DB_USERNAME:-cis_reader}
+      LEGACY_DB_PASSWORD: ${LEGACY_DB_PASSWORD:?Falta LEGACY_DB_PASSWORD}
+      CIS_RUN_MIGRATIONS: "false"
+      CIS_FINANCIAL_TEST_APPROVED: "false"
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+    networks: [private]
+    command: ["php", "scripts/check-legacy-connection.php"]
+    # Não publica portas; não activa endpoints financeiros.
