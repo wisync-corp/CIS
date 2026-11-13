@@ -41,5 +41,10 @@ services:
     depends_on: [api-preview]
     ports:
       - "127.0.0.1:8080:8080"
-    networks: [private]
+    networks: [private, preview_public]
     # Apenas loopback do VPS, acessível do PC por SSH -L.
+
+networks:
+  preview_public:
+    # Bridge normal para permitir publicação em loopback; a rede MySQL continua privada.
+
