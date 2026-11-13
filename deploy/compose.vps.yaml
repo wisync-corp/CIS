@@ -42,6 +42,11 @@ services:
       DB_DATABASE: ${MYSQL_DATABASE:-cis}
       DB_USERNAME: ${MYSQL_USER:-cis_app}
       DB_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD}
+      LEGACY_DB_HOST: mysql
+      LEGACY_DB_PORT: "3306"
+      LEGACY_DB_DATABASE: ${MYSQL_DATABASE:-cis}
+      LEGACY_DB_USERNAME: ${LEGACY_DB_USERNAME:-cis_reader}
+      LEGACY_DB_PASSWORD: ${LEGACY_DB_PASSWORD:?Defina LEGACY_DB_PASSWORD no ficheiro privado deploy/.env}
       CACHE_STORE: file
       CIS_RUN_MIGRATIONS: "false"
       SESSION_DRIVER: file
