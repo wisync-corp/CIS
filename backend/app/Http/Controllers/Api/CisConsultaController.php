@@ -40,10 +40,19 @@ class CisConsultaController extends Controller
     {
         $this->autorizar();
         // Apenas campos cadastrais essenciais, sem BI, contacto ou email.
-        return LegacyCliente::query()
-            ->select(['ID', 'Numeração', 'Nome Completo', 'Bairro', 'Cidade', 'Provincia'])
-            ->where('ID', $id)
-            ->firstOrFail();
+        $db = \Illuminate\Support\Facades\DB::connection('mysql_legacy');
+        // Toda a ficha original, exclusivamente para administrador na rede privada.
+        // Não consultar colunas complementares até confirmar a migração delas.
+        $rows = $db->table('Clientes')->where('ID', $id)->limit(2)->get([
+            'ID', 'Numeração', 'Nome Completo', 'Nº de BI', 'Nacionalidade',
+            'Contacto', 'Bairro', 'Cidade', 'Nº da Casa', 'Nº de Quarterão',
+            'Email', 'Conduta', 'Provincia', 'Data de Emissão', 'Estado Civil',
+            'Rua', 'Naturalidade', 'usuario',
+        ]);
+        abort_if($rows->count() !== 1, $rows->isEmpty() ? 404 : 409,
+            'Cliente inexistente ou identificador duplicado.');
+        return response()->json($rows->first())
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function contractos(Request $request)
