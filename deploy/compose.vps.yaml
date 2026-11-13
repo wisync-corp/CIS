@@ -1,5 +1,6 @@
 # VPS RackNerd — ambiente de preparação. NÃO importar dados financeiros antes das verificações.
 # Executar da raiz: sudo docker compose --env-file deploy/.env -f deploy/compose.vps.yaml up -d --build
+name: cis
 services:
   mysql:
     image: mysql:8.0
@@ -77,5 +78,6 @@ networks:
 
 volumes:
   cis_mysql_data:
+    name: cis_mysql_data
   cis_caddy_data:
   cis_caddy_config:
