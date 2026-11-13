@@ -18,6 +18,17 @@ export default function LegacyTable({module,token}:Props){
  const [startDate,setStartDate]=useState(''),[endDate,setEndDate]=useState(''),[appliedDates,setAppliedDates]=useState({inicio:'',fim:''});
  const [data,setData]=useState<Paged|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  useEffect(()=>{setPage(1);setTerm('');setSearch('');setData(null);setStartDate('');setEndDate('');setAppliedDates({inicio:'',fim:''});},[module]);
+ // Pesquisa automaticamente depois de digitar/digitalizar; Enter de um leitor aplica imediatamente.
+ // Debounce reduz pedidos sucessivos ao MySQL e evita pesquisas incompletas.
+ useEffect(()=>{
+  if(!endpoint)return;
+  const timer=window.setTimeout(()=>{
+   const next=search.trim();
+   if(next!==term){setPage(1);setTerm(next);}
+  },350);
+  return ()=>window.clearTimeout(timer);
+ },[search,endpoint,term]);
+
  useEffect(()=>{if(!endpoint)return;const controller=new AbortController();setLoading(true);setError('');
  const query=new URLSearchParams({page:String(page)});if(term.trim())query.set(endpoint==='extracto'?'contracto':'q',term.trim());if(endpoint==='extracto'){if(appliedDates.inicio)query.set('inicio',appliedDates.inicio);if(appliedDates.fim)query.set('fim',appliedDates.fim);}
  fetch(API+'/cis/'+endpoint+'?'+query.toString(),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
@@ -28,8 +39,8 @@ export default function LegacyTable({module,token}:Props){
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível para utilização. As operações de escrita estão bloqueadas até à validação das regras financeiras e de segurança.</p></section>;
  return <section className="cis-panel cis-list-panel">
   <div className="cis-panel-head"><div><h2>{module==='Clientes'?'Consulta de clientes':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Informação existente na base de dados · consulta apenas de leitura</p></div><span className="cis-list-tag"><Database size={14}/> MySQL</span></div>
-  <div className="cis-table-controls"><form onSubmit={e=>{e.preventDefault();if(endpoint==='extracto'&&startDate&&endDate&&startDate>endDate){setError('A data inicial não pode ser posterior à data final.');return;}setPage(1);setTerm(search);setAppliedDates({inicio:startDate,fim:endDate});}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={endpoint==='clientes'?'Pesquisar por nome ou ID':endpoint==='extracto'?'Filtrar por contrato exacto':'Pesquisar por número de contrato'} aria-label="Pesquisar"/><button type="submit">Pesquisar</button></form><button type="button" className="cis-refresh" onClick={()=>setRefresh(n=>n+1)} aria-label="Actualizar"><RefreshCw size={18}/></button></div>
-  {endpoint==='extracto'&&<div className="cis-extract-dates"><label>De <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label>Até <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}/></label><span>As datas aplicam-se ao clicar em Pesquisar.</span></div>}
+  <div className="cis-table-controls"><form onSubmit={e=>{e.preventDefault();if(endpoint==='extracto'&&startDate&&endDate&&startDate>endDate){setError('A data inicial não pode ser posterior à data final.');return;}setPage(1);setTerm(search.trim());setAppliedDates({inicio:startDate,fim:endDate});}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={endpoint==='clientes'?'Digite ou digitalize o nome ou ID':endpoint==='extracto'?'Digite ou digitalize o contrato':'Digite ou digitalize o número do contrato'} aria-label="Pesquisa automática" autoComplete="off"/><span className="cis-auto-search-hint">Pesquisa automática</span></form><button type="button" className="cis-refresh" onClick={()=>setRefresh(n=>n+1)} aria-label="Actualizar"><RefreshCw size={18}/></button></div>
+  {endpoint==='extracto'&&<div className="cis-extract-dates"><label>De <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label>Até <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}/></label><span>Para aplicar as datas, prima Enter no campo de pesquisa.</span></div>}
   {loading&&<div className="cis-loading" role="status">A consultar os registos…</div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
   {!loading&&!error&&data&&<><div className="cis-table-scroll"><table><thead><tr>{fields[module].map(c=><th key={c.key}>{c.label}</th>)}</tr></thead><tbody>{data.data.map((row,i)=><tr key={String(row.ID??row.Ordem??row.Nr??i)}>{fields[module].map(c=><td key={c.key}>{monetary.has(c.key)&&row[c.key]!=null&&Number.isFinite(Number(row[c.key]))?money.format(Number(row[c.key]))+' MT':String(row[c.key]??'—')}</td>)}</tr>)}</tbody></table>{data.data.length===0&&<div className="cis-table-none">Não foram encontrados registos para esta pesquisa.</div>}</div><div className="cis-table-footer"><span>{data.total} registos · Página {data.current_page} de {data.last_page}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=data.last_page} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div></>}
