@@ -7,7 +7,11 @@ use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(api: __DIR__.'/../routes/api.php', commands: __DIR__.'/../routes/console.php', health: '/up')
-    ->withMiddleware(function (Middleware $middleware) { })
+    ->withMiddleware(function (Middleware $middleware) {
+        // Override Laravel's default route('login') callback: API-only CIS has no web login route.
+        // The exception renderer below returns JSON 401 for all /api/* requests.
+        $middleware->redirectGuestsTo('/api/auth/login');
+    })
     ->withExceptions(function (Exceptions $exceptions) {
         // A API é stateless e não tem uma rota web chamada "login".
         // Sem isto, requests sem token e Accept: */* podem causar 500
