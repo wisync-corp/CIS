@@ -1,10 +1,20 @@
-import {useState,type FormEvent} from 'react';
+import {useEffect,useState,type FormEvent} from 'react';
 import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw,ArrowRightLeft,BadgePlus,Eye,ReceiptText} from 'lucide-react';
 
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
+type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string;Cidade:string|null};
+const API=import.meta.env.VITE_API_URL||'/api';
+function monthAfter(date:string,months:number):string {
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';
+ const [year,month,day]=date.split('-').map(Number);
+ const target=new Date(Date.UTC(year,month-1+months,1));
+ const max=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();
+ target.setUTCDate(Math.min(day,max));
+ return target.toISOString().slice(0,10);
+}
 const fields:Field[]=[
- {key:'cliente',label:'Mutuário / cliente',required:true,hint:'No sistema operacional, deverá ser seleccionado a partir do cadastro de Clientes.'},
- {key:'cliente_id',label:'Número do cliente',required:true,hint:'Identificador da tabela Clientes; não criar números de cliente manualmente.'},
+ {key:'cliente',label:'Mutuário / cliente',required:true,hint:'Seleccionado exclusivamente a partir dos clientes reais existentes no MySQL.'},
+ {key:'cliente_id',label:'ID do cliente',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
  {key:'numero',label:'Número do contrato',hint:'O número C-0000 será atribuído pelo servidor quando o fluxo financeiro for homologado.'},
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início',type:'date',required:true},
@@ -25,23 +35,58 @@ const groupings=[
 ];
 export default function ContractDraft({onBack}:{onBack:()=>void}){
  const [values,setValues]=useState<Record<string,string>>({});
+ const [clientSearch,setClientSearch]=useState('');
+ const [clients,setClients]=useState<Borrower[]>([]);
+ const [selectedBorrower,setSelectedBorrower]=useState<Borrower|null>(null);
+ const [clientError,setClientError]=useState('');
+ const [clientLoading,setClientLoading]=useState(false);
+ useEffect(()=>{
+  const controller=new AbortController();
+  const timer=window.setTimeout(()=>{
+   setClientLoading(true);setClientError('');
+   const params=new URLSearchParams({q:clientSearch.trim()});
+   fetch(API+'/cis/contratos/clientes?'+params.toString(),{
+    headers:{Authorization:'Bearer '+(sessionStorage.getItem('cis_token')??''),Accept:'application/json'},
+    signal:controller.signal
+   }).then(async result=>{
+    if(!result.ok)throw new Error('Não foi possível consultar os clientes autorizados.');
+    return result.json() as Promise<Borrower[]>;
+   }).then(list=>{if(!controller.signal.aborted)setClients(list);})
+   .catch(e=>{if(e.name!=='AbortError')setClientError(e.message);})
+   .finally(()=>{if(!controller.signal.aborted)setClientLoading(false);});
+  },300);
+  return ()=>{controller.abort();window.clearTimeout(timer);};
+ },[clientSearch]);
  const [checked,setChecked]=useState(false);
  const [message,setMessage]=useState('');
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
  const prazoMeses=Number((values.prazo??'').slice(0,1));
  const numeroPrestacoes=(!prazoMeses||!tipo)?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
- const handle=(event:FormEvent)=>{event.preventDefault();setChecked(true);setMessage('Campos revistos no navegador. A criação real do contrato, o plano de prestações e o movimento de desembolso continuam desactivados até à homologação dos cálculos e das permissões.');};
+ const dataFinal=values.data_inicio&&prazoMeses?monthAfter(values.data_inicio,prazoMeses):'';
+ const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
+  index+1===numeroPrestacoes?dataFinal:monthAfter(values.data_inicio,index+1)):[];
+ const handle=(event:FormEvent)=>{event.preventDefault();if(!selectedBorrower){setClientError('Seleccione um cliente existente no cadastro.');return;}setChecked(true);setMessage('Campos revistos no navegador. A criação real do contrato, o plano de prestações e o movimento de desembolso continuam desactivados até à homologação dos cálculos e das permissões.');};
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
   <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Modo de preparação:</strong> este formulário não cria contratos, não calcula prestações definitivas e não altera o Extracto. O registo financeiro real só ficará disponível após validação explícita das regras VBA e dos controlos de acesso.</span></div>
-  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setChecked(false);setMessage('');}}>
+  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setChecked(false);setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo));
-    const val=key==='modalidade'?modalidade:values[key]??'';
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo));
+    const val=key==='modalidade'?modalidade:key==='data_final'?dataFinal:values[key]??'';
+    if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
+     <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
+     <input id="cis-client-search" type="search" placeholder="Escreva nome ou ID do cliente" value={clientSearch} autoComplete="off" onChange={e=>setClientSearch(e.target.value)}/>
+     <select value={selectedBorrower?.ID??''} required aria-label="Seleccionar cliente" onChange={e=>{
+      const borrower=clients.find(c=>c.ID===Number(e.target.value))??null;
+      setSelectedBorrower(borrower);
+      setValues(v=>({...v,cliente:borrower?.['Nome Completo']??'',cliente_id:borrower?String(borrower.ID):'',cidade:borrower?.Cidade??''}));
+     }}><option value="">Seleccionar cliente do cadastro</option>{clients.map(c=><option key={c.ID} value={c.ID}>{c['Nome Completo']} · ID {c.ID}</option>)}</select>
+     {clientLoading&&<small>À procura de clientes…</small>}{clientError&&<small role="alert">{clientError}</small>}
+    </div>;
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
      {field.choices?<select value={val} disabled={disabled} required={field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
@@ -52,7 +97,8 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
    <div className="cis-contract-draft-count"><span>N.º previsto de prestações (regra do VBA)</span><strong>{numeroPrestacoes??'—'}</strong></div>
-   <p>Este número representa apenas a quantidade de prestações conforme o tipo de juro, modalidade e prazo seleccionados. Montantes, juros, vencimentos e multas não são calculados nem gravados.</p>
+   <p>Datas previstas segundo a regra DateAdd do VBA (adicionar meses ao início). Montantes, juros, multas e pagamentos não são calculados nem gravados.</p>
+   {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><ArrowRightLeft size={20}/> Operações previstas no formulário original</h3>
    <p>As operações seguintes constam de Contractos.frm. Permanecem bloqueadas porque modificam valores financeiros ou dependem da Cobrança e do Extracto.</p>
