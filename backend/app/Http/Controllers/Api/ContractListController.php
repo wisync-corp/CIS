@@ -12,9 +12,9 @@ final class ContractListController extends Controller
         $filters = $request->validate(['q' => ['sometimes','string','max:155']]);
         $q = trim($filters['q'] ?? '');
         $builder = DB::connection('mysql_legacy')->table('Contractos')
-            ->selectRaw('\\`Nr do Contracto\\` AS numero')
-            ->selectRaw('MIN(\\`Nome do Cliente\\`) AS cliente')
-            ->selectRaw('MIN(\\`Nº de Cliente\\`) AS cliente_id')
+            ->selectRaw('`Nr do Contracto` AS numero')
+            ->selectRaw('MIN(`Nome do Cliente`) AS cliente')
+            ->selectRaw('MIN(`Nº de Cliente`) AS cliente_id')
             ->selectRaw('COUNT(*) AS linhas_prestacoes')
             ->groupBy('Nr do Contracto');
         if ($q !== '') {
