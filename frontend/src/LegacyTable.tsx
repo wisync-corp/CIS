@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import {Search,RefreshCw,ChevronLeft,ChevronRight,LockKeyhole,Database,AlertCircle,ArrowUpRight} from 'lucide-react';
 import ClientProfile from './ClientProfile';
+import ContractProfile from './ContractProfile';
 
 type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void};
 type Row=Record<string,unknown>;
@@ -16,18 +17,19 @@ const monetary=new Set(['Valor','Amortização','Valor de Juros','Valor de Multa
 export default function LegacyTable({module,token,onProfileChange}:Props){
  const endpoint=module==='Clientes'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
  const [selected,setSelected]=useState<number|null>(null);
- useEffect(()=>{onProfileChange?.(module==='Clientes'&&selected!==null);return ()=>onProfileChange?.(false);},[module,selected,onProfileChange]);
+ const [selectedContract,setSelectedContract]=useState<string|null>(null);
+ useEffect(()=>{onProfileChange?.((module==='Clientes'&&selected!==null)||(module==='Contratos e prestações'&&selectedContract!==null));return ()=>onProfileChange?.(false);},[module,selected,selectedContract,onProfileChange]);
  const [page,setPage]=useState(1),[search,setSearch]=useState(''),[term,setTerm]=useState('');
  const [startDate,setStartDate]=useState(''),[endDate,setEndDate]=useState(''),[appliedDates,setAppliedDates]=useState({inicio:'',fim:''});
  const [data,setData]=useState<Paged|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
- useEffect(()=>{setSelected(null);setPage(1);setTerm('');setSearch('');setData(null);setStartDate('');setEndDate('');setAppliedDates({inicio:'',fim:''});},[module]);
+ useEffect(()=>{setSelected(null);setSelectedContract(null);setPage(1);setTerm('');setSearch('');setData(null);setStartDate('');setEndDate('');setAppliedDates({inicio:'',fim:''});},[module]);
  useEffect(()=>{
   if(!endpoint)return;
   const timer=window.setTimeout(()=>{const next=search.trim();if(next!==term){setPage(1);setTerm(next);}},350);
   return ()=>window.clearTimeout(timer);
  },[search,endpoint,term]);
  useEffect(()=>{
-  if(!endpoint||selected!==null)return;
+  if(!endpoint||selected!==null||selectedContract!==null)return;
   const controller=new AbortController();setLoading(true);setError('');
   const query=new URLSearchParams({page:String(page)});
   if(term.trim())query.set(endpoint==='extracto'?'contracto':'q',term.trim());
@@ -42,8 +44,9 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
    .then((result:Paged)=>setData(result)).catch(e=>{if(e.name!=='AbortError'){setData(null);setError(e.message);}})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return ()=>controller.abort();
- },[endpoint,token,page,term,appliedDates,refresh,selected]);
+ },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract]);
  if(endpoint==='clientes'&&selected!==null)return <ClientProfile id={selected} token={token} onBack={()=>{setSelected(null);setRefresh(v=>v+1);}}/>;
+ if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} onBack={()=>{setSelectedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">
   <div className="cis-panel-head"><div><h2>{module==='Clientes'?'Cadastro de clientes':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><span className="cis-list-tag"><Database size={14}/> MySQL</span></div>
@@ -51,6 +54,6 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
   {endpoint==='extracto'&&<div className="cis-extract-dates"><label>De <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label>Até <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}/></label><span>Para aplicar datas, prima Enter no campo de pesquisa.</span></div>}
   {loading&&<div className="cis-loading" role="status">A consultar os registos…</div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
-  {!loading&&!error&&data&&<><div className="cis-table-scroll"><table><thead><tr>{fields[module].map(c=><th key={c.key}>{c.label}</th>)}{endpoint==='clientes'&&<th>Ficha</th>}</tr></thead><tbody>{data.data.map((row,i)=><tr key={String(row.ID??row.Ordem??row.Nr??i)}>{fields[module].map(c=><td key={c.key}>{monetary.has(c.key)&&row[c.key]!=null&&Number.isFinite(Number(row[c.key]))?money.format(Number(row[c.key]))+' MT':String(row[c.key]??'—')}</td>)}{endpoint==='clientes'&&<td><button className="cis-edit-action" type="button" onClick={()=>setSelected(Number(row.ID))}>Abrir ficha <ArrowUpRight size={14}/></button></td>}</tr>)}</tbody></table>{data.data.length===0&&<div className="cis-table-none">Não foram encontrados registos para esta pesquisa.</div>}</div><div className="cis-table-footer"><span>{data.total} registos · Página {data.current_page} de {data.last_page}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=data.last_page} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div></>}
+  {!loading&&!error&&data&&<><div className="cis-table-scroll"><table><thead><tr>{fields[module].map(c=><th key={c.key}>{c.label}</th>)}{(endpoint==='clientes'||endpoint==='contractos')&&<th>Ficha</th>}</tr></thead><tbody>{data.data.map((row,i)=><tr key={String(row.ID??row.Ordem??row.Nr??i)}>{fields[module].map(c=><td key={c.key}>{monetary.has(c.key)&&row[c.key]!=null&&Number.isFinite(Number(row[c.key]))?money.format(Number(row[c.key]))+' MT':String(row[c.key]??'—')}</td>)}{endpoint==='clientes'&&<td><button className="cis-edit-action" type="button" onClick={()=>setSelected(Number(row.ID))}>Abrir ficha <ArrowUpRight size={14}/></button></td>}{endpoint==='contractos'&&<td><button className="cis-edit-action" type="button" onClick={()=>setSelectedContract(String(row['Nr do Contracto']??''))}>Abrir contrato <ArrowUpRight size={14}/></button></td>}</tr>)}</tbody></table>{data.data.length===0&&<div className="cis-table-none">Não foram encontrados registos para esta pesquisa.</div>}</div><div className="cis-table-footer"><span>{data.total} registos · Página {data.current_page} de {data.last_page}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=data.last_page} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div></>}
  </section>;
 }
