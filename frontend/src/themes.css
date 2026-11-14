@@ -1,0 +1,56 @@
+/* CIS: three selectable visual identities. Semantic tokens drive the same UI components. */
+:root,[data-theme="fintech"]{
+ --cis-sidebar:#102A43;--cis-sidebar-hover:#20425A;--cis-sidebar-text:#EAF3F8;--cis-sidebar-muted:#B8CAD7;--cis-sidebar-indicator:#41C9C3;--cis-sidebar-line:#345369;
+ --cis-primary:#087E8B;--cis-primary-hover:#066B77;--cis-tint:#E4F4F5;--cis-background:#F7F9FB;--cis-surface-subtle:#F5F9FA;
+ --cis-text:#243746;--cis-heading:#213B4D;--cis-text-muted:#607987;--cis-border:#DFE7EB;--cis-input-border:#B6CFD6;
+ --cis-hero-from:#102A43;--cis-hero-to:#176775;--cis-hero-soft:#D2EEF1;--cis-hero-accent:#94E3E1;--cis-success-bg:#E8F5EB;
+ color-scheme:light;
+}
+[data-theme="banking"]{
+ --cis-sidebar:#14263D;--cis-sidebar-hover:#263F60;--cis-sidebar-text:#EAF0FB;--cis-sidebar-muted:#B8C8E0;--cis-sidebar-indicator:#70A2FF;--cis-sidebar-line:#36516C;
+ --cis-primary:#2563EB;--cis-primary-hover:#1D4ED8;--cis-tint:#EAF1FF;--cis-background:#F8FAFC;--cis-surface-subtle:#F7FAFE;
+ --cis-text:#1E293B;--cis-heading:#14263D;--cis-text-muted:#64748B;--cis-border:#E2E8F0;--cis-input-border:#BFCEE4;
+ --cis-hero-from:#14263D;--cis-hero-to:#285A9E;--cis-hero-soft:#E1EAFB;--cis-hero-accent:#A6C8FF;--cis-success-bg:#E8F5EB;
+}
+[data-theme="premium"]{
+ --cis-sidebar:#171E2B;--cis-sidebar-hover:#303B50;--cis-sidebar-text:#EFF3F9;--cis-sidebar-muted:#C0C8D6;--cis-sidebar-indicator:#8AB7FF;--cis-sidebar-line:#3C485A;
+ --cis-primary:#3B82F6;--cis-primary-hover:#2563EB;--cis-tint:#EAF2FF;--cis-background:#F4F6F9;--cis-surface-subtle:#F8FAFD;
+ --cis-text:#202938;--cis-heading:#171E2B;--cis-text-muted:#67768A;--cis-border:#E5E7EB;--cis-input-border:#BECDE0;
+ --cis-hero-from:#171E2B;--cis-hero-to:#34425E;--cis-hero-soft:#DCE6F7;--cis-hero-accent:#A8C9FF;--cis-success-bg:#E8F5EB;
+}
+body{background:var(--cis-background);color:var(--cis-text)}
+button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
+.cis-side{background:var(--cis-sidebar);color:var(--cis-sidebar-text)}
+.cis-side nav button{color:var(--cis-sidebar-muted)}
+.cis-side nav button.current,.cis-side nav button:hover{background:var(--cis-sidebar-hover)}
+.cis-side nav button.current{box-shadow:inset 3px 0 var(--cis-sidebar-indicator)}
+.cis-profile-hero{background:linear-gradient(125deg,var(--cis-hero-from),var(--cis-hero-to))}
+.cis-login-left{background:linear-gradient(150deg,var(--cis-hero-from),var(--cis-hero-to))}
+.cis-signin,.cis-edit-actions button[type=submit],.cis-draft-form button:not(.cis-draft-cancel){background:var(--cis-primary)}
+.cis-signin:hover{background:var(--cis-primary-hover)}
+.cis-profile-hero-actions button{color:var(--cis-hero-from)}
+.cis-panel,.cis-stat,.cis-profile-content,.cis-profile-tabs{border-color:var(--cis-border)}
+.cis-table-scroll th{background:var(--cis-tint)}
+.cis-table-scroll tbody tr:hover{background:var(--cis-surface-subtle)}
+.cis-table-controls input{color:var(--cis-text)}
+.cis-brand small{color:var(--cis-sidebar-muted)}
+.cis-settings-appearance{display:grid;gap:16px;margin-bottom:26px}
+.cis-settings-appearance h2{font:800 19px Manrope;margin:0;color:var(--cis-heading)}
+.cis-settings-appearance>p{color:var(--cis-text-muted);font-size:13px;line-height:1.7}
+.cis-theme-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.cis-theme-option{display:grid;grid-template-rows:auto auto auto 1fr;gap:10px;text-align:left;background:#fff;border:2px solid var(--cis-border);border-radius:13px;padding:15px;cursor:pointer;min-width:0;transition:border-color .12s,box-shadow .12s}
+.cis-theme-option:hover{border-color:var(--cis-input-border)}
+.cis-theme-option[aria-pressed="true"]{border-color:var(--cis-primary);box-shadow:0 0 0 3px var(--cis-tint)}
+.cis-theme-preview{display:flex;height:67px;overflow:hidden;border-radius:8px;border:1px solid #e2e8f0}
+.cis-theme-preview-side{width:30%;display:grid;gap:7px;align-content:start;padding:9px}
+.cis-theme-preview-side i{display:block;height:5px;border-radius:2px;background:#ffffff80}
+.cis-theme-preview-body{flex:1;padding:9px;display:grid;gap:7px;align-content:start}
+.cis-theme-preview-body i{display:block;height:8px;background:#fff;border-radius:3px}
+.cis-theme-preview-body i:first-child{width:62%}
+.cis-theme-preview-body i:last-child{width:78%;height:18px;border-left:5px solid}
+.cis-theme-option-title{display:flex;align-items:center;justify-content:space-between;gap:7px;color:var(--cis-heading);font-weight:800;font-size:14px}
+.cis-theme-option-title svg{color:var(--cis-primary)}
+.cis-theme-option-sub{font-size:11px;color:var(--cis-text-muted)}
+.cis-theme-option-desc{font-size:12px;line-height:1.5;color:var(--cis-text-muted)}
+.cis-settings-status{display:flex;align-items:center;gap:8px;color:var(--cis-primary);font-size:12px;font-weight:700}
+@media(max-width:850px){.cis-theme-grid{grid-template-columns:1fr}}
