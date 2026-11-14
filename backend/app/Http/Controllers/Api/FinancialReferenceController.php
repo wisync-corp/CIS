@@ -28,8 +28,50 @@ final class FinancialReferenceController extends Controller
                 ->get(['limite_inferior', 'limite_superior', 'taxa', 'periodo_referencia']),
             'movimentos' => DB::table('cis_tipos_movimento')
                 ->orderBy('id')->get(['tipo_movimento', 'descricao']),
-            'unidade_periodo_confirmada' => false,
+            'unidade_periodo_confirmada' => true,
             'consulta_apenas' => true,
         ])->header('Cache-Control', 'no-store, private');
     }
+    public function quote(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN),
+            503, 'Consulta de tabela de juros disponível apenas na pré-visualização privada.');
+        if (!Schema::hasTable('cis_tabela_juros')) {
+            return response()->json(['message'=>'Tabela de juros ainda não activada.'],503)
+                ->header('Cache-Control','no-store, private');
+        }
+
+        // Não inferir taxas quando o montante cai numa lacuna, há sobreposição,
+        // ou o período não tem preço. A consulta não cria contratos.
+        $data = $request->validate([
+            'montante' => ['required','numeric','min:0','max:100000000','decimal:0,2'],
+            'periodo_dias' => ['required','integer','in:15,30'],
+        ]);
+        $matching = DB::table('cis_tabela_juros')
+            ->where('limite_inferior', '<=', $data['montante'])
+            ->where('limite_superior', '>=', $data['montante'])
+            ->where('periodo_referencia', '=', $data['periodo_dias'])
+            ->get(['limite_inferior','limite_superior','taxa','periodo_referencia']);
+
+        if ($matching->count() !== 1) {
+            return response()->json([
+                'found' => false,
+                'message' => $matching->isEmpty()
+                    ? 'Não existe taxa parametrizada para este montante e período.'
+                    : 'Existem taxas sobrepostas para este montante e período; requer revisão.',
+            ])->header('Cache-Control','no-store, private');
+        }
+
+        return response()->json([
+            'found' => true,
+            'taxa' => $matching->first()->taxa,
+            'periodo_dias' => (int)$matching->first()->periodo_referencia,
+            'limite_inferior' => (int)$matching->first()->limite_inferior,
+            'limite_superior' => (int)$matching->first()->limite_superior,
+            'consulta_apenas' => true,
+        ])->header('Cache-Control','no-store, private');
+    }
+
 }
