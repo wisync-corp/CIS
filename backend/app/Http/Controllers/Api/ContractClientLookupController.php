@@ -28,8 +28,7 @@ final class ContractClientLookupController extends Controller
             });
         }
 
-        return $builder->orderBy('Nome Completo')->orderBy('ID')
-            ->limit(30)->get()
-            ->toJson(JSON_UNESCAPED_UNICODE);
+        return response()->json($builder->orderBy('Nome Completo')->orderBy('ID')
+            ->limit(30)->get())->header('Cache-Control','no-store, private');
     }
 }
