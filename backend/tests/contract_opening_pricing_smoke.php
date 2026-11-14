@@ -2,6 +2,8 @@
 // Executar após composer install: php tests/contract_opening_pricing_smoke.php
 // Não exige ligação MySQL nem modifica qualquer dado financeiro.
 require __DIR__.'/../vendor/autoload.php';
+$app = require __DIR__.'/../bootstrap/app.php';
+$app->make(\\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
 
 use App\Services\LegacyContractPricing as Pricing;
 
