@@ -212,3 +212,13 @@ html{font-size:16px}
 .cis-contract-draft-count{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 19px;border:1px solid var(--cis-border);background:var(--cis-tint);border-radius:10px;margin-bottom:14px;color:var(--cis-heading)}
 .cis-contract-draft-count span{font-size:14px;font-weight:700}
 .cis-contract-draft-count strong{font-size:27px;font-variant-numeric:tabular-nums;color:var(--cis-primary)}
+
+/* Abertura de contrato: pesquisa vinculada ao cadastro real e prévia de vencimentos. */
+.cis-contract-client-picker>label{font-size:13px;color:var(--cis-heading);font-weight:700}
+.cis-contract-client-picker input[type=search]{margin-bottom:6px}
+.cis-contract-client-picker select{background:#fff;border-color:var(--cis-primary)}
+.cis-contract-client-picker small{color:var(--cis-text-muted);font-size:12px;line-height:1.5}
+.cis-contract-date-preview{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.cis-contract-date-preview>div{display:flex;flex-direction:column;gap:6px;padding:13px 15px;background:var(--cis-surface-subtle);border:1px solid var(--cis-border);border-radius:9px}
+.cis-contract-date-preview strong{font-size:13px;color:var(--cis-heading)}
+.cis-contract-date-preview time{font-size:15px;color:var(--cis-primary);font-variant-numeric:tabular-nums}
