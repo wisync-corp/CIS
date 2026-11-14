@@ -2,8 +2,8 @@ import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
-type Payload={contract:Item;installments:Item[];installment_rows:number;notice:string};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração';
+type Payload={contract:Item;installments:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
+type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
@@ -28,14 +28,26 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
  {tab:'Administração',icon:ShieldCheck,fields:[
   {name:'Nr do Contracto',label:'Identificador do contrato'},
   {name:'usuario',label:'Utilizador de origem'},
-  {name:'Estado do Contrato',label:'Estado original do contrato'}]},
+  {name:'Estado do Contrato',label:'Estado original do contrato'},
+  {name:'Nº',label:'Número de ordem original'},
+  {name:'Column1',label:'Coluna auxiliar legada'}]},
+ {tab:'Dados legados',icon:FileText,fields:[
+  {name:'Nr do Contracto',label:'N.º do contrato'},
+  {name:'Nº',label:'Número original'},
+  {name:'Column1',label:'Campo auxiliar legado'},
+  {name:'Codigo Cliente',label:'Código do cliente'},
+  {name:'Nº de Cliente',label:'N.º do cliente'},
+  {name:'Nome do Cliente',label:'Nome do cliente'},
+  {name:'usuario',label:'Utilizador original'}]},
 ];
 const installmentColumns=[
  {name:'Nº da Parcela',kind:'number'}, {name:'Data de Cobrança',kind:'date'},
  {name:'Data de Pagamento',kind:'date'}, {name:'Capital',kind:'number'},
  {name:'Amortização',kind:'number'}, {name:'Valor de Juros',kind:'number'},
  {name:'Valor de Multa',kind:'number'}, {name:'Valor a Pagar',kind:'number'},
- {name:'Valor Pago',kind:'number'}, {name:'Estado',kind:'text'}
+ {name:'Valor Pago',kind:'number'}, {name:'Estado',kind:'text'},
+ {name:'Situação de Pagamento',kind:'text'}, {name:'Dias',kind:'number'},
+ {name:'Intervalo',kind:'number'}, {name:'Nº',kind:'number'}, {name:'Column1',kind:'text'}
 ] as const;
 type InstallmentSort=typeof installmentColumns[number]['name'];
 function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
@@ -109,14 +121,17 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
     <div className="cis-profile-heading"><span>FICHA DE CONTRATO</span><h2>{format(contract,'Nr do Contracto')}</h2><p>{format(contract,'Nome do Cliente')} · {format(contract,'Estado do Contrato')}</p></div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
-   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Consulta apenas de leitura. Não existem operações de alteração de parcelas, juros, multas ou movimentos. Os valores são os originais, ainda não reconciliados.</span></div>
+   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Consulta apenas de leitura. Contratos Finalizados e Em Progresso são determinados pelo campo original «Estado do Contrato», não pelo estado de uma prestação. Os valores financeiros são os originais, ainda não reconciliados.</span></div>
+   {!!data.contract_fields_divergent?.length&&<div className="cis-contract-warning" role="status">Os seguintes campos não são uniformes entre as prestações deste contrato: {data.contract_fields_divergent.join(', ')}. Confirme as linhas originais antes de interpretar os valores gerais.</div>}
+   {!!data.columns_missing_in_database?.length&&<div className="cis-contract-warning" role="status">Campos previstos no formulário VBA mas ausentes desta versão da base de dados: {data.columns_missing_in_database.join(', ')}.</div>}
    <div className="cis-profile-layout">
     <nav className="cis-profile-tabs" aria-label="Secções do contrato">
      {([
       {name:'Contrato' as Tab,icon:FileText},
       {name:'Plano de prestações' as Tab,icon:Layers},
       {name:'Condições financeiras' as Tab,icon:Wallet},
-      {name:'Administração' as Tab,icon:ShieldCheck}
+      {name:'Administração' as Tab,icon:ShieldCheck},
+      {name:'Dados legados' as Tab,icon:FileText}
      ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
