@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\LegacyClienteEditController;
 use App\Http\Controllers\Api\ClientSecurityInfoController;
 use App\Http\Controllers\Api\ContractProfileController;
 use App\Http\Controllers\Api\ContractListController;
+use App\Http\Controllers\Api\ContractClientLookupController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -18,6 +19,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::put('cis/clients/{id}',[ClientController::class,'update'])->whereNumber('id')->middleware('throttle:20,1');
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateClientPreview::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes'])->middleware('throttle:30,1');
+        Route::get('contratos/clientes',[ContractClientLookupController::class,'index'])->middleware('throttle:30,1');
         Route::get('clientes/{id}',[CisConsultaController::class,'cliente'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('clientes/{id}/editar',[LegacyClienteEditController::class,'show'])->whereNumber('id')->middleware('throttle:30,1');
         Route::patch('clientes/{id}',[LegacyClienteEditController::class,'update'])->whereNumber('id')->middleware('throttle:10,1');
