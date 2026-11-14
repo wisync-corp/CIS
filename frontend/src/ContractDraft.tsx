@@ -16,8 +16,8 @@ const fields:Field[]=[
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
  {key:'prazo',label:'Prazo',type:'select',choices:['1 Mês','2 Meses','3 Meses'],required:true},
  {key:'modalidade',label:'Modalidade de pagamento',type:'select',choices:['Mensal','Uma Parcela'],required:true},
- {key:'forma',label:'Forma de pagamento',required:true,hint:'As opções dependem das definições operacionais existentes.'},
- {key:'disponibilidade',label:'Disponibilidade',required:true,hint:'Deverá ser validada com o Extracto antes do desembolso.'},
+ {key:'forma',label:'Forma de pagamento',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Corresponde às três opções originais do VBA, com ortografia corrigida na interface.'},
+ {key:'disponibilidade',label:'Meio de disponibilização do crédito',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Forma de desembolso; o saldo e o Extracto exigem reconciliação antes de qualquer gravação.'},
 ];
 const groupings=[
  {name:'Mutuário e contrato',icon:UserRound,keys:['cliente','cliente_id','numero','cidade','data_inicio','data_final']},
@@ -29,6 +29,8 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
  const [message,setMessage]=useState('');
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
+ const prazoMeses=Number((values.prazo??'').slice(0,1));
+ const numeroPrestacoes=(!prazoMeses||!tipo)?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
  const handle=(event:FormEvent)=>{event.preventDefault();setChecked(true);setMessage('Campos revistos no navegador. A criação real do contrato, o plano de prestações e o movimento de desembolso continuam desactivados até à homologação dos cálculos e das permissões.');};
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
@@ -48,6 +50,10 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
     </label>;
    })}</div>
   </section>)}
+  <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
+   <div className="cis-contract-draft-count"><span>N.º previsto de prestações (regra do VBA)</span><strong>{numeroPrestacoes??'—'}</strong></div>
+   <p>Este número representa apenas a quantidade de prestações conforme o tipo de juro, modalidade e prazo seleccionados. Montantes, juros, vencimentos e multas não são calculados nem gravados.</p>
+  </section>
   <section className="cis-panel cis-contract-draft-section"><h3><ArrowRightLeft size={20}/> Operações previstas no formulário original</h3>
    <p>As operações seguintes constam de Contractos.frm. Permanecem bloqueadas porque modificam valores financeiros ou dependem da Cobrança e do Extracto.</p>
    <div className="cis-contract-workflow-actions">
