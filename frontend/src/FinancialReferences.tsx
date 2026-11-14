@@ -37,10 +37,10 @@ export default function FinancialReferences({token}:{token:string}){
   {refs&&<div className="cis-financial-reference-grid">
    <section className="cis-panel cis-financial-reference-section">
     <h3>Tabela de preços de juros</h3>
-    <p>Limites monetários, taxa e período exactamente como definidos na tabela original.</p>
-    <div className="cis-contract-notice"><AlertTriangle size={17}/><span>Unidade do «Período» ainda não confirmada. Estes valores não são utilizados para calcular ou emitir novos contratos.</span></div>
+    <p>Montante mínimo e máximo (MT), taxa e período de 15 ou 30 dias, conforme a tabela original.</p>
+    <div className="cis-contract-notice"><AlertTriangle size={17}/><span>Os períodos da tabela são 15 ou 30 dias. A taxa é consultada automaticamente no formulário de preparação de contratos com juro fixo, mas ainda não autoriza a emissão de contratos.</span></div>
     <div className="cis-table-scroll"><table>
-     <thead><tr><th>Limite inferior (MT)</th><th>Limite superior (MT)</th><th>Taxa (%)</th><th>Período (valor original)</th></tr></thead>
+     <thead><tr><th>Limite inferior (MT)</th><th>Limite superior (MT)</th><th>Taxa (%)</th><th>Período (dias)</th></tr></thead>
      <tbody>{refs.juros.map((row,index)=><tr key={index}>
       <td>{number.format(row.limite_inferior)}</td><td>{number.format(row.limite_superior)}</td>
       <td>{number.format(Number(row.taxa))}%</td><td>{row.periodo_referencia}</td>
