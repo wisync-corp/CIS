@@ -185,3 +185,25 @@ html{font-size:16px}
 .cis-contract-summary-card.warning strong{color:#98610f}
 .cis-contract-summary-card:focus-visible{outline:3px solid var(--cis-primary);outline-offset:2px}
 @media(max-width:560px){.cis-contract-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.cis-contract-summary-card{padding:13px;min-height:108px}.cis-contract-summary-card.selected{padding:12px}.cis-contract-summary-card strong{font-size:25px}}
+
+/* Contractos.frm: full legacy ledger and guided, non-writing contract form. */
+.cis-contract-draft{display:grid;gap:16px}
+.cis-contract-draft-section{padding:24px}
+.cis-contract-draft-section h3{display:flex;align-items:center;gap:10px;color:var(--cis-heading);font-size:19px;margin:0 0 18px}
+.cis-contract-draft-section p{font-size:14px;color:var(--cis-text-muted);line-height:1.7;margin:0 0 14px}
+.cis-contract-draft-section .cis-profile-field select,.cis-contract-draft-section .cis-profile-field input{font-size:15px;min-height:44px;width:100%;padding:11px 13px;border:1px solid var(--cis-input-border);border-radius:8px;color:var(--cis-text);background:#fff}
+.cis-contract-draft-section .cis-profile-field input:disabled,.cis-contract-draft-section .cis-profile-field select:disabled{background:var(--cis-surface-subtle);opacity:.75}
+.cis-contract-draft-section .cis-profile-field small{line-height:1.4}
+.cis-contract-draft-section .cis-edit-actions{display:flex;gap:9px;flex-wrap:wrap}
+.cis-contract-draft-section .cis-edit-actions button{display:inline-flex;gap:8px;align-items:center;font-size:14px}
+.cis-contract-workflow-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.cis-contract-workflow-actions button{display:flex;align-items:center;gap:8px;text-align:left;padding:13px;border:1px solid var(--cis-border);background:var(--cis-surface-subtle);color:var(--cis-text-muted);border-radius:9px;font-size:13px;font-weight:700;cursor:not-allowed}
+.cis-contract-all-fields{min-width:0}
+.cis-contract-all-fields>.cis-contract-count{font-weight:500;line-height:1.6;white-space:normal}
+.cis-contract-all-fields .cis-table-scroll{overflow:auto;max-width:100%;border:1px solid var(--cis-border);border-radius:9px}
+.cis-contract-all-fields table{width:max-content;min-width:100%;font-variant-numeric:tabular-nums}
+.cis-contract-all-fields th{position:sticky;top:0;background:var(--cis-tint);z-index:1}
+.cis-contract-head-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cis-contract-draft-button{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid var(--cis-input-border);border-radius:9px;color:var(--cis-primary);background:var(--cis-tint);font-size:13px;font-weight:800;cursor:pointer}
+.cis-contract-draft-button:hover{border-color:var(--cis-primary)}
+@media(max-width:650px){.cis-contract-draft-section{padding:17px}.cis-contract-head-actions{width:100%;justify-content:flex-start}}
