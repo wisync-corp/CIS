@@ -15,6 +15,15 @@ sql() {
 echo "A verificar exclusivamente as colunas validade_documento e melhor_horario_contacto..."
 engine="$(sql "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes';")"
 [[ "$engine" == "InnoDB" ]] || { echo "BLOQUEADO: motor esperado InnoDB, encontrado $engine." >&2; exit 1; }
+# IMPORTANTE: ALTER de outras colunas pode revalidar as datas legadas existentes.
+# Bloquear ANTES de qualquer UPDATE se houver datas zero na tabela original.
+zero_issue_dates="$(sql "SELECT COUNT(*) FROM \`Clientes\` WHERE CAST(\`Data de Emissão\` AS CHAR) LIKE '0000-00-00%';")"
+if [[ "$zero_issue_dates" != "0" ]]; then
+ echo "BLOQUEADO ANTES DE ALTERAR: existem $zero_issue_dates datas zero em 'Data de Emissão'." >&2
+ echo "Não vamos modificar os dados originais sem uma decisão específica." >&2
+ echo "Use: bash deploy/check-legacy-zero-dates.sh" >&2
+ exit 1
+fi
 rows_before="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
 [[ "$rows_before" == 122 ]] || { echo "BLOQUEADO: contagem inesperada de clientes ($rows_before). Rever antes de prosseguir." >&2; exit 1; }
 date_type="$(sql "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME='validade_documento';")"
