@@ -207,3 +207,8 @@ html{font-size:16px}
 .cis-contract-draft-button{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid var(--cis-input-border);border-radius:9px;color:var(--cis-primary);background:var(--cis-tint);font-size:13px;font-weight:800;cursor:pointer}
 .cis-contract-draft-button:hover{border-color:var(--cis-primary)}
 @media(max-width:650px){.cis-contract-draft-section{padding:17px}.cis-contract-head-actions{width:100%;justify-content:flex-start}}
+
+/* Número de prestações previsto: indicador de quantidade, não cálculo financeiro. */
+.cis-contract-draft-count{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 19px;border:1px solid var(--cis-border);background:var(--cis-tint);border-radius:10px;margin-bottom:14px;color:var(--cis-heading)}
+.cis-contract-draft-count span{font-size:14px;font-weight:700}
+.cis-contract-draft-count strong{font-size:27px;font-variant-numeric:tabular-nums;color:var(--cis-primary)}
