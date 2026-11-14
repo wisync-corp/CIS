@@ -70,6 +70,7 @@ final class ContractProfileController extends Controller
         })->values();
         return response()->json([
             'contract' => $detail, 'installments' => $payments,
+            'legacy_rows' => $rows,
             'installment_rows' => $total,
             'contract_fields_divergent' => $divergent,
             'columns_missing_in_database' => array_values(array_diff(array_unique(array_merge(self::CONTRACT_FIELDS,self::PAYMENT_FIELDS)), array_keys($available))),
