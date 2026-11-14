@@ -191,7 +191,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
        <div className="cis-profile-field"><span>Documento original</span><div className="cis-profile-field-value">Ainda não associado ao armazenamento privado do CIS</div></div>
       </div>
       <p>Será necessário importar os PDFs originais e confirmar a correspondência de cada documento com o seu contrato, protegendo os ficheiros por permissões. Não será criado um documento fictício.</p>
-     </section>:     {tab==='Todos os campos'?<div className="cis-contract-all-fields">
+     </section>:tab==='Todos os campos'?<div className="cis-contract-all-fields">
       <p className="cis-contract-count">Consulta integral das 33 colunas do INSERT original do Contractos.frm, para cada prestação. Os valores permanecem os da base MySQL.</p>
       <div className="cis-table-scroll"><table><thead><tr>{allLegacyColumns.map(name=><th key={name}>{name}</th>)}</tr></thead>
       <tbody>{(data.legacy_rows??[]).map((row,index)=><tr key={String(row.Ordem??index)}>
