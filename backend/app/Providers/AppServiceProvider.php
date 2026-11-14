@@ -5,6 +5,12 @@ use Illuminate\Support\Facades\Gate;
 class AppServiceProvider extends ServiceProvider {
     public function register(): void {
         config(['database.connections.mysql_legacy' => require base_path('config/legacy-connection.example.php')]);
+        config(['database.connections.mysql_contract_writer' => array_merge(config('database.connections.mysql'), [
+            'host' => env('CONTRACT_WRITER_DB_HOST', 'mysql'),
+            'database' => env('CONTRACT_WRITER_DB_DATABASE', ''),
+            'username' => env('CONTRACT_WRITER_DB_USERNAME', ''),
+            'password' => env('CONTRACT_WRITER_DB_PASSWORD', ''),
+        ])]);
         config(['database.connections.mysql_editor' => array_merge(config('database.connections.mysql'), [
             'host' => env('CLIENT_EDITOR_DB_HOST', 'mysql'),
             'database' => env('CLIENT_EDITOR_DB_DATABASE', ''),
