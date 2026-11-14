@@ -27,7 +27,7 @@ final class ContractOpeningReviewController extends Controller
             'montante' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'tipo_juro' => ['required','in:Fixo,Variável,Composto'],
             'periodo_dias' => ['nullable','integer','in:15,30'],
-            'taxa_informada' => ['nullable','numeric','between:0,100'],
+            'taxa_informada' => ['required','numeric','between:0,100'],
             'taxa_multa' => ['required','numeric','between:0,100'],
             'prazo_meses' => ['required','integer','in:1,2,3'],
             'modalidade' => ['required','in:Mensal,Uma Parcela'],
@@ -65,7 +65,16 @@ final class ContractOpeningReviewController extends Controller
                 }
             }
         } else {
-            $issues[] = 'Regras de juros variáveis/compostos ainda não homologadas com o VBA.';
+            // Contractos.frm deixa a taxa de Variável e Composto ao utilizador;
+            // os cálculos só serão gravados no endpoint financeiro protegido.
+            if (!is_numeric($values['taxa_informada'])) {
+                $issues[] = 'É necessária uma taxa manual válida.';
+            }
+        }
+        foreach (['taxa_informada','taxa_multa'] as $column) {
+            if (abs((float)$values[$column] - round((float)$values[$column])) > 0.000001) {
+                $issues[] = 'As taxas do MySQL original usam INT; valores decimais exigem migração autorizada.';
+            }
         }
         if ($values['tipo_juro'] === 'Variável' && $values['modalidade'] !== 'Uma Parcela') {
             $issues[] = 'Modalidade incompatível com a regra de preparação para juro variável.';
@@ -85,12 +94,11 @@ final class ContractOpeningReviewController extends Controller
             'taxa_tabela' => $rate,
             'problemas' => $issues,
             'dados_verificados' => count($issues) === 0,
-            'autorizado_para_gravar' => false,
+            'autorizado_para_gravar' => count($issues) === 0 && filter_var(env('CIS_NEW_CONTRACTS_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
             'pendencias' => [
-                'Rever o ficheiro Contractos.frm original e confrontar fórmulas de juros/amortização.',
-                'Homologar a geração exacta de prestações.',
-                'Conciliar saldo de caixa e movimentos de desembolso no Extracto.',
-                'Definir numeração segura de contratos e permissões de escrita.',
+                'O servidor verificará novamente saldo disponível, taxa, cliente e esquema antes de gravar.',
+                'Os campos Capital/Amortização originais são INT: operações com perda de cêntimos serão recusadas.',
+                'O desembolso deve ser confirmado pelo operador; contrato e Extracto são gravados na mesma transacção.',
             ],
         ])->header('Cache-Control', 'no-store, private');
     }
