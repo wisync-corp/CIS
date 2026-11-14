@@ -222,3 +222,8 @@ html{font-size:16px}
 .cis-contract-date-preview>div{display:flex;flex-direction:column;gap:6px;padding:13px 15px;background:var(--cis-surface-subtle);border:1px solid var(--cis-border);border-radius:9px}
 .cis-contract-date-preview strong{font-size:13px;color:var(--cis-heading)}
 .cis-contract-date-preview time{font-size:15px;color:var(--cis-primary);font-variant-numeric:tabular-nums}
+
+/* Consulta automática da taxa no formulário de abertura de contrato. */
+.cis-contract-draft-section .cis-profile-field .cis-pricing-success{display:block;color:#116445;font-size:13px;font-weight:700;line-height:1.5}
+.cis-contract-draft-section .cis-profile-field .cis-pricing-pending{display:block;color:var(--cis-text-muted);font-size:13px;line-height:1.5}
+.cis-contract-draft-section .cis-profile-field input:disabled{opacity:1}
