@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\LegacyContractPricing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 final class ContractOpeningController extends Controller
@@ -76,6 +75,11 @@ final class ContractOpeningController extends Controller
                 foreach ($schema as $col) {
                     $types[$col->TABLE_NAME][$col->COLUMN_NAME] = $col;
                 }
+                $engines=$db->select("SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('Contractos','Extracto')");
+                abort_unless(count($engines)===2 && collect($engines)->every(
+                    fn ($table) => strtoupper((string)$table->ENGINE)==='INNODB'
+                ),503,'Ambas as tabelas financeiras devem usar InnoDB para garantir rollback.');
                 foreach (['Contractos'=>['Ordem','Nr do Contracto','Nº',
                     'Nome do Cliente','Nº de Cliente','Quantia Creditada','M. Pagamento',
                     'Prazo/Duração','% de Juro','Tipo de Juro','% de Multa',
