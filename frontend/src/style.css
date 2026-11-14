@@ -244,3 +244,9 @@ html{font-size:16px}
 .cis-contract-operation p{font-size:14px;line-height:1.6;color:var(--cis-text-muted)}
 .cis-contract-operation .cis-profile-field select,.cis-contract-operation .cis-profile-field input{min-height:44px;width:100%;border:1px solid var(--cis-input-border);border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:var(--cis-text)}
 .cis-contract-operation .cis-table-scroll{max-width:100%;overflow:auto}
+
+/* Confirmação explícita de desembolso com separação da simples validação. */
+.cis-contract-confirm{display:flex;align-items:flex-start;gap:12px;line-height:1.6;margin:13px 0 17px;cursor:pointer}
+.cis-contract-confirm input[type=checkbox]{width:20px;min-width:20px;height:20px;margin-top:2px;accent-color:var(--cis-primary)}
+.cis-contract-review button:disabled{cursor:not-allowed;opacity:.55}
+.cis-contract-review>.cis-contract-draft-button{margin-top:4px}
