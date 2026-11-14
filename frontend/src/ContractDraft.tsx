@@ -4,6 +4,7 @@ import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,Rotat
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
 type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string;Cidade:string|null};
 type InterestQuote={found:boolean;taxa?:string|number;periodo_dias?:number;limite_inferior?:number;limite_superior?:number;message?:string};
+type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:false;pendencias:string[]};
 const API=import.meta.env.VITE_API_URL||'/api';
 function monthAfter(date:string,months:number):string {
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';
@@ -91,6 +92,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  },[fixedRate,validAmount,values.quantia,values.periodo_tabela,token,currentQuoteKey]);
  const [checked,setChecked]=useState(false);
  const [message,setMessage]=useState('');
+ const [review,setReview]=useState<OpeningReview|null>(null);
+ const [reviewBusy,setReviewBusy]=useState(false);
+ const [reviewError,setReviewError]=useState('');
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
  const prazoMeses=Number((values.prazo??'').slice(0,1));
@@ -98,12 +102,39 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const dataFinal=values.data_inicio&&prazoMeses?monthAfter(values.data_inicio,prazoMeses):'';
  const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
   index+1===numeroPrestacoes?dataFinal:monthAfter(values.data_inicio,index+1)):[];
- const handle=(event:FormEvent)=>{event.preventDefault();if(fixedRate&&!priced){setQuoteError('Sem taxa parametrizada válida. Seleccione montante e período disponíveis antes de continuar.');return;}if(!selectedBorrower){setClientError('Seleccione um cliente existente no cadastro.');return;}setChecked(true);setMessage('Campos revistos no navegador. A criação real do contrato, o plano de prestações e o movimento de desembolso continuam desactivados até à homologação dos cálculos e das permissões.');};
+ const handle=async(event:FormEvent)=>{
+  event.preventDefault();
+  setReview(null);setReviewError('');setMessage('');setChecked(false);
+  if(fixedRate&&!priced){setQuoteError('Não existe taxa parametrizada válida para este montante e período.');return;}
+  if(!selectedBorrower){setClientError('Seleccione um cliente existente no cadastro.');return;}
+  setReviewBusy(true);
+  try{
+   const result=await fetch(API+'/cis/contractos/validar-abertura',{
+    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+    body:JSON.stringify({
+     cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
+     periodo_dias:fixedRate?Number(values.periodo_tabela):null,
+     taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
+     taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
+     modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
+     data_inicio:values.data_inicio
+    })
+   });
+   if(!result.ok){
+    if(result.status===422)throw new Error('Existem dados inválidos. Verifique os campos preenchidos.');
+    throw new Error(result.status===503?'A validação privada ainda não foi activada.':'Não foi possível validar os dados no servidor.');
+   }
+   const body=await result.json() as OpeningReview;
+   setReview(body);setChecked(true);
+   setMessage('Verificação concluída no Laravel, sem criar contrato ou movimento financeiro.');
+  }catch(error){setReviewError(error instanceof Error?error.message:'Erro na validação.');}
+  finally{setReviewBusy(false);}
+ };
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
   <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Modo de preparação:</strong> este formulário não cria contratos, não calcula prestações definitivas e não altera o Extracto. O registo financeiro real só ficará disponível após validação explícita das regras VBA e dos controlos de acesso.</span></div>
-  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setMessage('');}}>
+  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
@@ -146,7 +177,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
    <p>Prazo permitido no formulário: 1, 2 ou 3 meses. Juro variável: uma parcela, com juros apurados na cobrança após a data efectiva de pagamento. Juro composto: prestações mensais. Juro fixo: uma parcela ou mensal. Nenhum cálculo é aplicado a valores financeiros reais nesta fase.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
-   <div className="cis-edit-actions"><button type="reset"><RotateCcw size={16}/> Limpar formulário</button><button type="submit">Verificar preenchimento</button></div>
+   {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
+   {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}</p>
+    {review.problemas.length>0&&<div><strong>Incompatibilidades</strong><ul>{review.problemas.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}
+    <div><strong>Requisitos para activar a abertura real</strong><ul>{review.pendencias.map(item=><li key={item}>{item}</li>)}</ul></div>
+    <p><strong>Abertura e desembolso: não autorizados.</strong> Esta verificação não grava contratos, prestações nem extractos.</p></div>}
+   <div className="cis-edit-actions"><button type="reset"><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>
   </section></form>
  </section>;
 }
