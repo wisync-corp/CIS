@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette} from 'lucide-react';
 import {themeOptions,type ThemeId} from './theme';
+import FinancialReferences from './FinancialReferences';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
@@ -30,6 +31,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
    <div className="cis-settings-status"><CheckCircle2 size={16}/>Tema {themeOptions.find(option=>option.id===theme)?.name} activo · Guardado neste navegador</div>
    <p>A escolha fica guardada apenas neste navegador. Em outro dispositivo, poderá seleccionar o tema novamente.</p>
   </section>
+  {role==='administrador'&&<FinancialReferences token={token}/>}
   {role==='administrador'&&<section className="cis-panel">
    <div className="cis-panel-head"><div><h2>Estado da ligação MySQL</h2><p>Verificação de configuração, sem exposição de credenciais.</p></div><button type="button" className="cis-client-edit" onClick={()=>setReload(x=>x+1)} aria-label="Actualizar estado"><RefreshCw size={18}/></button></div>
    <div className="cis-banner"><ShieldCheck size={20}/><div><b>As credenciais não devem ser introduzidas neste site.</b><p>Guarda os acessos apenas no ambiente privado do servidor. Esta página não apresenta palavras-passe ou chaves.</p></div></div>
