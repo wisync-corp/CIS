@@ -1,11 +1,14 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {ShieldCheck, ArrowRight, Eye, EyeOff, LockKeyhole, Landmark} from 'lucide-react';
 import Dashboard from './Dashboard';
+import {applyTheme,getTheme,type ThemeId} from './theme';
 
 type User={name:string;email:string;role:string};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export default function App(){
+ const [theme,setTheme]=useState<ThemeId>(getTheme);
+ useEffect(()=>{applyTheme(theme);},[theme]);
  const [token,setToken]=useState<string|null>(sessionStorage.getItem('cis_token'));
  const [user,setUser]=useState<User|null>(null);
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
@@ -25,7 +28,7 @@ export default function App(){
  async function logout(){if(token)await fetch(API+'/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+token}}).catch(()=>{});
  sessionStorage.removeItem('cis_token');setToken(null);setUser(null);}
  if(token&&!user)return <div className="cis-auth-pending" role="status">A validar a sessão do CIS…</div>;
- if(token&&user)return <Dashboard token={token} name={user.name} role={user.role} onLogout={logout}/>;
+ if(token&&user)return <Dashboard token={token} name={user.name} role={user.role} theme={theme} onThemeChange={setTheme} onLogout={logout}/>;
  return <div className="cis-login"><div className="cis-login-left"><div className="cis-login-brand"><div>C<span>·</span></div><strong>CIS<small>CREDIT INSIGHT SHIFT</small></strong></div><div className="cis-login-story"><div className="cis-login-eyebrow">PLATAFORMA DE GESTÃO FINANCEIRA</div><h1>Crédito com<br/>mais <em>clareza.</em><br/>Gestão com<br/>mais confiança.</h1><p>Um só espaço para acompanhar clientes, contratos, prestações e operações de microcrédito.</p><div className="cis-login-feature"><ShieldCheck size={21}/><span>Protecção de dados e controlo de acessos</span></div></div><div className="cis-login-caption">CIS · Sistema de Informação de Crédito</div></div>
  <div className="cis-login-right"><form className="cis-login-form" onSubmit={login}><div className="cis-login-mobile-mark"><Landmark size={19}/> CIS</div><div className="cis-form-caption">ÁREA RESERVADA</div><h2>Entrar na plataforma</h2><p>Introduza as credenciais do CIS Web para continuar.</p>
  <label htmlFor="email">Endereço de email</label><input id="email" type="email" autoComplete="username" required placeholder="nome@empresa.co.mz" value={email} onChange={e=>setEmail(e.target.value)}/>
