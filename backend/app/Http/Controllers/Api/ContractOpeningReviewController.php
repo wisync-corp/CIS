@@ -14,6 +14,26 @@ final class ContractOpeningReviewController extends Controller
      * não gera parcelas reais, não lança desembolsos e não modifica Extracto.
      * A revisão exacta de Contractos.frm é obrigatória antes de autorizar escrita.
      */
+    public function cashBalance(Request $request)
+    {
+        $user=$request->user();
+        abort_unless($user && $user->active && $user->role==='administrador',403);
+        abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN)
+            && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503);
+        $rows=DB::connection('mysql_legacy')->table('Extracto')
+            ->get(['Tipo de Movimento','Valor']);
+        $saldo=0.0;
+        foreach ($rows as $row) {
+            $amount=(float)$row->Valor;
+            abort_unless(is_finite($amount) && $amount>=0,409,
+                'Extracto contém valores inconsistentes; não é possível determinar o saldo.');
+            $saldo += $row->{'Tipo de Movimento'}==='Entradas'?$amount:-$amount;
+        }
+        return response()->json(['saldo_disponivel'=>max(0,floor($saldo)),
+            'saldo_contabil'=>round($saldo,2),
+            'consulta_apenas'=>true])->header('Cache-Control','no-store, private');
+    }
+
     public function validateDraft(Request $request)
     {
         $user = $request->user();
