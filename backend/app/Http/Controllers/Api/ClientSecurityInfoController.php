@@ -59,7 +59,7 @@ final class ClientSecurityInfoController extends Controller
             'contacto_alternativo' => ['nullable', 'string', 'max:40'],
             'pessoa_referencia_nome' => ['nullable', 'string', 'max:180'],
             'pessoa_referencia_contacto' => ['nullable', 'string', 'max:40'],
-            'melhor_horario_contacto' => ['nullable', 'string', 'max:100'],
+            'melhor_horario_contacto' => ['nullable', 'date_format:H:i'],
             'tipo_cliente' => ['nullable', 'string', 'max:60'],
             'genero' => ['nullable', 'string', 'max:50'],
             'profissao' => ['nullable', 'string', 'max:150'],
@@ -85,6 +85,10 @@ final class ClientSecurityInfoController extends Controller
         foreach (self::FIELDS as $field) {
             $value = $validated[$field] ?? null;
             $values[$field] = is_string($value) && trim($value) !== '' ? trim($value) : null;
+        }
+        // MySQL TIME normaliza HH:MM para HH:MM:SS; DATE usa ISO YYYY-MM-DD.
+        if ($values['melhor_horario_contacto'] !== null) {
+            $values['melhor_horario_contacto'] .= ':00';
         }
         $db = DB::connection('mysql_editor');
         $db->transaction(function () use ($db, $id, $values) {
