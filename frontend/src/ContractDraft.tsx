@@ -23,7 +23,7 @@ const fields:Field[]=[
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
- {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Depende da reconciliação das entradas e saídas do Extracto.'},
+ {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
  {key:'periodo_tabela',label:'Período automático da tabela (dias)',type:'select',choices:['30'],hint:'Contractos.frm usa k = 30 quando o prazo mensal está seleccionado. A tabela de 15 dias fica em Definições, mas não é aplicada automaticamente por este formulário.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
@@ -44,6 +44,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [selectedBorrower,setSelectedBorrower]=useState<Borrower|null>(null);
  const [clientError,setClientError]=useState('');
  const [clientLoading,setClientLoading]=useState(false);
+ const [cashBalance,setCashBalance]=useState<string>('');
+ const [cashError,setCashError]=useState('');
  const [quote,setQuote]=useState<InterestQuote|null>(null);
  const [quoteKey,setQuoteKey]=useState('');
  const [quoteLoading,setQuoteLoading]=useState(false);
@@ -65,6 +67,17 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   },300);
   return ()=>{controller.abort();window.clearTimeout(timer);};
  },[clientSearch,token]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  fetch(API+'/cis/contractos/saldo',{headers:{
+   Authorization:'Bearer '+token,Accept:'application/json'
+  },signal:controller.signal}).then(async res=>{
+   if(!res.ok)throw new Error('Saldo ainda não disponível para consulta.');
+   return res.json() as Promise<{saldo_disponivel:number}>;
+  }).then(data=>{if(!controller.signal.aborted)setCashBalance(String(data.saldo_disponivel));})
+   .catch(e=>{if(e.name!=='AbortError')setCashError(e.message);});
+  return ()=>controller.abort();
+ },[token]);
  const fixedRate=values.tipo_juro==='Fixo';
  const currentQuoteKey=values.quantia+'|30';
  const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\.\d{1,2})?$/.test(values.quantia??'');
@@ -177,7 +190,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
     const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo))||(key==='juros'&&fixedRate)||(key==='periodo_tabela');
-    const val=key==='modalidade'?modalidade:key==='periodo_tabela'&&fixedRate?'30':key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
+    const val=key==='modalidade'?modalidade:key==='saldo_disponivel'?cashBalance:key==='periodo_tabela'&&fixedRate?'30':key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <input id="cis-client-search" type="search" placeholder="Escreva nome ou ID do cliente" value={clientSearch} autoComplete="off" onChange={e=>setClientSearch(e.target.value)}/>
@@ -194,6 +207,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
        <option value="">Seleccionar</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
       </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
+     {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
      {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Preencha o montante e o prazo. O VBA consulta automaticamente 30 dias.')}</small>}
     </label>;
    })}</div>
