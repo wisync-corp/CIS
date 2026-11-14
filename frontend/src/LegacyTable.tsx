@@ -21,7 +21,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
  const [selected,setSelected]=useState<number|null>(null);
  const [selectedContract,setSelectedContract]=useState<string|null>(null);
  const [contractDraftOpen,setContractDraftOpen]=useState(false);
- useEffect(()=>{onProfileChange?.((module==='Clientes'&&selected!==null)||(module==='Contratos e prestações'&&selectedContract!==null));return ()=>onProfileChange?.(false);},[module,selected,selectedContract,contractDraftOpen,onProfileChange]);
+ useEffect(()=>{onProfileChange?.((module==='Clientes'&&selected!==null)||(module==='Contratos e prestações'&&(selectedContract!==null||contractDraftOpen)));return ()=>onProfileChange?.(false);},[module,selected,selectedContract,contractDraftOpen,onProfileChange]);
  const [page,setPage]=useState(1),[search,setSearch]=useState(''),[term,setTerm]=useState('');
  const [contractStates,setContractStates]=useState<string[]>([]);
  const [contractSummary,setContractSummary]=useState<ContractSummary|null>(null);
