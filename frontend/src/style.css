@@ -234,3 +234,13 @@ html{font-size:16px}
 .cis-contract-review>div{margin:12px 0}
 .cis-contract-review ul{padding-left:22px;margin:5px 0 0}
 .cis-contract-review li{margin:5px 0}
+
+/* Operações VBA: navegação activa para revisão, sem transacções financeiras. */
+.cis-contract-workflow-actions button:not(:disabled){cursor:pointer;color:var(--cis-heading);background:var(--cis-tint);border-color:var(--cis-input-border)}
+.cis-contract-workflow-actions button:not(:disabled):hover{border-color:var(--cis-primary)}
+.cis-contract-workflow-actions button:focus-visible{outline:2px solid var(--cis-primary);outline-offset:2px}
+.cis-contract-operation{display:grid;gap:18px;min-width:0}
+.cis-contract-operation h4{font-size:17px;color:var(--cis-heading);margin:4px 0 0}
+.cis-contract-operation p{font-size:14px;line-height:1.6;color:var(--cis-text-muted)}
+.cis-contract-operation .cis-profile-field select,.cis-contract-operation .cis-profile-field input{min-height:44px;width:100%;border:1px solid var(--cis-input-border);border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:var(--cis-text)}
+.cis-contract-operation .cis-table-scroll{max-width:100%;overflow:auto}
