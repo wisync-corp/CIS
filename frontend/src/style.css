@@ -173,3 +173,15 @@ html{font-size:16px}
 
 /* Alertas de discrepância dos contratos legados — não ocultar informação inconclusiva. */
 .cis-contract-warning{border:1px solid #f0ce89;background:#fff8e7;color:#704b13;border-radius:10px;padding:12px 15px;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+
+/* Cartões de estado calculados a partir dos contratos distintos; filtragem num clique. */
+.cis-contract-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 22px}
+.cis-contract-summary-card{text-align:left;display:flex;flex-direction:column;gap:6px;min-height:120px;padding:17px 18px;background:#fff;border:1px solid var(--cis-border);border-radius:12px;color:var(--cis-text);cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.cis-contract-summary-card:hover{border-color:var(--cis-primary);box-shadow:0 4px 16px #123f3512}
+.cis-contract-summary-card.selected{border:2px solid var(--cis-primary);padding:16px 17px;background:var(--cis-tint)}
+.cis-contract-summary-card span{font-size:13px;font-weight:750;line-height:1.35}
+.cis-contract-summary-card strong{font-size:30px;line-height:1.1;font-weight:800;color:var(--cis-heading);font-variant-numeric:tabular-nums}
+.cis-contract-summary-card small{font-size:12px;color:var(--cis-text-muted)}
+.cis-contract-summary-card.warning strong{color:#98610f}
+.cis-contract-summary-card:focus-visible{outline:3px solid var(--cis-primary);outline-offset:2px}
+@media(max-width:560px){.cis-contract-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.cis-contract-summary-card{padding:13px;min-height:108px}.cis-contract-summary-card.selected{padding:12px}.cis-contract-summary-card strong{font-size:25px}}
