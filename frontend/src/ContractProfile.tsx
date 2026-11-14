@@ -2,8 +2,8 @@ import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
-type Payload={contract:Item;installments:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados';
+type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
+type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados'|'Todos os campos';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
@@ -40,6 +40,18 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
   {name:'Nome do Cliente',label:'Nome do cliente'},
   {name:'usuario',label:'Utilizador original'}]},
 ];
+// Os 33 campos originais são copiados do INSERT INTO Contractos do ficheiro Contractos.frm.
+const allLegacyColumns=[
+ 'Nr do Contracto','Nº','Nome do Cliente','Nº de Cliente',
+ 'Quantia Creditada','M. Pagamento','Prazo/Duração','% de Juro','Tipo de Juro','% de Multa',
+ 'Forma de Pagamento','Disponibilidade','Data de Inicio','Cidade','Data Final',
+ 'Data de Cobrança','Capital','Amortização','Valor a Pagar','Data de Pagamento',
+ 'Valor de Juros','Valor de Multa','Valor Pago','Estado','Codigo Cliente',
+ 'Estado do Contrato','Nº da Parcela','Nº de Prestações','Column1',
+ 'Dias','Intervalo','Situação de Pagamento','usuario'
+] as const;
+const dateLegacyColumns=new Set(['Data de Inicio','Data Final','Data de Cobrança','Data de Pagamento']);
+const moneyLegacyColumns=new Set(['Quantia Creditada','Capital','Amortização','Valor a Pagar','Valor de Juros','Valor de Multa','Valor Pago']);
 const installmentColumns=[
  {name:'Nº da Parcela',kind:'number'}, {name:'Data de Cobrança',kind:'date'},
  {name:'Data de Pagamento',kind:'date'}, {name:'Capital',kind:'number'},
@@ -131,12 +143,21 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       {name:'Plano de prestações' as Tab,icon:Layers},
       {name:'Condições financeiras' as Tab,icon:Wallet},
       {name:'Administração' as Tab,icon:ShieldCheck},
-      {name:'Dados legados' as Tab,icon:FileText}
+      {name:'Dados legados' as Tab,icon:FileText},
+      {name:'Todos os campos' as Tab,icon:Layers}
      ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':'Informações originais do sistema de microcrédito.'}</p></div></header>
-     {tab==='Plano de prestações'?<>
+     {tab==='Todos os campos'?<div className="cis-contract-all-fields">
+      <p className="cis-contract-count">Consulta integral das 33 colunas do INSERT original do Contractos.frm, para cada prestação. Os valores permanecem os da base MySQL.</p>
+      <div className="cis-table-scroll"><table><thead><tr>{allLegacyColumns.map(name=><th key={name}>{name}</th>)}</tr></thead>
+      <tbody>{(data.legacy_rows??[]).map((row,index)=><tr key={String(row.Ordem??index)}>
+       {allLegacyColumns.map(name=><td key={name}>{Object.prototype.hasOwnProperty.call(row,name)
+       ?format(row,name,dateLegacyColumns.has(name)?'date':moneyLegacyColumns.has(name)?'money':undefined)
+       :'Campo ausente na tabela'}</td>)}
+      </tr>)}</tbody></table></div>
+     </div>:tab==='Plano de prestações'?<>
       <div className="cis-contract-count"><CalendarDays size={18}/>{data.installment_rows} linha(s) de prestação registada(s)</div>
       <div className="cis-table-scroll"><table><thead><tr>{installmentColumns.map(({name,kind})=><th key={name} aria-sort={sortColumn===name?(sortDirection==='asc'?'ascending':'descending'):undefined}>
        <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${name} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
