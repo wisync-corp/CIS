@@ -101,7 +101,7 @@ final class ContractOpeningController extends Controller
                 }
 
                 $buyer = $db->table('Clientes')->where('ID',$d['cliente_id'])
-                    ->lockForUpdate()->limit(2)
+                    ->limit(2)
                     ->get(['ID','Nome Completo','Cidade']);
                 abort_if($buyer->count()!==1,422,
                     'Cliente inexistente ou identificador duplicado.');
@@ -127,7 +127,7 @@ final class ContractOpeningController extends Controller
                 $plan=LegacyContractPricing::plan((float)$d['montante'],$rate,
                     $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio']);
                 $cashRows=$db->table('Extracto')
-                    ->select(['Tipo de Movimento','Valor'])->lockForUpdate()->get();
+                    ->select(['Tipo de Movimento','Valor'])->get();
                 $saldo=0.0;
                 foreach ($cashRows as $movement) {
                     $amount=(float)$movement->Valor;
@@ -145,7 +145,7 @@ final class ContractOpeningController extends Controller
                 $dup=$db->table('Contractos')
                     ->where('Nº de Cliente',$d['cliente_id'])
                     ->where('Data de Inicio',$d['data_inicio'])
-                    ->where('Quantia Creditada',$d['montante'])
+                    ->whereBetween('Quantia Creditada',[(float)$d['montante']-0.01,(float)$d['montante']+0.01])
                     ->exists();
                 abort_if($dup,409,'Já existe contrato com mesmo cliente, data e montante. Verifique a carteira.');
 
