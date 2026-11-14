@@ -9,10 +9,12 @@ use App\Http\Controllers\Api\ClientSecurityInfoController;
 use App\Http\Controllers\Api\ContractProfileController;
 use App\Http\Controllers\Api\ContractListController;
 use App\Http\Controllers\Api\ContractClientLookupController;
+use App\Http\Controllers\Api\FinancialReferenceController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
     Route::get('admin/connection-status', ConnectionStatusController::class);
+    Route::get('admin/financial-references', [FinancialReferenceController::class,'index'])->middleware('throttle:30,1');
     Route::post('auth/logout',[AuthController::class,'logout']);
     Route::get('cis/clients',[ClientController::class,'index']);
     Route::post('cis/clients',[ClientController::class,'store'])->middleware('throttle:20,1');
