@@ -16,6 +16,16 @@ final class ClientSecurityInfoController extends Controller
         'pessoa_referencia_nome',
         'pessoa_referencia_contacto',
         'melhor_horario_contacto',
+        'tipo_cliente',
+        'genero',
+        'profissao',
+        'tipo_documento',
+        'nuit',
+        'local_emissao_documento',
+        'validade_documento',
+        'nome_pai',
+        'nome_mae',
+        'grau_parentesco_referencia',
     ];
 
     private function allowed(Request $request): void
@@ -50,6 +60,16 @@ final class ClientSecurityInfoController extends Controller
             'pessoa_referencia_nome' => ['nullable', 'string', 'max:180'],
             'pessoa_referencia_contacto' => ['nullable', 'string', 'max:40'],
             'melhor_horario_contacto' => ['nullable', 'string', 'max:100'],
+            'tipo_cliente' => ['nullable', 'string', 'max:60'],
+            'genero' => ['nullable', 'string', 'max:50'],
+            'profissao' => ['nullable', 'string', 'max:150'],
+            'tipo_documento' => ['nullable', 'string', 'max:80'],
+            'nuit' => ['nullable', 'string', 'max:30'],
+            'local_emissao_documento' => ['nullable', 'string', 'max:150'],
+            'validade_documento' => ['nullable', 'date_format:Y-m-d'],
+            'nome_pai' => ['nullable', 'string', 'max:180'],
+            'nome_mae' => ['nullable', 'string', 'max:180'],
+            'grau_parentesco_referencia' => ['nullable', 'string', 'max:100'],
             'referencia_contacto_informado' => ['required', 'boolean'],
         ]);
         $hasThirdParty = trim((string)($validated['pessoa_referencia_nome'] ?? '')) !== ''
