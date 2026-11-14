@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateContractsPreview::class)->group(function(){
         Route::get('contractos',[ContractListController::class,'index'])->middleware('throttle:30,1');
         Route::get('contractos/estados',[ContractListController::class,'states'])->middleware('throttle:30,1');
+        Route::get('contractos/resumo',[ContractListController::class,'summary'])->middleware('throttle:30,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
