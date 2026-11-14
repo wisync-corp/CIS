@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {Search,RefreshCw,ChevronLeft,ChevronRight,LockKeyhole,Database,AlertCircle,ArrowUpRight} from 'lucide-react';
 import ClientProfile from './ClientProfile';
 
-type Props={module:string;token:string};
+type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void};
 type Row=Record<string,unknown>;
 type Paged={data:Row[];current_page:number;last_page:number;total:number};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -13,9 +13,10 @@ const fields:Record<string,{key:string;label:string}[]>={
 };
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const monetary=new Set(['Valor','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago']);
-export default function LegacyTable({module,token}:Props){
+export default function LegacyTable({module,token,onProfileChange}:Props){
  const endpoint=module==='Clientes'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
  const [selected,setSelected]=useState<number|null>(null);
+ useEffect(()=>{onProfileChange?.(module==='Clientes'&&selected!==null);return ()=>onProfileChange?.(false);},[module,selected,onProfileChange]);
  const [page,setPage]=useState(1),[search,setSearch]=useState(''),[term,setTerm]=useState('');
  const [startDate,setStartDate]=useState(''),[endDate,setEndDate]=useState(''),[appliedDates,setAppliedDates]=useState({inicio:'',fim:''});
  const [data,setData]=useState<Paged|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
