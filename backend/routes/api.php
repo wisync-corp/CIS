@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ContractProfileController;
 use App\Http\Controllers\Api\ContractListController;
 use App\Http\Controllers\Api\ContractClientLookupController;
 use App\Http\Controllers\Api\FinancialReferenceController;
+use App\Http\Controllers\Api\ContractOpeningReviewController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -33,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('contractos',[ContractListController::class,'index'])->middleware('throttle:30,1');
         Route::get('contractos/estados',[ContractListController::class,'states'])->middleware('throttle:30,1');
         Route::get('contractos/resumo',[ContractListController::class,'summary'])->middleware('throttle:30,1');
+        Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
