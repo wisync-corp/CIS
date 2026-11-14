@@ -111,7 +111,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     originalChanges[key]=draft[key];before[key]=profile[key]==null?null:String(profile[key]);
    }
   }
-  const secondaryChanged=[...secondaryFields].some(k=>draft[k]!==normalized(profile[k]));
+  const secondaryChanged=[...secondaryFields].some(k=>draft[k]!==formValue(k,profile[k]));
   const thirdParty=Boolean(draft.pessoa_referencia_nome?.trim()||draft.pessoa_referencia_contacto?.trim());
   if(secondaryChanged&&thirdParty&&!informed){
    setError('Confirma que o cliente foi informado sobre a finalidade dos dados da pessoa de referência.');
