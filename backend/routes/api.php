@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ConnectionStatusController;
 use App\Http\Controllers\Api\LegacyClienteEditController;
 use App\Http\Controllers\Api\ClientSecurityInfoController;
 use App\Http\Controllers\Api\ContractProfileController;
+use App\Http\Controllers\Api\ContractListController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -24,7 +25,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('clientes/{id}/complementares',[ClientSecurityInfoController::class,'update'])->whereNumber('id')->middleware('throttle:10,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateContractsPreview::class)->group(function(){
-        Route::get('contractos',[CisConsultaController::class,'contractos'])->middleware('throttle:30,1');
+        Route::get('contractos',[ContractListController::class,'index'])->middleware('throttle:30,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
