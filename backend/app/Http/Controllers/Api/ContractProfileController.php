@@ -10,19 +10,21 @@ final class ContractProfileController extends Controller
 {
     // Os nomes seguintes vêm do Contractos.frm e da tabela original.
     // Algumas versões não contêm Tipo de Juro; a API não deve inventar o campo.
+    // Campos confirmados pela instrução INSERT do Contractos.frm (33 campos).
+    // O campo Ordem é um identificador adicional utilizado pela listagem legada.
     private const CONTRACT_FIELDS = [
-        'Nr do Contracto', 'Nome do Cliente', 'Nº de Cliente',
+        'Nr do Contracto', 'Nº', 'Nome do Cliente', 'Nº de Cliente',
         'Quantia Creditada', 'M. Pagamento', 'Prazo/Duração',
         '% de Juro', 'Tipo de Juro', '% de Multa',
         'Forma de Pagamento', 'Disponibilidade', 'Data de Inicio',
-        'Cidade', 'Data Final', 'Nº de Prestações', 'Codigo Cliente',
-        'Estado do Contrato', 'usuario'
+        'Cidade', 'Data Final', 'Codigo Cliente',
+        'Estado do Contrato', 'Nº de Prestações', 'Column1', 'usuario'
     ];
     private const PAYMENT_FIELDS = [
-        'Ordem', 'Nº da Parcela', 'Data de Cobrança',
-        'Data de Pagamento', 'Capital', 'Amortização', 'Valor de Juros',
-        'Valor de Multa', 'Valor a Pagar', 'Valor Pago', 'Estado',
-        'Situação de Pagamento', 'Dias', 'Intervalo'
+        'Ordem', 'Nº', 'Nº da Parcela', 'Data de Cobrança',
+        'Data de Pagamento', 'Capital', 'Amortização', 'Valor a Pagar',
+        'Valor de Juros', 'Valor de Multa', 'Valor Pago', 'Estado',
+        'Dias', 'Intervalo', 'Situação de Pagamento', 'Column1'
     ];
 
     public function show(Request $request, string $numero)
@@ -50,6 +52,14 @@ final class ContractProfileController extends Controller
             $ids = $rows->pluck('Nº de Cliente')->filter(fn ($id) => $id !== null)->unique();
             abort_if($ids->count() > 1, 409, 'Contrato com identificadores de cliente divergentes.');
         }
+        // Em contratos antigos alguns campos gerais podem variar entre parcelas.
+        // Não escolher silenciosamente um valor como se fosse único.
+        $divergent = [];
+        foreach (self::CONTRACT_FIELDS as $field) {
+            if (!isset($available[$field])) continue;
+            $values = $rows->pluck($field)->map(fn ($value) => $value === null ? '__CIS_NULL__' : (string)$value)->unique();
+            if ($values->count() > 1) $divergent[] = $field;
+        }
         $detail = [];
         foreach (self::CONTRACT_FIELDS as $field) {
             if (array_key_exists($field, $first)) $detail[$field] = $first[$field];
@@ -61,6 +71,8 @@ final class ContractProfileController extends Controller
         return response()->json([
             'contract' => $detail, 'installments' => $payments,
             'installment_rows' => $total,
+            'contract_fields_divergent' => $divergent,
+            'columns_missing_in_database' => array_values(array_diff(array_unique(array_merge(self::CONTRACT_FIELDS,self::PAYMENT_FIELDS)), array_keys($available))),
             'notice' => 'Valores originais do MySQL; não foram recalculados ou reconciliados.',
         ])->header('Cache-Control', 'no-store, private');
     }
