@@ -130,7 +130,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
-   if(body.dados_verificados){
+   if(body.cadastro_confirmado){
     try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
@@ -170,7 +170,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
    <div className="cis-contract-draft-count"><span>N.º previsto de prestações (regra do VBA)</span><strong>{numeroPrestacoes??'—'}</strong></div>
-   <p>Datas previstas segundo a regra DateAdd do VBA (adicionar meses ao início). Montantes, juros, multas e pagamentos não são calculados nem gravados.</p>
+   <p>Datas previstas segundo a regra DateAdd do VBA (adicionar meses ao início). O quadro financeiro indicativo aparece depois de validar os dados no servidor. Nenhuma operação é gravada.</p>
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><ArrowRightLeft size={20}/> Operações previstas no formulário original</h3>
