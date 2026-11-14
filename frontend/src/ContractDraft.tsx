@@ -95,6 +95,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [review,setReview]=useState<OpeningReview|null>(null);
  const [reviewBusy,setReviewBusy]=useState(false);
  const [reviewError,setReviewError]=useState('');
+ useEffect(()=>{setReview(null);setChecked(false);setMessage('');},[values,selectedBorrower]);
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
  const prazoMeses=Number((values.prazo??'').slice(0,1));
