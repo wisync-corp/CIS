@@ -1,5 +1,5 @@
-import {useCallback,useEffect,useState} from 'react';
-import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw} from 'lucide-react';
+import {useCallback,useEffect,useMemo,useState} from 'react';
+import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
 type Payload={contract:Item;installments:Item[];installment_rows:number;notice:string};
@@ -30,6 +30,31 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
   {name:'usuario',label:'Utilizador de origem'},
   {name:'Estado do Contrato',label:'Estado original do contrato'}]},
 ];
+const installmentColumns=[
+ {name:'Nº da Parcela',kind:'number'}, {name:'Data de Cobrança',kind:'date'},
+ {name:'Data de Pagamento',kind:'date'}, {name:'Capital',kind:'number'},
+ {name:'Amortização',kind:'number'}, {name:'Valor de Juros',kind:'number'},
+ {name:'Valor de Multa',kind:'number'}, {name:'Valor a Pagar',kind:'number'},
+ {name:'Valor Pago',kind:'number'}, {name:'Estado',kind:'text'}
+] as const;
+type InstallmentSort=typeof installmentColumns[number]['name'];
+function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
+ const kind=installmentColumns.find(item=>item.name===column)!.kind;
+ const left=a[column],right=b[column];
+ const empty=(v:string|number|null|undefined)=>v===null||v===undefined||String(v).trim()===''||String(v)==='0000-00-00';
+ if(empty(left)&&empty(right))return 0;
+ if(empty(left))return 1;
+ if(empty(right))return -1;
+ if(kind==='number'){
+  const n1=Number(left),n2=Number(right);
+  if(Number.isFinite(n1)&&Number.isFinite(n2))return n1-n2;
+ }
+ if(kind==='date'){
+  const l=String(left).slice(0,10),r=String(right).slice(0,10);
+  if(/^\\d{4}-\\d{2}-\\d{2}$/.test(l)&&/^\\d{4}-\\d{2}-\\d{2}$/.test(r))return l.localeCompare(r);
+ }
+ return String(left).localeCompare(String(right),'pt',{numeric:kind==='number'});
+}
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  const raw=item[name];
@@ -52,6 +77,8 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  const [data,setData]=useState<Payload|null>(null);
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
+ const [sortColumn,setSortColumn]=useState<InstallmentSort>('Nº da Parcela');
+ const [sortDirection,setSortDirection]=useState<'asc'|'desc'>('asc');
  const load=useCallback(async(signal?:AbortSignal)=>{
   setLoading(true);setError('');
   try{
@@ -67,6 +94,11 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  },[numero,token]);
  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
  const contract=data?.contract;
+ const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
+  const cmp=compareInstallments(a.item,b.item,sortColumn);
+  return cmp===0?a.index-b.index:(sortDirection==='asc'?cmp:-cmp);
+ }).map(({item})=>item)??[],[data,sortColumn,sortDirection]);
+ function sortBy(column:InstallmentSort){if(sortColumn===column)setSortDirection(prev=>prev==='asc'?'desc':'asc');else{setSortColumn(column);setSortDirection('asc');}}
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Ficha individual</span></div>
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={18}/>{error}</div>}
@@ -91,13 +123,12 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
      <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':'Informações originais do sistema de microcrédito.'}</p></div></header>
      {tab==='Plano de prestações'?<>
       <div className="cis-contract-count"><CalendarDays size={18}/>{data.installment_rows} linha(s) de prestação registada(s)</div>
-      <div className="cis-table-scroll"><table><thead><tr>{[
-        'Nº da Parcela','Data de Cobrança','Data de Pagamento','Capital','Amortização',
-        'Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','Estado'
-       ].map(n=><th key={n}>{n}</th>)}</tr></thead>
-       <tbody>{data.installments.map((item,index)=><tr key={String(item.Ordem??index)}>
-        {['Nº da Parcela','Data de Cobrança','Data de Pagamento','Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','Estado'].map(name=>
-         <td key={name}>{format(item,name,name.startsWith('Data')?'date':(['Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago'].includes(name)?'money':undefined))}</td>)}
+      <div className="cis-table-scroll"><table><thead><tr>{installmentColumns.map(({name,kind})=><th key={name} aria-sort={sortColumn===name?(sortDirection==='asc'?'ascending':'descending'):undefined}>
+       <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${name} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
+        {name}{sortColumn===name?(sortDirection==='asc'?<ChevronUp size={15}/>:<ChevronDown size={15}/>):<ArrowDownUp size={14}/>}
+       </button></th>)}</tr></thead>
+       <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
+        {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
        </tr>)}</tbody></table></div>
      </>:<div className="cis-profile-fields">{groups.find(g=>g.tab===tab)?.fields.map(field=><div className="cis-profile-field" key={field.name}>
       <span>{field.label}</span><div className="cis-profile-field-value">{format(contract,field.name,field.kind)}</div>
