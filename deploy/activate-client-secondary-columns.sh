@@ -24,9 +24,9 @@ columns=(
  "ponto_referencia:255" "local_trabalho_actividade:180"
  "fonte_rendimento_principal:180" "contacto_alternativo:40"
  "pessoa_referencia_nome:180" "pessoa_referencia_contacto:40"
- "melhor_horario_contacto:100"
+ "melhor_horario_contacto:TIME"
  "tipo_cliente:60" "genero:50" "profissao:150" "tipo_documento:80"
- "nuit:30" "local_emissao_documento:150" "validade_documento:10"
+ "nuit:30" "local_emissao_documento:150" "validade_documento:DATE"
  "nome_pai:180" "nome_mae:180" "grau_parentesco_referencia:100"
 )
 alter=()
@@ -37,15 +37,28 @@ for item in "${columns[@]}"; do
  found="$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME='$name';")"
  if [[ "$found" == 1 ]]; then
   type="$(sql "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME='$name';")"
-  if [[ "$type" != "varchar" ]]; then
-   echo "BLOQUEADO: coluna já existente $name tem tipo $type; rever manualmente." >&2; exit 1
-  fi
-  actual="$(sql "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME='$name';")"
-  if (( actual < size )); then
-   echo "BLOQUEADO: coluna $name existente demasiado curta ($actual < $size)." >&2; exit 1
+  if [[ "$size" == DATE || "$size" == TIME ]]; then
+   expected="${size,,}"
+   if [[ "$type" != "$expected" ]]; then
+    echo "BLOQUEADO: coluna temporal $name já existe como $type, mas deve ser $expected." >&2
+    echo "É necessário validar os valores existentes antes de converter (sem perda de dados)." >&2
+    exit 1
+   fi
+  else
+   if [[ "$type" != "varchar" ]]; then
+    echo "BLOQUEADO: coluna já existente $name tem tipo $type; rever manualmente." >&2; exit 1
+   fi
+   actual="$(sql "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME='$name';")"
+   if (( actual < size )); then
+    echo "BLOQUEADO: coluna $name existente demasiado curta ($actual < $size)." >&2; exit 1
+   fi
   fi
  elif [[ "$found" == 0 ]]; then
-  alter+=("ADD COLUMN \`$name\` VARCHAR($size) NULL")
+  if [[ "$size" == DATE || "$size" == TIME ]]; then
+   alter+=("ADD COLUMN \`$name\` $size NULL")
+  else
+   alter+=("ADD COLUMN \`$name\` VARCHAR($size) NULL")
+  fi
  else
   echo "BLOQUEADO: estado ambíguo da coluna $name." >&2; exit 1
  fi
@@ -53,7 +66,7 @@ done
 if (( ${#alter[@]} == 0 )); then echo "Todas as 17 colunas já existem; nenhuma alteração necessária."; exit 0; fi
 before="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
 echo "Clientes existentes: $before. Colunas novas necessárias: ${#alter[@]}."
-echo "Todas serão opcionais e adicionadas à MESMA tabela Clientes; nenhuma tabela auxiliar."
+echo "Todas serão opcionais e adicionadas à MESMA tabela Clientes; datas DATE e horários TIME; nenhuma tabela auxiliar."
 read -r -p "Autoriza apenas estas colunas em Clientes? Escreva ADICIONAR: " confirm
 [[ "$confirm" == ADICIONAR ]] || { echo 'Cancelado.'; exit 1; }
 sep=""
