@@ -32,6 +32,9 @@ fi
 if [[ "$(sql "SELECT COUNT(*) FROM mysql.user WHERE User='cis_contract_writer';")" != '0' ]]; then
  echo 'BLOQUEADO: utilizador cis_contract_writer já existe; verificar manualmente.' >&2; exit 1
 fi
+echo 'A executar testes financeiros sem gravação, antes de conceder permissões…'
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml \\
+ run --rm --no-deps --build api-test php tests/contract_opening_pricing_smoke.php
 password="$(openssl rand -hex 32)"
 echo 'Operação a activar:'
 echo ' - Criação de contratos e suas prestações em Contractos'
