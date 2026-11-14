@@ -30,7 +30,7 @@ export default function ClientSecondaryInfo({id,token,onClose}:{id:number;token:
    if(!response.ok)throw new Error(response.status===503?'Cadastro complementar ainda não está activado no servidor.':'Não foi possível consultar o cadastro complementar.');
    return response.json() as Promise<Partial<Record<Field,string|null>>>;
   }).then(data=>{
-   setForm(Object.fromEntries(fields.map(([k])=>[k,data[k]??''])) as FormValues);
+   setForm(Object.fromEntries(fields.map(([k])=>[k,k==='melhor_horario_contacto'?(data[k]??'').slice(0,5):(data[k]??'')])) as FormValues);
   }).catch(e=>{if(e.name!=='AbortError')setError(e.message);})
    .finally(()=>{if(!controller.signal.aborted)setBusy(false);});
   return ()=>controller.abort();
@@ -57,7 +57,7 @@ export default function ClientSecondaryInfo({id,token,onClose}:{id:number;token:
    <p>Dados adicionais de contacto e verificação. A morada, contacto principal, BI e outros dados existentes não são repetidos.</p>
    <form onSubmit={save}>
     {fields.map(([key,label])=><label key={key}>{label}<input
-      type="text" autoComplete="off" maxLength={key==='ponto_referencia'?255:key==='contacto_alternativo'||key==='pessoa_referencia_contacto'?40:key==='melhor_horario_contacto'?100:180}
+      type={key==='melhor_horario_contacto'?'time':'text'} step={key==='melhor_horario_contacto'?60:undefined} autoComplete="off" maxLength={key==='ponto_referencia'?255:key==='contacto_alternativo'||key==='pessoa_referencia_contacto'?40:key==='melhor_horario_contacto'?100:180}
       value={form[key]} onChange={e=>{setSuccess('');setForm(prev=>({...prev,[key]:e.target.value}));}}/>
     </label>)}
     {hasThirdParty&&<label className="cis-secondary-confirm"><input type="checkbox" checked={informed} onChange={e=>setInformed(e.target.checked)}/>
