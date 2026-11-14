@@ -9,8 +9,8 @@ COMPOSE=(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml)
 dbsql() {
  "${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$1"
 }
-count="$(dbsql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME IN ('ponto_referencia','local_trabalho_actividade','fonte_rendimento_principal','contacto_alternativo','pessoa_referencia_nome','pessoa_referencia_contacto','melhor_horario_contacto');")"
-[[ "$count" == "7" ]] || { echo "Campos complementares incompletos: execute primeiro activate-client-secondary-columns.sh" >&2; exit 1; }
+count="$(dbsql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Clientes' AND COLUMN_NAME IN ('ponto_referencia','local_trabalho_actividade','fonte_rendimento_principal','contacto_alternativo','pessoa_referencia_nome','pessoa_referencia_contacto','melhor_horario_contacto','tipo_cliente','genero','profissao','tipo_documento','nuit','local_emissao_documento','validade_documento','nome_pai','nome_mae','grau_parentesco_referencia');")"
+[[ "$count" == "17" ]] || { echo "Campos complementares incompletos: execute primeiro activate-client-secondary-columns.sh" >&2; exit 1; }
 # Não criar um segundo editor se a conta de edição anterior já existir.
 existing_user="$(grep '^CLIENT_EDITOR_DB_USERNAME=' deploy/.env | tail -n1 | cut -d= -f2- || true)"
 existing_pass="$(grep '^CLIENT_EDITOR_DB_PASSWORD=' deploy/.env | tail -n1 | cut -d= -f2- || true)"
@@ -34,7 +34,7 @@ if [[ "$newuser" == false && "$user_count" != "1" ]]; then
  echo "A conta cis_editor esperada não foi encontrada no MySQL." >&2; exit 1
 fi
 # Gravação por coluna; sem INSERT, DELETE, DROP, CREATE ou alteração de tabelas legadas.
-sql="GRANT SELECT (\`ID\`) ON \`cis\`.\`Clientes\` TO 'cis_editor'@'%'; GRANT UPDATE (\`ponto_referencia\`,\`local_trabalho_actividade\`,\`fonte_rendimento_principal\`,\`contacto_alternativo\`,\`pessoa_referencia_nome\`,\`pessoa_referencia_contacto\`,\`melhor_horario_contacto\`) ON \`cis\`.\`Clientes\` TO 'cis_editor'@'%';"
+sql="GRANT SELECT (\`ID\`) ON \`cis\`.\`Clientes\` TO 'cis_editor'@'%'; GRANT UPDATE (\`ponto_referencia\`,\`local_trabalho_actividade\`,\`fonte_rendimento_principal\`,\`contacto_alternativo\`,\`pessoa_referencia_nome\`,\`pessoa_referencia_contacto\`,\`melhor_horario_contacto\`,\`tipo_cliente\`,\`genero\`,\`profissao\`,\`tipo_documento\`,\`nuit\`,\`local_emissao_documento\`,\`validade_documento\`,\`nome_pai\`,\`nome_mae\`,\`grau_parentesco_referencia\`) ON \`cis\`.\`Clientes\` TO 'cis_editor'@'%';"
 if [[ "$newuser" == true ]]; then
  # A password é gerada localmente, sem aparecer nos logs.
  sql="CREATE USER 'cis_editor'@'%' IDENTIFIED BY '$existing_pass'; $sql"
