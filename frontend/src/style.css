@@ -170,3 +170,6 @@ html{font-size:16px}
 .cis-contract-sort svg{color:var(--cis-primary);flex-shrink:0}
 .cis-table-scroll th[aria-sort="ascending"],.cis-table-scroll th[aria-sort="descending"]{color:var(--cis-primary);background:var(--cis-tint)}
 @media(max-width:650px){.cis-contract-filters{align-items:stretch;flex-direction:column}.cis-contract-filters select{width:100%}.cis-contract-filters-note{margin:0}}
+
+/* Alertas de discrepância dos contratos legados — não ocultar informação inconclusiva. */
+.cis-contract-warning{border:1px solid #f0ce89;background:#fff8e7;color:#704b13;border-radius:10px;padding:12px 15px;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
