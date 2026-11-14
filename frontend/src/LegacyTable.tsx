@@ -32,6 +32,8 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
   if(contractSort===field)setSortDirection(previous=>previous==='asc'?'desc':'asc');
   else{setContractSort(field);setSortDirection('asc');}
  }
+ const [startDate,setStartDate]=useState(''),[endDate,setEndDate]=useState(''),[appliedDates,setAppliedDates]=useState({inicio:'',fim:''});
+ const [data,setData]=useState<Paged|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  useEffect(()=>{
   if(endpoint!=='contractos')return;
   const controller=new AbortController();setStateError('');
@@ -41,8 +43,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
    .catch(e=>{if(e.name!=='AbortError')setStateError(e.message);});
   return ()=>controller.abort();
  },[endpoint,token,refresh]);
- const [startDate,setStartDate]=useState(''),[endDate,setEndDate]=useState(''),[appliedDates,setAppliedDates]=useState({inicio:'',fim:''});
- const [data,setData]=useState<Paged|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
+
  useEffect(()=>{setSelected(null);setSelectedContract(null);setPage(1);setTerm('');setSearch('');setStateFilter('');setContractSort('numero');setSortDirection('asc');setData(null);setStartDate('');setEndDate('');setAppliedDates({inicio:'',fim:''});},[module]);
  useEffect(()=>{
   if(!endpoint)return;
