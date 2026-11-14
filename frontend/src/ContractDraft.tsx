@@ -5,7 +5,7 @@ import {previewContractVba,type ContractPreview} from './contractVbaPreview';
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
 type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string;Cidade:string|null};
 type InterestQuote={found:boolean;taxa?:string|number;periodo_dias?:number;limite_inferior?:number;limite_superior?:number;message?:string};
-type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:false;pendencias:string[]};
+type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:boolean;pendencias:string[]};
 const API=import.meta.env.VITE_API_URL||'/api';
 function monthAfter(date:string,months:number):string {
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';
@@ -18,9 +18,9 @@ function monthAfter(date:string,months:number):string {
 const fields:Field[]=[
  {key:'cliente',label:'Mutuário / cliente',required:true,hint:'Seleccionado exclusivamente a partir dos clientes reais existentes no MySQL.'},
  {key:'cliente_id',label:'ID do cliente',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
- {key:'numero',label:'Número do contrato',hint:'O número C-0000 será atribuído pelo servidor quando o fluxo financeiro for homologado.'},
+ {key:'numero',label:'Número do contrato',hint:'Atribuído pelo servidor apenas quando a abertura real for confirmada.'},
  {key:'cidade',label:'Cidade',required:true},
- {key:'data_inicio',label:'Data de início',type:'date',required:true},
+ {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Depende da reconciliação das entradas e saídas do Extracto.'},
@@ -98,8 +98,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [reviewError,setReviewError]=useState('');
  const [preview,setPreview]=useState<ContractPreview|null>(null);
  const [previewError,setPreviewError]=useState('');
+ const [confirmedDisbursement,setConfirmedDisbursement]=useState(false);
+ const [openingBusy,setOpeningBusy]=useState(false);
+ const [openedContract,setOpenedContract]=useState<{numero:string;prestacoes:number;desembolso:string|number}|null>(null);
+ const [openingError,setOpeningError]=useState('');
 
- useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');},[values,selectedBorrower,quoteKey]);
+ useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey]);
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
  const prazoMeses=Number((values.prazo??'').slice(0,1));
@@ -139,10 +143,35 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   }catch(error){setReviewError(error instanceof Error?error.message:'Erro na validação.');}
   finally{setReviewBusy(false);}
  };
+ const openContract=async()=>{
+  if(!review?.dados_verificados||!review.autorizado_para_gravar||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
+  setOpeningBusy(true);setOpeningError('');
+  try{
+   const res=await fetch(API+'/cis/contractos/abrir',{
+    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+    body:JSON.stringify({
+     cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
+     taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
+     taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
+     modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
+     data_inicio:values.data_inicio,confirmacao_desembolso:true
+    })
+   });
+   const payload=await res.json().catch(()=>null) as {numero?:string;prestacoes?:number;desembolso?:string|number;message?:string;errors?:Record<string,string[]>}|null;
+   if(!res.ok){
+    const details=payload?.errors?Object.values(payload.errors).flat().join(' '):payload?.message;
+    throw new Error(res.status===503?'A abertura real ainda não está activada no servidor.':res.status===409?(details||'Conflito: confirme se o contrato já foi criado antes de tentar novamente.'):(details||'O servidor rejeitou a abertura; nada deve ser presumido como gravado.'));
+   }
+   if(!payload?.numero||payload.prestacoes===undefined||payload.desembolso===undefined)throw new Error('Resposta inesperada: confirme a carteira antes de repetir.');
+   setOpenedContract({numero:payload.numero,prestacoes:payload.prestacoes,desembolso:payload.desembolso});
+  }catch(e){setOpeningError(e instanceof Error?e.message:'Erro na abertura. Verifique a carteira antes de repetir.');}
+  finally{setOpeningBusy(false);}
+ };
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
-  <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Modo de preparação:</strong> este formulário não cria contratos, não calcula prestações definitivas e não altera o Extracto. O registo financeiro real só ficará disponível após validação explícita das regras VBA e dos controlos de acesso.</span></div>
+  <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Abertura controlada:</strong> a gravação e o desembolso reais apenas são possíveis após validação no servidor, activação autorizada e confirmação expressa de que os fundos foram disponibilizados. O sistema grava contrato, prestações e movimento do Extracto numa única transacção.</span></div>
   <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
@@ -175,8 +204,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><BadgePlus size={20}/> Criar e desembolsar crédito</h3>
-   <p>Esta página destina-se exclusivamente à abertura de um novo contrato. Ainda não há prestações gravadas para cobrar ou aumentar.</p>
-   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>A gravação e o desembolso estão bloqueados até à homologação financeira. Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente.</span></div>
+   <p>Esta página destina-se exclusivamente à abertura de um novo contrato. As prestações reais só existem depois da abertura confirmada.</p>
+   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente. A abertura real é verificada e protegida contra valores não suportados pelo esquema legado.</span></div>
   </section>
   <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
    <p>Prazo permitido no formulário: 1, 2 ou 3 meses. Juro variável: uma parcela, com juros apurados na cobrança após a data efectiva de pagamento. Juro composto: prestações mensais. Juro fixo: uma parcela ou mensal. Nenhum cálculo é aplicado a valores financeiros reais nesta fase.</p>
@@ -193,8 +222,21 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}</p>
     {review.problemas.length>0&&<div><strong>Incompatibilidades</strong><ul>{review.problemas.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}
     <div><strong>Requisitos para activar a abertura real</strong><ul>{review.pendencias.map(item=><li key={item}>{item}</li>)}</ul></div>
-    <p><strong>Abertura e desembolso: não autorizados.</strong> Esta verificação não grava contratos, prestações nem extractos.</p></div>}
-   <div className="cis-edit-actions"><button type="reset"><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>
+    <p><strong>{review.autorizado_para_gravar?'Abertura disponível mediante confirmação expressa':'Abertura ainda não activada'}.</strong> A validação isolada não grava contratos, prestações nem extractos.</p></div>}
+   {openingError&&<div className="cis-table-error" role="alert">{openingError}</div>}
+   {openedContract?<div className="cis-contract-review" role="status">
+    <strong>Contrato criado e desembolso registado</strong>
+    <p>Contrato <strong>{openedContract.numero}</strong> · {openedContract.prestacoes} prestação(ões) · desembolso de {Number(openedContract.desembolso).toLocaleString('pt-MZ')} MT.</p>
+    <p>Não submeta novamente. Consulte o contrato na carteira.</p>
+    <button type="button" className="cis-contract-draft-button" onClick={onBack}>Voltar à carteira de contratos</button>
+   </div>:review?.dados_verificados&&<div className="cis-contract-review">
+    <strong>Confirmação de abertura real</strong>
+    {review.autorizado_para_gravar?<><label className="cis-contract-confirm"><input type="checkbox" checked={confirmedDisbursement} onChange={e=>setConfirmedDisbursement(e.target.checked)}/>
+     <span>Confirmo que o montante indicado foi efectivamente disponibilizado ao mutuário e autorizo o lançamento da saída no Extracto.</span></label>
+     <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||openingBusy} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':'Criar contrato e registar desembolso'}</button>
+    </>:<p>A funcionalidade de escrita ainda não está activada no servidor. O administrador deve executar a activação privada após o backup e reconciliação da caixa.</p>}
+   </div>}
+   <div className="cis-edit-actions"><button type="reset" disabled={openingBusy||!!openedContract}><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy||openingBusy||!!openedContract}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>
   </section></form>
  </section>;
 }
