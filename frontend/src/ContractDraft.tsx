@@ -65,7 +65,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  },[clientSearch,token]);
  const fixedRate=values.tipo_juro==='Fixo';
  const currentQuoteKey=values.quantia+'|'+values.periodo_tabela;
- const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\\d+(\\.\\d{1,2})?$/.test(values.quantia??'');
+ const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\\.\d{1,2})?$/.test(values.quantia??'');
  const priced= fixedRate&&quoteKey===currentQuoteKey&&quote?.found===true;
  useEffect(()=>{
   setQuote(null);setQuoteKey('');setQuoteError('');
