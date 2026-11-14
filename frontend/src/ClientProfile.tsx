@@ -93,7 +93,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  },[id,token]);
  useEffect(()=>{const ctrl=new AbortController();void load(ctrl.signal);return()=>ctrl.abort();},[load]);
 
- const canEdit=(key:string)=>editableOriginal.has(key)?originalEditReady:secondaryFields.has(key)?secondaryReady&&originalEditReady:false;
+ const canEdit=(key:string)=>editableOriginal.has(key)?originalEditReady:secondaryFields.has(key)?secondaryReady:false;
  const hasChanges=Boolean(profile&&Object.entries(draft).some(([key,value])=>canEdit(key)&&value!==normalized(profile[key])));
  async function save(e:FormEvent){
   e.preventDefault();if(!profile||!hasChanges)return;
