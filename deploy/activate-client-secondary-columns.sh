@@ -51,7 +51,7 @@ for item in "${columns[@]}"; do
  fi
 done
 if (( ${#alter[@]} == 0 )); then echo "Todas as 17 colunas já existem; nenhuma alteração necessária."; exit 0; fi
-before="$(sql 'SELECT COUNT(*) FROM \`Clientes\`;')"
+before="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
 echo "Clientes existentes: $before. Colunas novas necessárias: ${#alter[@]}."
 echo "Todas serão opcionais e adicionadas à MESMA tabela Clientes; nenhuma tabela auxiliar."
 read -r -p "Autoriza apenas estas colunas em Clientes? Escreva ADICIONAR: " confirm
@@ -61,7 +61,7 @@ statement="ALTER TABLE \`Clientes\` "
 for part in "${alter[@]}"; do statement+="$sep$part"; sep=", "; done
 statement+=";"
 sql "$statement"
-after="$(sql 'SELECT COUNT(*) FROM \`Clientes\`;')"
+after="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
 [[ "$after" == "$before" ]] || { echo "ALERTA: contagem mudou ($before → $after); bloquear edição e investigar." >&2; exit 2; }
 echo "OK: $after clientes preservados. Colunas acrescentadas: ${#alter[@]}."
 echo "As permissões de edição mantêm-se independentes e exigem configuração específica."
