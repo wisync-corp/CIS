@@ -157,3 +157,16 @@ html{font-size:16px}
 .cis-contract-count{display:flex;align-items:center;gap:9px;color:var(--cis-primary);font-size:14px;font-weight:700;margin-bottom:18px}
 .cis-profile-content .cis-table-scroll{margin-top:9px}
 .cis-profile-content .cis-table-scroll th,.cis-profile-content .cis-table-scroll td{font-size:13px;padding:12px 11px}
+
+/* Filtros e ordenação da carteira de contratos — válidos nos três temas. */
+.cis-contract-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px 13px;margin:-3px 0 20px}
+.cis-contract-filters>label{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--cis-heading)}
+.cis-contract-filters select{border:1px solid var(--cis-input-border);border-radius:8px;background:#fff;color:var(--cis-text);font:inherit;font-size:14px;min-height:42px;padding:9px 36px 9px 12px;max-width:100%;min-width:min(245px,100%)}
+.cis-contract-filters select:focus-visible,.cis-contract-sort:focus-visible{outline:2px solid var(--cis-primary);outline-offset:2px}
+.cis-clear-contract-filters{border:1px solid var(--cis-border);border-radius:8px;padding:10px 12px;min-height:42px;background:var(--cis-surface-subtle);color:var(--cis-primary);font-size:13px;font-weight:700}
+.cis-contract-filters-note{font-size:12px;color:var(--cis-text-muted);margin-left:auto}
+.cis-contract-sort{border:0;background:transparent;display:inline-flex;align-items:center;gap:7px;font:inherit;font-weight:800;color:inherit;padding:2px 0;white-space:nowrap;cursor:pointer}
+.cis-contract-sort:hover{color:var(--cis-primary)}
+.cis-contract-sort svg{color:var(--cis-primary);flex-shrink:0}
+.cis-table-scroll th[aria-sort="ascending"],.cis-table-scroll th[aria-sort="descending"]{color:var(--cis-primary);background:var(--cis-tint)}
+@media(max-width:650px){.cis-contract-filters{align-items:stretch;flex-direction:column}.cis-contract-filters select{width:100%}.cis-contract-filters-note{margin:0}}
