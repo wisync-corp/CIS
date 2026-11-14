@@ -98,6 +98,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [reviewError,setReviewError]=useState('');
  const [preview,setPreview]=useState<ContractPreview|null>(null);
  const [previewError,setPreviewError]=useState('');
+ const [workflowHint,setWorkflowHint]=useState('');
  useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');},[values,selectedBorrower,quoteKey]);
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
@@ -176,13 +177,14 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   <section className="cis-panel cis-contract-draft-section"><h3><ArrowRightLeft size={20}/> Operações previstas no formulário original</h3>
    <p>As operações seguintes constam de Contractos.frm. Permanecem bloqueadas porque modificam valores financeiros ou dependem da Cobrança e do Extracto.</p>
    <div className="cis-contract-workflow-actions">
-    <button type="button" disabled title="Requer validação financeira"><BadgePlus size={18}/> Criar e desembolsar crédito</button>
-    <button type="button" disabled title="Requer validação financeira"><ArrowRightLeft size={18}/> Aumentar crédito (juro fixo)</button>
-    <button type="button" disabled title="Módulo Cobranças ainda não homologado"><ReceiptText size={18}/> Abrir Cobrança</button>
-    <button type="button" disabled title="Operação original a validar"><Eye size={18}/> Visualizar documento original</button>
+    <button type="button" onClick={()=>{setWorkflowHint("A abertura real permanece bloqueada. Preencha os dados e use Validar abertura no servidor; a validação não desembolsa fundos.");document.getElementById("cis-contract-final-review")?.scrollIntoView({behavior:"smooth"});}}><BadgePlus size={18}/> Criar e desembolsar crédito</button>
+    <button type="button" onClick={()=>setWorkflowHint("Para rever um aumento, regresse à carteira, abra a ficha de um contrato e escolha Aumento de crédito. Não são gravados aumentos.")}><ArrowRightLeft size={18}/> Aumentar crédito (juro fixo)</button>
+    <button type="button" onClick={()=>setWorkflowHint("Para consultar prestações na Cobrança, regresse à carteira, abra um contrato e escolha o separador Cobrança. Receber pagamentos continua bloqueado.")}><ReceiptText size={18}/> Abrir Cobrança</button>
+    <button type="button" onClick={()=>setWorkflowHint("Os PDFs originais não estão no VPS. Na ficha de um contrato, consulte Documento original para verificar a situação de associação.")}><Eye size={18}/> Visualizar documento original</button>
    </div>
+   {workflowHint&&<div className="cis-contract-notice" role="status"><LockKeyhole size={17}/><span>{workflowHint} <button type="button" className="cis-contract-draft-button" onClick={onBack}>Voltar à carteira</button></span></div>}
   </section>
-  <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
+  <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
    <p>Prazo permitido no formulário: 1, 2 ou 3 meses. Juro variável: uma parcela, com juros apurados na cobrança após a data efectiva de pagamento. Juro composto: prestações mensais. Juro fixo: uma parcela ou mensal. Nenhum cálculo é aplicado a valores financeiros reais nesta fase.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
