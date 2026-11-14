@@ -102,7 +102,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [sortColumn,setSortColumn]=useState<InstallmentSort>('Nº da Parcela');
- const [targetInstallment,setTargetInstallment]=useState('');
+ const [targetInstallment,setTargetInstallment]=useState<number|null>(null);
  const [increaseAmount,setIncreaseAmount]=useState('');
  const [sortDirection,setSortDirection]=useState<'asc'|'desc'>('asc');
  const load=useCallback(async(signal?:AbortSignal)=>{
@@ -120,6 +120,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  },[numero,token]);
  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
  const contract=data?.contract;
+ const selectedInstallment=targetInstallment===null?null:data?.installments[targetInstallment]??null;
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
   return cmp===0?a.index-b.index:(sortDirection==='asc'?cmp:-cmp);
@@ -148,12 +149,11 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       {name:'Dados legados' as Tab,icon:FileText},
       {name:'Todos os campos' as Tab,icon:Layers},
       {name:'Cobrança' as Tab,icon:ReceiptText},
-      {name:'Aumento de crédito' as Tab,icon:ArrowRightLeft},
       {name:'Documento original' as Tab,icon:Eye}
      ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':'Informações originais do sistema de microcrédito.'}</p></div></header>
+     <header className="cis-profile-section-title"><div><h3>{tab==='Aumento de crédito'?'Aumento de crédito · prestação '+(selectedInstallment?format(selectedInstallment,'Nº da Parcela'):'não seleccionada'):tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':tab==='Aumento de crédito'?'Operação ligada a uma prestação já existente; apenas revisão, sem gravação.':'Informações originais do sistema de microcrédito.'}</p></div></header>
      {tab==='Cobrança'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>O botão <strong>cmb_cobranca_Click</strong> do Contractos.frm transfere o número do contrato para outro formulário denominado Cobrança. A consulta das prestações é possível; receber pagamentos permanece bloqueado até à análise de Cobrança.frm.</span></div>
       <h4>Prestações vinculadas ao contrato {numero}</h4>
@@ -168,21 +168,19 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       <p>Estes valores são históricos, não constituem um saldo actualizado ou uma ordem de cobrança. O lançamento de pagamentos, juros variáveis e multas não está disponível nesta etapa.</p>
      </section>:tab==='Aumento de crédito'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>YourButton_Click</strong> do Contractos.frm permite aumento directo apenas para juro fixo. Contém uma atribuição a «Valor Pago» que exige reconciliação antes da migração. Esta página é de preparação; não altera o contrato.</span></div>
-      <h4>Revisão de aumento de crédito</h4>
-      <div className="cis-profile-fields">
-       <label className="cis-profile-field"><span>Prestação pretendida</span>
-        <select value={targetInstallment} onChange={event=>setTargetInstallment(event.target.value)}>
-         <option value="">Seleccionar uma prestação</option>
-         {data.installments.map((row,index)=><option value={String(row.Ordem??index)} key={index}>Parcela {format(row,'Nº da Parcela')} · {format(row,'Estado')}</option>)}
-        </select>
-       </label>
-       <label className="cis-profile-field"><span>Valor de aumento pretendido (MT) — apenas consulta local</span>
-        <input type="number" min="0.01" step="0.01" value={increaseAmount} onChange={e=>setIncreaseAmount(e.target.value)} placeholder="Montante adicional"/>
-       </label>
-       <div className="cis-profile-field"><span>Tipo de juro original</span><div className="cis-profile-field-value">{format(contract,'Tipo de Juro')}</div></div>
-       <div className="cis-profile-field"><span>Elegibilidade técnica</span><div className="cis-profile-field-value">{String(contract['Tipo de Juro']??'').toLowerCase()==='fixo'?'Juro fixo — requer reconciliação dos movimentos':'Não elegível para aumento directo no VBA'}</div></div>
-      </div>
-      <p>{targetInstallment&&Number(increaseAmount)>0?'Pedido preliminar preenchido.':'Seleccione a prestação e indique o montante que pretende avaliar.'} Não existe cálculo nem gravação de aumento nesta etapa.</p>
+      <button className="cis-contract-draft-button" type="button" onClick={()=>{setTab('Plano de prestações');setTargetInstallment(null);setIncreaseAmount('');}}>← Voltar às prestações</button>
+      {selectedInstallment?<><h4>Prestação {format(selectedInstallment,'Nº da Parcela')} · contrato {numero}</h4>
+       <div className="cis-profile-fields">
+        <div className="cis-profile-field"><span>Estado da prestação</span><div className="cis-profile-field-value">{format(selectedInstallment,'Estado')}</div></div>
+        <div className="cis-profile-field"><span>Valor a pagar registado</span><div className="cis-profile-field-value">{format(selectedInstallment,'Valor a Pagar','money')}</div></div>
+        <div className="cis-profile-field"><span>Valor pago registado</span><div className="cis-profile-field-value">{format(selectedInstallment,'Valor Pago','money')}</div></div>
+        <div className="cis-profile-field"><span>Tipo de juro</span><div className="cis-profile-field-value">{format(contract,'Tipo de Juro')}</div></div>
+        <label className="cis-profile-field"><span>Montante de aumento pretendido (MT) — não gravado</span>
+         <input type="number" min="0.01" step="0.01" disabled={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'} value={increaseAmount} onChange={e=>setIncreaseAmount(e.target.value)} placeholder="Indicar montante adicional"/>
+        </label>
+       </div>
+       <p>{String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'?'O VBA só permite aumento directo para contratos de juro fixo.':Number(increaseAmount)>0?'Valor de aumento introduzido, ainda sujeito à validação dos movimentos e do histórico de pagamento.':'Introduza o montante para preparar a revisão da prestação.'} Não existe cálculo, aprovação ou gravação de aumento nesta etapa.</p>
+      </>:<p>Abra o separador Plano de prestações e escolha «Aumentar crédito» na prestação que pretende consultar.</p>}
      </section>:tab==='Documento original'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
       <h4>Documento associado ao contrato</h4>
@@ -204,9 +202,15 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       <div className="cis-table-scroll"><table><thead><tr>{installmentColumns.map(({name,kind})=><th key={name} aria-sort={sortColumn===name?(sortDirection==='asc'?'ascending':'descending'):undefined}>
        <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${name} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
         {name}{sortColumn===name?(sortDirection==='asc'?<ChevronUp size={15}/>:<ChevronDown size={15}/>):<ArrowDownUp size={14}/>}
-       </button></th>)}</tr></thead>
+       </button></th>)}<th>Operação da prestação</th></tr></thead>
        <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
         {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
+        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{
+         const sourceIndex=data.installments.indexOf(item);
+         setTargetInstallment(sourceIndex);
+         setIncreaseAmount('');
+         setTab('Aumento de crédito');
+        }} disabled={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'} title={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'?'O aumento directo no VBA aplica-se apenas a juro fixo':'Rever aumento associado a esta prestação'}><ArrowRightLeft size={15}/> Aumentar crédito</button></td>
        </tr>)}</tbody></table></div>
      </>:<div className="cis-profile-fields">{groups.find(g=>g.tab===tab)?.fields.map(field=><div className="cis-profile-field" key={field.name}>
       <span>{field.label}</span><div className="cis-profile-field-value">{format(contract,field.name,field.kind)}</div>
