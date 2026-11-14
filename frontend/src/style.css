@@ -130,3 +130,23 @@ html{font-size:16px}
  .cis-profile-content{padding:18px}
  .cis-profile-fields{grid-template-columns:1fr}
 }
+
+/* Sidebar accessibility pass: legible labels across all three themes. */
+.cis-side{width:282px;padding:24px 15px 17px}
+.cis-brand{gap:12px;padding:0 9px 34px}
+.cis-logo{width:47px;height:47px;flex:none;font-size:27px}
+.cis-brand strong{font-size:23px;letter-spacing:2px}
+.cis-brand small{font-size:10px;letter-spacing:1.25px;line-height:1.45}
+.cis-workspace{font-size:12px;letter-spacing:1.35px;font-weight:700;padding:0 13px 15px}
+.cis-side nav{gap:6px}
+.cis-side nav button{font-size:16px;font-weight:600;line-height:1.35;padding:13px 14px;gap:13px;min-height:47px}
+.cis-side nav button svg{width:20px;height:20px;flex-shrink:0}
+.secure-mark{font-size:13px;line-height:1.5;padding:15px 9px}
+.secure-mark svg{width:19px;height:19px;flex:none}
+.cis-profile{padding:17px 5px 4px}
+.cis-profile-name strong{font-size:14px;line-height:1.4}
+.cis-profile-name small{font-size:13px}
+.cis-profile button{font-size:13px;padding:9px 11px}
+@media(max-width:750px){
+ .cis-side{width:min(282px,86vw)}
+}
