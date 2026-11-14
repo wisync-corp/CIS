@@ -51,7 +51,7 @@ function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
  }
  if(kind==='date'){
   const l=String(left).slice(0,10),r=String(right).slice(0,10);
-  if(/^\\d{4}-\\d{2}-\\d{2}$/.test(l)&&/^\\d{4}-\\d{2}-\\d{2}$/.test(r))return l.localeCompare(r);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(l)&&/^\d{4}-\d{2}-\d{2}$/.test(r))return l.localeCompare(r);
  }
  return String(left).localeCompare(String(right),'pt',{numeric:kind==='number'});
 }
