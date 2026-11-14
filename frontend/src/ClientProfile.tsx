@@ -7,7 +7,11 @@ type Tab='Identificação'|'Contactos'|'Morada'|'Actividade'|'Referências'|'Adm
 const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[]}[]=[
  {name:'Identificação',icon:UserRound,fields:[
   {key:'Numeração',label:'Número do cliente'}, {key:'Nome Completo',label:'Nome completo'},
-  {key:'Nº de BI',label:'Número do BI'}, {key:'Data de Emissão',label:'Data de emissão do BI'},
+  {key:'tipo_cliente',label:'Tipo de cliente'}, {key:'genero',label:'Género'},
+  {key:'tipo_documento',label:'Tipo de documento'}, {key:'Nº de BI',label:'N.º do BI (cadastro original)'},
+  {key:'Data de Emissão',label:'Data de emissão do BI'},
+  {key:'local_emissao_documento',label:'Local de emissão do documento'},
+  {key:'validade_documento',label:'Validade do documento'}, {key:'nuit',label:'NUIT'},
   {key:'Nacionalidade',label:'Nacionalidade'}, {key:'Naturalidade',label:'Naturalidade'},
   {key:'Estado Civil',label:'Estado civil'}]},
  {name:'Contactos',icon:Phone,fields:[
@@ -20,11 +24,14 @@ const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[
   {key:'Nº da Casa',label:'Número da casa'}, {key:'Nº de Quarterão',label:'Quarteirão'},
   {key:'ponto_referencia',label:'Ponto de referência'}]},
  {name:'Actividade',icon:BriefcaseBusiness,fields:[
+  {key:'profissao',label:'Profissão'},
   {key:'local_trabalho_actividade',label:'Local de trabalho / actividade'},
   {key:'fonte_rendimento_principal',label:'Principal fonte de rendimento'}]},
  {name:'Referências',icon:ShieldCheck,fields:[
-  {key:'pessoa_referencia_nome',label:'Pessoa de referência'},
-  {key:'pessoa_referencia_contacto',label:'Contacto da pessoa de referência'}]},
+  {key:'nome_pai',label:'Nome do pai'}, {key:'nome_mae',label:'Nome da mãe'},
+  {key:'pessoa_referencia_nome',label:'Pessoa de referência / emergência'},
+  {key:'pessoa_referencia_contacto',label:'Contacto de emergência'},
+  {key:'grau_parentesco_referencia',label:'Grau de parentesco'}]},
  {name:'Administração',icon:FileText,fields:[
   {key:'ID',label:'ID interno'}, {key:'Conduta',label:'Conduta'},
   {key:'usuario',label:'Utilizador associado'}]}
@@ -32,7 +39,9 @@ const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[
 const editableOriginal=new Set(['Nome Completo','Bairro','Cidade','Provincia','Rua']);
 const secondaryFields=new Set([
  'ponto_referencia','local_trabalho_actividade','fonte_rendimento_principal',
- 'contacto_alternativo','pessoa_referencia_nome','pessoa_referencia_contacto','melhor_horario_contacto']);
+ 'contacto_alternativo','pessoa_referencia_nome','pessoa_referencia_contacto','melhor_horario_contacto',
+ 'tipo_cliente','genero','profissao','tipo_documento','nuit','local_emissao_documento','validade_documento',
+ 'nome_pai','nome_mae','grau_parentesco_referencia']);
 const originalFields=['Nome Completo','Bairro','Cidade','Provincia','Rua'];
 function normalized(value:string|number|null|undefined){return value===null||value===undefined?'':String(value);}
 
@@ -148,10 +157,11 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
        const enabled=editing&&canEdit(key);
        const display=isExtra&&!secondaryReady?'Ainda não activado':normalized(profile[key])||'Não informado';
        return <label className="cis-profile-field" key={key}><span>{label}</span>
-        {enabled?<input type="text" value={draft[key]??''} maxLength={key==='ponto_referencia'?255:key.includes('contacto')?40:180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
+        {enabled?<input type={key==='validade_documento'?'date':'text'} value={draft[key]??''} maxLength={key==='ponto_referencia'?255:key.includes('contacto')?40:180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
         {editing&&!canEdit(key)&&<small><LockKeyhole size={12}/> Campo protegido{isExtra?' · necessita activação':''}</small>}
        </label>;
      })}</div>
+     {tab==='Identificação'&&<p className="cis-profile-safety"><ShieldCheck size={16}/> O número do documento existente corresponde ao BI. Outros documentos não reutilizam esse campo sem revisão do cadastro legado.</p>}
      {tab==='Referências'&&editing&&secondaryReady&&<label className="cis-secondary-confirm"><input type="checkbox" checked={informed} onChange={e=>setInformed(e.target.checked)}/> Confirmo que o cliente foi informado sobre a finalidade da recolha do contacto da pessoa de referência.</label>}
      {editing&&<p className="cis-profile-safety"><ShieldCheck size={16}/> Apenas os campos autorizados podem ser gravados. Outros dados permanecem protegidos até validação das permissões.</p>}
     </div>
