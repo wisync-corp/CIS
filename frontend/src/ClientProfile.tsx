@@ -44,6 +44,14 @@ const secondaryFields=new Set([
  'nome_pai','nome_mae','grau_parentesco_referencia']);
 const originalFields=['Nome Completo','Bairro','Cidade','Provincia','Rua'];
 function normalized(value:string|number|null|undefined){return value===null||value===undefined?'':String(value);}
+const dateFields=new Set(['Data de Emissão','validade_documento']);
+const timeFields=new Set(['melhor_horario_contacto']);
+function formValue(key:string,value:string|number|null|undefined):string{
+ const text=normalized(value);
+ if(timeFields.has(key)&&/^\\d{2}:\\d{2}:\\d{2}$/.test(text))return text.slice(0,5);
+ if(dateFields.has(key)&&/^\\d{4}-\\d{2}-\\d{2}/.test(text))return text.slice(0,10);
+ return text;
+}
 
 export default function ClientProfile({id,token,onBack}:{id:number;token:string;onBack:()=>void}){
  const [tab,setTab]=useState<Tab>('Identificação');
@@ -79,7 +87,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
    const current={...base,...extras};
    setSecondaryReady(active);
    setProfile(current);
-   setDraft(Object.fromEntries(Object.entries(current).map(([k,v])=>[k,normalized(v)])));
+   setDraft(Object.fromEntries(Object.entries(current).map(([k,v])=>[k,formValue(k,v)])));
    // A conta de edição directa tem aprovação própria; qualquer falha não bloqueia a consulta.
    try{
     const edit=await fetch(API+'/cis/clientes/'+id+'/editar',{
@@ -94,12 +102,12 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  useEffect(()=>{const ctrl=new AbortController();void load(ctrl.signal);return()=>ctrl.abort();},[load]);
 
  const canEdit=(key:string)=>editableOriginal.has(key)?originalEditReady:secondaryFields.has(key)?secondaryReady:false;
- const hasChanges=Boolean(profile&&Object.entries(draft).some(([key,value])=>canEdit(key)&&value!==normalized(profile[key])));
+ const hasChanges=Boolean(profile&&Object.entries(draft).some(([key,value])=>canEdit(key)&&value!==formValue(key,profile[key])));
  async function save(e:FormEvent){
   e.preventDefault();if(!profile||!hasChanges)return;
   const originalChanges:Record<string,string>={},before:Record<string,string|null>={};
   for(const key of originalFields){
-   if(draft[key]!==normalized(profile[key])){
+   if(draft[key]!==formValue(key,profile[key])){
     originalChanges[key]=draft[key];before[key]=profile[key]==null?null:String(profile[key]);
    }
   }
@@ -141,7 +149,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     <div className="cis-profile-heading"><span>FICHA DE CLIENTE</span><h2>{normalized(profile['Nome Completo'])||'Cliente sem nome'}</h2><p>Cliente nº {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id}</p></div>
     <div className="cis-profile-hero-actions">
       {!editing?<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
-       <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,normalized(v)])));setError('');}}>Cancelar</button>
+       <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,formValue(k,v)])));setError('');}}>Cancelar</button>
        <button type="submit" disabled={!hasChanges||saving}><Save size={16}/>{saving?'A guardar…':'Guardar alterações'}</button>
       </>}
     </div>
@@ -155,9 +163,9 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
      <div className="cis-profile-fields">{active.fields.map(({key,label})=>{
        const isExtra=secondaryFields.has(key);
        const enabled=editing&&canEdit(key);
-       const display=isExtra&&!secondaryReady?'Ainda não activado':normalized(profile[key])||'Não informado';
+       const display=isExtra&&!secondaryReady?'Ainda não activado':formValue(key,profile[key])||'Não informado';
        return <label className="cis-profile-field" key={key}><span>{label}</span>
-        {enabled?<input type={key==='validade_documento'?'date':'text'} value={draft[key]??''} maxLength={key==='ponto_referencia'?255:key.includes('contacto')?40:180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
+        {enabled?<input type={dateFields.has(key)?'date':timeFields.has(key)?'time':'text'} step={timeFields.has(key)?60:undefined} value={draft[key]??''} maxLength={key==='ponto_referencia'?255:key.includes('contacto')?40:180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
         {editing&&!canEdit(key)&&<small><LockKeyhole size={12}/> Campo protegido{isExtra?' · necessita activação':''}</small>}
        </label>;
      })}</div>
