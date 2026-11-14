@@ -227,3 +227,10 @@ html{font-size:16px}
 .cis-contract-draft-section .cis-profile-field .cis-pricing-success{display:block;color:#116445;font-size:13px;font-weight:700;line-height:1.5}
 .cis-contract-draft-section .cis-profile-field .cis-pricing-pending{display:block;color:var(--cis-text-muted);font-size:13px;line-height:1.5}
 .cis-contract-draft-section .cis-profile-field input:disabled{opacity:1}
+
+/* Revisão da abertura de crédito: decisões explícitas, sem escrita financeira. */
+.cis-contract-review{border:1px solid var(--cis-input-border);background:var(--cis-surface-subtle);color:var(--cis-text);border-radius:10px;padding:18px;margin:14px 0;line-height:1.6;font-size:14px}
+.cis-contract-review>strong{display:block;color:var(--cis-heading);font-size:17px;margin-bottom:8px}
+.cis-contract-review>div{margin:12px 0}
+.cis-contract-review ul{padding-left:22px;margin:5px 0 0}
+.cis-contract-review li{margin:5px 0}
