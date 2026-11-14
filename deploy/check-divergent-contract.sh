@@ -15,14 +15,18 @@ sql "SELECT \`Nr do Contracto\` AS contrato,COUNT(*) AS linhas,
  FROM \`Contractos\` GROUP BY \`Nr do Contracto\`
  HAVING diferentes>1;"
 echo '=== Distribuição por estado dos contratos divergentes (sem nomes, BI ou montantes) ==='
-sql "SELECT c.\`Nr do Contracto\` AS contrato,
- COALESCE(NULLIF(TRIM(c.\`Estado do Contrato\`),''),'(sem estado)') AS estado,
- COUNT(*) AS linhas
- FROM \`Contractos\` c
- JOIN (
- SELECT \`Nr do Contracto\` FROM \`Contractos\`
- GROUP BY \`Nr do Contracto\`
- HAVING COUNT(DISTINCT COALESCE(NULLIF(TRIM(\`Estado do Contrato\`),''),'__CIS_VAZIO__'))>1
- ) d ON c.\`Nr do Contracto\`=d.\`Nr do Contracto\`
- GROUP BY c.\`Nr do Contracto\`,estado ORDER BY contrato,estado;"
+sql "SELECT dados.contrato, dados.estado, COUNT(*) AS linhas
+ FROM (
+   SELECT c.\`Nr do Contracto\` AS contrato,
+          COALESCE(NULLIF(TRIM(c.\`Estado do Contrato\`),''),'(sem estado)') AS estado
+   FROM \`Contractos\` c
+   INNER JOIN (
+     SELECT \`Nr do Contracto\`
+     FROM \`Contractos\`
+     GROUP BY \`Nr do Contracto\`
+     HAVING COUNT(DISTINCT COALESCE(NULLIF(TRIM(\`Estado do Contrato\`),''),'__CIS_VAZIO__'))>1
+   ) d ON c.\`Nr do Contracto\`=d.\`Nr do Contracto\`
+ ) dados
+ GROUP BY dados.contrato, dados.estado
+ ORDER BY dados.contrato, dados.estado;"
 echo 'Nenhum dado foi alterado. Não corrija estados automaticamente: requer validação do histórico.'
