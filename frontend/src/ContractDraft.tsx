@@ -33,7 +33,7 @@ const groupings=[
  {name:'Mutuário e contrato',icon:UserRound,keys:['cliente','cliente_id','numero','cidade','data_inicio','data_final']},
  {name:'Condições do crédito',icon:Wallet,keys:['quantia','saldo_disponivel','tipo_juro','juros','multa','prazo','modalidade','forma','disponibilidade']},
 ];
-export default function ContractDraft({onBack}:{onBack:()=>void}){
+export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>({});
  const [clientSearch,setClientSearch]=useState('');
  const [clients,setClients]=useState<Borrower[]>([]);
@@ -46,7 +46,7 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
    setClientLoading(true);setClientError('');
    const params=new URLSearchParams({q:clientSearch.trim()});
    fetch(API+'/cis/contratos/clientes?'+params.toString(),{
-    headers:{Authorization:'Bearer '+(sessionStorage.getItem('cis_token')??''),Accept:'application/json'},
+    headers:{Authorization:'Bearer '+token,Accept:'application/json'},
     signal:controller.signal
    }).then(async result=>{
     if(!result.ok)throw new Error('Não foi possível consultar os clientes autorizados.');
@@ -56,7 +56,7 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
    .finally(()=>{if(!controller.signal.aborted)setClientLoading(false);});
   },300);
   return ()=>{controller.abort();window.clearTimeout(timer);};
- },[clientSearch]);
+ },[clientSearch,token]);
  const [checked,setChecked]=useState(false);
  const [message,setMessage]=useState('');
  const tipo=values.tipo_juro??'';
@@ -85,12 +85,13 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
       setSelectedBorrower(borrower);
       setValues(v=>({...v,cliente:borrower?.['Nome Completo']??'',cliente_id:borrower?String(borrower.ID):'',cidade:borrower?.Cidade??''}));
      }}><option value="">Seleccionar cliente do cadastro</option>{clients.map(c=><option key={c.ID} value={c.ID}>{c['Nome Completo']} · ID {c.ID}</option>)}</select>
+     {selectedBorrower&&<small>Seleccionado: {selectedBorrower['Nome Completo']} · ID {selectedBorrower.ID}</small>}
      {clientLoading&&<small>À procura de clientes…</small>}{clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
-     {field.choices?<select value={val} disabled={disabled} required={field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
+     {field.choices?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
-      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
+      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
     </label>;
    })}</div>
