@@ -8,7 +8,9 @@ const fields:Field[]=[
  {key:'numero',label:'Número do contrato',hint:'O número C-0000 será atribuído pelo servidor quando o fluxo financeiro for homologado.'},
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início',type:'date',required:true},
+ {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
+ {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Depende da reconciliação das entradas e saídas do Extracto.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
@@ -18,8 +20,8 @@ const fields:Field[]=[
  {key:'disponibilidade',label:'Disponibilidade',required:true,hint:'Deverá ser validada com o Extracto antes do desembolso.'},
 ];
 const groupings=[
- {name:'Mutuário e contrato',icon:UserRound,keys:['cliente','cliente_id','numero','cidade','data_inicio']},
- {name:'Condições do crédito',icon:Wallet,keys:['quantia','tipo_juro','juros','multa','prazo','modalidade','forma','disponibilidade']},
+ {name:'Mutuário e contrato',icon:UserRound,keys:['cliente','cliente_id','numero','cidade','data_inicio','data_final']},
+ {name:'Condições do crédito',icon:Wallet,keys:['quantia','saldo_disponivel','tipo_juro','juros','multa','prazo','modalidade','forma','disponibilidade']},
 ];
 export default function ContractDraft({onBack}:{onBack:()=>void}){
  const [values,setValues]=useState<Record<string,string>>({});
@@ -36,7 +38,7 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=key==='numero'||(key==='modalidade'&&['Variável','Composto'].includes(tipo));
+    const disabled=['numero','data_final','saldo_disponivel'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo));
     const val=key==='modalidade'?modalidade:values[key]??'';
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
      {field.choices?<select value={val} disabled={disabled} required={field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
