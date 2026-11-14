@@ -1,5 +1,5 @@
 import {useState,type FormEvent} from 'react';
-import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw} from 'lucide-react';
+import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw,ArrowRightLeft,BadgePlus,Eye,ReceiptText} from 'lucide-react';
 
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
 const fields:Field[]=[
@@ -41,11 +41,20 @@ export default function ContractDraft({onBack}:{onBack:()=>void}){
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
      {field.choices?<select value={val} disabled={disabled} required={field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
-      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={field.required&&key!=='cliente_id'} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
+      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
     </label>;
    })}</div>
   </section>)}
+  <section className="cis-panel cis-contract-draft-section"><h3><ArrowRightLeft size={20}/> Operações previstas no formulário original</h3>
+   <p>As operações seguintes constam de Contractos.frm. Permanecem bloqueadas porque modificam valores financeiros ou dependem da Cobrança e do Extracto.</p>
+   <div className="cis-contract-workflow-actions">
+    <button type="button" disabled title="Requer validação financeira"><BadgePlus size={18}/> Criar e desembolsar crédito</button>
+    <button type="button" disabled title="Requer validação financeira"><ArrowRightLeft size={18}/> Aumentar crédito (juro fixo)</button>
+    <button type="button" disabled title="Módulo Cobranças ainda não homologado"><ReceiptText size={18}/> Abrir Cobrança</button>
+    <button type="button" disabled title="Operação original a validar"><Eye size={18}/> Visualizar documento original</button>
+   </div>
+  </section>
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
    <p>Prazo permitido no formulário: 1, 2 ou 3 meses. Juro variável: uma parcela, com juros apurados na cobrança após a data efectiva de pagamento. Juro composto: prestações mensais. Juro fixo: uma parcela ou mensal. Nenhum cálculo é aplicado a valores financeiros reais nesta fase.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
