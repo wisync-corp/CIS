@@ -40,9 +40,17 @@ for item in "${columns[@]}"; do
   if [[ "$size" == DATE || "$size" == TIME ]]; then
    expected="${size,,}"
    if [[ "$type" != "$expected" ]]; then
-    echo "BLOQUEADO: coluna temporal $name já existe como $type, mas deve ser $expected." >&2
-    echo "É necessário validar os valores existentes antes de converter (sem perda de dados)." >&2
-    exit 1
+    if [[ "$type" != "varchar" ]]; then
+     echo "BLOQUEADO: coluna temporal $name já existe como $type; esperado $expected." >&2; exit 1
+    fi
+    # Só converter VARCHAR legado quando os valores estiverem TODOS vazios;
+    # jamais transformar datas/horas desconhecidas e perder informação.
+    filled="$(sql "SELECT COUNT(*) FROM \`Clientes\` WHERE \`$name\` IS NOT NULL AND TRIM(\`$name\`) <> '';")"
+    if [[ "$filled" != "0" ]]; then
+     echo "BLOQUEADO: coluna $name guarda $filled valores textuais; precisa de validação antes de converter para $expected." >&2
+     exit 1
+    fi
+    alter+=("MODIFY COLUMN \`$name\` $size NULL")
    fi
   else
    if [[ "$type" != "varchar" ]]; then
@@ -65,7 +73,7 @@ for item in "${columns[@]}"; do
 done
 if (( ${#alter[@]} == 0 )); then echo "Todas as 17 colunas já existem; nenhuma alteração necessária."; exit 0; fi
 before="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
-echo "Clientes existentes: $before. Colunas novas necessárias: ${#alter[@]}."
+echo "Clientes existentes: $before. Alterações de colunas necessárias: ${#alter[@]}."
 echo "Todas serão opcionais e adicionadas à MESMA tabela Clientes; datas DATE e horários TIME; nenhuma tabela auxiliar."
 read -r -p "Autoriza apenas estas colunas em Clientes? Escreva ADICIONAR: " confirm
 [[ "$confirm" == ADICIONAR ]] || { echo 'Cancelado.'; exit 1; }
@@ -76,5 +84,5 @@ statement+=";"
 sql "$statement"
 after="$(sql 'SELECT COUNT(*) FROM `Clientes`;')"
 [[ "$after" == "$before" ]] || { echo "ALERTA: contagem mudou ($before → $after); bloquear edição e investigar." >&2; exit 2; }
-echo "OK: $after clientes preservados. Colunas acrescentadas: ${#alter[@]}."
+echo "OK: $after clientes preservados. Alterações de colunas aplicadas: ${#alter[@]}."
 echo "As permissões de edição mantêm-se independentes e exigem configuração específica."
