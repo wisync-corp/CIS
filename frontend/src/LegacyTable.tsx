@@ -84,7 +84,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
   return ()=>controller.abort();
  },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,contractSort,sortDirection]);
  if(endpoint==='clientes'&&selected!==null)return <ClientProfile id={selected} token={token} onBack={()=>{setSelected(null);setRefresh(v=>v+1);}}/>;
- if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft onBack={()=>setContractDraftOpen(false)}/>;
+ if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft token={token} onBack={()=>setContractDraftOpen(false)}/>;
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} onBack={()=>{setSelectedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">
