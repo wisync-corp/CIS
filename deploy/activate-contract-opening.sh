@@ -42,7 +42,11 @@ echo ' - Um movimento Saídas / Desembolso de Empréstimo em Extracto'
 echo ' - Verificação prévia de saldo e da tabela de preços'
 echo ' - Transacção atómica; não altera contratos e movimentos antigos'
 echo ' - Apenas administrador, via pré-visualização privada'
-echo 'ATENÇÃO: isto permite registos financeiros reais. Confirme que o saldo do Extracto foi reconciliado.'
+echo 'ATENÇÃO: isto permite registos financeiros reais.'
+echo 'O antigo Excel/VBA e outros programas que alteram Contractos/Extracto devem estar PARADOS; não partilham o bloqueio de criação do CIS.'
+echo 'Confirme que o saldo do Extracto foi reconciliado com o dinheiro/contas reais.'
+read -r -p 'Confirma que não há outros escritores activos? Escreva EXCEL-PARADO: ' external
+[[ "$external" == 'EXCEL-PARADO' ]] || { echo 'Cancelado, sem alterações.'; exit 0; }
 read -r -p 'Autorizar abertura e desembolso reais? Escreva ACTIVAR-ABERTURA: ' confirm
 [[ "$confirm" == 'ACTIVAR-ABERTURA' ]] || { echo 'Cancelado, sem alterações.'; exit 0; }
 umask 077
