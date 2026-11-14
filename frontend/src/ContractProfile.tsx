@@ -1,9 +1,9 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
+import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,ArrowRightLeft,Eye} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados'|'Todos os campos';
+type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados'|'Todos os campos'|'Cobrança'|'Aumento de crédito'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
@@ -102,6 +102,8 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [sortColumn,setSortColumn]=useState<InstallmentSort>('Nº da Parcela');
+ const [targetInstallment,setTargetInstallment]=useState('');
+ const [increaseAmount,setIncreaseAmount]=useState('');
  const [sortDirection,setSortDirection]=useState<'asc'|'desc'>('asc');
  const load=useCallback(async(signal?:AbortSignal)=>{
   setLoading(true);setError('');
@@ -144,12 +146,52 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       {name:'Condições financeiras' as Tab,icon:Wallet},
       {name:'Administração' as Tab,icon:ShieldCheck},
       {name:'Dados legados' as Tab,icon:FileText},
-      {name:'Todos os campos' as Tab,icon:Layers}
+      {name:'Todos os campos' as Tab,icon:Layers},
+      {name:'Cobrança' as Tab,icon:ReceiptText},
+      {name:'Aumento de crédito' as Tab,icon:ArrowRightLeft},
+      {name:'Documento original' as Tab,icon:Eye}
      ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':'Informações originais do sistema de microcrédito.'}</p></div></header>
-     {tab==='Todos os campos'?<div className="cis-contract-all-fields">
+     {tab==='Cobrança'?<section className="cis-contract-operation">
+      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>O botão <strong>cmb_cobranca_Click</strong> do Contractos.frm transfere o número do contrato para outro formulário denominado Cobrança. A consulta das prestações é possível; receber pagamentos permanece bloqueado até à análise de Cobrança.frm.</span></div>
+      <h4>Prestações vinculadas ao contrato {numero}</h4>
+      <div className="cis-table-scroll"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Estado</th><th>Valor a pagar (MT)</th><th>Valor pago (MT)</th></tr></thead>
+       <tbody>{sortedInstallments.map((row,index)=><tr key={String(row.Ordem??index)}>
+        <td>{format(row,'Nº da Parcela')}</td>
+        <td>{format(row,'Data de Cobrança','date')}</td>
+        <td>{format(row,'Estado')}</td>
+        <td>{format(row,'Valor a Pagar','money')}</td>
+        <td>{format(row,'Valor Pago','money')}</td>
+       </tr>)}</tbody></table></div>
+      <p>Estes valores são históricos, não constituem um saldo actualizado ou uma ordem de cobrança. O lançamento de pagamentos, juros variáveis e multas não está disponível nesta etapa.</p>
+     </section>:tab==='Aumento de crédito'?<section className="cis-contract-operation">
+      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>YourButton_Click</strong> do Contractos.frm permite aumento directo apenas para juro fixo. Contém uma atribuição a «Valor Pago» que exige reconciliação antes da migração. Esta página é de preparação; não altera o contrato.</span></div>
+      <h4>Revisão de aumento de crédito</h4>
+      <div className="cis-profile-fields">
+       <label className="cis-profile-field"><span>Prestação pretendida</span>
+        <select value={targetInstallment} onChange={event=>setTargetInstallment(event.target.value)}>
+         <option value="">Seleccionar uma prestação</option>
+         {data.installments.map((row,index)=><option value={String(row.Ordem??index)} key={index}>Parcela {format(row,'Nº da Parcela')} · {format(row,'Estado')}</option>)}
+        </select>
+       </label>
+       <label className="cis-profile-field"><span>Valor de aumento pretendido (MT) — apenas consulta local</span>
+        <input type="number" min="0.01" step="0.01" value={increaseAmount} onChange={e=>setIncreaseAmount(e.target.value)} placeholder="Montante adicional"/>
+       </label>
+       <div className="cis-profile-field"><span>Tipo de juro original</span><div className="cis-profile-field-value">{format(contract,'Tipo de Juro')}</div></div>
+       <div className="cis-profile-field"><span>Elegibilidade técnica</span><div className="cis-profile-field-value">{String(contract['Tipo de Juro']??'').toLowerCase()==='fixo'?'Juro fixo — requer reconciliação dos movimentos':'Não elegível para aumento directo no VBA'}</div></div>
+      </div>
+      <p>{targetInstallment&&Number(increaseAmount)>0?'Pedido preliminar preenchido.':'Seleccione a prestação e indique o montante que pretende avaliar.'} Não existe cálculo nem gravação de aumento nesta etapa.</p>
+     </section>:tab==='Documento original'?<section className="cis-contract-operation">
+      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
+      <h4>Documento associado ao contrato</h4>
+      <div className="cis-profile-fields">
+       <div className="cis-profile-field"><span>Número do contrato</span><div className="cis-profile-field-value">{numero}</div></div>
+       <div className="cis-profile-field"><span>Documento original</span><div className="cis-profile-field-value">Ainda não associado ao armazenamento privado do CIS</div></div>
+      </div>
+      <p>Será necessário importar os PDFs originais e confirmar a correspondência de cada documento com o seu contrato, protegendo os ficheiros por permissões. Não será criado um documento fictício.</p>
+     </section>:     {tab==='Todos os campos'?<div className="cis-contract-all-fields">
       <p className="cis-contract-count">Consulta integral das 33 colunas do INSERT original do Contractos.frm, para cada prestação. Os valores permanecem os da base MySQL.</p>
       <div className="cis-table-scroll"><table><thead><tr>{allLegacyColumns.map(name=><th key={name}>{name}</th>)}</tr></thead>
       <tbody>{(data.legacy_rows??[]).map((row,index)=><tr key={String(row.Ordem??index)}>
