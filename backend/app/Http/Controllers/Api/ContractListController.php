@@ -35,6 +35,29 @@ final class ContractListController extends Controller
             ->groupBy('Nr do Contracto');
     }
 
+    public function summary()
+    {
+        // Reutiliza EXACTAMENTE a mesma regra de estado da listagem.
+        // Conta contratos distintos, e nunca as 679 linhas de prestações.
+        $rows = DB::connection('mysql_legacy')->query()
+            ->fromSub($this->groupedContracts(), 'contratos')
+            ->select('estado')
+            ->selectRaw('COUNT(*) AS total')
+            ->groupBy('estado')
+            ->orderBy('estado')
+            ->get();
+
+        $byState = $rows->map(fn ($row) => [
+            'estado' => $row->estado,
+            'total' => (int) $row->total,
+        ])->values();
+
+        return response()->json([
+            'total' => (int) $byState->sum('total'),
+            'por_estado' => $byState,
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
     public function states()
     {
         // Estados de contrato agregados (não estados individuais de parcelas).
