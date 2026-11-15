@@ -153,8 +153,6 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify({
      cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
-     periodo_dias:Number(periodo),
-     prazo: selectedTerm,
      taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
@@ -187,6 +185,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
      taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
+     periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
      data_inicio:values.data_inicio,confirmacao_desembolso:true
     })
@@ -263,7 +262,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    })}</div>
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
-   <div className="cis-contract-draft-count"><span>N.º previsto de prestações (regra do VBA)</span><strong>{numeroPrestacoes??'—'}</strong></div>
+   <div className="cis-contract-draft-count"><span>{weeklyTerm?'N.º de prestações semanais (pendente de regra)':'N.º previsto de prestações (regra do VBA)'}</span><strong>{numeroPrestacoes??'—'}</strong></div>
    <p>{weeklyTerm?'Prazo semanal: a data final é indicativa, calculada em semanas de sete dias. O calendário das prestações e o cálculo financeiro semanal precisam de homologação antes da gravação.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
    {weeklyTerm&&dataFinal&&<p><strong>Data final indicativa:</strong> {dataFinal.split('-').reverse().join('/')} · prestação(ões) ainda não definidas para este prazo semanal.</p>}
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
