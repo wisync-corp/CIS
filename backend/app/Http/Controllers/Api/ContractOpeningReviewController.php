@@ -46,10 +46,11 @@ final class ContractOpeningReviewController extends Controller
             'cliente_id' => ['required', 'integer', 'min:1'],
             'montante' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'tipo_juro' => ['required','in:Fixo,Variável,Composto'],
-            'periodo_dias' => ['nullable','integer','in:15,30'],
+            'periodo_dias' => ['required','integer','in:15,30'],
+            'prazo' => ['required','in:1 Semana,2 Semanas,3 Semanas,1 Mês,2 Meses,3 Meses'],
             'taxa_informada' => ['required','numeric','between:0,100'],
             'taxa_multa' => ['required','numeric','between:0,100'],
-            'prazo_meses' => ['required','integer','in:1,2,3'],
+            'prazo_meses' => ['required','integer','min:0','max:3'],
             'modalidade' => ['required','in:Mensal,Uma Parcela'],
             'forma_pagamento' => ['required','string','max:100'],
             'disponibilidade' => ['required','string','max:100'],
@@ -63,6 +64,20 @@ final class ContractOpeningReviewController extends Controller
 
         $issues = [];
         $rate = null;
+        $terms = (int)$values['periodo_dias']===15
+            ? ['1 Semana','2 Semanas']
+            : ['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
+        if (!in_array($values['prazo'], $terms, true)) {
+            $issues[] = 'O prazo não é compatível com o período de juros seleccionado.';
+        }
+        $isWeekly = str_contains($values['prazo'],'Semana');
+        $expectedMonths = $isWeekly ? 0 : (int)explode(' ',$values['prazo'])[0];
+        if ((int)$values['prazo_meses'] !== $expectedMonths) {
+            $issues[] = 'O prazo enviado não corresponde à duração indicada.';
+        }
+        if ($isWeekly) {
+            $issues[] = 'O prazo semanal está disponível para selecção e consulta de taxa, mas as fórmulas e os vencimentos semanais ainda necessitam de homologação antes de criar e desembolsar.';
+        }
         if ($values['tipo_juro'] === 'Fixo') {
             if (!isset($values['periodo_dias'])) {
                 $issues[] = 'Seleccionar o período em dias para consultar a tabela de juros.';
