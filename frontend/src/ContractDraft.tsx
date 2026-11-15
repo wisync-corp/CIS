@@ -31,7 +31,7 @@ function monthAfter(date:string,months:number):string {
 const fields:Field[]=[
  {key:'cliente',label:'Mutuário / cliente',required:true,hint:'Seleccionado exclusivamente a partir dos clientes reais existentes no MySQL.'},
  {key:'cliente_id',label:'ID do cliente',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
- {key:'numero',label:'Número do contrato',hint:'Atribuído pelo servidor apenas quando a abertura real for confirmada.'},
+ {key:'numero',label:'Número do contrato',hint:'Número provisório calculado pelo maior Nº da tabela Contractos. Será confirmado na gravação e pode mudar se outro contrato for criado primeiro.'},
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
@@ -61,6 +61,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [activeSuggestion,setActiveSuggestion]=useState(0);
  const [cashBalance,setCashBalance]=useState<string>('');
  const [cashError,setCashError]=useState('');
+ const [suggestedNumber,setSuggestedNumber]=useState('');
+ const [numberError,setNumberError]=useState('');
+ const [numberLoading,setNumberLoading]=useState(true);
  const [quote,setQuote]=useState<InterestQuote|null>(null);
  const [quoteKey,setQuoteKey]=useState('');
  const [quoteLoading,setQuoteLoading]=useState(false);
@@ -93,6 +96,26 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    return res.json() as Promise<{saldo_disponivel:number}>;
   }).then(data=>{if(!controller.signal.aborted)setCashBalance(String(data.saldo_disponivel));})
    .catch(e=>{if(e.name!=='AbortError')setCashError(e.message);});
+  return ()=>controller.abort();
+ },[token]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  setNumberLoading(true);setNumberError('');
+  fetch(API+'/cis/contractos/proximo-numero',{
+   headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+   signal:controller.signal
+  }).then(async res=>{
+   if(!res.ok)throw new Error('Não foi possível consultar a numeração actual.');
+   return res.json() as Promise<{numero_sugerido:string;provisorio:boolean}>;
+  }).then(data=>{
+   if(!controller.signal.aborted){
+    if(!/^C-\\d{4,}$/.test(data.numero_sugerido))throw new Error('Número recebido inválido.');
+    setSuggestedNumber(data.numero_sugerido);
+   }
+  }).catch(error=>{
+   if(error.name!=='AbortError'&&!controller.signal.aborted)
+    setNumberError(error instanceof Error?error.message:'Falha na consulta da numeração.');
+  }).finally(()=>{if(!controller.signal.aborted)setNumberLoading(false);});
   return ()=>controller.abort();
  },[token]);
  const chooseBorrower=(borrower:Borrower)=>{
@@ -225,7 +248,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
     const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm));
-    const val=key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
+    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -267,11 +290,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {!selectedBorrower&&clientSearch.trim().length>0&&<small>Escolha uma das sugestões para associar o cliente ao contrato.</small>}
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
-    return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
+    return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
      {field.choices||key==='prazo'||key==='modalidade'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:field.choices??[]).map(choice=><option key={choice} value={choice}>{choice}</option>)}
-      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
+      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
+     {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
      {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;
