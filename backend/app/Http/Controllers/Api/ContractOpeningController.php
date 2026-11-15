@@ -31,6 +31,8 @@ final class ContractOpeningController extends Controller
             'cliente_id'=>['required','integer','min:1'],
             'montante'=>['required','numeric','gt:0','max:100000000','decimal:0,2'],
             'tipo_juro'=>['required','in:Fixo,Variável,Composto'],
+            'periodo_dias'=>['required','integer','in:15,30'],
+            'prazo'=>['required','in:1 Semana,2 Semanas,3 Semanas,1 Mês,2 Meses,3 Meses'],
             'taxa_informada'=>['required','numeric','between:0,100'],
             'taxa_multa'=>['required','numeric','between:0,100'],
             'prazo_meses'=>['required','integer','in:1,2,3'],
@@ -40,6 +42,22 @@ final class ContractOpeningController extends Controller
             'data_inicio'=>['required','date_format:Y-m-d'],
             'confirmacao_desembolso'=>['required','accepted'],
         ]);
+        $validTerms=(int)$d['periodo_dias']===15
+            ? ['1 Semana','2 Semanas']
+            : ['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
+        if (!in_array($d['prazo'],$validTerms,true)) {
+            throw ValidationException::withMessages(['prazo'=>
+                'Prazo incompatível com o período escolhido.']);
+        }
+        // Os prazos de semanas foram autorizados para a interface, não para
+        // gravações financeiras com cálculos mensais de Contractos.frm.
+        if (str_contains($d['prazo'],'Semana')) {
+            throw ValidationException::withMessages(['prazo'=>
+                'Abertura semanal ainda suspensa: faltam regras homologadas para juros, modalidades e prestações semanais. Nenhum dado foi gravado.']);
+        }
+        if ((int)explode(' ',$d['prazo'])[0] !== (int)$d['prazo_meses']) {
+            throw ValidationException::withMessages(['prazo'=>'Prazo e meses inconsistentes.']);
+        }
         // Esquema antigo: juros/multa INT. Não truncar percentagens silenciosamente.
         foreach (['taxa_informada','taxa_multa'] as $taxa) {
             if (abs((float)$d[$taxa] - round((float)$d[$taxa])) > 0.000001) {
@@ -118,9 +136,9 @@ final class ContractOpeningController extends Controller
                     $prices=$db->table('cis_tabela_juros')
                         ->where('limite_inferior','<=',$d['montante'])
                         ->where('limite_superior','>=',$d['montante'])
-                        ->where('periodo_referencia',30)->get();
+                        ->where('periodo_referencia',$d['periodo_dias'])->get();
                     abort_unless($prices->count()===1,422,
-                        'Não foi encontrada uma taxa única na tabela de preços para 30 dias.');
+                        'Não foi encontrada uma taxa única na tabela de preços para o período seleccionado.');
                     $rate=(float)$prices[0]->taxa;
                     if (abs($rate-(float)$d['taxa_informada'])>0.00001) {
                         throw ValidationException::withMessages(['taxa_informada'=>
