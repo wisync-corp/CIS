@@ -34,6 +34,34 @@ final class ContractOpeningReviewController extends Controller
             'consulta_apenas'=>true])->header('Cache-Control','no-store, private');
     }
 
+    /**
+     * Apenas PRÉVIA do próximo número: não faz reserva nem altera registos.
+     * O número definitivo só é atribuído na transacção de abertura, sob lock.
+     */
+    public function suggestedNumber(Request $request)
+    {
+        $user=$request->user();
+        abort_unless($user && $user->active && $user->role==='administrador',403);
+        abort_unless(
+            filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN)
+            && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            503,'Consulta de contratos não disponível neste ambiente.'
+        );
+        $db=DB::connection('mysql_legacy');
+        $max=$db->table('Contractos')->max('Nº');
+        abort_if($max!==null && (!is_numeric($max) || (float)$max<0
+            || (float)$max>999999998),409,'Sequência de contratos inválida ou esgotada.');
+        $sequence=(int)($max??0)+1;
+        $numero='C-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT);
+        abort_if($db->table('Contractos')->where('Nr do Contracto',$numero)->exists(),
+            409,'O número sugerido já está em uso; é necessária reconciliação.');
+        return response()->json([
+            'numero_sugerido'=>$numero,
+            'provisorio'=>true,
+            'mensagem'=>'Número calculado pelo maior Nº actual; confirmado apenas na gravação.',
+        ])->header('Cache-Control','no-store, private');
+    }
+
     public function validateDraft(Request $request)
     {
         $user = $request->user();
