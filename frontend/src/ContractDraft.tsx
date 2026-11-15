@@ -7,6 +7,19 @@ type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string
 type InterestQuote={found:boolean;taxa?:string|number;periodo_dias?:number;limite_inferior?:number;limite_superior?:number;message?:string};
 type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:boolean;pendencias:string[]};
 const API=import.meta.env.VITE_API_URL||'/api';
+function todayMaputo():string{
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
+  year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const part=(name:string)=>parts.find(p=>p.type===name)?.value??'';
+ return part('year')+'-'+part('month')+'-'+part('day');
+}
+function allowedPaymentMethods(term:string):string[]{
+ if(term==='1 Semana')return ['Uma Parcela'];
+ if(term==='2 Semanas'||term==='3 Semanas')return ['Semanal','Uma Parcela'];
+ if(term==='1 Mês')return ['Semanal','Uma Parcela'];
+ if(term==='2 Meses'||term==='3 Meses')return ['Semanal','Mensal','Uma Parcela'];
+ return [];
+}
 function monthAfter(date:string,months:number):string {
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';
  const [year,month,day]=date.split('-').map(Number);
@@ -29,7 +42,7 @@ const fields:Field[]=[
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
  {key:'prazo',label:'Prazo',type:'select',required:true,hint:'As opções mudam automaticamente conforme o período seleccionado.'},
- {key:'modalidade',label:'Modalidade de pagamento',type:'select',choices:['Mensal','Uma Parcela'],required:true},
+ {key:'modalidade',label:'Modalidade de pagamento',type:'select',required:true,hint:'Conforme o prazo: semanal, mensal (apenas 2 ou 3 meses) ou uma única parcela.'},
  {key:'forma',label:'Forma de pagamento',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Corresponde às três opções originais do VBA, com ortografia corrigida na interface.'},
  {key:'disponibilidade',label:'Meio de disponibilização do crédito',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Forma de desembolso; o saldo e o Extracto exigem reconciliação antes de qualquer gravação.'},
 ];
@@ -38,7 +51,7 @@ const groupings=[
  {name:'Condições do crédito',icon:Wallet,keys:['quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','forma','disponibilidade']},
 ];
 export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
- const [values,setValues]=useState<Record<string,string>>({});
+ const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
  const [clientSearch,setClientSearch]=useState('');
  const [clients,setClients]=useState<Borrower[]>([]);
  const [selectedBorrower,setSelectedBorrower]=useState<Borrower|null>(null);
@@ -95,6 +108,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const availableTerms=periodo==='15'?['1 Semana','2 Semanas']:periodo==='30'?['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses']:[];
  const selectedTerm=availableTerms.includes(values.prazo??'')?values.prazo??'':'';
  const weeklyTerm=selectedTerm.includes('Semana');
+ const availableModalities=allowedPaymentMethods(selectedTerm);
+ const selectedModality=availableModalities.includes(values.modalidade??'')?values.modalidade??'':'';
+ const unsupportedSchedule=weeklyTerm||selectedModality==='Semanal';
  const currentQuoteKey=values.quantia+'|'+periodo;
  const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\.\d{1,2})?$/.test(values.quantia??'');
  const priced= fixedRate&&quoteKey===currentQuoteKey&&quote?.found===true;
@@ -134,11 +150,11 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
 
  useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey]);
  const tipo=values.tipo_juro??'';
- const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
+ const modalidade=selectedModality;
  const prazoMeses=selectedTerm.includes('Mês')||selectedTerm.includes('Meses')?Number(selectedTerm.slice(0,1)):0;
  const prazoSemanas=weeklyTerm?Number(selectedTerm.slice(0,1)):0;
  const addWeeks=(date:string,weeks:number)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';const [y,m,d]=date.split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+7*weeks));return t.toISOString().slice(0,10);};
- const numeroPrestacoes=(!prazoMeses||!tipo)?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
+ const numeroPrestacoes=!selectedTerm||!tipo||!modalidade?null:unsupportedSchedule?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
  const dataFinal=values.data_inicio&&(prazoMeses||prazoSemanas)?(weeklyTerm?addWeeks(values.data_inicio,prazoSemanas):monthAfter(values.data_inicio,prazoMeses)):'';
  const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
   index+1===numeroPrestacoes?dataFinal:monthAfter(values.data_inicio,index+1)):[];
@@ -166,7 +182,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
-   if(body.cadastro_confirmado&&!weeklyTerm){
+   if(body.cadastro_confirmado&&!unsupportedSchedule){
     try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
@@ -175,7 +191,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   finally{setReviewBusy(false);}
  };
  const openContract=async()=>{
-  if(!review?.dados_verificados||!review.autorizado_para_gravar||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(!review?.dados_verificados||!review.autorizado_para_gravar||unsupportedSchedule||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
   if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
   setOpeningBusy(true);setOpeningError('');
   try{
@@ -204,12 +220,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
   <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Abertura controlada:</strong> a gravação e o desembolso reais apenas são possíveis após validação no servidor, activação autorizada e confirmação expressa de que os fundos foram disponibilizados. O sistema grava contrato, prestações e movimento do Extracto numa única transacção.</span></div>
-  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setClients([]);setSuggestionsOpen(false);setActiveSuggestion(0);setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
+  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({data_inicio:todayMaputo()});setSelectedBorrower(null);setClientSearch('');setClients([]);setSuggestionsOpen(false);setActiveSuggestion(0);setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo))||(key==='juros'&&fixedRate)||(key==='prazo'&&!periodo);
-    const val=key==='modalidade'?modalidade:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm));
+    const val=key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -252,8 +268,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
-     {field.choices||key==='prazo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:''}):({...prev,[key]:e.target.value}))}>
-       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:field.choices??[]).map(choice=><option key={choice} value={choice}>{choice}</option>)}
+     {field.choices||key==='prazo'||key==='modalidade'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):({...prev,[key]:e.target.value}))}>
+       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:field.choices??[]).map(choice=><option key={choice} value={choice}>{choice}</option>)}
       </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
@@ -263,8 +279,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
    <div className="cis-contract-draft-count"><span>{weeklyTerm?'N.º de prestações semanais (pendente de regra)':'N.º previsto de prestações (regra do VBA)'}</span><strong>{numeroPrestacoes??'—'}</strong></div>
-   <p>{weeklyTerm?'Prazo semanal: a data final é indicativa, calculada em semanas de sete dias. O calendário das prestações e o cálculo financeiro semanal precisam de homologação antes da gravação.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
-   {weeklyTerm&&dataFinal&&<p><strong>Data final indicativa:</strong> {dataFinal.split('-').reverse().join('/')} · prestação(ões) ainda não definidas para este prazo semanal.</p>}
+   <p>{unsupportedSchedule?'Modalidade semanal ou prazo semanal: a data final é indicativa. O calendário e o cálculo financeiro de prestações semanais precisam de homologação antes da gravação.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
+   {unsupportedSchedule&&dataFinal&&<p><strong>Data final indicativa:</strong> {dataFinal.split('-').reverse().join('/')} · distribuição semanal das prestações ainda por homologar.</p>}
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><BadgePlus size={20}/> Criar e desembolsar crédito</h3>
@@ -272,7 +288,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente. A abertura real é verificada e protegida contra valores não suportados pelo esquema legado.</span></div>
   </section>
   <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
-   <p>Período de 15 dias: prazos de 1 ou 2 semanas. Período de 30 dias: prazos de 1, 2 ou 3 semanas, ou 1, 2 ou 3 meses. Os prazos semanais estão disponíveis para selecção e consulta da taxa, mas a criação real permanece bloqueada até à validação das prestações semanais. As regras mensais continuam as do Contractos.frm.</p>
+   <p>A data de início é preenchida automaticamente com o dia actual em Moçambique, mas pode ser alterada. Uma semana admite parcela única; duas ou três semanas admitem Semanal ou Uma Parcela; um mês admite Semanal ou Uma Parcela; dois ou três meses admitem Semanal, Mensal ou Uma Parcela. A gravação financeira semanal ainda exige homologação.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
