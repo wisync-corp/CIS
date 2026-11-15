@@ -263,3 +263,6 @@ html{font-size:16px}
 .cis-contract-draft-section .cis-client-suggestion small{font-size:12px;color:var(--cis-text-muted)}
 .cis-client-suggestion-status{padding:14px;font-size:13px;color:var(--cis-text-muted)}
 .cis-contract-draft-section .cis-client-confirmed{color:var(--cis-primary);font-weight:700}
+
+/* Contract number takes its own row above all credit amount and repayment fields. */
+.cis-contract-draft-section .cis-profile-field.cis-contract-number-row{grid-column:1 / -1}
