@@ -44,6 +44,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [selectedBorrower,setSelectedBorrower]=useState<Borrower|null>(null);
  const [clientError,setClientError]=useState('');
  const [clientLoading,setClientLoading]=useState(false);
+ const [suggestionsOpen,setSuggestionsOpen]=useState(false);
+ const [activeSuggestion,setActiveSuggestion]=useState(0);
  const [cashBalance,setCashBalance]=useState<string>('');
  const [cashError,setCashError]=useState('');
  const [quote,setQuote]=useState<InterestQuote|null>(null);
@@ -51,6 +53,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [quoteLoading,setQuoteLoading]=useState(false);
  const [quoteError,setQuoteError]=useState('');
  useEffect(()=>{
+  if(selectedBorrower && clientSearch===selectedBorrower['Nome Completo'])return;
+  if(!clientSearch.trim()){setClients([]);setClientLoading(false);return;}
   const controller=new AbortController();
   const timer=window.setTimeout(()=>{
    setClientLoading(true);setClientError('');
@@ -61,12 +65,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }).then(async result=>{
     if(!result.ok)throw new Error('Não foi possível consultar os clientes autorizados.');
     return result.json() as Promise<Borrower[]>;
-   }).then(list=>{if(!controller.signal.aborted)setClients(list);})
+   }).then(list=>{if(!controller.signal.aborted){setClients(list);setActiveSuggestion(0);}})
    .catch(e=>{if(e.name!=='AbortError')setClientError(e.message);})
    .finally(()=>{if(!controller.signal.aborted)setClientLoading(false);});
   },300);
   return ()=>{controller.abort();window.clearTimeout(timer);};
- },[clientSearch,token]);
+ },[clientSearch,token,selectedBorrower]);
  useEffect(()=>{
   const controller=new AbortController();
   fetch(API+'/cis/contractos/saldo',{headers:{
@@ -78,6 +82,14 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    .catch(e=>{if(e.name!=='AbortError')setCashError(e.message);});
   return ()=>controller.abort();
  },[token]);
+ const chooseBorrower=(borrower:Borrower)=>{
+  setSelectedBorrower(borrower);
+  setClientSearch(borrower['Nome Completo']);
+  setSuggestionsOpen(false);
+  setClientError('');
+  setValues(v=>({...v,cliente:borrower['Nome Completo'],cliente_id:String(borrower.ID),cidade:borrower.Cidade??''}));
+ };
+ const matchingClients=clients.slice(0,12);
  const fixedRate=values.tipo_juro==='Fixo';
  const currentQuoteKey=values.quantia+'|30';
  const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\.\d{1,2})?$/.test(values.quantia??'');
@@ -185,7 +197,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
   <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Abertura controlada:</strong> a gravação e o desembolso reais apenas são possíveis após validação no servidor, activação autorizada e confirmação expressa de que os fundos foram disponibilizados. O sistema grava contrato, prestações e movimento do Extracto numa única transacção.</span></div>
-  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
+  <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({});setSelectedBorrower(null);setClientSearch('');setClients([]);setSuggestionsOpen(false);setActiveSuggestion(0);setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
@@ -193,14 +205,44 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     const val=key==='modalidade'?modalidade:key==='saldo_disponivel'?cashBalance:key==='periodo_tabela'&&fixedRate?'30':key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
-     <input id="cis-client-search" type="search" placeholder="Escreva nome ou ID do cliente" value={clientSearch} autoComplete="off" onChange={e=>setClientSearch(e.target.value)}/>
-     <select value={selectedBorrower?.ID??''} required aria-label="Seleccionar cliente" onChange={e=>{
-      const borrower=clients.find(c=>c.ID===Number(e.target.value))??null;
-      setSelectedBorrower(borrower);
-      setValues(v=>({...v,cliente:borrower?.['Nome Completo']??'',cliente_id:borrower?String(borrower.ID):'',cidade:borrower?.Cidade??''}));
-     }}><option value="">Seleccionar cliente do cadastro</option>{clients.map(c=><option key={c.ID} value={c.ID}>{c['Nome Completo']} · ID {c.ID}</option>)}</select>
-     {selectedBorrower&&<small>Seleccionado: {selectedBorrower['Nome Completo']} · ID {selectedBorrower.ID}</small>}
-     {clientLoading&&<small>À procura de clientes…</small>}{clientError&&<small role="alert">{clientError}</small>}
+     <div className="cis-client-combobox">
+      <input id="cis-client-search" type="search" role="combobox" aria-autocomplete="list"
+       aria-expanded={suggestionsOpen&&clientSearch.trim().length>0}
+       aria-controls="cis-client-suggestions"
+       aria-activedescendant={suggestionsOpen&&matchingClients[activeSuggestion]?'cis-client-option-'+matchingClients[activeSuggestion].ID:undefined}
+       placeholder="Digite nome ou ID do cliente" value={clientSearch} autoComplete="off"
+       onFocus={()=>{if(!selectedBorrower)setSuggestionsOpen(true);}}
+       onBlur={()=>setSuggestionsOpen(false)}
+       onChange={e=>{
+        setClientSearch(e.target.value);
+        setSelectedBorrower(null);
+        setValues(v=>({...v,cliente:'',cliente_id:'',cidade:''}));
+        setSuggestionsOpen(true);
+        setActiveSuggestion(0);
+       }}
+       onKeyDown={e=>{
+        if(e.key==='Escape'){setSuggestionsOpen(false);return;}
+        if(e.key==='ArrowDown'){e.preventDefault();setSuggestionsOpen(true);setActiveSuggestion(i=>Math.min(i+1,matchingClients.length-1));return;}
+        if(e.key==='ArrowUp'){e.preventDefault();setActiveSuggestion(i=>Math.max(0,i-1));return;}
+        if(e.key==='Enter'&&suggestionsOpen&&matchingClients.length){e.preventDefault();chooseBorrower(matchingClients[activeSuggestion]??matchingClients[0]);}
+       }}/>
+      {suggestionsOpen&&clientSearch.trim().length>0&&<div className="cis-client-suggestion-list" role="listbox" id="cis-client-suggestions" aria-label="Clientes correspondentes">
+       {clientLoading?<div className="cis-client-suggestion-status" role="status">A pesquisar clientes…</div>:
+        matchingClients.length>0?matchingClients.map((borrower,index)=><button
+         type="button" role="option" id={'cis-client-option-'+borrower.ID} key={borrower.ID}
+         aria-selected={index===activeSuggestion}
+         className={'cis-client-suggestion'+(index===activeSuggestion?' active':'')}
+         onMouseDown={e=>e.preventDefault()}
+         onClick={()=>chooseBorrower(borrower)}>
+          <strong>{borrower['Nome Completo']}</strong>
+          <small>ID {borrower.ID}{borrower.Cidade?' · '+borrower.Cidade:''}</small>
+         </button>):
+        <div className="cis-client-suggestion-status" role="status">Nenhum cliente encontrado.</div>}
+      </div>}
+     </div>
+     {selectedBorrower&&<small className="cis-client-confirmed">✓ Seleccionado: {selectedBorrower['Nome Completo']} · ID {selectedBorrower.ID}</small>}
+     {!selectedBorrower&&clientSearch.trim().length>0&&<small>Escolha uma das sugestões para associar o cliente ao contrato.</small>}
+     {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
      {field.choices?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
