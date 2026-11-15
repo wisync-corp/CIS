@@ -250,3 +250,16 @@ html{font-size:16px}
 .cis-contract-confirm input[type=checkbox]{width:20px;min-width:20px;height:20px;margin-top:2px;accent-color:var(--cis-primary)}
 .cis-contract-review button:disabled{cursor:not-allowed;opacity:.55}
 .cis-contract-review>.cis-contract-draft-button{margin-top:4px}
+
+/* Pesquisa de mutuário no próprio campo, com sugestões clicáveis. */
+.cis-client-combobox{position:relative;min-width:0}
+.cis-contract-draft-section .cis-client-combobox>input{margin:0}
+.cis-client-suggestion-list{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;max-height:280px;overflow-y:auto;border:1px solid var(--cis-input-border);border-radius:10px;background:var(--cis-surface,#fff);box-shadow:0 12px 25px rgba(0,0,0,.12)}
+.cis-contract-draft-section .cis-client-suggestion{display:flex;align-items:flex-start;flex-direction:column;justify-content:center;width:100%;min-height:52px;gap:3px;text-align:left;padding:11px 13px;background:transparent;border:0;border-bottom:1px solid var(--cis-border);color:var(--cis-text);cursor:pointer}
+.cis-contract-draft-section .cis-client-suggestion:last-child{border-bottom:0}
+.cis-contract-draft-section .cis-client-suggestion:hover,.cis-contract-draft-section .cis-client-suggestion.active{background:var(--cis-tint)}
+.cis-contract-draft-section .cis-client-suggestion:focus-visible{outline:2px solid var(--cis-primary);outline-offset:-3px}
+.cis-contract-draft-section .cis-client-suggestion strong{font-size:14px;color:var(--cis-heading)}
+.cis-contract-draft-section .cis-client-suggestion small{font-size:12px;color:var(--cis-text-muted)}
+.cis-client-suggestion-status{padding:14px;font-size:13px;color:var(--cis-text-muted)}
+.cis-contract-draft-section .cis-client-confirmed{color:var(--cis-primary);font-weight:700}
