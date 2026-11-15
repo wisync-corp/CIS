@@ -30,3 +30,12 @@ Origem: ficheiro VBA Contractos.frm fornecido pelo utilizador em 14-11-2026. Có
 - Consulta e pré-validação Laravel, tabela de preços e pré-visualização financeira local baseadas nas ramificações VBA; sem escrita financeira.
 - Prestações e juros previstos são indicadores de simulação, não montantes homologados para cobrança.
 - Antes de criar contratos no MySQL: paridade monetária com o Excel, saldo do Extracto, numeração segura, permissões de escrita, auditoria e atomicidade.
+
+## Ajuste de produto autorizado pelo utilizador — períodos e prazos (15-11-2026)
+- O utilizador definiu uma nova relação entre o período de preços e o prazo do contrato; isto é uma extensão do formulário VBA mensal, não uma regra inferida do Contractos.frm histórico.
+- Período 15 dias: **1 Semana** ou **2 Semanas**.
+- Período 30 dias: **1 Semana**, **2 Semanas**, **3 Semanas**, **1 Mês**, **2 Meses**, **3 Meses**.
+- O campo período passa a ser seleccionável (15/30), e qualquer mudança limpa o prazo anterior para impedir combinações inconsistentes.
+- A cotação de juro fixo usa o período seleccionado, e o servidor valida a combinação antes de qualquer operação.
+- **Segurança:** os cálculos e o esquema de prestações semanais não constam das fórmulas mensais do Contractos.frm analisado; a interface permite seleccionar e consultar taxas para semanas, mas a abertura real semanal continua bloqueada na API até validação das modalidades, número e datas das parcelas e cálculo dos juros.
+- Para os prazos mensais com período 30 dias, a abertura real conserva as validações financeiras já existentes; não alterar dados históricos.
