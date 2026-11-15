@@ -39,3 +39,14 @@ Origem: ficheiro VBA Contractos.frm fornecido pelo utilizador em 14-11-2026. Có
 - A cotação de juro fixo usa o período seleccionado, e o servidor valida a combinação antes de qualquer operação.
 - **Segurança:** os cálculos e o esquema de prestações semanais não constam das fórmulas mensais do Contractos.frm analisado; a interface permite seleccionar e consultar taxas para semanas, mas a abertura real semanal continua bloqueada na API até validação das modalidades, número e datas das parcelas e cálculo dos juros.
 - Para os prazos mensais com período 30 dias, a abertura real conserva as validações financeiras já existentes; não alterar dados históricos.
+
+## Ajuste da data e modalidade — 15-11-2026
+- O formulário passa a iniciar com a data corrente de Moçambique (Africa/Maputo). O operador pode editar a data; a API de desembolso real continuará a exigir que corresponda ao dia efectivo do desembolso.
+- O período (15 ou 30 dias) determina os prazos disponíveis. A escolha do prazo determina as modalidades disponíveis:
+  - 1 Semana: Uma Parcela.
+  - 2 ou 3 Semanas: Semanal ou Uma Parcela.
+  - 1 Mês: Semanal ou Uma Parcela (não Mensal).
+  - 2 ou 3 Meses: Semanal, Mensal ou Uma Parcela.
+- Alterar período limpa prazo e modalidade; alterar prazo limpa modalidade.
+- Para juro Variável/Composto, as limitações adicionais da rotina legada continuam verificadas no servidor (Variável apenas Uma Parcela; Composto apenas Mensal). Combinações novas sem fórmula homologada não autorizam desembolso.
+- Modalidade Semanal e prazos semanais **podem ser preparados no formulário**, mas a gravação real permanece bloqueada pela API até se aprovar número de prestações, datas e cálculo de juros, não inferidos do módulo VBA original.
