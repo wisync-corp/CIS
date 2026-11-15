@@ -51,7 +51,7 @@ final class ContractOpeningReviewController extends Controller
             'taxa_informada' => ['required','numeric','between:0,100'],
             'taxa_multa' => ['required','numeric','between:0,100'],
             'prazo_meses' => ['required','integer','min:0','max:3'],
-            'modalidade' => ['required','in:Mensal,Uma Parcela'],
+            'modalidade' => ['required','in:Semanal,Mensal,Uma Parcela'],
             'forma_pagamento' => ['required','string','max:100'],
             'disponibilidade' => ['required','string','max:100'],
             'data_inicio' => ['required','date_format:Y-m-d'],
@@ -77,6 +77,18 @@ final class ContractOpeningReviewController extends Controller
         }
         if ($isWeekly) {
             $issues[] = 'O prazo semanal está disponível para selecção e consulta de taxa, mas as fórmulas e os vencimentos semanais ainda necessitam de homologação antes de criar e desembolsar.';
+        }
+        $allowedModalities = match ($values['prazo']) {
+            '1 Semana' => ['Uma Parcela'],
+            '2 Semanas', '3 Semanas', '1 Mês' => ['Semanal','Uma Parcela'],
+            '2 Meses','3 Meses' => ['Semanal','Mensal','Uma Parcela'],
+            default => [],
+        };
+        if (!in_array($values['modalidade'],$allowedModalities,true)) {
+            $issues[] = 'A modalidade de pagamento não é compatível com o prazo seleccionado.';
+        }
+        if ($values['modalidade'] === 'Semanal') {
+            $issues[] = 'A modalidade semanal está disponível no formulário, mas a geração e gravação das prestações semanais requerem homologação.';
         }
         if ($values['tipo_juro'] === 'Fixo') {
             if (!isset($values['periodo_dias'])) {
