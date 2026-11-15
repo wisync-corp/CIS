@@ -25,10 +25,10 @@ const fields:Field[]=[
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
- {key:'periodo_tabela',label:'Período automático da tabela (dias)',type:'select',choices:['30'],hint:'Contractos.frm usa k = 30 quando o prazo mensal está seleccionado. A tabela de 15 dias fica em Definições, mas não é aplicada automaticamente por este formulário.'},
+ {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
- {key:'prazo',label:'Prazo',type:'select',choices:['1 Mês','2 Meses','3 Meses'],required:true},
+ {key:'prazo',label:'Prazo',type:'select',required:true,hint:'As opções mudam automaticamente conforme o período seleccionado.'},
  {key:'modalidade',label:'Modalidade de pagamento',type:'select',choices:['Mensal','Uma Parcela'],required:true},
  {key:'forma',label:'Forma de pagamento',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Corresponde às três opções originais do VBA, com ortografia corrigida na interface.'},
  {key:'disponibilidade',label:'Meio de disponibilização do crédito',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Forma de desembolso; o saldo e o Extracto exigem reconciliação antes de qualquer gravação.'},
@@ -91,12 +91,16 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  };
  const matchingClients=clients.slice(0,12);
  const fixedRate=values.tipo_juro==='Fixo';
- const currentQuoteKey=values.quantia+'|30';
+ const periodo=values.periodo_tabela??'';
+ const availableTerms=periodo==='15'?['1 Semana','2 Semanas']:periodo==='30'?['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses']:[];
+ const selectedTerm=availableTerms.includes(values.prazo??'')?values.prazo??'':'';
+ const weeklyTerm=selectedTerm.includes('Semana');
+ const currentQuoteKey=values.quantia+'|'+periodo;
  const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\.\d{1,2})?$/.test(values.quantia??'');
  const priced= fixedRate&&quoteKey===currentQuoteKey&&quote?.found===true;
  useEffect(()=>{
   setQuote(null);setQuoteKey('');setQuoteError('');
-  if(!fixedRate || !validAmount || !(values.prazo&&['1 Mês','2 Meses','3 Meses'].includes(values.prazo))){
+  if(!fixedRate || !validAmount || !['15','30'].includes(periodo) || !selectedTerm){
    setQuoteLoading(false);return;
   }
   const key=currentQuoteKey;
@@ -104,7 +108,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   const timer=window.setTimeout(()=>{
    setQuoteLoading(true);
    fetch(API+'/admin/interest-quote?'+new URLSearchParams({
-    montante:values.quantia,periodo_dias:'30'
+    montante:values.quantia,periodo_dias:periodo
    }),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
     .then(async res=>{
      if(!res.ok)throw new Error(res.status===503?'A tabela de preços ainda não está activada no MySQL.':'Não foi possível consultar a tabela de juros.');
@@ -115,7 +119,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     .finally(()=>{if(!controller.signal.aborted)setQuoteLoading(false);});
   },300);
   return ()=>{window.clearTimeout(timer);controller.abort();};
- },[fixedRate,validAmount,values.quantia,values.prazo,token,currentQuoteKey]);
+ },[fixedRate,validAmount,values.quantia,periodo,selectedTerm,token,currentQuoteKey]);
  const [checked,setChecked]=useState(false);
  const [message,setMessage]=useState('');
  const [review,setReview]=useState<OpeningReview|null>(null);
@@ -131,9 +135,11 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey]);
  const tipo=values.tipo_juro??'';
  const modalidade=tipo==='Variável'?'Uma Parcela':tipo==='Composto'?'Mensal':(values.modalidade??'');
- const prazoMeses=Number((values.prazo??'').slice(0,1));
+ const prazoMeses=selectedTerm.includes('Mês')||selectedTerm.includes('Meses')?Number(selectedTerm.slice(0,1)):0;
+ const prazoSemanas=weeklyTerm?Number(selectedTerm.slice(0,1)):0;
+ const addWeeks=(date:string,weeks:number)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';const [y,m,d]=date.split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+7*weeks));return t.toISOString().slice(0,10);};
  const numeroPrestacoes=(!prazoMeses||!tipo)?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
- const dataFinal=values.data_inicio&&prazoMeses?monthAfter(values.data_inicio,prazoMeses):'';
+ const dataFinal=values.data_inicio&&(prazoMeses||prazoSemanas)?(weeklyTerm?addWeeks(values.data_inicio,prazoSemanas):monthAfter(values.data_inicio,prazoMeses)):'';
  const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
   index+1===numeroPrestacoes?dataFinal:monthAfter(values.data_inicio,index+1)):[];
  const handle=async(event:FormEvent)=>{
@@ -147,9 +153,11 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify({
      cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
-     periodo_dias:fixedRate?30:null,
+     periodo_dias:Number(periodo),
+     prazo: selectedTerm,
      taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
+     periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
      data_inicio:values.data_inicio
     })
@@ -160,7 +168,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
-   if(body.cadastro_confirmado){
+   if(body.cadastro_confirmado&&!weeklyTerm){
     try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
@@ -201,8 +209,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo))||(key==='juros'&&fixedRate)||(key==='periodo_tabela');
-    const val=key==='modalidade'?modalidade:key==='saldo_disponivel'?cashBalance:key==='periodo_tabela'&&fixedRate?'30':key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='modalidade'&&['Variável','Composto'].includes(tipo))||(key==='juros'&&fixedRate)||(key==='prazo'&&!periodo);
+    const val=key==='modalidade'?modalidade:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -245,18 +253,19 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className="cis-profile-field"><span>{field.label}{field.required?' *':''}</span>
-     {field.choices?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}>
-       <option value="">Seleccionar</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
+     {field.choices||key==='prazo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:''}):({...prev,[key]:e.target.value}))}>
+       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:field.choices??[]).map(choice=><option key={choice} value={choice}>{choice}</option>)}
       </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?'Atribuído automaticamente':undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
-     {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Preencha o montante e o prazo. O VBA consulta automaticamente 30 dias.')}</small>}
+     {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;
    })}</div>
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
    <div className="cis-contract-draft-count"><span>N.º previsto de prestações (regra do VBA)</span><strong>{numeroPrestacoes??'—'}</strong></div>
-   <p>Datas previstas segundo a regra DateAdd do VBA (adicionar meses ao início). O quadro financeiro indicativo aparece depois de validar os dados no servidor. Nenhuma operação é gravada.</p>
+   <p>{weeklyTerm?'Prazo semanal: a data final é indicativa, calculada em semanas de sete dias. O calendário das prestações e o cálculo financeiro semanal precisam de homologação antes da gravação.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
+   {weeklyTerm&&dataFinal&&<p><strong>Data final indicativa:</strong> {dataFinal.split('-').reverse().join('/')} · prestação(ões) ainda não definidas para este prazo semanal.</p>}
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><BadgePlus size={20}/> Criar e desembolsar crédito</h3>
@@ -264,7 +273,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente. A abertura real é verificada e protegida contra valores não suportados pelo esquema legado.</span></div>
   </section>
   <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
-   <p>Prazo permitido no formulário: 1, 2 ou 3 meses. Juro variável: uma parcela, com juros apurados na cobrança após a data efectiva de pagamento. Juro composto: prestações mensais. Juro fixo: uma parcela ou mensal. Nenhum cálculo é aplicado a valores financeiros reais nesta fase.</p>
+   <p>Período de 15 dias: prazos de 1 ou 2 semanas. Período de 30 dias: prazos de 1, 2 ou 3 semanas, ou 1, 2 ou 3 meses. Os prazos semanais estão disponíveis para selecção e consulta da taxa, mas a criação real permanece bloqueada até à validação das prestações semanais. As regras mensais continuam as do Contractos.frm.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
