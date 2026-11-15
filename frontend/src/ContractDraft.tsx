@@ -47,8 +47,8 @@ const fields:Field[]=[
  {key:'disponibilidade',label:'Meio de disponibilização do crédito',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Forma de desembolso; o saldo e o Extracto exigem reconciliação antes de qualquer gravação.'},
 ];
 const groupings=[
- {name:'Mutuário e contrato',icon:UserRound,keys:['cliente','cliente_id','numero','cidade','data_inicio','data_final']},
- {name:'Condições do crédito',icon:Wallet,keys:['quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','forma','disponibilidade']},
+ {name:'Mutuário',icon:UserRound,keys:['cliente','cliente_id','cidade']},
+ {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
 ];
 export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
