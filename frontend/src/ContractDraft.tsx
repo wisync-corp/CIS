@@ -109,7 +109,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    return res.json() as Promise<{numero_sugerido:string;provisorio:boolean}>;
   }).then(data=>{
    if(!controller.signal.aborted){
-    if(!/^C-\\d{4,}$/.test(data.numero_sugerido))throw new Error('Número recebido inválido.');
+    if(!/^C-\d{4,}$/.test(data.numero_sugerido))throw new Error('Número recebido inválido.');
     setSuggestedNumber(data.numero_sugerido);
    }
   }).catch(error=>{
