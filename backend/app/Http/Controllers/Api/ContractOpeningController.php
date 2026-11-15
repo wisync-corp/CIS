@@ -36,7 +36,7 @@ final class ContractOpeningController extends Controller
             'taxa_informada'=>['required','numeric','between:0,100'],
             'taxa_multa'=>['required','numeric','between:0,100'],
             'prazo_meses'=>['required','integer','in:1,2,3'],
-            'modalidade'=>['required','in:Mensal,Uma Parcela'],
+            'modalidade'=>['required','in:Semanal,Mensal,Uma Parcela'],
             'forma_pagamento'=>['required','in:Transferência/Depósito Bancário,Transferência Móvel,Numerário'],
             'disponibilidade'=>['required','in:Transferência/Depósito Bancário,Transferência Móvel,Numerário'],
             'data_inicio'=>['required','date_format:Y-m-d'],
@@ -48,6 +48,20 @@ final class ContractOpeningController extends Controller
         if (!in_array($d['prazo'],$validTerms,true)) {
             throw ValidationException::withMessages(['prazo'=>
                 'Prazo incompatível com o período escolhido.']);
+        }
+        $allowedModalities=match ($d['prazo']) {
+            '1 Semana' => ['Uma Parcela'],
+            '2 Semanas','3 Semanas','1 Mês' => ['Semanal','Uma Parcela'],
+            '2 Meses','3 Meses' => ['Semanal','Mensal','Uma Parcela'],
+            default => [],
+        };
+        if (!in_array($d['modalidade'],$allowedModalities,true)) {
+            throw ValidationException::withMessages(['modalidade'=>
+                'Modalidade incompatível com o prazo seleccionado.']);
+        }
+        if ($d['modalidade']==='Semanal') {
+            throw ValidationException::withMessages(['modalidade'=>
+                'Pagamento semanal ainda não homologado para gravação de prestações; nenhuma operação foi efectuada.']);
         }
         // Os prazos de semanas foram autorizados para a interface, não para
         // gravações financeiras com cálculos mensais de Contractos.frm.
