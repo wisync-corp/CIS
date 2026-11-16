@@ -1,5 +1,27 @@
 # CAPTA — Implementação segura da Caixa com Extracto.account_id
 
+## Fase seguinte: cadastro seguro de contas (sem operações financeiras)
+
+A interface e a API foram adaptadas para que o **cadastro administrativo das contas** seja activado separadamente das movimentações. A opção `CIS_CASH_ACCOUNT_SETUP_APPROVED` (inicialmente `false`) só controla `POST /api/cis/caixa/contas` e **não autoriza** saldo inicial, activação da conta, desembolso, cobrança, transferências ou receitas/despesas.
+
+O cadastro exige sessão de **administrador activo**, aprovação em variável de ambiente e credenciais MySQL próprias. A conta `cis_cash_setup` recebe **somente SELECT, INSERT na tabela `cis_cash_accounts`**; nenhuma permissão de escrita na tabela `Extracto`. Contas novas nascem `em_preparacao`, sem saldo, sempre inactivas para movimentos.
+
+**Antes de activar:** aplicar a migração correctiva e confirmar a estrutura por `deploy/postflight-cash-direct-account.sh`. A execução do ensaio isolado não demonstra que o servidor operacional foi corrigido.
+
+**Activação voluntária em janela supervisionada, somente após corrigenda confirmada:**
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/postflight-cash-direct-account.sh
+bash deploy/activate-cash-account-registration.sh
+```
+
+O script de activação executa verificações de esquema, cria um utilizador MySQL com privilégios limitados, guarda a credencial apenas em `deploy/.env` privado, solicita `ACTIVAR-CADASTRO-CAIXA` e reconstrói a pré-visualização. **Não insere contas de exemplo**. Para cadastrar contas reais, entrar com uma sessão de administrador e ir a **Caixa → Contas e saldos → Nova conta**.
+
+**Não activar `CIS_CASH_WRITES_APPROVED`.** A abertura/validação de saldos exige controlo documental e segregação de funções; os fluxos financeiros permanecem bloqueados.
+
+
 ## Estado real após instalação com imagem antiga (16/11/2026)
 
 **Diagnóstico confirmado no servidor pelo utilizador:** a migração histórica `2026_11_16_000030_create_cis_cash_tables` aparece como executada, mas foi executado o esquema antigo da imagem Docker. Existem `cis_cash_accounts` e `cis_cash_movements`, **ambas vazias**; `Extracto.account_id` não existe. Os 1.295 movimentos do Extracto e 680 registos de Contractos continuam com as contagens esperadas. O processo **não** deve ser repetido ou revertido automaticamente.
