@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
-import {Landmark,Wallet,ArrowDownLeft,ArrowUpRight,ArrowLeftRight,RefreshCw,ShieldCheck,AlertCircle,CheckCircle2,Plus,CircleDollarSign,LockKeyhole,Clock3} from 'lucide-react';
+import {Landmark,Wallet,ArrowDownLeft,ArrowUpRight,ArrowLeftRight,RefreshCw,ShieldCheck,AlertCircle,CheckCircle2,Plus,CircleDollarSign,LockKeyhole,Clock3,Search,Filter,ArrowRight,Eye,Info,X,ClipboardCheck,ChevronRight} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type CashAccount={
@@ -26,6 +26,12 @@ export default function CashDesk({token}:{token:string}){
  const [error,setError]=useState('');
  const [notice,setNotice]=useState('');
  const [section,setSection]=useState<'contas'|'movimentos'>('contas');
+ const [accountQuery,setAccountQuery]=useState('');
+ const [accountStatus,setAccountStatus]=useState<'todas'|CashAccount['status']>('todas');
+ const [movementQuery,setMovementQuery]=useState('');
+ const [movementType,setMovementType]=useState('todas');
+ const [movementAccount,setMovementAccount]=useState('');
+ const [accountDetail,setAccountDetail]=useState<number|null>(null);
  const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'>('none');
  const [selected,setSelected]=useState('');
  const [newAccount,setNewAccount]=useState({code:'',name:'',type:'banco' as CashAccount['type'],identifier:''});
@@ -55,9 +61,28 @@ export default function CashDesk({token}:{token:string}){
  useEffect(()=>{void reload();},[reload]);
  const active=useMemo(()=>accounts.filter(a=>a.status==='activa'),[accounts]);
  const selectedAccount=accounts.find(a=>String(a.id)===selected);
+ const detailAccount=accounts.find(a=>a.id===accountDetail);
+ const filteredAccounts=useMemo(()=>accounts.filter(a=>{
+  const matches=accountStatus==='todas'||a.status===accountStatus;
+  const q=accountQuery.trim().toLocaleLowerCase('pt');
+  return matches&&(!q||[a.code,a.name,a.type,a.identifier??''].some(x=>x.toLocaleLowerCase('pt').includes(q)));
+ }),[accounts,accountQuery,accountStatus]);
+ const filteredMovements=useMemo(()=>movements.filter(m=>{
+  const matchesAccount=!movementAccount||String(m.account_id)===movementAccount;
+  const matchesType=movementType==='todas'||(movementType==='entradas'
+   ?['entrada','transferencia_entrada','estorno_entrada'].includes(m.type)
+   :['saida','transferencia_saida','estorno_saida'].includes(m.type));
+  const q=movementQuery.trim().toLocaleLowerCase('pt');
+  return matchesAccount&&matchesType&&(!q||[m.reference,m.category,m.description,String(m.amount),
+   accounts.find(a=>a.id===m.account_id)?.code??''].some(x=>x.toLocaleLowerCase('pt').includes(q)));
+ }),[movements,accounts,movementAccount,movementType,movementQuery]);
+ const pendingCount=accounts.filter(a=>a.status==='pendente_validacao').length;
+ const hasAvailableBalance=active.some(a=>a.saldo_disponivel!==null);
  const total=active.reduce((sum,a)=>sum+Number(a.saldo_disponivel??0),0);
  const readableDate=(raw:string|null)=>raw?raw.replace('T',' ').slice(0,16):'—';
  function resetAction(){setAction('none');setError('');}
+ function showMovementsFor(id:number){setMovementAccount(String(id));setMovementQuery('');setMovementType('todas');setSection('movimentos');setAction('none');setAccountDetail(null);}
+ function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');if(value==='record'||value==='transfer')setOperationKey(crypto.randomUUID());}
  async function submit(event:FormEvent,what:'create'|'opening'|'activate'|'record'|'transfer',id?:number){
   event.preventDefault();setError('');setNotice('');
   if(!enabled){setError('As escritas financeiras não estão activadas.');return;}
@@ -86,22 +111,29 @@ export default function CashDesk({token}:{token:string}){
   finally{setBusy(false);}
  }
  return <section className="cis-cash">
-  <div className="cis-cash-intro"><div><div className="cis-cash-eyebrow">GESTÃO FINANCEIRA · CAIXA PADRÃO</div>
-   <h2>Caixa Geral</h2><p>Contas, disponibilidades e movimentos da instituição. A reconciliação bancária avançada pertence à Tesouraria opcional.</p></div>
-   <button type="button" onClick={()=>void reload()} disabled={busy||loading}><RefreshCw size={16}/> Actualizar</button>
+  <div className="cis-cash-intro"><div><div className="cis-cash-eyebrow"><span className="cis-cash-live-dot"/> GESTÃO FINANCEIRA · MÓDULO PADRÃO</div>
+   <h2>Caixa Geral</h2><p>Disponibilidades e operações financeiras de todas as contas da instituição.</p>
+   <div className="cis-cash-hero-flags"><span><ShieldCheck size={14}/> Contas independentes</span><span><LockKeyhole size={14}/> Acesso protegido</span></div></div>
+   <button type="button" onClick={()=>void reload()} disabled={busy||loading}><RefreshCw size={16}/> Actualizar dados</button>
   </div>
-  {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/>{error}</div>}
-  {notice&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={18}/>{notice}</div>}
-  {!enabled&&!loading&&!error&&<div className="cis-cash-message caution"><LockKeyhole size={18}/> A Caixa está em modo de consulta. Para activar operações é necessária migração, reconciliação e autorização no servidor.</div>}
-  <div className="cis-cash-stats">
-   <article><span><Wallet size={17}/> Disponível nas contas activas</span><strong>{formatMoney(total)}</strong><small>Saldo inicial validado + movimentos da Caixa CIS</small></article>
-   <article><span><Landmark size={17}/> Contas activas</span><strong>{active.length}</strong><small>{accounts.length} conta(s) cadastrada(s)</small></article>
-   <article><span><CircleDollarSign size={17}/> Movimentos apresentados</span><strong>{movements.length}</strong><small>Últimos 200 movimentos, não inclui Extracto legado</small></article>
+  {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/><span>{error}</span><button type="button" onClick={()=>setError('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
+  {notice&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Fechar confirmação"><X size={16}/></button></div>}
+  {!enabled&&!loading&&<div className="cis-cash-message caution" role="status"><LockKeyhole size={18}/>
+   <span><strong>Modo de consulta.</strong> Os registos e transferências continuam bloqueados até autorização financeira no servidor. A apresentação não representa activação da Caixa.</span>
+  </div>}
+  <div className="cis-cash-stats" aria-label="Resumo da Caixa">
+   <article className="cis-cash-stat-feature"><span><Wallet size={17}/> Disponível nas contas activas</span><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong>
+    <small>{loading?'A consultar dados…':!accounts.length?'Cadastre e valide uma conta para começar.':'Saldo de abertura validado e movimentos registados na Caixa.'}</small></article>
+   <article><span><Landmark size={17}/> Contas activas</span><strong>{loading||error?'—':active.length}</strong><small>{loading?'A consultar…':accounts.length+' conta(s) cadastrada(s)'}</small></article>
+   <article><span><ClipboardCheck size={17}/> Por validar</span><strong>{loading||error?'—':pendingCount}</strong><small>Contas à espera de confirmação documental</small></article>
   </div>
-  <nav className="cis-cash-tabs" aria-label="Área de Caixa">
-   <button type="button" className={section==='contas'?'active':''} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
-   <button type="button" className={section==='movimentos'?'active':''} onClick={()=>{setSection('movimentos');resetAction();}}><ArrowLeftRight size={17}/> Livro de movimentos</button>
-  </nav>
+  <div className="cis-cash-sectionbar">
+   <nav className="cis-cash-tabs" aria-label="Áreas do módulo Caixa">
+    <button type="button" className={section==='contas'?'active':''} aria-current={section==='contas'?'page':undefined} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
+    <button type="button" className={section==='movimentos'?'active':''} aria-current={section==='movimentos'?'page':undefined} onClick={()=>{setSection('movimentos');resetAction();}}><ArrowLeftRight size={17}/> Movimentos</button>
+   </nav>
+   <span className="cis-cash-section-context">{section==='contas'?'Gestão de contas':'Últimos 200 movimentos'} <ChevronRight size={14}/></span>
+  </div>
   {section==='contas'?<div className="cis-cash-panel">
    <div className="cis-cash-panel-head"><div><h3>Contas financeiras</h3><p>Cadastre contas reais e valide os respectivos saldos de abertura.</p></div>
     {enabled&&<button type="button" className="cis-cash-primary" onClick={()=>{setAction(action==='create'?'none':'create');setError('');}}><Plus size={17}/> Nova conta</button>}
