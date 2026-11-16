@@ -214,9 +214,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const prazoMeses=selectedTerm.includes('Mês')||selectedTerm.includes('Meses')?Number(selectedTerm.slice(0,1)):0;
  const prazoSemanas=weeklyTerm?Number(selectedTerm.slice(0,1)):0;
  const addWeeks=(date:string,weeks:number)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';const [y,m,d]=date.split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+7*weeks));return t.toISOString().slice(0,10);};
+ const dataFinal=values.data_inicio&&(prazoMeses||prazoSemanas)?(weeklyTerm?addWeeks(values.data_inicio,prazoSemanas):monthAfter(values.data_inicio,prazoMeses)):'';
  const daysDuration=values.data_inicio&&dataFinal?Math.round((Date.parse(dataFinal+'T00:00:00Z')-Date.parse(values.data_inicio+'T00:00:00Z'))/86400000):0;
  const numeroPrestacoes=!selectedTerm||!tipo||!modalidade?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:modalidade==='Semanal'?Math.ceil(daysDuration/7):prazoMeses;
- const dataFinal=values.data_inicio&&(prazoMeses||prazoSemanas)?(weeklyTerm?addWeeks(values.data_inicio,prazoSemanas):monthAfter(values.data_inicio,prazoMeses)):'';
  const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
   index+1===numeroPrestacoes?dataFinal:modalidade==='Semanal'?addWeeks(values.data_inicio,index+1):monthAfter(values.data_inicio,index+1)):[];
  const handle=async(event:FormEvent)=>{
