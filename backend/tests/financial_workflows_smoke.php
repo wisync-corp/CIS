@@ -42,7 +42,7 @@ try {
  throw new RuntimeException('A conversão de juros compostos semanais devia estar bloqueada.');
 } catch (\Illuminate\Validation\ValidationException $e) {}
 // Prévia real do módulo Cobrança.frm, SEM abertura de transacções.
-$controller=new \\App\\Http\\Controllers\\Api\\ContractCollectionController();
+$controller=new \App\Http\Controllers\Api\ContractCollectionController();
 $quoteMethod=new ReflectionMethod($controller,'quote');
 $fixed=(object)[
  'Data de Cobrança'=>'2026-11-20','Data de Inicio'=>'2026-11-16',
@@ -64,4 +64,4 @@ $quote=$quoteMethod->invoke($controller,$variable,'2026-11-20',false);
 assertFlow($quote['juros']===40&&$quote['total']===1040,
     'juro variável: capital * taxa * quatro dias, arredondado para cima');
 assertFlow($quote['dias_atraso']===0,'sem multa antes do vencimento');
-echo "OK: calendários semanais, reconciliação, juro variável e cálculo de multa sem escrita.\\n";
+echo "OK: calendários semanais, reconciliação, juro variável e cálculo de multa sem escrita.\n";
