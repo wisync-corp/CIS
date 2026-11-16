@@ -90,7 +90,7 @@ final class ContractCollectionController extends Controller
         abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
             'A cobrança efectiva deve ser registada com a data de hoje.');
         $db=DB::connection('mysql_contract_writer');
-        $result=$db->transaction(function () use ($db,$data,$numero,$ordem) {
+        $result=$db->transaction(function () use ($db,$data,$numero,$ordem,$request) {
             $rows=$db->table('Contractos')->where('Nr do Contracto',$numero)
                 ->where('Ordem',$ordem)->lockForUpdate()->get();
             abort_unless($rows->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
