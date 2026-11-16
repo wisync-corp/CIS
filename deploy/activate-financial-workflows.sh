@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 [[ -f deploy/.env ]] || { echo 'ERRO: deploy/.env inexistente' >&2; exit 1; }
 COMPOSE=(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml)
 sql(){
- printf '%s\n' "$1" | "${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --batch --skip-column-names "$MYSQL_DATABASE"'
+ printf '%s\n' "$1" | "${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 --batch --skip-column-names "$MYSQL_DATABASE"'
 }
 check(){
  [[ "$1" == "$2" ]] || { echo "BLOQUEADO: $3" >&2; exit 1; }
@@ -17,8 +17,25 @@ check "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=
 check "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND ((TABLE_NAME='Contractos' AND COLUMN_NAME='Ordem' AND EXTRA LIKE '%auto_increment%') OR (TABLE_NAME='Extracto' AND COLUMN_NAME='Nr' AND EXTRA LIKE '%auto_increment%'));")" '2' 'IDs antigos não estão protegidos por AUTO_INCREMENT.'
 grep -qx 'CIS_CLIENTES_PREVIEW_APPROVED=true' deploy/.env || { echo 'BLOQUEADO: consulta de clientes não autorizada.' >&2; exit 1; }
 grep -qx 'CIS_CONTRACTS_READ_APPROVED=true' deploy/.env || { echo 'BLOQUEADO: consulta de contratos não autorizada.' >&2; exit 1; }
-if [[ "$(sql "SELECT COUNT(*) FROM Contractos WHERE \`Valor Pago\` < 0 OR \`Capital\` < 0 OR \`Amortização\` < 0;")" != '0' ]]; then
- echo 'BLOQUEADO: movimentos financeiros negativos na tabela Contractos; reconciliar.' >&2; exit 1
+# A coluna Amortização usa UTF-8. Não tratar falhas SQL como contagens.
+if ! negatives="$(sql "SELECT COUNT(*) FROM Contractos WHERE \`Valor Pago\` < 0 OR \`Capital\` < 0 OR \`Amortização\` < 0;")"; then
+ echo 'BLOQUEADO: a consulta financeira falhou (SQL/charset/esquema); não foi apurada qualquer contagem de negativos.' >&2
+ exit 1
+fi
+if [[ ! "$negatives" =~ ^[0-9]+$ ]]; then
+ echo 'BLOQUEADO: contagem financeira inválida; operação interrompida.' >&2
+ exit 1
+fi
+if [[ "$negatives" != '0' ]]; then
+ echo "BLOQUEADO: existem $negatives linhas com valores financeiros negativos na tabela Contractos; reconciliar." >&2
+ exit 1
+fi
+# Uma importação antiga deixou o nome da coluna de estratégia com dupla codificação.
+# Não adicionar uma segunda coluna equivalente silenciosamente.
+legacy_strategy_hex='457374726174C383C2A96769612064652043C383C2A16C63756C6F'
+if [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Contractos' AND HEX(COLUMN_NAME)='$legacy_strategy_hex';")" != '0' ]]; then
+ echo 'BLOQUEADO: coluna de estratégia existente com codificação dupla (EstratÃ©gia de CÃ¡lculo). É necessária migração controlada antes da activação.' >&2
+ exit 1
 fi
 echo 'A criar backup integral e protegido antes de alterar a base…'
 bash deploy/backup-before-auth.sh
