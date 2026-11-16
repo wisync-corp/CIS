@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,ArrowRightLeft,Eye} from 'lucide-react';
+import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,ArrowRightLeft,Eye,ArrowUpRight,Clock3,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
 type CollectionQuote={parcela:number;dias_atraso:number;juros:number;multa:number;total:number;estado:string;data_pagamento:string;aviso:string};
@@ -17,7 +17,6 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
 
 
   {name:'Nº de Cliente',label:'N.º do cliente'},
-
   {name:'Data de Inicio',label:'Data de início',kind:'date'},
   {name:'Data Final',label:'Data final',kind:'date'},
   {name:'Cidade',label:'Cidade'},
@@ -59,6 +58,8 @@ function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
  return String(left).localeCompare(String(right),'pt',{numeric:kind==='number'});
 }
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const validAmount=(raw:unknown):raw is number|string=>raw!==null&&raw!==undefined&&raw!==''&&Number.isFinite(Number(raw));
+const isPaid=(row:Item)=>['pago','pago em atraso','liquidado','finalizado'].includes(String(row.Estado??'').trim().toLowerCase());
 const integerMoney=new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0});
 function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  const raw=item[name];
@@ -110,12 +111,15 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  // Indicadores calculados apenas a partir das prestações efectivamente lidas.
  const financialSnapshot=useMemo(()=>{
   const rows=data?.installments??[];
-  const sum=(key:string)=>rows.reduce((total,row)=>total+(Number.isFinite(Number(row[key]))?Number(row[key]):0),0);
+  const sum=(key:string)=>rows.reduce((total,row)=>total+(validAmount(row[key])?Number(row[key]):0),0);
   const paid=sum('Valor Pago');
   const scheduled=sum('Valor a Pagar');
   const outstanding=Math.max(0,scheduled-paid);
-  const pending=rows.filter(row=>!['Pago','Pago em Atraso'].includes(String(row.Estado??''))).length;
-  return {paid,scheduled,outstanding,pending,installments:rows.length};
+  const pendingRows=rows.filter(row=>!isPaid(row));
+  const nextDue=[...pendingRows].filter(row=>/^\d{4}-\d{2}-\d{2}/.test(String(row['Data de Cobrança']??'')))
+   .sort((a,b)=>String(a['Data de Cobrança']).localeCompare(String(b['Data de Cobrança'])))[0]??null;
+  const progress=scheduled>0?Math.min(100,Math.max(0,(paid/scheduled)*100)):0;
+  return {paid,scheduled,outstanding,pending:pendingRows.length,installments:rows.length,nextDue,progress};
  },[data]);
  const firstLoanAmount=contract?.['Quantia Creditada'];
  const currency=(value:number)=>money.format(value)+' MT';
@@ -165,37 +169,56 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <button type="button" onClick={onBack}>Ir à carteira</button>
    </div>}
   {data&&contract&&<>
-   <header className="cis-profile-hero">
-    <div className="cis-profile-avatar"><FileText size={31}/></div>
-    <div className="cis-profile-heading"><span>FICHA DE CONTRATO</span><h2>{format(contract,'Nr do Contracto')}</h2><p>{format(contract,'Nome do Cliente')} · {format(contract,'Estado do Contrato')}</p></div>
-    <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
+   <header className="cis-profile-hero cis-credit-hero">
+    <div className="cis-profile-avatar"><FileText size={30}/></div>
+    <div className="cis-profile-heading">
+     <span>FICHA DE CRÉDITO · {numero}</span>
+     <h2>{format(contract,'Nome do Cliente')}</h2>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{format(contract,'Estado do Contrato')}</span><span>Cliente #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+    </div>
+    <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
-   <div className="cis-contract-overview-grid" aria-label="Indicadores deste contrato">
-    <article><span>Crédito concedido</span><strong>{firstLoanAmount==null?'Não informado':currency(Number(firstLoanAmount))}</strong><small>Valor registado no contrato</small></article>
-    <article><span>Total previsto</span><strong>{currency(financialSnapshot.scheduled)}</strong><small>Soma das prestações registadas</small></article>
-    <article><span>Total pago</span><strong>{currency(financialSnapshot.paid)}</strong><small>Valor Pago nas prestações</small></article>
-    <article><span>Por liquidar · previsto</span><strong>{currency(financialSnapshot.outstanding)}</strong><small>{financialSnapshot.pending} de {financialSnapshot.installments} prestações não liquidadas</small></article>
+   <div className="cis-credit-highlights" aria-label="Resumo do contrato">
+    <article className="cis-credit-highlight cis-credit-highlight-main"><span>Crédito concedido</span>
+     <strong>{validAmount(firstLoanAmount)?currency(Number(firstLoanAmount)):'Não informado'}</strong>
+     <small>Capital inicial registado</small></article>
+    <article className="cis-credit-highlight"><span>Prestações</span>
+     <strong>{financialSnapshot.installments}</strong>
+     <small>{financialSnapshot.pending} ainda por liquidar</small></article>
+    <article className="cis-credit-highlight"><span>Próximo vencimento registado</span>
+     <strong>{financialSnapshot.nextDue?format(financialSnapshot.nextDue,'Data de Cobrança','date'):'—'}</strong>
+     <small>{financialSnapshot.nextDue?'Prestação '+format(financialSnapshot.nextDue,'Nº da Parcela'):'Sem prestação pendente com data válida'}</small></article>
    </div>
-   <div className="cis-contract-overview-note"><AlertCircle size={15}/> Valores calculados das prestações existentes; juros variáveis e multas futuras podem alterar o total efectivo a receber.</div>
-   <div className="cis-contract-overview-note"><ShieldCheck size={16}/> Os pagamentos e cobranças ficam no separador Pagamentos. Dados históricos preservados.</div>
-   {!!data.contract_fields_divergent?.length&&<div className="cis-contract-warning" role="status">Os seguintes campos não são uniformes entre as prestações deste contrato: {data.contract_fields_divergent.join(', ')}. Confirme as linhas originais antes de interpretar os valores gerais.</div>}
-   {!!data.columns_missing_in_database?.length&&<div className="cis-contract-warning" role="status">Campos previstos no formulário VBA mas ausentes desta versão da base de dados: {data.columns_missing_in_database.join(', ')}.</div>}
+   {!!data.contract_fields_divergent?.length&&<details className="cis-credit-disclosure">
+    <summary><AlertCircle size={16}/> Dados divergentes entre prestações <ChevronDown size={15}/></summary>
+    <p>Estes campos apresentam valores diferentes: {data.contract_fields_divergent.join(', ')}. Verifique o contrato original antes de tomar decisões.</p>
+   </details>}
+   {!!data.columns_missing_in_database?.length&&<details className="cis-credit-disclosure">
+    <summary><Info size={16}/> Campos do sistema antigo não disponíveis <ChevronDown size={15}/></summary>
+    <p>{data.columns_missing_in_database.join(', ')}</p>
+   </details>}
    <div className="cis-profile-layout">
-    <nav className="cis-profile-tabs" aria-label="Secções do contrato">
+    <nav className="cis-profile-tabs cis-credit-navigation" aria-label="Secções do contrato">
      {([
-      {name:'Contrato' as Tab,icon:FileText},
-      {name:'Condições financeiras' as Tab,icon:Wallet},
-      {name:'Plano de prestações' as Tab,icon:Layers},
-      {name:'Pagamentos' as Tab,icon:ReceiptText},
-      {name:'Documento original' as Tab,icon:Eye}
-     ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
+      {name:'Contrato' as Tab,icon:FileText,detail:'Dados principais'},
+      {name:'Condições financeiras' as Tab,icon:Wallet,detail:'Termos do crédito'},
+      {name:'Plano de prestações' as Tab,icon:CalendarDays,detail:'Vencimentos'},
+      {name:'Pagamentos' as Tab,icon:ReceiptText,detail:'Recebimentos'},
+      {name:'Documento original' as Tab,icon:Eye,detail:'Documentação'}
+     ]).map(({name,icon:Icon,detail})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}>
+      <Icon size={19}/><span>{name}<small>{detail}</small></span><ChevronRight className="cis-credit-nav-chevron" size={15}/></button>)}
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{tab==='Aumento de crédito'?'Aumento de crédito · prestação '+(selectedInstallment?format(selectedInstallment,'Nº da Parcela'):'não seleccionada'):tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Histórico e cobrança separados do contrato.':tab==='Aumento de crédito'?'Revisão sem gravação.':'Informações essenciais do contrato.'}</p></div></header>
      {tab==='Pagamentos'?<section className="cis-contract-operation">
       <div className="cis-contract-payment-summary" aria-label="Resumo de pagamentos">
-       <article><span>Total recebido</span><strong>{currency(financialSnapshot.paid)}</strong></article>
-       <article><span>Previsto por liquidar</span><strong>{currency(financialSnapshot.outstanding)}</strong></article>
+       <article><span>Total recebido</span><strong>{currency(financialSnapshot.paid)}</strong><small>Registos de Valor Pago</small></article>
+       <article><span>Previsto por liquidar</span><strong>{currency(financialSnapshot.outstanding)}</strong><small>Conforme prestações actuais</small></article>
+      </div>
+      <div className="cis-credit-progress" role="group" aria-label="Progresso financeiro previsto">
+       <div><strong>Progresso de recebimentos</strong><span>{financialSnapshot.progress.toFixed(0)}% do total previsto</span></div>
+       <div className="cis-credit-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(financialSnapshot.progress)} aria-label="Percentagem prevista recebida"><span style={{width:financialSnapshot.progress+'%'}}/></div>
+       <small>O total previsto pode variar com juros variáveis, multas e outros encargos. Não representa uma reconciliação contabilística.</small>
       </div>
       <h4>Histórico de pagamentos</h4>
       {data.installments.some(row=>Number(row['Valor Pago']??0)>0)?<div className="cis-table-scroll"><table><thead><tr><th>Parcela</th><th>Data de pagamento</th><th>Valor recebido</th><th>Estado</th></tr></thead><tbody>
@@ -260,9 +283,13 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
          setTab('Aumento de crédito');
         }} disabled={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'} title={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'?'O aumento directo no VBA aplica-se apenas a juro fixo':'Rever aumento associado a esta prestação'}><ArrowRightLeft size={15}/> Aumentar crédito</button></td>
        </tr>)}</tbody></table></div>
-     </>:<div className="cis-profile-fields">{groups.find(g=>g.tab===tab)?.fields.map(field=><div className="cis-profile-field" key={field.name}>
+     </>:<div className="cis-credit-section">
+      {tab==='Contrato'&&<div className="cis-credit-section-lead"><CheckCircle2 size={19}/><div><strong>Informação do contrato</strong><p>Os elementos essenciais, sem campos técnicos do antigo Excel.</p></div></div>}
+      <div className="cis-profile-fields">{groups.find(g=>g.tab===tab)?.fields.map(field=><div className="cis-profile-field" key={field.name}>
       <span>{field.label}</span><div className="cis-profile-field-value">{format(contract,field.name,field.kind)}</div>
-     </div>)}</div>}
+     </div>)}</div>
+      {tab==='Contrato'&&<button type="button" className="cis-credit-next-action" onClick={()=>setTab('Condições financeiras')}>Consultar condições do crédito <ArrowUpRight size={16}/></button>}
+     </div>}
     </div>
    </div>
   </>}
