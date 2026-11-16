@@ -15,7 +15,7 @@ final class ContractProfileController extends Controller
     private const CONTRACT_FIELDS = [
         'Nr do Contracto', 'Nº', 'Nome do Cliente', 'Nº de Cliente',
         'Quantia Creditada', 'M. Pagamento', 'Prazo/Duração',
-        '% de Juro', 'Tipo de Juro', '% de Multa',
+        '% de Juro', 'Tipo de Juro', 'Estratégia de Cálculo', '% de Multa',
         'Forma de Pagamento', 'Disponibilidade', 'Data de Inicio',
         'Cidade', 'Data Final', 'Codigo Cliente',
         'Estado do Contrato', 'Nº de Prestações', 'Column1', 'usuario'
