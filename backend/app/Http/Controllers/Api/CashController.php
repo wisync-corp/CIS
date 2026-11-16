@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class CashController extends Controller
@@ -17,7 +16,7 @@ final class CashController extends Controller
         abort_unless($user && $user->active && $user->role === 'administrador', 403,
             'Nesta fase, a Caixa está reservada ao administrador até activar a matriz de permissões.');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN), 503);
-        abort_unless(Schema::hasTable('cis_cash_accounts') && Schema::hasTable('cis_cash_movements'),
+        abort_unless(Schema::hasTable('cis_cash_accounts') && Schema::hasTable('cis_cash_links') && Schema::hasTable('Extracto'),
             503, 'O esquema da Caixa ainda não foi instalado.');
         if ($write) {
             abort_unless(filter_var(env('CIS_CASH_WRITES_APPROVED', false), FILTER_VALIDATE_BOOLEAN), 503,
@@ -42,15 +41,21 @@ final class CashController extends Controller
     private function balance(object $account): int
     {
         abort_unless($account->opening_balance !== null && $account->cut_at !== null, 409,
-            'A conta ainda não tem saldo inicial reconciliado.');
+            'A conta ainda não tem saldo inicial documentado e validado.');
         $saldo = $this->cents((string)$account->opening_balance);
-        $movements = DB::table('cis_cash_movements')
-            ->where('account_id', $account->id)->where('status', 'confirmado')
-            ->where('effective_at', '>', $account->cut_at)->get(['type','amount']);
+        // Fonte financeira única: Extracto. A ligação não duplica o valor.
+        // Linhas históricas associadas para consulta não entram no saldo pós-abertura.
+        $movements = DB::table('cis_cash_links as l')
+            ->join('Extracto as e','e.Nr','=','l.extracto_nr')
+            ->where('l.account_id',$account->id)
+            ->where('l.counts_after_opening',true)
+            ->get(['e.Tipo de Movimento as movement_type','e.Valor as amount']);
         foreach ($movements as $movement) {
             $value = $this->cents((string)$movement->amount);
-            $saldo += in_array($movement->type,
-                ['entrada','transferencia_entrada','estorno_entrada'], true) ? $value : -$value;
+            abort_unless($value>=0,409,'Extracto contém montante inválido.');
+            abort_unless(in_array($movement->movement_type,['Entradas','Saídas'],true),409,
+                'O Extracto contém um tipo não reconhecido; saldo indisponível.');
+            $saldo += $movement->movement_type==='Entradas' ? $value : -$value;
         }
         return $saldo;
     }
@@ -77,8 +82,8 @@ final class CashController extends Controller
         $accounts = $this->accountRows();
         return response()->json([
             'accounts' => $accounts,
-            'can_write' => filter_var(env('CIS_CASH_WRITES_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
-            'notice' => 'Contas da Caixa CIS; saldos iniciais documentais, não reconciliados automaticamente com extractos bancários. Extracto legado separado.'
+            'can_write' => false, // Até integrar Extracto e associação de modo atómico.
+            'notice' => 'Contas CIS; o Extracto permanece fonte única para movimentos financeiros. Escritas pendentes da integração híbrida segura.'
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -86,12 +91,24 @@ final class CashController extends Controller
     {
         $this->access($request);
         $d = $request->validate(['account_id'=>['nullable','integer','min:1']]);
-        $query = DB::table('cis_cash_movements')->orderByDesc('id');
-        if (isset($d['account_id'])) $query->where('account_id', $d['account_id']);
-        $rows = $query->limit(200)->get();
-        return response()->json(['movements'=>$rows,
-            'notice'=>'Últimos 200 movimentos confirmados da Caixa CIS; não inclui Extracto legado.']
-        )->header('Cache-Control', 'no-store, private');
+        $query=DB::table('cis_cash_links as l')
+            ->join('Extracto as e','e.Nr','=','l.extracto_nr')
+            ->orderByDesc('l.id');
+        if (isset($d['account_id'])) $query->where('l.account_id',$d['account_id']);
+        $rows=$query->limit(200)->get([
+            'l.id','l.account_id','l.nature as category','l.evidence_reference',
+            'e.Nr as extracto_nr','e.Tipo de Movimento as legacy_type',
+            'e.Valor as amount','e.Descrição as description',
+            'e.Data da Operação as effective_at','l.idempotency_key as reference',
+            'l.confirmation','l.confirmed_at','l.counts_after_opening'
+        ])->map(function ($movement) {
+            $movement->type=$movement->legacy_type==='Entradas'?'entrada':'saida';
+            return $movement;
+        });
+        return response()->json([
+            'movements'=>$rows,
+            'notice'=>'Movimentos do Extracto associados a contas; valores não duplicados. Importação e reconciliação de extractos bancários reservadas à Tesouraria.'
+        ])->header('Cache-Control','no-store, private');
     }
 
     public function createAccount(Request $request)
@@ -128,7 +145,7 @@ final class CashController extends Controller
             $account=DB::table('cis_cash_accounts')->where('id',$id)->lockForUpdate()->first();
             abort_if(!$account,404,'Conta não encontrada.');
             abort_unless($account->status==='em_preparacao',409,'Conta já submetida ou activa.');
-            abort_if(DB::table('cis_cash_movements')->where('account_id',$id)->exists(),409,
+            abort_if(DB::table('cis_cash_links')->where('account_id',$id)->exists(),409,
                 'A conta já tem movimentos; abertura bloqueada.');
             DB::table('cis_cash_accounts')->where('id',$id)->update([
                 'opening_balance'=>$this->decimal($amount), 'cut_at'=>$d['cut_at'],
@@ -160,89 +177,19 @@ final class CashController extends Controller
             'notice'=>'Validação documental manual; não representa conciliação bancária independente.']);
     }
 
+    // NÃO efectuar escrituras financeiras pelo antigo fluxo independente:
+    // o modelo híbrido exige inserir uma linha em Extracto e associar o seu Nr
+    // a uma conta na MESMA transacção. Não activar sem conexão e privilégios
+    // transaccionais validados, regras de aprovação e idempotência.
     public function record(Request $request)
     {
-        $this->access($request,true);
-        $d=$request->validate([
-            'account_id'=>['required','integer','min:1'],
-            'type'=>['required','in:entrada,saida'],
-            'amount'=>['required','string','max:20'],
-            'category'=>['required','string','min:3','max:90'],
-            'description'=>['required','string','min:4','max:500'],
-            'evidence_reference'=>['nullable','string','max:255'],
-            'idempotency_key'=>['required','uuid'],
-        ]);
-        $amount=$this->cents($d['amount']);
-        abort_if($amount<=0,422,'O montante deve ser positivo.');
-        abort_if(in_array(mb_strtolower(trim($d['category'])),
-            ['desembolso de empréstimo','cobrança','prestação de crédito','desembolso'],true),
-            422,'Movimentos de crédito devem ser lançados exclusivamente pelo fluxo integrado de contratos.');
-        $reference='CIS-CAIXA-'.$d['idempotency_key'];
-        DB::transaction(function () use ($d,$request,$amount,$reference) {
-            abort_if(DB::table('cis_cash_movements')->where('reference',$reference)->exists(),409,
-                'Esta operação já foi processada. Actualize o histórico antes de repetir.');
-            $account=DB::table('cis_cash_accounts')->where('id',$d['account_id'])->lockForUpdate()->first();
-            abort_if(!$account,404,'Conta não encontrada.');
-            abort_unless($account->status==='activa' && $account->currency==='MZN',409,'Conta não activa ou moeda incompatível.');
-            if ($d['type']==='saida') {
-                abort_if($this->balance($account)<$amount,422,'Saldo disponível insuficiente nesta conta.');
-                if ($account->type!=='numerario') {
-                    abort_unless(filled($d['evidence_reference']??null),422,
-                        'Referência ou comprovativo obrigatório para saída não numerária.');
-                }
-            }
-            DB::table('cis_cash_movements')->insert([
-                'account_id'=>$account->id, 'type'=>$d['type'], 'amount'=>$this->decimal($amount),
-                'reference'=>$reference, 'category'=>$d['category'],
-                'description'=>$d['description'], 'effective_at'=>now('Africa/Maputo'),
-                'evidence_reference'=>$d['evidence_reference']??null,
-                'created_by'=>$request->user()->id, 'created_at'=>now(), 'updated_at'=>now(),
-            ]);
-        },1);
-        return response()->json(['reference'=>$reference,'status'=>'confirmado'],201);
+        $this->access($request);
+        abort(503,'Registo de movimentos em preparação para o modelo híbrido com Extracto; nenhum lançamento foi efectuado.');
     }
 
     public function transfer(Request $request)
     {
-        $this->access($request,true);
-        $d=$request->validate([
-            'source_account_id'=>['required','integer','min:1'],
-            'destination_account_id'=>['required','integer','min:1','different:source_account_id'],
-            'confirmed_source_debit'=>['required','accepted'],
-            'confirmed_destination_credit'=>['required','accepted'],
-            'amount'=>['required','string','max:20'],
-            'description'=>['required','string','min:4','max:500'],
-            'evidence_reference'=>['required','string','min:5','max:255'],
-            'idempotency_key'=>['required','uuid'],
-        ]);
-        $amount=$this->cents($d['amount']);
-        abort_if($amount<=0,422);
-        $reference='CIS-TRANS-'.$d['idempotency_key'];
-        DB::transaction(function () use ($d,$request,$amount,$reference) {
-            abort_if(DB::table('cis_cash_movements')->where('reference',$reference.'-S')->exists(),409,
-                'Transferência já registada.');
-            $ids=[$d['source_account_id'],$d['destination_account_id']]; sort($ids,SORT_NUMERIC);
-            $accounts=DB::table('cis_cash_accounts')->whereIn('id',$ids)
-                ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-            abort_unless($accounts->count()===2,422,'As duas contas devem existir.');
-            $source=$accounts[$d['source_account_id']];$target=$accounts[$d['destination_account_id']];
-            foreach ([$source,$target] as $account) {
-                abort_unless($account->status==='activa' && $account->currency==='MZN',409,
-                    'A transferência exige duas contas activas em MZN.');
-            }
-            abort_if($this->balance($source)<$amount,422,'Saldo insuficiente na conta de origem.');
-            $group=(string)Str::uuid();
-            foreach ([[$source,'transferencia_saida','-S'],[$target,'transferencia_entrada','-E']] as [$account,$type,$suffix]) {
-                DB::table('cis_cash_movements')->insert([
-                    'account_id'=>$account->id, 'type'=>$type,
-                    'amount'=>$this->decimal($amount), 'reference'=>$reference.$suffix,
-                    'category'=>'Transferência interna','description'=>$d['description'],
-                    'transfer_group'=>$group, 'effective_at'=>now('Africa/Maputo'),
-                    'evidence_reference'=>$d['evidence_reference'],
-                    'created_by'=>$request->user()->id, 'created_at'=>now(), 'updated_at'=>now(),
-                ]);
-            }
-        },1);
-        return response()->json(['reference'=>$reference,'status'=>'confirmado'],201);
+        $this->access($request);
+        abort(503,'Transferências em preparação para associação atómica de duas linhas do Extracto; nenhum lançamento foi efectuado.');
     }
 }
