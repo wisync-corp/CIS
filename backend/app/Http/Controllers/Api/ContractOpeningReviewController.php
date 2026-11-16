@@ -73,7 +73,7 @@ final class ContractOpeningReviewController extends Controller
 
         $values = $request->validate([
             'cliente_id' => ['required', 'integer', 'min:1'],
-            'montante' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'montante' => ['required', 'integer', 'min:1', 'max:16777216'],
             'tipo_juro' => ['required','in:Fixo,Variável,Composto'],
             'estrategia_calculo' => ['required','string','max:90'],
             'periodo_dias' => ['required','integer','in:15,30'],
