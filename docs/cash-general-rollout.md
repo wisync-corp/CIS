@@ -34,6 +34,24 @@ Antes de aplicar qualquer migração, efectuar backup restaurável e ensaio numa
 
 **Não reutilizar o procedimento anterior para a versão de duas tabelas.** O ficheiro tem o mesmo nome histórico, mas a definição foi alterada.
 
+## Ensaio seguro após o backup
+
+Depois de criar o backup, **não aplicar a migração em produção**. Executar o ensaio automatizado que restaura a cópia numa **rede Docker interna, volume temporário e container MySQL separados**. A migração Laravel é executada **apenas no restauro isolado**.
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/rehearse-cash-migration.sh
+```
+
+O script selecciona o backup `cis-before-auth-*.sql` mais recente da pasta privada `$HOME/cis-private/backups`. Também aceita o caminho explícito como argumento. Necessita de Docker, OpenSSL e espaço disponível para um MySQL temporário. Não publica portas e elimina a infraestrutura temporária ao terminar, com sucesso ou erro.
+
+Verificações efectuadas: restauro completo, execução da migração Laravel real, manutenção das quantidades de Contractos, manutenção da quantidade e soma financeira de Extracto, criação de `cis_cash_accounts`, inclusão de `Extracto.account_id` nullable e **zero movimentos históricos com conta atribuída**.
+
+Resultado esperado: `ENSAIO DE RESTAURO E MIGRACAO: APROVADO (somente ambiente isolado).`
+
+**Importante:** esta validação não verifica toda a compatibilidade de escritores externos (Excel/VBA) nem substitui janela de manutenção e autorização de alteração produtiva.
+
 ## Ficheiro de migração proposto
 
 `backend/database/migrations/2026_11_16_000030_create_cis_cash_tables.php`
