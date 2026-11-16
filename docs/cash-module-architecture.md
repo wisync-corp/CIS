@@ -2,6 +2,9 @@
 
 **DOCUMENTO HISTÓRICO:** as referências seguintes a `cis_cash_movements` correspondem à proposta inicial **revogada**. O modelo final confirmado é **C — `Extracto` + `cis_cash_accounts` + `cis_cash_links`**, com apenas duas tabelas novas e sem dupla contagem. **Consultar `docs/cash-hybrid-treasury-architecture.md` como referência técnica actual**, incluindo a extensão futura de Tesouraria opcional.
 
+**Nova decisão:** a tabela `cis_cash_links` também foi descartada. A arquitectura vigente cria **somente `cis_cash_accounts`** e acrescenta `Extracto.account_id` (nullable). A referência normativa actual é `docs/cash-hybrid-treasury-architecture.md`.
+
+
 
 
 Estado: **PROPOSTA PARA DECISÃO — NÃO IMPLEMENTAR ESCRITAS FINANCEIRAS**.
