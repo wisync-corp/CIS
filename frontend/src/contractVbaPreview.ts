@@ -40,7 +40,7 @@ export function previewContractVba(input:{
  prazoMeses:number;dataInicio:string;estrategia:Strategy;prazo?:string;periodoDias?:number;
 }):ContractPreview{
  const {montante,taxa,tipo,prazoMeses,dataInicio,estrategia}=input;
- if(!Number.isSafeInteger(montante)||montante<=0||montante>100000000||
+ if(!Number.isSafeInteger(montante)||montante<=0||montante>16777216||
   !Number.isFinite(taxa)||taxa<0||taxa>100||
   !Number.isInteger(prazoMeses)||prazoMeses<0||prazoMeses>3)
   throw new Error('Montante inteiro, taxa ou prazo inválidos.');
