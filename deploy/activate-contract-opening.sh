@@ -29,12 +29,16 @@ fi
 if [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND ((TABLE_NAME='Contractos' AND COLUMN_NAME='Ordem' AND EXTRA LIKE '%auto_increment%') OR (TABLE_NAME='Extracto' AND COLUMN_NAME='Nr' AND EXTRA LIKE '%auto_increment%'));" )" != '2' ]]; then
  echo 'BLOQUEADO: falta AUTO_INCREMENT no esquema original.' >&2; exit 1
 fi
+if [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Contractos' AND COLUMN_NAME='Estratégia de Cálculo';")" != '1' ]]; then
+ echo 'BLOQUEADO: falta coluna de estratégia; execute bash deploy/add-contract-calculation-strategy-column.sh.' >&2
+ exit 1
+fi
 if [[ "$(sql "SELECT COUNT(*) FROM mysql.user WHERE User='cis_contract_writer';")" != '0' ]]; then
  echo 'BLOQUEADO: utilizador cis_contract_writer já existe; verificar manualmente.' >&2; exit 1
 fi
 echo 'A executar testes financeiros sem gravação, antes de conceder permissões…'
-sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml \\
- run --rm --no-deps --build api-test php tests/contract_opening_pricing_smoke.php
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps --build api-test php tests/contract_opening_pricing_smoke.php
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps api-test php tests/contract_calculation_strategy_smoke.php
 password="$(openssl rand -hex 32)"
 echo 'Operação a activar:'
 echo ' - Criação de contratos e suas prestações em Contractos'
