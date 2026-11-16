@@ -95,7 +95,7 @@ A Tesouraria é uma **camada adicional**, contratada ou activada conforme a esco
 A escolha **B — Caixa Geral** resolve o âmbito do produto, **não** autoriza automaticamente:
 1. O procedimento de saldos iniciais e a data de corte de reconciliação.
 2. O tratamento de transferências bancárias/móveis ainda pendentes de confirmação.
-3. Os perfis, limites e regras de autorização de desembolsos.
+3. A parametrização concreta dos limites por perfil, utilizador e conta, e a política de aprovação (modelo híbrido já aprovado).
 4. A alteração imediata do endpoint de desembolso existente (bloqueio operacional).
 
 Manter a implementação financeira desactivada até definir e testar estas regras; não atribuir a contas os registos legados sem reconciliação.
@@ -131,9 +131,57 @@ Manter a implementação financeira desactivada até definir e testar estas regr
 ### Decisões por definir antes de implementar
 
 1. **Data de corte e contas iniciais**: por conta ou data comum? Montantes, moedas e comprovativos reais.
-2. **Política de desembolsos**: permissões e limites por perfil/indivíduo; aprovação directa ou independente; momento de confirmação das transferências bancárias/móveis.
+2. **Parâmetros de desembolso**: limites, responsáveis, regras de excepção e momento de confirmação das transferências bancárias/móveis (modelo híbrido confirmado).
 3. **Activação operacional**: como impedir novas saídas sem conta reconciliada e como migrar os créditos em preparação, sem perda de operações.
 4. **Gestão de diferenças**: responsáveis, tolerâncias e procedimento formal de ajustes.
+
+## Decisão confirmada — Modelo híbrido de permissões de desembolso
+
+**Confirmado pelo cliente:** a Caixa Geral é padrão; a Tesouraria é opcional; **o tipo de desembolso não depende do módulo contratado**, mas de um modelo híbrido de perfis, permissões individuais, limites e políticas da instituição.
+
+### Modelo de autorização
+
+- **Perfil** fornece uma matriz inicial de permissões; o nome do perfil não é, por si só, autorização suficiente.
+- **Permissões individuais** permitem conceder/revogar direitos específicos de `credit.create`, `credit.approve`, `cash.disbursement.request`, `cash.disbursement.approve`, `cash.disbursement.execute`, `cash.accounts.manage`, `cash.accounts.reconcile` e `cash.movements.read`.
+- **Âmbito por conta** limita que contas o utilizador pode movimentar, de forma independente do acesso de consulta.
+- **Limites monetários** definem o valor máximo que um utilizador pode executar directamente, aprovar ou apenas solicitar; todos os montantes são avaliados em unidades monetárias exactas.
+- **Regra directa:** execução sem segunda aprovação **apenas** quando o utilizador está autorizado na conta, abaixo do limite configurado e a política da instituição permite a via directa.
+- **Regra com aprovação:** quando a política exige dupla autorização ou o limite directo é excedido, o crédito segue fluxo de solicitação e aprovação. A pessoa que solicita não pode aprovar a própria operação quando for exigida independência.
+- **Regra condicionada:** depende do valor, conta, método de pagamento, risco, unidade e eventuais excepções autorizadas.
+- **Confirmação de entrega efectiva dos fundos** é uma dimensão distinta da aprovação. Uma transferência solicitada não deve ser marcada como desembolsada antes de comprovada a execução.
+- **Deny by default:** sem política homologada, permissão explícita, conta reconciliada, saldo ou identidade confirmada, a API recusa a movimentação. Nunca herdar autorização do módulo Tesouraria activado.
+
+### Estados funcionais propostos
+
+`Rascunho → Pendente de aprovação → Aprovado → Pendente de execução → A confirmar entrega → Desembolsado`, com vias adicionais `Rejeitado`, `Cancelado` e `Falhou`. Para operações directas, os estados de pedido/aprovação podem ser omitidos quando a política o permite, mantendo trilho de decisão.
+
+### Dados propostos (sem migração autorizada)
+
+- `cis_financial_role_permissions`: perfil, capacidade, habilitação.
+- `cis_financial_user_permissions`: utilizador, capacidade, decisão explícita (conceder/revogar), validade, responsável.
+- `cis_financial_account_access`: utilizador ou perfil, conta, operações permitidas.
+- `cis_disbursement_policy`: instituição, modo directo/condicionado/aprovação, limites, segregação, estado, versão, vigência.
+- `cis_disbursement_requests`: identificador idempotente, contrato, conta, montante, requerente, aprovador, executor, estado, política aplicada, carimbos e prova de entrega.
+- `cis_disbursement_audit`: histórico imutável de decisões, justificação, interveniente e data.
+
+As alterações às políticas e permissões devem ser auditadas e só afectar operações futuras; operações pendentes precisam de regra explícita para políticas alteradas.
+
+### Critérios de aceitação antes de utilizar valores reais
+
+1. Dois utilizadores com o mesmo perfil podem ter limites e permissões diferentes.
+2. Um utilizador sem permissão de execução pode preparar a operação, mas não movimentar fundos.
+3. O operador com execução directa só pode movimentar as contas autorizadas e respeitar o limite.
+4. Montante acima do limite segue aprovação; não é convertido automaticamente em desembolso.
+5. Uma aprovação independente nunca pode ser feita pelo próprio requerente.
+6. Perfil administrador não ignora bloqueios de conta, saldo, confirmação ou registo de auditoria.
+7. Activar ou desactivar Tesouraria não modifica as permissões de desembolso.
+8. Conta inactiva ou não reconciliada impede a execução, mesmo com aprovação.
+9. Requisição repetida não cria desembolso duplicado.
+10. Nenhuma falha de confirmação externa de transferência pode transformar uma operação pendente em concluída.
+
+### Próxima etapa de implementação
+
+Implementar primeiro **cadastro e reconciliação de contas com consulta apenas**, a seguir permissões e fluxos de aprovação, e só depois a integração atómica de desembolsos. Não activar escritas ou alterar o Extracto legado por esta confirmação.
 
 ## Decisões necessárias
 
