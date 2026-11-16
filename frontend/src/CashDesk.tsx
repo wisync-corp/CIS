@@ -63,7 +63,8 @@ export default function CashDesk({token}:{token:string}){
   if(!enabled){setError('As escritas financeiras não estão activadas.');return;}
   if(what==='record' && !moneyInput(record.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer' && !moneyInput(transfer.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
-  if((what==='record'||what==='transfer')&&!window.confirm('Confirma o registo desta operação financeira na Caixa? A operação não poderá ser apagada.'))return;
+  if(what==='transfer'&&!window.confirm('Confirma que a saída da origem E a entrada no destino foram ambas efectivamente executadas e comprovadas? Se qualquer uma estiver pendente, não registe a transferência como concluída.'))return;
+  if(what==='record'&&!window.confirm('Confirma o registo deste movimento financeiro na Caixa? A operação não poderá ser apagada.'))return;
   if(what==='activate'&&!window.confirm('Confirma que conferiu o saldo, a data de corte e a evidência documental desta conta?'))return;
   setBusy(true);
   try{
@@ -76,7 +77,7 @@ export default function CashDesk({token}:{token:string}){
    if(what==='record')await request('movimentos','POST',{...record,account_id:Number(record.account_id),idempotency_key:operationKey});
    if(what==='transfer')await request('transferencias','POST',{
     ...transfer,source_account_id:Number(transfer.source_account_id),
-    destination_account_id:Number(transfer.destination_account_id),idempotency_key:operationKey
+    destination_account_id:Number(transfer.destination_account_id),confirmed_source_debit:true,confirmed_destination_credit:true,idempotency_key:operationKey
    });
    setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para validação documental.':what==='activate'?'Conta activada com base na validação documental.':'Operação financeira registada.');
    if(what==='record'||what==='transfer')setOperationKey(crypto.randomUUID());
@@ -145,7 +146,7 @@ export default function CashDesk({token}:{token:string}){
     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!active.length}>Registar movimento</button></div>
    </form>}
    {action==='transfer'&&<form className="cis-cash-form" onSubmit={e=>void submit(e,'transfer')}>
-    <div className="cis-cash-form-title"><h4>Transferência entre contas</h4><p>Movimentação interna: uma saída e uma entrada atómicas.</p></div>
+    <div className="cis-cash-form-title"><h4>Transferência entre contas</h4><p>Registe apenas após confirmar e documentar a saída da origem e a entrada no destino; transferências pendentes não devem ser registadas como concluídas.</p></div>
     <label>Conta de origem<select required value={transfer.source_account_id} onChange={e=>setTransfer(p=>({...p,source_account_id:e.target.value}))}><option value="">Seleccionar origem</option>{active.map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Conta de destino<select required value={transfer.destination_account_id} onChange={e=>setTransfer(p=>({...p,destination_account_id:e.target.value}))}><option value="">Seleccionar destino</option>{active.filter(a=>String(a.id)!==transfer.source_account_id).map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={transfer.amount} onChange={e=>setTransfer(p=>({...p,amount:e.target.value}))} placeholder="0.00"/></label>
