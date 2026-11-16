@@ -8,7 +8,7 @@ backup="${1:-}"
 if [[ -z "$backup" ]]; then
   backup_dir="$HOME/cis-private/backups"
   [[ -d "$backup_dir" ]] || { echo 'BLOQUEADO: sem pasta privada de backups.' >&2; exit 1; }
-  backup="$(find "$backup_dir" -maxdepth 1 -type f -name 'cis-before-auth-*.sql' -printf '%T@ %p\\n' | sort -rn | head -n 1 | cut -d' ' -f2-)"
+  backup="$(find "$backup_dir" -maxdepth 1 -type f -name 'cis-before-auth-*.sql' -printf '%T@ %p\n' | sort -rn | head -n 1 | cut -d' ' -f2-)"
 fi
 [[ -n "$backup" && -r "$backup" && -s "$backup" ]] || { echo 'Backup ausente, vazio ou ilegível.' >&2; exit 1; }
 command -v openssl >/dev/null || exit 1
