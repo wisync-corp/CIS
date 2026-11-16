@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 if(DB::getDriverName()!=='sqlite') throw new RuntimeException('Fixture proibida fora de SQLite.');
 if(Schema::hasTable('cis_cash_accounts') || Schema::hasTable('cis_cash_movements')) throw new RuntimeException('Fixture nao limpa.');
+Schema::create('Contractos',function(Blueprint $t) { $t->id('Ordem'); });
 Schema::create('cis_cash_accounts',function(Blueprint $t) {
   $t->id();
   $t->string('code',40)->unique(); $t->string('name',150);
