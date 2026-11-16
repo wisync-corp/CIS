@@ -24,7 +24,7 @@ export default function Dashboard({token, name, role, theme, onThemeChange, onLo
   <aside className={'cis-side '+(open?'visible':'')}>
    <div className="cis-brand"><div className="cis-logo">C<span>·</span></div><div><strong>CIS</strong><small>CREDIT INSIGHT SHIFT</small></div></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
-   <nav aria-label="Navegação principal">{nav.map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
+   <nav aria-label="Navegação principal">{nav.filter(({label})=>label!=='Caixa'||role==='administrador').map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}</small></div><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
