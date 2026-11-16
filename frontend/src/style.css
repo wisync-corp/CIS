@@ -284,3 +284,12 @@ html{font-size:16px}
 .cis-contract-overview-note svg{flex-shrink:0;margin-top:1px}
 @media(max-width:1050px){.cis-contract-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.cis-contract-overview-grid{grid-template-columns:1fr}.cis-contract-created-banner{flex-direction:column;align-items:stretch}.cis-contract-created-banner button{align-self:flex-start}}
+
+/* Ficha do contrato: separação visual de dados contratuais e recebimentos. */
+.cis-contract-payment-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:4px 0 16px}
+.cis-contract-payment-summary article{display:flex;flex-direction:column;gap:8px;padding:19px 21px;border:1px solid var(--cis-border);background:var(--cis-surface,#fff);border-radius:12px}
+.cis-contract-payment-summary span{font-size:13px;color:var(--cis-text-muted);font-weight:700}
+.cis-contract-payment-summary strong{font-size:clamp(20px,2vw,27px);font-variant-numeric:tabular-nums;color:var(--cis-heading)}
+.cis-profile-tabs{gap:6px}
+.cis-profile-content .cis-contract-operation>h4{margin:12px 0 0}
+@media(max-width:650px){.cis-contract-payment-summary{grid-template-columns:1fr}}
