@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ContractOpeningReviewController;
 use App\Http\Controllers\Api\ContractOpeningController;
 use App\Http\Controllers\Api\ContractCollectionController;
 use App\Http\Controllers\Api\ContractOperationalStatusController;
+use App\Http\Controllers\Api\CashController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -24,6 +25,16 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::get('cis/clients',[ClientController::class,'index']);
     Route::post('cis/clients',[ClientController::class,'store'])->middleware('throttle:20,1');
     Route::put('cis/clients/{id}',[ClientController::class,'update'])->whereNumber('id')->middleware('throttle:20,1');
+    // Caixa Geral: cadastro e consulta separados de movimentos financeiros.
+    Route::prefix('cis/caixa')->group(function() {
+        Route::get('contas',[CashController::class,'index'])->middleware('throttle:30,1');
+        Route::get('movimentos',[CashController::class,'movements'])->middleware('throttle:30,1');
+        Route::post('contas',[CashController::class,'createAccount'])->middleware('throttle:8,1');
+        Route::post('contas/{id}/abertura',[CashController::class,'submitOpening'])->whereNumber('id')->middleware('throttle:8,1');
+        Route::post('contas/{id}/activar',[CashController::class,'activate'])->whereNumber('id')->middleware('throttle:8,1');
+        Route::post('movimentos',[CashController::class,'record'])->middleware('throttle:8,1');
+        Route::post('transferencias',[CashController::class,'transfer'])->middleware('throttle:8,1');
+    });
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateClientPreview::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes'])->middleware('throttle:30,1');
         Route::get('contratos/clientes',[ContractClientLookupController::class,'index'])->middleware('throttle:30,1');
