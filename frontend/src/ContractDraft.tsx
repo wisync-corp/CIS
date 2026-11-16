@@ -207,6 +207,14 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [openingBusy,setOpeningBusy]=useState(false);
  const [openedContract,setOpenedContract]=useState<{numero:string;prestacoes:number;desembolso:string|number}|null>(null);
  const [openingError,setOpeningError]=useState('');
+ const [openingRetryAt,setOpeningRetryAt]=useState(0);
+ const [openingClock,setOpeningClock]=useState(Date.now());
+ useEffect(()=>{
+  if(openingRetryAt<=Date.now())return;
+  const timer=window.setInterval(()=>setOpeningClock(Date.now()),1000);
+  return ()=>window.clearInterval(timer);
+ },[openingRetryAt]);
+ const openingCooldownSeconds=Math.max(0,Math.ceil((openingRetryAt-openingClock)/1000));
 
  useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey]);
  const tipo=values.tipo_juro??'';
@@ -255,6 +263,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  };
  const openContract=async()=>{
   if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(Date.now()<openingRetryAt){setOpeningError('Limite temporário de tentativas. Consulte primeiro a carteira para confirmar se o contrato já existe.');return;}
   if(!strategySelected.trim()){setOpeningError('Seleccione uma fórmula de cálculo antes de criar e desembolsar o crédito.');return;}
   if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
   setOpeningBusy(true);setOpeningError('');
@@ -271,6 +280,16 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      data_inicio:values.data_inicio,confirmacao_desembolso:true
     })
    });
+   if(res.status===429){
+    const retryHeader=res.headers.get('Retry-After');
+    const retryNumber=retryHeader?Number(retryHeader):NaN;
+    const retryDate=retryHeader?Date.parse(retryHeader):NaN;
+    const delay=Number.isFinite(retryNumber)?retryNumber:Number.isFinite(retryDate)?(retryDate-Date.now())/1000:60;
+    const seconds=Math.min(300,Math.max(1,Math.ceil(delay)));
+    setOpeningRetryAt(Date.now()+seconds*1000);
+    setOpeningClock(Date.now());
+    throw new Error('Limite de segurança atingido (429). Não volte a submeter por '+seconds+' segundos. Antes de tentar novamente, confirme na carteira e no Extracto se a operação já foi registada.');
+   }
    const payload=await res.json().catch(()=>null) as {numero?:string;prestacoes?:number;desembolso?:string|number;message?:string;errors?:Record<string,string[]>}|null;
    if(!res.ok){
     const details=payload?.errors?Object.values(payload.errors).flat().join(' '):payload?.message;
@@ -380,7 +399,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     <strong>Confirmação de abertura real</strong>
     {review.autorizado_para_gravar?<><label className="cis-contract-confirm"><input type="checkbox" checked={confirmedDisbursement} onChange={e=>setConfirmedDisbursement(e.target.checked)}/>
      <span>Confirmo que o montante indicado foi efectivamente disponibilizado ao mutuário e autorizo o lançamento da saída no Extracto.</span></label>
-     <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||openingBusy} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':'Criar contrato e registar desembolso'}</button>
+     <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||openingBusy||openingCooldownSeconds>0} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':openingCooldownSeconds>0?'Aguarde '+openingCooldownSeconds+' s (limite de segurança)':'Criar contrato e registar desembolso'}</button>
     </>:<p>A funcionalidade de escrita ainda não está activada no servidor. O administrador deve executar a activação privada após o backup e reconciliação da caixa.</p>}
    </div>}
    <div className="cis-edit-actions"><button type="reset" disabled={openingBusy||!!openedContract}><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy||openingBusy||!!openedContract}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>
