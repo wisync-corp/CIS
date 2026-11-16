@@ -61,3 +61,20 @@ A nova lista visual foi fornecida em captura pelo operador; o código **Contract
 - Uma migração aditiva fornece a coluna nullable **Estratégia de Cálculo** (VARCHAR 90) na tabela Contractos. As prestações históricas ficam com NULL; todas as prestações de novos contratos guardam a estratégia escolhida.
 - A API verifica tipo/estratégia novamente antes da gravação e recusa qualquer estratégia não implementada no motor real. A ficha do contrato apresenta a estratégia quando a coluna já existe.
 - Para aplicar no VPS com backup recente: `bash deploy/add-contract-calculation-strategy-column.sh`. O script exige confirmação explícita; nenhuma alteração à base de produção foi efectuada pelo desenvolvimento no GitHub.
+
+## Nova política financeira aprovada — 16-11-2026: meticais inteiros e estratégias adicionais
+O utilizador solicitou expressamente a implementação dos três métodos restantes com base no conhecimento matemático geral e que os **valores monetários sejam inteiros, sempre arredondados para cima**. Trata-se de uma ALTERAÇÃO às regras antigas do VBA, que usava `Round(...,2)`. Não atribuir estes cálculos novos ao código histórico do Contractos.frm.
+
+**Compatibilidade e fórmulas adoptadas no CIS:**
+- **Fixo — Amortização fixa com juro fixo:** juro TOTAL `ceil(P*r)` uma vez; amortização de capital `ceil(P/n)` por prestação (última = saldo exacto), juros distribuídos em inteiros, última = juro total ainda não distribuído.
+- **Fixo — Prestação fixa pelo total:** total `T=P+ceil(P*r)`, prestação `ceil(T/n)` (última = saldo exacto do total), amortização `ceil(P/n)` (última = capital restante); juro por prestação = prestação menos amortização. O total do contrato não varia com o número de prestações.
+- **Fixo — Prestação fixa simples:** juros simples de `ceil(P*r)` EM CADA prestação, usando capital original P; amortização de capital igual a `ceil(P/n)`, última recebe saldo exacto. Por aplicar juros por prestação, o juro total é `n*ceil(P*r)`. Esta é uma opção distinta da prestação fixa pelo total, e o utilizador deve conhecer essa distinção.
+- **Composto — Amortização fixa com juro decrescente:** amortização `ceil(P/n)`, última = saldo exacto; juro de cada prestação `ceil(saldo_devedor*r)`; prestação = amortização + juro.
+- **Composto — Tabela Price:** prestação base `ceil(P*r*(1+r)^n/((1+r)^n-1))`, ou `ceil(P/n)` se r=0; juro de cada período `ceil(saldo_devedor*r)`; amortização é diferença prestação-juro; última prestação quita saldo e respectivos juros.
+- **Variável — Juro variável na cobrança:** cria uma prestação de capital inteiro, sem antecipar os juros; estes só poderão ser apurados quando o módulo Cobrança tiver as regras respectivas.
+
+**Regras comuns:** montante de desembolso deve ser inteiro e positivo; percentagens são validadas no esquema original. Não arredondar ou aumentar silenciosamente o capital desembolsado; rejeitar montante fraccionário. Sempre que houver divisão, arredondar para cima os valores positivos. A parcela final recebe o **remanescente inteiro exacto**, sem arredondar novamente esse saldo; isto evita criar ou cobrar capital não desembolsado. Todas as prestações satisfazem `a_pagar=amortizacao+juros`; somatório das amortizações = capital realmente desembolsado; somatório do contrato = capital+juros. Registos antigos não são recalculados.
+
+**Nota temporal:** a taxa é aplicada por período de prestação mensal nas estratégias COMPOSTO e SIMPLE descritas acima; as regras financeiras de frequência Semanal e prazo em Semanas permanecem bloqueadas até homologação da correspondência entre períodos de juros e periodicidade real. Esta alteração não habilita modalidades semanais nem altera o Extracto sem nova abertura confirmada.
+
+**Implantação:** os novos algoritmos afectam APENAS contratos novos depois da publicação e dos testes; se houver contratos reais em curso, confirmar previamente como serão tratados os contratos antigos. Executar os scripts de teste do backend antes de activar novos desembolsos.
