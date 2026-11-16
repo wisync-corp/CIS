@@ -30,7 +30,7 @@ final class ContractOpeningController extends Controller
 
         $d = $request->validate([
             'cliente_id'=>['required','integer','min:1'],
-            'montante'=>['required','numeric','gt:0','max:100000000','decimal:0,2'],
+            'montante'=>['required','integer','min:1','max:100000000'],
             'tipo_juro'=>['required','in:Fixo,Variável,Composto'],
             'estrategia_calculo'=>['required','string','max:90'],
             'periodo_dias'=>['required','integer','in:15,30'],
@@ -169,7 +169,8 @@ final class ContractOpeningController extends Controller
                     $band=(string)$prices[0]->limite_inferior.' - '.(string)$prices[0]->limite_superior;
                 }
                 $plan=LegacyContractPricing::plan((float)$d['montante'],$rate,
-                    $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio']);
+                    $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio'],
+                    $d['estrategia_calculo']);
                 $cashRows=$db->table('Extracto')
                     ->select(['Tipo de Movimento','Valor'])->get();
                 $saldo=0.0;
