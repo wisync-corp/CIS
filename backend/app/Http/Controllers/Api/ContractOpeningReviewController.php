@@ -99,6 +99,14 @@ final class ContractOpeningReviewController extends Controller
         } elseif (!ContractCalculationStrategy::compatible($values['tipo_juro'], $values['estrategia_calculo'])) {
             $issues[] = 'A estratégia escolhida não é compatível com o tipo de juro.';
         }
+        $isExtended = in_array($values['estrategia_calculo'], [
+            ContractCalculationStrategy::TOTAL,
+            ContractCalculationStrategy::SIMPLE,
+            ContractCalculationStrategy::DECLINING,
+        ], true);
+        if ($isExtended && !filter_var(env('CIS_EXTENDED_CALCULATIONS_APPROVED', false), FILTER_VALIDATE_BOOLEAN)) {
+            $issues[] = 'A fórmula adicional está implementada para pré-visualização, mas a gravação financeira exige a activação de CIS_EXTENDED_CALCULATIONS_APPROVED após testes.';
+        }
         if (!DB::connection('mysql_legacy')->getSchemaBuilder()->hasColumn('Contractos','Estratégia de Cálculo')) {
             $issues[] = 'A nova coluna Estratégia de Cálculo ainda não foi criada na tabela Contractos. Execute a migração autorizada.';
         }
