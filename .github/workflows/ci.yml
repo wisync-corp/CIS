@@ -36,6 +36,7 @@ jobs:
       - run: sed -i '/^DB_DATABASE=/d' .env
       - run: touch database/database.sqlite
       - run: php artisan key:generate
+      - run: php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(\\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); if (!array_key_exists("mysql_cash_setup",config("database.connections",[]))) exit(1); echo "Cash writer connection configured.\\n";'
       - run: php tests/create_cash_legacy_fixture.php
       # A migração de estratégia do legado exige Contractos real, ausente na BD SQLite de CI.
       # Validar isoladamente as novas tabelas sem modificar a migração financeira do legado.
@@ -50,6 +51,7 @@ jobs:
       - run: bash -n ../deploy/rehearse-cash-migration.sh
       - run: bash -n ../deploy/install-cash-direct-account.sh
       - run: bash -n ../deploy/activate-cash-account-registration.sh
+      - run: bash -n ../deploy/verify-cash-account-registration.sh
       - run: bash -n ../deploy/postflight-cash-direct-account.sh
       - run: bash -n ../deploy/inspect-cash-migration-mismatch.sh
       - run: php tests/cash_smoke.php
