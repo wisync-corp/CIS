@@ -5,91 +5,136 @@ namespace App\Services;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Motor de prestações em meticais inteiros.
+ *
+ * Regra CIS autorizada em 16-11-2026: quaisquer valores de juros/prestações
+ * positivos são arredondados para cima. O capital é sempre reconciliado
+ * exactamente com o montante desembolsado; a última amortização é o
+ * REMANESCENTE INTEIRO, nunca um novo arredondamento do principal.
+ *
+ * As fórmulas TOTAL / SIMPLE / DECLINING são extensões financeiras CIS,
+ * não métodos existentes de forma autónoma no Contractos.frm.
+ */
 final class LegacyContractPricing
 {
-    // VB Round(value, 2) = empate para o par. Os valores são arredondados
-    // em cada etapa, como em cmb_adicionar_Click do Contractos.frm.
-    public static function round(float $value): float
+    public static function upwards(float $amount): int
     {
-        return round($value, 2, PHP_ROUND_HALF_EVEN);
+        if (!is_finite($amount) || $amount < 0 || $amount > 1000000000) {
+            throw ValidationException::withMessages(['montante'=>'Resultado financeiro inválido.']);
+        }
+        // Tolerância mínima para desvios binários em cálculos de quocientes.
+        return (int)ceil($amount - 1e-9);
     }
 
     public static function plan(float $principal, float $taxa, string $tipo, string $modalidade,
-        int $meses, string $dataInicio): array
+        int $meses, string $dataInicio, ?string $estrategia = null): array
     {
-        if ($principal <= 0 || $principal > 100000000 || $taxa < 0 || $taxa > 100
-            || !in_array($tipo, ['Fixo','Variável','Composto'], true) || $meses < 1 || $meses > 3) {
-            throw ValidationException::withMessages(['contracto'=>'Condições do contrato inválidas.']);
+        if (!is_finite($principal) || $principal <= 0 || $principal > 100000000
+            || abs($principal-round($principal)) > 1e-8
+            || !is_finite($taxa) || $taxa < 0 || $taxa > 100
+            || $meses < 1 || $meses > 3) {
+            throw ValidationException::withMessages(['montante'=>
+                'Montante inteiro positivo, taxa e prazo válidos são obrigatórios.']);
         }
-
-        $inicio = CarbonImmutable::createFromFormat('!Y-m-d', $dataInicio);
-        if (!$inicio || $inicio->format('Y-m-d') !== $dataInicio) {
+        $estrategia ??= ContractCalculationStrategy::supportedFor($tipo);
+        if (!$estrategia || !ContractCalculationStrategy::compatible($tipo,$estrategia)) {
+            throw ValidationException::withMessages(['estrategia_calculo'=>
+                'A estratégia não é compatível com o tipo de juro.']);
+        }
+        if (($tipo === 'Variável' && $modalidade !== 'Uma Parcela')
+            || ($tipo === 'Composto' && $modalidade !== 'Mensal')
+            || !in_array($modalidade,['Mensal','Uma Parcela'],true)) {
+            throw ValidationException::withMessages(['modalidade'=>'Modalidade incompatível com esta estratégia.']);
+        }
+        $inicio=CarbonImmutable::createFromFormat('!Y-m-d',$dataInicio);
+        if (!$inicio || $inicio->format('Y-m-d')!==$dataInicio) {
             throw ValidationException::withMessages(['data_inicio'=>'Data de início inválida.']);
         }
-        $final = $inicio->addMonthsNoOverflow($meses)->format('Y-m-d');
-        $modo = $tipo === 'Variável' ? 'Uma Parcela'
-            : ($tipo === 'Composto' ? 'Mensal' : $modalidade);
-        $k = $tipo === 'Variável' || $modo === 'Uma Parcela' ? 1 : $meses;
-        $r = $taxa / 100.0;
-        $totalJuros = $tipo === 'Fixo' ? self::round($principal * $r) : 0.0;
-        $base = $tipo === 'Composto'
-            ? self::round($r == 0.0 ? $principal / $k
-                : ($principal * $r * pow(1+$r,$k)) / (pow(1+$r,$k)-1)) : 0.0;
-        $saldo = self::round($principal);
-        $jurosDistribuidos = 0.0;
-        $rows = [];
-        for ($i=1; $i<=$k; $i++) {
-            $vencimento = ($i === $k ? $final
-                : $inicio->addMonthsNoOverflow($i)->format('Y-m-d'));
-            if ($tipo === 'Variável') {
-                $capital = self::round($principal);
-                $amortizacao = $capital;
-                $juros = 0.0;
-                $pagar = $capital;
-            } elseif ($tipo === 'Composto') {
-                $capital = self::round($saldo);
-                $juros = self::round($capital * $r);
-                if ($i === $k) {
-                    $amortizacao = self::round($saldo);
-                    $pagar = self::round($amortizacao + $juros);
-                } else {
-                    $pagar = $base;
-                    $amortizacao = self::round($pagar - $juros);
-                }
-                $saldo = self::round($saldo - $amortizacao);
-            } else {
-                $capital = self::round($saldo);
-                $amortizacao = $i === $k ? self::round($saldo)
-                    : self::round($principal / $k);
-                if ($i === $k) {
-                    $juros = self::round($totalJuros - $jurosDistribuidos);
-                } else {
-                    $juros = self::round($totalJuros / $k);
-                    $jurosDistribuidos = self::round($jurosDistribuidos + $juros);
-                }
-                $pagar = self::round($amortizacao + $juros);
-                $saldo = self::round($saldo - $amortizacao);
+        $k=$tipo==='Variável'||$modalidade==='Uma Parcela'?1:$meses;
+        $P=(int)$principal;
+        if ($P<$k) {
+            throw ValidationException::withMessages(['montante'=>
+                'O capital não chega para amortizar pelo menos 1 MT por prestação.']);
+        }
+        $r=$taxa/100;
+        $fim=$inicio->addMonthsNoOverflow($meses)->format('Y-m-d');
+        $totalInterest=match($estrategia) {
+            ContractCalculationStrategy::FIXED_AMORTIZATION,
+            ContractCalculationStrategy::TOTAL => self::upwards($P*$r),
+            default => null,
+        };
+        $price=$estrategia===ContractCalculationStrategy::PRICE
+            ? self::upwards($r==0.0?$P/$k:
+                ($P*$r*pow(1+$r,$k))/(pow(1+$r,$k)-1))
+            : null;
+        $totalDue=$estrategia===ContractCalculationStrategy::TOTAL
+            ? $P+$totalInterest : null;
+        $perPayment=$totalDue!==null?self::upwards($totalDue/$k):null;
+        $perCapital=self::upwards($P/$k);
+        $perFixedInterest=$totalInterest!==null?self::upwards($totalInterest/$k):null;
+        $saldo=$P;
+        $paidInterest=0;
+        $paidTotal=0;
+        $rows=[];
+        for ($i=1;$i<=$k;$i++) {
+            $last=$i===$k;
+            $capital=$saldo;
+            $amortizacao=$last?$saldo:min($saldo,$perCapital);
+            $juros=0;
+            $pagar=0;
+            switch ($estrategia) {
+                case ContractCalculationStrategy::VARIABLE_COLLECTION:
+                    $juros=0; $pagar=$amortizacao; break;
+                case ContractCalculationStrategy::FIXED_AMORTIZATION:
+                    $juros=$last?($totalInterest-$paidInterest):min($perFixedInterest,$totalInterest-$paidInterest);
+                    $pagar=$amortizacao+$juros; break;
+                case ContractCalculationStrategy::TOTAL:
+                    $pagar=$last?($totalDue-$paidTotal):min($perPayment,$totalDue-$paidTotal);
+                    $juros=$pagar-$amortizacao;
+                    break;
+                case ContractCalculationStrategy::SIMPLE:
+                    // Juros simples por prestação sobre o capital ORIGINAL.
+                    $juros=self::upwards($P*$r);
+                    $pagar=$amortizacao+$juros;
+                    break;
+                case ContractCalculationStrategy::DECLINING:
+                    // Juros sobre o saldo ANTES da amortização desta prestação.
+                    $juros=self::upwards($saldo*$r);
+                    $pagar=$amortizacao+$juros;
+                    break;
+                case ContractCalculationStrategy::PRICE:
+                    $juros=self::upwards($saldo*$r);
+                    $pagar=$last?$saldo+$juros:$price;
+                    $amortizacao=$last?$saldo:$pagar-$juros;
+                    break;
             }
-            if (abs($saldo) < 0.01) $saldo = 0;
-            if (!is_finite($capital) || !is_finite($amortizacao)
-                || !is_finite($juros) || !is_finite($pagar) ||
-                $amortizacao < 0 || $pagar < 0 || $saldo < 0) {
-                throw ValidationException::withMessages(['montante'=>'O cálculo produziu valores inválidos.']);
-            }
-            // O esquema ORIGINAL tem Capital e Amortização do tipo INT, NÃO DECIMAL.
-            // Guardar centavos nessa coluna truncaria dinheiro. Não alterar o esquema sem
-            // autorização específica. Impedir contratos que exigiriam perda de centavos.
-            if (abs($capital - round($capital)) > 0.00001 ||
-                abs($amortizacao - round($amortizacao)) > 0.00001) {
+            if ($amortizacao<=0 || $amortizacao>$saldo || $juros<0 || $pagar<0
+                || $pagar!==$amortizacao+$juros) {
                 throw ValidationException::withMessages(['montante'=>
-                    'Esta combinação exige centavos em Capital/Amortização, que são INT no MySQL legado. Não é seguro gravar sem migração autorizada para DECIMAL.']);
+                    'A distribuição da estratégia gerou prestação inválida. Operação cancelada.']);
             }
-            $rows[] = [
-                'parcela'=>$i, 'vencimento'=>$vencimento,
-                'capital'=>$capital, 'amortizacao'=>$amortizacao,
-                'juros'=>$juros, 'pagar'=>$pagar,
+            $saldo-=$amortizacao;
+            $paidInterest+=$juros;
+            $paidTotal+=$pagar;
+            $rows[]=[
+                'parcela'=>$i,
+                'vencimento'=>$last?$fim:$inicio->addMonthsNoOverflow($i)->format('Y-m-d'),
+                'capital'=>$capital,
+                'amortizacao'=>$amortizacao,
+                'juros'=>$juros,
+                'pagar'=>$pagar,
             ];
         }
-        return ['data_final'=>$final, 'modalidade'=>$modo, 'prestacoes'=>$rows];
+        if ($saldo!==0 || array_sum(array_column($rows,'amortizacao'))!==$P
+            || $paidTotal!==$P+$paidInterest) {
+            throw ValidationException::withMessages(['montante'=>
+                'Não foi possível reconciliar capital, juros e prestações.']);
+        }
+        return [
+            'data_final'=>$fim,'modalidade'=>$modalidade,'prestacoes'=>$rows,
+            'total_juros'=>$paidInterest,'total_pagar'=>$paidTotal,
+            'estrategia_calculo'=>$estrategia,
+        ];
     }
 }
