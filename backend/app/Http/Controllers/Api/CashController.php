@@ -83,7 +83,8 @@ final class CashController extends Controller
         $accounts = $this->accountRows();
         return response()->json([
             'accounts' => $accounts,
-            'can_write' => false, // Até integrar Extracto e associação de modo atómico.
+            'can_write' => false, // Movimentações financeiras desactivadas.
+            'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'notice' => 'Contas CIS; a fonte única é Extracto, com account_id opcional para preservar históricos. Escritas aguardam integração segura.'
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -113,71 +114,55 @@ final class CashController extends Controller
         ])->header('Cache-Control','no-store, private');
     }
 
+    /**
+     * Cadastro de CONTAS sem saldo, abertura ou movimentos.
+     * A flag e o utilizador MySQL dedicado sao independentes da autorização
+     * de saídas e desembolsos. Só INSERT em cis_cash_accounts.
+     */
     public function createAccount(Request $request)
     {
-        $this->access($request, true);
-        $d = $request->validate([
-            'code'=>['required','string','regex:/^[A-Za-z0-9_-]{2,40}$/','unique:cis_cash_accounts,code'],
+        $this->access($request);
+        abort_unless(filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED', false), FILTER_VALIDATE_BOOLEAN), 503,
+            'Cadastro de contas ainda não activado. Operações financeiras permanecem bloqueadas.');
+        $d=$request->validate([
+            'code'=>['required','string','regex:/^[A-Za-z0-9_-]{2,40}$/'],
             'name'=>['required','string','min:3','max:150'],
             'type'=>['required','in:banco,numerario,carteira_movel'],
             'identifier'=>['nullable','string','max:120'],
         ]);
-        $id = DB::table('cis_cash_accounts')->insertGetId([
-            'code'=>strtoupper($d['code']), 'name'=>$d['name'], 'type'=>$d['type'],
-            'identifier'=>$d['identifier']??null, 'currency'=>'MZN',
-            'status'=>'em_preparacao','created_by'=>$request->user()->id,
-            'created_at'=>now(), 'updated_at'=>now(),
-        ]);
-        return response()->json(['id'=>$id,'status'=>'em_preparacao'],201);
+        $code=strtoupper($d['code']);
+        $writer=DB::connection('mysql_cash_setup');
+        abort_unless($writer->getDatabaseName() === DB::connection()->getDatabaseName(),503,
+            'Ligação de cadastro aponta para uma base diferente da Caixa.');
+        try {
+            $id=$writer->table('cis_cash_accounts')->insertGetId([
+                'code'=>$code,'name'=>$d['name'],'type'=>$d['type'],
+                'identifier'=>$d['identifier']??null,'currency'=>'MZN',
+                'status'=>'em_preparacao','created_by'=>$request->user()->id,
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        } catch (\\Illuminate\\Database\\UniqueConstraintViolationException $e) {
+            throw ValidationException::withMessages(['code'=>'Código já utilizado por outra conta.']);
+        }
+        return response()->json([
+            'id'=>$id,'status'=>'em_preparacao',
+            'notice'=>'Conta cadastrada SEM saldo e SEM permissão para operações financeiras.',
+        ],201)->header('Cache-Control','no-store, private');
     }
 
+    // Abertura e activação de saldos requerem validação documental
+    // independente e segregação de funções ainda em desenvolvimento.
+    // A opção de cadastrar contas NÃO activa estes endpoints.
     public function submitOpening(Request $request, int $id)
     {
-        $this->access($request, true);
-        $d=$request->validate([
-            'opening_balance'=>['required','string','max:20'],
-            'cut_at'=>['required','date_format:Y-m-d H:i:s'],
-            'evidence_reference'=>['required','string','min:5','max:255'],
-        ]);
-        $amount = $this->cents($d['opening_balance']);
-        abort_if($amount < 0, 422);
-        $cut = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $d['cut_at'], 'Africa/Maputo');
-        abort_if($cut->greaterThan(now('Africa/Maputo')), 422, 'Data de corte futura não permitida.');
-        DB::transaction(function () use ($d,$id,$request,$amount) {
-            $account=DB::table('cis_cash_accounts')->where('id',$id)->lockForUpdate()->first();
-            abort_if(!$account,404,'Conta não encontrada.');
-            abort_unless($account->status==='em_preparacao',409,'Conta já submetida ou activa.');
-            abort_if(DB::table('Extracto')->where('account_id',$id)->exists(),409,
-                'A conta já tem movimentos; abertura bloqueada.');
-            DB::table('cis_cash_accounts')->where('id',$id)->update([
-                'opening_balance'=>$this->decimal($amount), 'cut_at'=>$d['cut_at'],
-                'evidence_reference'=>$d['evidence_reference'],
-                'status'=>'pendente_validacao', 'updated_at'=>now(),
-            ]);
-        });
-        return response()->json(['status'=>'pendente_validacao']);
+        $this->access($request);
+        abort(503,'Abertura de saldo ainda não homologada. A conta continua em preparação.');
     }
 
     public function activate(Request $request, int $id)
     {
-        $this->access($request,true);
-        $d=$request->validate([
-            'confirmed_document'=>['required','accepted'],
-        ]);
-        DB::transaction(function () use ($id,$request) {
-            $account=DB::table('cis_cash_accounts')->where('id',$id)->lockForUpdate()->first();
-            abort_if(!$account,404,'Conta não encontrada.');
-            abort_unless($account->status==='pendente_validacao'
-                && $account->opening_balance!==null && $account->cut_at!==null
-                && filled($account->evidence_reference),409,'A conta não está pronta para validar.');
-            DB::table('cis_cash_accounts')->where('id',$id)->update([
-                'status'=>'activa', 'opening_extracto_nr'=>DB::table('Extracto')->max('Nr')??0,
-                'validated_by'=>$request->user()->id,
-                'validated_at'=>now(),'updated_at'=>now(),
-            ]);
-        });
-        return response()->json(['status'=>'activa',
-            'notice'=>'Validação documental manual; não representa conciliação bancária independente.']);
+        $this->access($request);
+        abort(503,'Activação financeira de contas ainda não homologada.');
     }
 
     // NÃO efectuar escrituras financeiras pelo antigo fluxo independente:
