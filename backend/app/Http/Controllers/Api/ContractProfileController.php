@@ -45,7 +45,16 @@ final class ContractProfileController extends Controller
         $total = (clone $query)->count();
         abort_if($total === 0, 404, 'Contrato não encontrado.');
         abort_if($total > 500, 409, 'Contrato excede o limite de consulta segura.');
-        $rows = $query->orderBy('Nº da Parcela')->orderBy('Ordem')->get($columns);
+        // O Query Builder interpreta pontos dentro dos nomes das colunas como
+        // separadores tabela.coluna. O legado contém literalmente "M. Pagamento".
+        // As colunas vêm exclusivamente das listas constantes acima e do esquema
+        // real da BD, nunca de parâmetros introduzidos pelo utilizador.
+        $safeColumns = array_map(
+            static fn (string $name): string => '`'.str_replace('`', '``', $name).'`',
+            $columns
+        );
+        $rows = $query->orderBy('Nº da Parcela')->orderBy('Ordem')
+            ->selectRaw(implode(', ', $safeColumns))->get();
         $first = (array)$rows->first();
         // Um contrato nunca deve juntar mutuários diferentes no mesmo número.
         if (isset($available['Nº de Cliente'])) {
