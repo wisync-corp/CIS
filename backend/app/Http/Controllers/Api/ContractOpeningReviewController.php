@@ -192,11 +192,11 @@ final class ContractOpeningReviewController extends Controller
             'taxa_tabela' => $rate,
             'problemas' => $issues,
             'dados_verificados' => count($issues) === 0,
-            'autorizado_para_gravar' => count($issues) === 0 && filter_var(env('CIS_NEW_CONTRACTS_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
+            'autorizado_para_gravar' => false, // aguardando desembolso integrado por conta da Caixa
             'pendencias' => [
                 'O servidor verificará novamente saldo disponível, taxa, cliente e esquema antes de gravar.',
                 'Todas as quantias e parcelas são inteiras; os juros são arredondados para cima e o capital é reconciliado integralmente.',
-                'O desembolso deve ser confirmado pelo operador; contrato e Extracto são gravados na mesma transacção.',
+                'A nova abertura real está bloqueada até integrar saída por conta reconciliada na Caixa, com registo atómico e permissões.',
             ],
         ])->header('Cache-Control', 'no-store, private');
     }
