@@ -25,6 +25,17 @@ return new class extends Migration {
             // CI SQLite cria Extracto somente como fixture vazia isolada.
             throw new RuntimeException('A tabela financeira Extracto deve existir antes de instalar a associação.');
         }
+        foreach (['Nr','Tipo de Movimento','Valor','Descrição','Data da Operação'] as $column) {
+            if (!Schema::hasColumn('Extracto',$column)) {
+                throw new RuntimeException('Extracto incompatível: falta coluna '.$column.'. Não foi feita migração.');
+            }
+        }
+        if (DB::getDriverName()==='mysql') {
+            $table=DB::selectOne("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Extracto'");
+            if (!$table || strtoupper((string)$table->ENGINE)!=='INNODB') {
+                throw new RuntimeException('Extracto deve ser InnoDB para associar movimentos atomicamente.');
+            }
+        }
         Schema::create('cis_cash_accounts', function (Blueprint $t) {
             $t->id();
             $t->string('code',40)->unique();
