@@ -189,11 +189,11 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Ficha individual</span></div>
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={18}/>{error}</div>}
   {loading&&<div className="cis-panel cis-loading">A consultar contrato e prestações…</div>}
-  {data&&contract&&<>
-   {justCreated&&<div className="cis-contract-created-banner" role="status" aria-live="polite">
+  {justCreated&&<div className="cis-contract-created-banner" role="status" aria-live="polite">
     <div><ShieldCheck size={24}/><span><strong>Crédito criado e desembolso registado</strong><small>A operação foi confirmada pelo servidor. Está agora na ficha do contrato {numero}. Não volte a submeter a abertura.</small></span></div>
     <button type="button" onClick={onBack}>Ir à carteira</button>
    </div>}
+  {data&&contract&&<>
    <header className="cis-profile-hero">
     <div className="cis-profile-avatar"><FileText size={31}/></div>
     <div className="cis-profile-heading"><span>FICHA DE CONTRATO</span><h2>{format(contract,'Nr do Contracto')}</h2><p>{format(contract,'Nome do Cliente')} · {format(contract,'Estado do Contrato')}</p></div>
