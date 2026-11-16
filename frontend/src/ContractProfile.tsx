@@ -6,6 +6,12 @@ type CollectionQuote={parcela:number;dias_atraso:number;juros:number;multa:numbe
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
 type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados'|'Todos os campos'|'Cobrança'|'Aumento de crédito'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
+function paymentTodayMozambique():string{
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
+  year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const val=(kind:string)=>parts.find(part=>part.type===kind)?.value??'';
+ return val('year')+'-'+val('month')+'-'+val('day');
+}
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
   {name:'Nr do Contracto',label:'Número do contrato'},
@@ -141,7 +147,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
   try{
    const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(numero)+'/prestacoes/'+encodeURIComponent(collectionOrd)+'/simular-cobranca',{
     method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',Accept:'application/json'},
-    body:JSON.stringify({data_pagamento:new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Maputo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),cobrar_multa:collectPenalty})
+    body:JSON.stringify({data_pagamento:paymentTodayMozambique(),cobrar_multa:collectPenalty})
    });
    const payload=await response.json().catch(()=>null) as CollectionQuote&{message?:string};
    if(!response.ok)throw new Error(payload?.message??'Não foi possível preparar a cobrança. Apenas contratos CIS novos são elegíveis.');
@@ -177,7 +183,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
     <div className="cis-profile-heading"><span>FICHA DE CONTRATO</span><h2>{format(contract,'Nr do Contracto')}</h2><p>{format(contract,'Nome do Cliente')} · {format(contract,'Estado do Contrato')}</p></div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
-   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Consulta apenas de leitura. Contratos Finalizados e Em Progresso são determinados pelo campo original «Estado do Contrato», não pelo estado de uma prestação. Os valores financeiros são os originais, ainda não reconciliados.</span></div>
+   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Os dados históricos são preservados. A cobrança integral exige contrato CIS novo, validação no servidor, confirmação de recebimento e activação financeira. Pagamentos parciais e renovações não estão disponíveis.</span></div>
    {!!data.contract_fields_divergent?.length&&<div className="cis-contract-warning" role="status">Os seguintes campos não são uniformes entre as prestações deste contrato: {data.contract_fields_divergent.join(', ')}. Confirme as linhas originais antes de interpretar os valores gerais.</div>}
    {!!data.columns_missing_in_database?.length&&<div className="cis-contract-warning" role="status">Campos previstos no formulário VBA mas ausentes desta versão da base de dados: {data.columns_missing_in_database.join(', ')}.</div>}
    <div className="cis-profile-layout">
