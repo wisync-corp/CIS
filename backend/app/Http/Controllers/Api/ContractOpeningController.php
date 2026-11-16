@@ -21,6 +21,11 @@ final class ContractOpeningController extends Controller
      */
     public function store(Request $request)
     {
+        // BLOQUEIO DE INTEGRIDADE: o caminho legado desembolsa usando o saldo
+        // agregado do Extracto sem associar a saída a uma conta específica.
+        // Não permitir novos desembolsos até concluir ligação atómica com
+        // cis_cash_accounts / cis_cash_movements e permissões híbridas.
+        abort(503, 'Abertura com desembolso temporariamente suspensa: seleccione uma conta reconciliada na nova integração da Caixa (em implementação).');
         $user = $request->user();
         abort_unless($user && $user->active && $user->role === 'administrador', 403);
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CLIENTES_PREVIEW_APPROVED',
