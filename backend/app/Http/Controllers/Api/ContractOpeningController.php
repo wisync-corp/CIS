@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\LegacyContractPricing;
+use App\Services\ContractCalculationStrategy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,7 @@ final class ContractOpeningController extends Controller
             'cliente_id'=>['required','integer','min:1'],
             'montante'=>['required','numeric','gt:0','max:100000000','decimal:0,2'],
             'tipo_juro'=>['required','in:Fixo,Variável,Composto'],
+            'estrategia_calculo'=>['required','string','max:90'],
             'periodo_dias'=>['required','integer','in:15,30'],
             'prazo'=>['required','in:1 Semana,2 Semanas,3 Semanas,1 Mês,2 Meses,3 Meses'],
             'taxa_informada'=>['required','numeric','between:0,100'],
@@ -42,6 +44,11 @@ final class ContractOpeningController extends Controller
             'data_inicio'=>['required','date_format:Y-m-d'],
             'confirmacao_desembolso'=>['required','accepted'],
         ]);
+        if (!in_array($d['estrategia_calculo'],ContractCalculationStrategy::OPTIONS,true)
+            || !ContractCalculationStrategy::compatible($d['tipo_juro'],$d['estrategia_calculo'])) {
+            throw ValidationException::withMessages(['estrategia_calculo'=>
+                'Esta estratégia não está homologada para este tipo de juro no motor VBA.']);
+        }
         $validTerms=(int)$d['periodo_dias']===15
             ? ['1 Semana','2 Semanas']
             : ['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
@@ -120,6 +127,7 @@ final class ContractOpeningController extends Controller
                     'Amortização','Valor a Pagar','Data de Pagamento','Valor de Juros',
                     'Valor de Multa','Valor Pago','Estado','Codigo Cliente',
                     'Estado do Contrato','Nº da Parcela','Nº de Prestações',
+                    'Estratégia de Cálculo',
                     'Column1','Dias','Intervalo','Situação de Pagamento','usuario'],
                     'Extracto'=>['Nr','Contracto','Cliente','Parcela','Data da Operação',
                         'Valor','Tipo de Movimento','Descrição','usuario']] as $table=>$columns) {
@@ -199,6 +207,7 @@ final class ContractOpeningController extends Controller
                         'Nome do Cliente'=>$buyer->{'Nome Completo'},
                         'Nº de Cliente'=>$buyer->ID,'Quantia Creditada'=>$d['montante'],
                         'M. Pagamento'=>$plan['modalidade'],
+                        'Estratégia de Cálculo'=>$d['estrategia_calculo'],
                         'Prazo/Duração'=>$d['prazo_meses'].' '.((int)$d['prazo_meses']===1?'Mês':'Meses'),
                         '% de Juro'=>$rate,'Tipo de Juro'=>$d['tipo_juro'],
                         '% de Multa'=>$d['taxa_multa'],
