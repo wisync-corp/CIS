@@ -51,7 +51,7 @@ const fields:Field[]=[
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
- {key:'estrategia_calculo',label:'Estratégia de cálculo das prestações',type:'select',required:true,hint:'A estratégia depende do tipo de juro. As fórmulas ainda não comprovadas no VBA ficam indisponíveis para desembolso.'},
+ {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. As fórmulas ainda não comprovadas no VBA ficam indisponíveis para desembolso.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
@@ -62,7 +62,8 @@ const fields:Field[]=[
 ];
 const groupings=[
  {name:'Mutuário',icon:UserRound,keys:['cliente','cliente_id','cidade']},
- {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','estrategia_calculo','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
+ {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
+ {name:'Estratégia de cálculo das prestações',icon:Wallet,keys:['estrategia_calculo']},
 ];
 export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
