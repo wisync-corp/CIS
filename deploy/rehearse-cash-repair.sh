@@ -5,8 +5,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 umask 077
 backup="${1:-}"
-[[ -n "$backup" ]] || { echo 'Indique o caminho exacto do backup tirado DEPOIS da migração antiga.' >&2; exit 1; }
-[[ -r "$backup" && -s "$backup" ]] || { echo 'Backup ausente, vazio ou ilegível.' >&2; exit 1; }
+if [[ -z "$backup" ]]; then
+  backup_dir="$HOME/cis-private/backups"
+  [[ -d "$backup_dir" ]] || { echo 'BLOQUEADO: sem pasta privada de backups.' >&2; exit 1; }
+  backup="$(find "$backup_dir" -maxdepth 1 -type f -name 'cis-before-auth-*.sql' -printf '%T@ %p\\n' | sort -rn | head -n 1 | cut -d' ' -f2-)"
+fi
+[[ -n "$backup" && -r "$backup" && -s "$backup" ]] || { echo 'Backup ausente, vazio ou ilegível.' >&2; exit 1; }
 command -v openssl >/dev/null || exit 1
 nonce="$(openssl rand -hex 5)"
 db="cis_cash_repair_db_$nonce"
