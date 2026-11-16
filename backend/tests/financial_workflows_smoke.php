@@ -70,4 +70,19 @@ $quote=$quoteMethod->invoke($controller,$variable,'2026-11-20',false);
 assertFlow($quote['juros']===40&&$quote['total']===1040,
     'juro variável: capital * taxa * quatro dias, arredondado para cima');
 assertFlow($quote['dias_atraso']===0,'sem multa antes do vencimento');
+// Regressão MySQL 1054: o nome literal `M. Pagamento` não é `M`.` Pagamento`.
+[$contractInsertSql, $contractInsertBindings] =
+    \App\Services\LegacyContractInsert::statement([
+        'Nr do Contracto'=>'C-TEST-NOT-SAVED',
+        'M. Pagamento'=>'Semanal',
+        'Estratégia de Cálculo'=>'Amortização fixa com juro fixo',
+    ]);
+assertFlow(str_contains($contractInsertSql, '`M. Pagamento`'),
+    'a coluna M. Pagamento deve ficar totalmente citada');
+assertFlow(!str_contains($contractInsertSql, '`M`.` Pagamento`'),
+    'o ponto do identificador não pode separar tabela e coluna');
+assertFlow(substr_count($contractInsertSql, '?')===count($contractInsertBindings),
+    'todos os valores financeiros devem ser parametrizados');
+assertFlow($contractInsertBindings[1]==='Semanal',
+    'as bindings preservam a modalidade sem inserir dados');
 echo "OK: calendários semanais, reconciliação, juro variável e cálculo de multa sem escrita.\n";
