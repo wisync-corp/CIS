@@ -83,7 +83,7 @@ export default function CashDesk({token}:{token:string}){
  const hasAvailableBalance=active.some(a=>a.saldo_disponivel!==null);
  const total=active.reduce((sum,a)=>sum+Number(a.saldo_disponivel??0),0);
  const readableDate=(raw:string|null)=>raw?raw.replace('T',' ').slice(0,16):'—';
- function resetAction(){setAction('none');setError('');}
+ function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
  function showMovementsFor(id:number){setMovementAccount(String(id));setMovementQuery('');setMovementType('todas');setSection('movimentos');setAction('none');setAccountDetail(null);}
  function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');if(value==='record'||value==='transfer')setOperationKey(crypto.randomUUID());}
  async function submit(event:FormEvent,what:'create'|'opening'|'activate'|'record'|'transfer',id?:number){
@@ -109,7 +109,7 @@ export default function CashDesk({token}:{token:string}){
    });
    setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para validação documental.':what==='activate'?'Conta activada com base na validação documental.':'Operação financeira registada.');
    if(what==='record'||what==='transfer')setOperationKey(crypto.randomUUID());
-   setAction('none');await reload();
+   setAction('none');setNewAccount({code:'',name:'',type:'banco',identifier:''});await reload();
   }catch(e){setError(e instanceof Error?e.message:'Não foi possível efectuar a operação. Não repita sem verificar o histórico.');}
   finally{setBusy(false);}
  }
@@ -149,8 +149,8 @@ export default function CashDesk({token}:{token:string}){
     </select></label>
     <span className="cis-cash-result-count">{filteredAccounts.length} de {accounts.length} conta(s)</span>
    </div>
-   {action==='create'&&<div className="cis-cash-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetAction();}}><form className="cis-cash-form cis-cash-dialog" role="dialog" aria-modal="true" aria-labelledby="cash-form-title" onSubmit={e=>void submit(e,'create')}>
-    <div className="cis-cash-form-title"><span className="cis-cash-step">NOVA CONTA · 01 / 02</span><h4 id="cash-form-title">Cadastrar conta financeira</h4><p>Identifique a conta. O saldo inicial será introduzido e validado posteriormente; não é criado automaticamente.</p></div>
+   {action==='create'&&<div className="cis-cash-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetAction();}} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();resetAction();}}}><form className="cis-cash-form cis-cash-dialog" role="dialog" aria-modal="true" aria-labelledby="cash-form-title" onSubmit={e=>void submit(e,'create')}>
+    <div className="cis-cash-form-title"><span className="cis-cash-step">NOVA CONTA · CADASTRO</span><h4 id="cash-form-title">Cadastrar conta financeira</h4><p>Identifique a conta. O saldo inicial será introduzido e validado posteriormente; não é criado automaticamente.</p><button type="button" className="cis-cash-dialog-close" onClick={resetAction} aria-label="Fechar formulário" disabled={busy}><X size={18}/></button></div>
     <label>Código único <small>Obrigatório</small><input autoFocus required maxLength={40} pattern="[A-Za-z0-9_-]{2,40}" value={newAccount.code} onChange={e=>setNewAccount(p=>({...p,code:e.target.value}))} placeholder="Ex.: CONTA-001"/><small>Letras, números, hífen ou sublinhado.</small>{accounts.some(a=>a.code.toUpperCase()===newAccount.code.trim().toUpperCase())&&<small className="cis-cash-validation">Este código já existe.</small>}</label>
     <label>Designação <small>Obrigatório</small><input required minLength={3} maxLength={150} value={newAccount.name} onChange={e=>setNewAccount(p=>({...p,name:e.target.value}))} placeholder="Ex.: Conta corrente principal"/></label>
     <div className="cis-cash-kind-options"><span>Tipo de conta</span><div>{([['banco','Conta bancária'],['numerario','Numerário'],['carteira_movel','Carteira móvel']] as const).map(([key,label])=><button key={key} type="button" aria-pressed={newAccount.type===key} className={newAccount.type===key?'selected':''} onClick={()=>setNewAccount(p=>({...p,type:key}))}>{key==='banco'?<Landmark size={18}/>:key==='numerario'?<Wallet size={18}/>:<Smartphone size={18}/>}<span>{label}</span>{newAccount.type===key&&<CheckCircle2 size={14}/>}</button>)}</div></div>
