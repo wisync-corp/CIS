@@ -200,10 +200,11 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const prazoMeses=selectedTerm.includes('Mês')||selectedTerm.includes('Meses')?Number(selectedTerm.slice(0,1)):0;
  const prazoSemanas=weeklyTerm?Number(selectedTerm.slice(0,1)):0;
  const addWeeks=(date:string,weeks:number)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';const [y,m,d]=date.split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+7*weeks));return t.toISOString().slice(0,10);};
- const numeroPrestacoes=!selectedTerm||!tipo||!modalidade?null:unsupportedSchedule?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:prazoMeses;
+ const daysDuration=values.data_inicio&&dataFinal?Math.round((Date.parse(dataFinal+'T00:00:00Z')-Date.parse(values.data_inicio+'T00:00:00Z'))/86400000):0;
+ const numeroPrestacoes=!selectedTerm||!tipo||!modalidade?null:tipo==='Variável'||modalidade==='Uma Parcela'?1:modalidade==='Semanal'?Math.ceil(daysDuration/7):prazoMeses;
  const dataFinal=values.data_inicio&&(prazoMeses||prazoSemanas)?(weeklyTerm?addWeeks(values.data_inicio,prazoSemanas):monthAfter(values.data_inicio,prazoMeses)):'';
  const dates=numeroPrestacoes&&values.data_inicio?Array.from({length:numeroPrestacoes},(_,index)=>
-  index+1===numeroPrestacoes?dataFinal:monthAfter(values.data_inicio,index+1)):[];
+  index+1===numeroPrestacoes?dataFinal:modalidade==='Semanal'?addWeeks(values.data_inicio,index+1):monthAfter(values.data_inicio,index+1)):[];
  const handle=async(event:FormEvent)=>{
   event.preventDefault();
   setReview(null);setReviewError('');setMessage('');setChecked(false);
@@ -230,8 +231,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
-   if(body.cadastro_confirmado&&!unsupportedSchedule&&strategyCompatible){
-    try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio,estrategia:strategySelected as import('./contractVbaPreview').Strategy}));}
+   if(body.cadastro_confirmado&&strategyCompatible&&!(tipo==='Composto'&&modalidade==='Semanal')){
+    try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Semanal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio,estrategia:strategySelected as import('./contractVbaPreview').Strategy,prazo:selectedTerm,periodoDias:Number(periodo)}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
    setMessage('Verificação concluída no Laravel, sem criar contrato ou movimento financeiro.');
@@ -239,7 +240,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   finally{setReviewBusy(false);}
  };
  const openContract=async()=>{
-  if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||unsupportedSchedule||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
   if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
   setOpeningBusy(true);setOpeningError('');
   try{
@@ -329,8 +330,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   </section>)}
   <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
    <div className="cis-contract-draft-count"><span>{weeklyTerm?'N.º de prestações semanais (pendente de regra)':'N.º previsto de prestações (regra do VBA)'}</span><strong>{numeroPrestacoes??'—'}</strong></div>
-   <p>{unsupportedSchedule?'Modalidade semanal ou prazo semanal: a data final é indicativa. O calendário e o cálculo financeiro de prestações semanais precisam de homologação antes da gravação.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
-   {unsupportedSchedule&&dataFinal&&<p><strong>Data final indicativa:</strong> {dataFinal.split('-').reverse().join('/')} · distribuição semanal das prestações ainda por homologar.</p>}
+   <p>{unsupportedSchedule?'Prestações semanais de 7 em 7 dias; no prazo mensal o último vencimento coincide com a data final. A gravação requer aprovação separada dos cálculos semanais.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
+   {unsupportedSchedule&&dataFinal&&<p><strong>Data final:</strong> {dataFinal.split('-').reverse().join('/')} · período semanal sujeito à activação autorizada no VPS.</p>}
    {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><BadgePlus size={20}/> Criar e desembolsar crédito</h3>
@@ -338,7 +339,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente. A abertura real é verificada e protegida contra valores não suportados pelo esquema legado.</span></div>
   </section>
   <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
-   <p>A data de início é preenchida automaticamente com o dia actual em Moçambique, mas pode ser alterada. Uma semana admite parcela única; duas ou três semanas admitem Semanal ou Uma Parcela; um mês admite Semanal ou Uma Parcela; dois ou três meses admitem Semanal, Mensal ou Uma Parcela. A gravação financeira semanal ainda exige homologação.</p>
+   <p>A data de início é preenchida automaticamente com o dia actual em Moçambique, mas pode ser alterada. Uma semana admite parcela única; duas ou três semanas admitem Semanal ou Uma Parcela; um mês admite Semanal ou Uma Parcela; dois ou três meses admitem Semanal, Mensal ou Uma Parcela. O calendário semanal está implementado, mas a gravação depende dos testes e da activação segura. Juros compostos semanais ainda aguardam definição da taxa equivalente.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
