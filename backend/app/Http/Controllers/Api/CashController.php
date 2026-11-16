@@ -141,7 +141,7 @@ final class CashController extends Controller
                 'status'=>'em_preparacao','created_by'=>$request->user()->id,
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
-        } catch (\\Illuminate\\Database\\UniqueConstraintViolationException $e) {
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
             throw ValidationException::withMessages(['code'=>'Código já utilizado por outra conta.']);
         }
         return response()->json([
