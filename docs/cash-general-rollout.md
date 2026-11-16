@@ -1,52 +1,35 @@
-# CAPTA — Caixa Geral: instalação pendente do modelo híbrido
+# CAPTA — Implementação segura da Caixa com Extracto.account_id
 
-**Decisão confirmada:** a Caixa padrão utiliza `Extracto` como **fonte única dos lançamentos**, acrescentando apenas `cis_cash_accounts` (contas) e `cis_cash_links` (associação de Extracto.Nr a conta). A Tesouraria é opcional e disponibiliza reconciliação bancária e gestão avançada **sem criar outro livro de movimentos**.
+**Arquitectura aprovada:** criar apenas `cis_cash_accounts` e acrescentar `Extracto.account_id` nullable. Não criar `cis_cash_links` nem `cis_cash_movements`. Ver `docs/cash-hybrid-treasury-architecture.md` para pormenores.
 
-**Arquitectura detalhada:** `docs/cash-hybrid-treasury-architecture.md`.
+## Estado de entrega
+- Migração e consultas do backend actualizadas no GitHub; **não executadas na VPS**.
+- O painel da Caixa continua em modo de consulta. Os endpoints de movimentos e transferências devolvem 503 até implementar gravação atómica e autorizações.
+- Os contratos existentes e o Extracto original permanecem intactos. Novos desembolsos continuam bloqueados pela protecção de segurança já implementada.
+- Os saldos históricos não serão atribuídos automaticamente às contas.
 
-## Estado actual
-- Código e interface actualizados no GitHub; **nenhuma migração aplicada pelo assistente na VPS**.
-- A Caixa é consulta apenas até homologar o novo processo; criação de movimentos e transferências pelo fluxo antigo é bloqueada com HTTP 503.
-- Abertura de crédito com desembolso continua bloqueada até ligar `Contractos + Extracto + cis_cash_links` numa transacção atómica e validar a conta/saldo/permissão.
-- Nenhum movimento ou saldo fictício foi introduzido.
-- Os saldos iniciais carecem de evidência documental e data de corte por conta; não atribuir o legado automaticamente.
+## Pré-voo obrigatório na VPS (apenas leitura)
 
-## Antes de executar qualquer migração
+Antes de aplicar qualquer migração, efectuar backup restaurável e ensaio numa **cópia** da base. Verificar:
+1. Que `cis_cash_accounts`, `cis_cash_links` e `cis_cash_movements` não estão instaladas;
+2. Que `Extracto.account_id` não existe; se existir, **interromper** e estudar migração diferencial sem destruir dados;
+3. Que `Extracto.Nr` é a PK esperada e a tabela é InnoDB;
+4. Que os registos antigos não dependem de regras implícitas de valores nulos;
+5. Que todas as aplicações externas que escrevem em `Extracto` toleram uma nova coluna nullable;
+6. Que existe uma janela de manutenção e um plano de recuperação caso o DDL do MySQL termine parcialmente.
 
-1. **Não aplicar a migração anterior** do modelo independente com `cis_cash_movements`. O mesmo nome de ficheiro foi revisto para a arquitectura híbrida.
-2. Confirmar **backup restaurável** e testar numa **cópia** da base real; não executar em produção por mera indicação deste documento.
-3. Consultar `information_schema.TABLES` para identificar instalações anteriores de `cis_cash_accounts`, `cis_cash_links` ou `cis_cash_movements`. Se alguma existir, **parar** e definir migração de transição sem eliminar dados.
-4. Confirmar a estrutura de `Extracto.Nr`, `Extracto.Valor`, as restrições, a engine InnoDB e o impacto dos escritores legados externos.
-5. Validar as regras de associação de movimentos históricos `counts_after_opening=false`, evitando dupla contagem.
-6. Só depois homologar a migração isolada; não executar `php artisan migrate` sem `--path` na base legada.
+**Não reutilizar o procedimento anterior para a versão de duas tabelas.** O ficheiro tem o mesmo nome histórico, mas a definição foi alterada.
 
-## Actualização do frontend sem activação financeira
-
-```bash
-cd /opt/cis
-git pull origin main
-bash deploy/refresh-private-preview.sh
-```
-
-A interface poderá manter aviso **"O esquema da Caixa ainda não foi instalado"** enquanto as duas tabelas híbridas não forem instaladas.
-
-## Migração isolada — apenas após validação e autorização expressa
-
-O ficheiro de migração continua a chamar-se:
+## Ficheiro de migração proposto
 
 `backend/database/migrations/2026_11_16_000030_create_cis_cash_tables.php`
 
-Agora cria **`cis_cash_accounts` + `cis_cash_links`**, não cria `cis_cash_movements`.
+Executar *somente depois* de ensaio e aprovação expressa de alteração da base produtiva. Não usar `php artisan migrate` sem `--path`: há outras migrações do legado com dependências próprias.
 
-**Não usar um comando de instalação de migração em produção antes de executar o pré-voo acima e testar em cópia.** Se existir tabela anterior ou parcial, o código bloqueia a migração em vez de sobrescrever dados.
+## Caixa e Tesouraria
 
-## Próximas tarefas antes de operações reais
+Caixa (padrão): gerir contas, saldos, entradas, saídas, transferências e comprovativos operacionais, após homologação dos lançamentos.
 
-- Cadastro da conta e abertura documental com validação das permissões por utilizador.
-- Registo de despesas e receitas gerais pelo Extracto + associação, atomicamente.
-- Transferências com duas linhas Extracto e duas ligações com `operation_id` comum.
-- Integração de desembolsos e cobranças usando conta obrigatória.
-- Permissões híbridas, controlo de reserva, correcção/estorno e testes concorrentes.
-- Módulo Tesouraria futuro: importação de extractos, conciliação bancária, planeamento e pré-contabilidade. Não duplicar movimentos.
+Tesouraria (opcional): importar extractos externos, reconciliar movimentos, identificar diferenças, projectar liquidez e produzir relatórios pré-contabilísticos. Utiliza **as mesmas contas e o mesmo Extracto**, sem novos registos monetários duplicados.
 
-**Nota:** a flag `CIS_CASH_WRITES_APPROVED` NÃO permite reactivar os endpoints de movimentos do fluxo antigo; esses endpoints foram explicitamente bloqueados enquanto o backend híbrido não estiver pronto.
+A política de desembolsos directos ou com aprovação depende do utilizador e das permissões institucionais, **não** da activação da Tesouraria.
