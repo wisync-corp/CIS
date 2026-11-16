@@ -52,7 +52,7 @@ echo "Movimentos existentes no Extracto (sem alterar): $count"
 # Detectar possivel tentativa de migracao ja registada, sem confiar so nela.
 migration_table="$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='migrations';")"
 if [[ "$migration_table" == 1 ]]; then
-  already="$(sql "SELECT COUNT(*) FROM `migrations` WHERE migration='2026_11_16_000030_create_cis_cash_tables';")"
+  already="$(sql "SELECT COUNT(*) FROM migrations WHERE migration='2026_11_16_000030_create_cis_cash_tables';")"
   echo "Migração Caixa marcada como executada = $already"
   [[ "$already" == 0 ]] || { echo 'BLOQUEADO: migracao ja registada; investigar antes de qualquer comando.' >&2; exit 1; }
 else
