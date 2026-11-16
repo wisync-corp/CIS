@@ -28,7 +28,12 @@ const calculationStrategies=[
  'Tabela Price',
  'Juro variável na cobrança',
 ] as const;
-const supportedStrategyByInterest:Record<string,string>={
+const strategyOptionsByInterest:Record<string,string[]>={
+ Fixo:['Amortização fixa com juro fixo','Prestação fixa pelo total','Prestação fixa simples'],
+ Composto:['Amortização fixa com juro decrescente','Tabela Price'],
+ Variável:['Juro variável na cobrança'],
+};
+const defaultStrategyByInterest:Record<string,string>={
  Fixo:'Amortização fixa com juro fixo',
  Composto:'Tabela Price',
  Variável:'Juro variável na cobrança',
@@ -48,7 +53,7 @@ const fields:Field[]=[
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
- {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
+ {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
  {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. As fórmulas ainda não comprovadas no VBA ficam indisponíveis para desembolso.'},
@@ -142,9 +147,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  };
  const matchingClients=clients.slice(0,12);
  const fixedRate=values.tipo_juro==='Fixo';
- const strategyForType=supportedStrategyByInterest[values.tipo_juro??'']??'';
+ const strategiesForType=strategyOptionsByInterest[values.tipo_juro??'']??[];
  const strategySelected=values.estrategia_calculo??'';
- const strategyCompatible=!!strategyForType&&strategySelected===strategyForType;
+ const strategyCompatible=strategiesForType.includes(strategySelected);
  const periodo=values.periodo_tabela??'';
  const availableTerms=periodo==='15'?['1 Semana','2 Semanas']:periodo==='30'?['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses']:[];
  const selectedTerm=availableTerms.includes(values.prazo??'')?values.prazo??'':'';
@@ -153,7 +158,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const selectedModality=availableModalities.includes(values.modalidade??'')?values.modalidade??'':'';
  const unsupportedSchedule=weeklyTerm||selectedModality==='Semanal';
  const currentQuoteKey=values.quantia+'|'+periodo;
- const validAmount=values.quantia!==''&&Number.isFinite(Number(values.quantia))&&Number(values.quantia)>=0&&/^\d+(\.\d{1,2})?$/.test(values.quantia??'');
+ const validAmount=values.quantia!==''&&Number.isSafeInteger(Number(values.quantia))&&Number(values.quantia)>0&&/^\d+$/.test(values.quantia??'');
  const priced= fixedRate&&quoteKey===currentQuoteKey&&quote?.found===true;
  useEffect(()=>{
   setQuote(null);setQuoteKey('');setQuoteError('');
@@ -225,7 +230,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
    if(body.cadastro_confirmado&&!unsupportedSchedule&&strategyCompatible){
-    try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio}));}
+    try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio,estrategia:strategySelected as import('./contractVbaPreview').Strategy}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
    setMessage('Verificação concluída no Laravel, sem criar contrato ou movimento financeiro.');
@@ -310,12 +315,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
-     {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:supportedStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
-       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&choice!==strategyForType}>{choice}{key==='estrategia_calculo'&&choice!==strategyForType?' — não homologada para este juro':''}</option>)}
-      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
+     {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:defaultStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
+       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&!strategiesForType.includes(choice)}>{choice}{key==='estrategia_calculo'&&!strategiesForType.includes(choice)?' — não aplicável a este juro':''}</option>)}
+      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'1':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
-     {key==='estrategia_calculo'&&tipo&&<small role="status">{strategyCompatible?'Estratégia disponível e correspondente à fórmula actual do Contractos.frm.':'Escolha a estratégia compatível com o tipo de juro. As outras aguardam validação das respectivas fórmulas.'}</small>}
+     {key==='estrategia_calculo'&&tipo&&<small role="status">{strategyCompatible?'Estratégia compatível. Os valores são calculados em MT inteiros e arredondados para cima; a última amortização reconcilia o capital.':'Escolha uma estratégia compatível com o tipo de juro.'}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
      {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;
@@ -337,9 +342,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
    {preview&&<div className="cis-contract-plan-preview"><h4>Pré-visualização das prestações (Contractos.frm)</h4>
-    <p>Prévia sem gravação, gerada segundo os ramos FIXO / VARIÁVEL / COMPOSTO de cmb_adicionar_Click. A paridade monetária com o VBA ainda exige testes antes da produção.</p>
+    <p>Prévia sem gravação, segundo a estratégia seleccionada. Regra CIS: valores em MT inteiros com arredondamento para cima e capital totalmente reconciliado. As fórmulas novas são extensões ao VBA original.</p>
     <div className="cis-table-scroll"><table><thead><tr>{['Parcela','Vencimento','Capital (MT)','Amortização (MT)','Juros (MT)','A pagar (MT)','Estado'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{preview.linhas.map(row=><tr key={row.parcela}>
-     <td>{row.parcela}</td><td>{row.vencimento.split('-').reverse().join('/')}</td>{[row.capital,row.amortizacao,row.juros,row.valorPagar].map((amount,index)=><td key={index}>{new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(amount)}</td>)}<td>{row.estado}</td>
+     <td>{row.parcela}</td><td>{row.vencimento.split('-').reverse().join('/')}</td>{[row.capital,row.amortizacao,row.juros,row.valorPagar].map((amount,index)=><td key={index}>{new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(amount)}</td>)}<td>{row.estado}</td>
     </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalJuros)} MT.
     {tipo==='Variável'?' Os juros variáveis são calculados na Cobrança quando for conhecida a data efectiva de pagamento.':''}</p>
    </div>}
