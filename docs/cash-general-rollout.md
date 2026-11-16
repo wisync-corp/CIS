@@ -1,5 +1,25 @@
 # CAPTA — Implementação segura da Caixa com Extracto.account_id
 
+## Estado real após instalação com imagem antiga (16/11/2026)
+
+**Diagnóstico confirmado no servidor pelo utilizador:** a migração histórica `2026_11_16_000030_create_cis_cash_tables` aparece como executada, mas foi executado o esquema antigo da imagem Docker. Existem `cis_cash_accounts` e `cis_cash_movements`, **ambas vazias**; `Extracto.account_id` não existe. Os 1.295 movimentos do Extracto e 680 registos de Contractos continuam com as contagens esperadas. O processo **não** deve ser repetido ou revertido automaticamente.
+
+Existe agora uma **migração correctiva NOVA** (`2026_11_17_000032_repair_legacy_cash_schema_to_direct_accounts.php`), que falha caso encontre registos nas tabelas antigas; em ambiente homologado, adiciona `opening_extracto_nr` a `cis_cash_accounts`, cria `Extracto.account_id` nullable e remove **apenas a tabela vazia** `cis_cash_movements`. A migração 000030 original fica registada, sem ser reexecutada.
+
+**Próximo passo: ensaio numa cópia actual do banco, depois da instalação antiga; NÃO na produção.**
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/backup-before-auth.sh
+bash deploy/rehearse-cash-repair.sh
+```
+
+O último comando utiliza o backup privado mais recente; confirma que ele contém exactamente o esquema antigo e ambas as tabelas vazias, executa só a corrigenda numa instância MySQL descartável, compara as contagens e soma dos valores financeiros, e destrói os recursos de ensaio.
+
+**Só após aprovar o ensaio e rever o resultado** preparar um comando de instalação real da corrigenda com autorização e janela de manutenção. **Não executar agora** `migrate`, `rollback`, `DROP TABLE` ou `install-cash-direct-account.sh`.
+
+
 **Arquitectura aprovada:** criar apenas `cis_cash_accounts` e acrescentar `Extracto.account_id` nullable. Não criar `cis_cash_links` nem `cis_cash_movements`. Ver `docs/cash-hybrid-treasury-architecture.md` para pormenores.
 
 ## Estado de entrega
