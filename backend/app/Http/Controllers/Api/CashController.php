@@ -16,7 +16,7 @@ final class CashController extends Controller
         abort_unless($user && $user->active && $user->role === 'administrador', 403,
             'Nesta fase, a Caixa está reservada ao administrador até activar a matriz de permissões.');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN), 503);
-        abort_unless(Schema::hasTable('cis_cash_accounts') && Schema::hasTable('cis_cash_links') && Schema::hasTable('Extracto'),
+        abort_unless(Schema::hasTable('cis_cash_accounts') && Schema::hasTable('Extracto') && Schema::hasColumn('Extracto','account_id'),
             503, 'O esquema da Caixa ainda não foi instalado.');
         if ($write) {
             abort_unless(filter_var(env('CIS_CASH_WRITES_APPROVED', false), FILTER_VALIDATE_BOOLEAN), 503,
@@ -43,19 +43,20 @@ final class CashController extends Controller
         abort_unless($account->opening_balance !== null && $account->cut_at !== null, 409,
             'A conta ainda não tem saldo inicial documentado e validado.');
         $saldo = $this->cents((string)$account->opening_balance);
-        // Fonte financeira única: Extracto. A ligação não duplica o valor.
-        // Linhas históricas associadas para consulta não entram no saldo pós-abertura.
-        $movements = DB::table('cis_cash_links as l')
-            ->join('Extracto as e','e.Nr','=','l.extracto_nr')
-            ->where('l.account_id',$account->id)
-            ->where('l.counts_after_opening',true)
-            ->get(['e.Tipo de Movimento as movement_type','e.Valor as amount']);
+        abort_unless($account->opening_extracto_nr !== null,409,
+            'A conta não possui marcador de abertura homologado.');
+        // Apenas linhas posteriores ao marco de abertura de Extracto,
+        // atribuídas directamente a esta conta, entram neste saldo.
+        // Nunca inferir conta a partir de Contracto ou Descrição.
+        $movements=DB::table('Extracto')
+            ->where('account_id',$account->id)
+            ->where('Nr','>',$account->opening_extracto_nr)
+            ->get(['Tipo de Movimento','Valor']);
         foreach ($movements as $movement) {
-            $value = $this->cents((string)$movement->amount);
-            abort_unless($value>=0,409,'Extracto contém montante inválido.');
-            abort_unless(in_array($movement->movement_type,['Entradas','Saídas'],true),409,
-                'O Extracto contém um tipo não reconhecido; saldo indisponível.');
-            $saldo += $movement->movement_type==='Entradas' ? $value : -$value;
+            $value=$this->cents((string)$movement->Valor);
+            abort_unless(in_array($movement->{'Tipo de Movimento'},['Entradas','Saídas'],true),409,
+                'Tipo de movimento desconhecido no Extracto.');
+            $saldo += $movement->{'Tipo de Movimento'}==='Entradas' ? $value : -$value;
         }
         return $saldo;
     }
@@ -83,7 +84,7 @@ final class CashController extends Controller
         return response()->json([
             'accounts' => $accounts,
             'can_write' => false, // Até integrar Extracto e associação de modo atómico.
-            'notice' => 'Contas CIS; o Extracto permanece fonte única para movimentos financeiros. Escritas pendentes da integração híbrida segura.'
+            'notice' => 'Contas CIS; a fonte única é Extracto, com account_id opcional para preservar históricos. Escritas aguardam integração segura.'
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -91,23 +92,24 @@ final class CashController extends Controller
     {
         $this->access($request);
         $d = $request->validate(['account_id'=>['nullable','integer','min:1']]);
-        $query=DB::table('cis_cash_links as l')
-            ->join('Extracto as e','e.Nr','=','l.extracto_nr')
-            ->orderByDesc('l.id');
-        if (isset($d['account_id'])) $query->where('l.account_id',$d['account_id']);
+        $query=DB::table('Extracto')->whereNotNull('account_id')->orderByDesc('Nr');
+        if (isset($d['account_id'])) $query->where('account_id',$d['account_id']);
         $rows=$query->limit(200)->get([
-            'l.id','l.account_id','l.nature as category','l.evidence_reference',
-            'e.Nr as extracto_nr','e.Tipo de Movimento as legacy_type',
-            'e.Valor as amount','e.Descrição as description',
-            'e.Data da Operação as effective_at','l.idempotency_key as reference',
-            'l.confirmation','l.confirmed_at','l.counts_after_opening'
+            'Nr as id','Nr as extracto_nr','account_id',
+            'Tipo de Movimento as legacy_type','Valor as amount',
+            'Descrição as description','Data da Operação as effective_at',
+            'Contracto as contract_number','Parcela as installment',
+            'usuario as operator'
         ])->map(function ($movement) {
             $movement->type=$movement->legacy_type==='Entradas'?'entrada':'saida';
+            $movement->category=$movement->description;
+            $movement->reference='EXT-'.(string)$movement->extracto_nr;
+            $movement->evidence_reference=null; // o Extracto não tem este campo.
             return $movement;
         });
         return response()->json([
             'movements'=>$rows,
-            'notice'=>'Movimentos do Extracto associados a contas; valores não duplicados. Importação e reconciliação de extractos bancários reservadas à Tesouraria.'
+            'notice'=>'Movimentos da tabela Extracto com account_id identificado; dados históricos sem conta não são atribuídos automaticamente.'
         ])->header('Cache-Control','no-store, private');
     }
 
@@ -145,7 +147,7 @@ final class CashController extends Controller
             $account=DB::table('cis_cash_accounts')->where('id',$id)->lockForUpdate()->first();
             abort_if(!$account,404,'Conta não encontrada.');
             abort_unless($account->status==='em_preparacao',409,'Conta já submetida ou activa.');
-            abort_if(DB::table('cis_cash_links')->where('account_id',$id)->exists(),409,
+            abort_if(DB::table('Extracto')->where('account_id',$id)->exists(),409,
                 'A conta já tem movimentos; abertura bloqueada.');
             DB::table('cis_cash_accounts')->where('id',$id)->update([
                 'opening_balance'=>$this->decimal($amount), 'cut_at'=>$d['cut_at'],
@@ -169,7 +171,8 @@ final class CashController extends Controller
                 && $account->opening_balance!==null && $account->cut_at!==null
                 && filled($account->evidence_reference),409,'A conta não está pronta para validar.');
             DB::table('cis_cash_accounts')->where('id',$id)->update([
-                'status'=>'activa', 'validated_by'=>$request->user()->id,
+                'status'=>'activa', 'opening_extracto_nr'=>DB::table('Extracto')->max('Nr')??0,
+                'validated_by'=>$request->user()->id,
                 'validated_at'=>now(),'updated_at'=>now(),
             ]);
         });
@@ -178,18 +181,18 @@ final class CashController extends Controller
     }
 
     // NÃO efectuar escrituras financeiras pelo antigo fluxo independente:
-    // o modelo híbrido exige inserir uma linha em Extracto e associar o seu Nr
-    // a uma conta na MESMA transacção. Não activar sem conexão e privilégios
-    // transaccionais validados, regras de aprovação e idempotência.
+    // o modelo directo exige inserir a linha em Extracto com account_id
+    // validado, sob lock de conta, na MESMA transacção da operação principal.
+    // Não activar sem privilégios homologados, idempotência e regras de aprovação.
     public function record(Request $request)
     {
         $this->access($request);
-        abort(503,'Registo de movimentos em preparação para o modelo híbrido com Extracto; nenhum lançamento foi efectuado.');
+        abort(503,'Registo de movimentos em preparação para Extracto.account_id; nenhum lançamento foi efectuado.');
     }
 
     public function transfer(Request $request)
     {
         $this->access($request);
-        abort(503,'Transferências em preparação para associação atómica de duas linhas do Extracto; nenhum lançamento foi efectuado.');
+        abort(503,'Transferências em preparação para duas linhas atómicas de Extracto.account_id; nenhum lançamento foi efectuado.');
     }
 }
