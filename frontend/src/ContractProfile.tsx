@@ -4,7 +4,7 @@ import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,Al
 type Item=Record<string,string|number|null>;
 type CollectionQuote={parcela:number;dias_atraso:number;juros:number;multa:number;total:number;estado:string;data_pagamento:string;aviso:string};
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Administração'|'Dados legados'|'Todos os campos'|'Cobrança'|'Aumento de crédito'|'Documento original';
+type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Pagamentos'|'Aumento de crédito'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
 function paymentTodayMozambique():string{
  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
@@ -14,10 +14,10 @@ function paymentTodayMozambique():string{
 }
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
-  {name:'Nr do Contracto',label:'Número do contrato'},
-  {name:'Nome do Cliente',label:'Mutuário'},
+
+
   {name:'Nº de Cliente',label:'N.º do cliente'},
-  {name:'Codigo Cliente',label:'Código do cliente'},
+
   {name:'Data de Inicio',label:'Data de início',kind:'date'},
   {name:'Data Final',label:'Data final',kind:'date'},
   {name:'Cidade',label:'Cidade'},
@@ -33,41 +33,12 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
   {name:'Prazo/Duração',label:'Prazo / duração'},
   {name:'Disponibilidade',label:'Disponibilidade'},
   {name:'Nº de Prestações',label:'Número de prestações'}]},
- {tab:'Administração',icon:ShieldCheck,fields:[
-  {name:'Nr do Contracto',label:'Identificador do contrato'},
-  {name:'usuario',label:'Utilizador de origem'},
-  {name:'Estado do Contrato',label:'Estado original do contrato'},
-  {name:'Nº',label:'Número de ordem original'},
-  {name:'Column1',label:'Coluna auxiliar legada'}]},
- {tab:'Dados legados',icon:FileText,fields:[
-  {name:'Nr do Contracto',label:'N.º do contrato'},
-  {name:'Nº',label:'Número original'},
-  {name:'Column1',label:'Campo auxiliar legado'},
-  {name:'Codigo Cliente',label:'Código do cliente'},
-  {name:'Nº de Cliente',label:'N.º do cliente'},
-  {name:'Nome do Cliente',label:'Nome do cliente'},
-  {name:'usuario',label:'Utilizador original'}]},
 ];
-// Os 33 campos originais são copiados do INSERT INTO Contractos do ficheiro Contractos.frm.
-const allLegacyColumns=[
- 'Nr do Contracto','Nº','Nome do Cliente','Nº de Cliente',
- 'Quantia Creditada','M. Pagamento','Prazo/Duração','% de Juro','Tipo de Juro','Estratégia de Cálculo','% de Multa',
- 'Forma de Pagamento','Disponibilidade','Data de Inicio','Cidade','Data Final',
- 'Data de Cobrança','Capital','Amortização','Valor a Pagar','Data de Pagamento',
- 'Valor de Juros','Valor de Multa','Valor Pago','Estado','Codigo Cliente',
- 'Estado do Contrato','Nº da Parcela','Nº de Prestações','Column1',
- 'Dias','Intervalo','Situação de Pagamento','usuario'
-] as const;
-const dateLegacyColumns=new Set(['Data de Inicio','Data Final','Data de Cobrança','Data de Pagamento']);
-const moneyLegacyColumns=new Set(['Quantia Creditada','Capital','Amortização','Valor a Pagar','Valor de Juros','Valor de Multa','Valor Pago']);
 const installmentColumns=[
  {name:'Nº da Parcela',kind:'number'}, {name:'Data de Cobrança',kind:'date'},
- {name:'Data de Pagamento',kind:'date'}, {name:'Capital',kind:'number'},
- {name:'Amortização',kind:'number'}, {name:'Valor de Juros',kind:'number'},
- {name:'Valor de Multa',kind:'number'}, {name:'Valor a Pagar',kind:'number'},
- {name:'Valor Pago',kind:'number'}, {name:'Estado',kind:'text'},
- {name:'Situação de Pagamento',kind:'text'}, {name:'Dias',kind:'number'},
- {name:'Intervalo',kind:'number'}, {name:'Nº',kind:'number'}, {name:'Column1',kind:'text'}
+ {name:'Capital',kind:'number'}, {name:'Amortização',kind:'number'},
+ {name:'Valor de Juros',kind:'number'}, {name:'Valor a Pagar',kind:'number'},
+ {name:'Valor Pago',kind:'number'}, {name:'Estado',kind:'text'}
 ] as const;
 type InstallmentSort=typeof installmentColumns[number]['name'];
 function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
@@ -206,30 +177,32 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <article><span>Por liquidar · previsto</span><strong>{currency(financialSnapshot.outstanding)}</strong><small>{financialSnapshot.pending} de {financialSnapshot.installments} prestações não liquidadas</small></article>
    </div>
    <div className="cis-contract-overview-note"><AlertCircle size={15}/> Valores calculados das prestações existentes; juros variáveis e multas futuras podem alterar o total efectivo a receber.</div>
-   <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Os dados históricos são preservados. A cobrança integral exige contrato CIS novo, validação no servidor, confirmação de recebimento e activação financeira. Pagamentos parciais e renovações não estão disponíveis.</span></div>
+   <div className="cis-contract-overview-note"><ShieldCheck size={16}/> Os pagamentos e cobranças ficam no separador Pagamentos. Dados históricos preservados.</div>
    {!!data.contract_fields_divergent?.length&&<div className="cis-contract-warning" role="status">Os seguintes campos não são uniformes entre as prestações deste contrato: {data.contract_fields_divergent.join(', ')}. Confirme as linhas originais antes de interpretar os valores gerais.</div>}
    {!!data.columns_missing_in_database?.length&&<div className="cis-contract-warning" role="status">Campos previstos no formulário VBA mas ausentes desta versão da base de dados: {data.columns_missing_in_database.join(', ')}.</div>}
    <div className="cis-profile-layout">
     <nav className="cis-profile-tabs" aria-label="Secções do contrato">
      {([
       {name:'Contrato' as Tab,icon:FileText},
-      {name:'Plano de prestações' as Tab,icon:Layers},
       {name:'Condições financeiras' as Tab,icon:Wallet},
-      {name:'Administração' as Tab,icon:ShieldCheck},
-      {name:'Dados legados' as Tab,icon:FileText},
-      {name:'Todos os campos' as Tab,icon:Layers},
-      {name:'Cobrança' as Tab,icon:ReceiptText},
+      {name:'Plano de prestações' as Tab,icon:Layers},
+      {name:'Pagamentos' as Tab,icon:ReceiptText},
       {name:'Documento original' as Tab,icon:Eye}
      ]).map(({name,icon:Icon})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}><Icon size={19}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab==='Aumento de crédito'?'Aumento de crédito · prestação '+(selectedInstallment?format(selectedInstallment,'Nº da Parcela'):'não seleccionada'):tab}</h3><p>{tab==='Plano de prestações'?'Prestações registadas na tabela Contractos.':tab==='Aumento de crédito'?'Operação ligada a uma prestação já existente; apenas revisão, sem gravação.':'Informações originais do sistema de microcrédito.'}</p></div></header>
-     {tab==='Cobrança'?<section className="cis-contract-operation">
-      <div className="cis-contract-notice"><ReceiptText size={18}/><span>O formulário Cobrança.frm foi analisado. Esta funcionalidade prepara a liquidação TOTAL das prestações criadas pelo CIS; pagamentos parciais e renovações permanecem bloqueados. Juros variáveis dependem dos dias efectivos, e multas sobre juros só são aplicadas quando escolhidas.</span></div>
-      <h4>Prestações do contrato {numero}</h4>
-      <div className="cis-table-scroll"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Estado</th><th>A pagar (MT)</th><th>Pago (MT)</th></tr></thead><tbody>
-      {sortedInstallments.map((row,index)=><tr key={String(row.Ordem??index)}><td>{format(row,'Nº da Parcela')}</td><td>{format(row,'Data de Cobrança','date')}</td><td>{format(row,'Estado')}</td><td>{format(row,'Valor a Pagar','money')}</td><td>{format(row,'Valor Pago','money')}</td></tr>)}
-      </tbody></table></div>
+     <header className="cis-profile-section-title"><div><h3>{tab==='Aumento de crédito'?'Aumento de crédito · prestação '+(selectedInstallment?format(selectedInstallment,'Nº da Parcela'):'não seleccionada'):tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Histórico e cobrança separados do contrato.':tab==='Aumento de crédito'?'Revisão sem gravação.':'Informações essenciais do contrato.'}</p></div></header>
+     {tab==='Pagamentos'?<section className="cis-contract-operation">
+      <div className="cis-contract-payment-summary" aria-label="Resumo de pagamentos">
+       <article><span>Total recebido</span><strong>{currency(financialSnapshot.paid)}</strong></article>
+       <article><span>Previsto por liquidar</span><strong>{currency(financialSnapshot.outstanding)}</strong></article>
+      </div>
+      <h4>Histórico de pagamentos</h4>
+      {data.installments.some(row=>Number(row['Valor Pago']??0)>0)?<div className="cis-table-scroll"><table><thead><tr><th>Parcela</th><th>Data de pagamento</th><th>Valor recebido</th><th>Estado</th></tr></thead><tbody>
+       {sortedInstallments.filter(row=>Number(row['Valor Pago']??0)>0).map((row,index)=><tr key={String(row.Ordem??index)}><td>{format(row,'Nº da Parcela')}</td><td>{format(row,'Data de Pagamento','date')}</td><td>{format(row,'Valor Pago','money')}</td><td>{format(row,'Estado')}</td></tr>)}
+      </tbody></table></div>:<p>Não existem pagamentos registados nas prestações deste contrato.</p>}
+      <h4>Registar pagamento</h4>
+      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>Cobrança sujeita a autorização financeira no servidor. Pagamentos parciais e renovações continuam indisponíveis.</span></div>
       <div className="cis-profile-fields">
        <label className="cis-profile-field"><span>Prestação a receber</span><select value={collectionOrd} onChange={e=>{setCollectionOrd(e.target.value);setCollectionQuote(null);setReceivedConfirmed(false);setCollectionError('');}}>
         <option value="">Seleccionar prestação pendente</option>
@@ -272,15 +245,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        <div className="cis-profile-field"><span>Documento original</span><div className="cis-profile-field-value">Ainda não associado ao armazenamento privado do CIS</div></div>
       </div>
       <p>Será necessário importar os PDFs originais e confirmar a correspondência de cada documento com o seu contrato, protegendo os ficheiros por permissões. Não será criado um documento fictício.</p>
-     </section>:tab==='Todos os campos'?<div className="cis-contract-all-fields">
-      <p className="cis-contract-count">Consulta das 33 colunas originais do Contractos.frm e da estratégia de cálculo acrescentada pelo CIS, para cada prestação. Os valores permanecem os da base MySQL.</p>
-      <div className="cis-table-scroll"><table><thead><tr>{allLegacyColumns.map(name=><th key={name}>{name}</th>)}</tr></thead>
-      <tbody>{(data.legacy_rows??[]).map((row,index)=><tr key={String(row.Ordem??index)}>
-       {allLegacyColumns.map(name=><td key={name}>{Object.prototype.hasOwnProperty.call(row,name)
-       ?format(row,name,dateLegacyColumns.has(name)?'date':moneyLegacyColumns.has(name)?'money':undefined)
-       :'Campo ausente na tabela'}</td>)}
-      </tr>)}</tbody></table></div>
-     </div>:tab==='Plano de prestações'?<>
+     </section>:tab==='Plano de prestações'?<>
       <div className="cis-contract-count"><CalendarDays size={18}/>{data.installment_rows} linha(s) de prestação registada(s)</div>
       <div className="cis-table-scroll"><table><thead><tr>{installmentColumns.map(({name,kind})=><th key={name} aria-sort={sortColumn===name?(sortDirection==='asc'?'ascending':'descending'):undefined}>
        <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${name} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
