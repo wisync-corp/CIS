@@ -48,6 +48,7 @@ jobs:
       - run: php -l database/migrations/2026_11_16_000030_create_cis_cash_tables.php
       - run: bash -n ../deploy/preflight-cash-direct-account.sh
       - run: bash -n ../deploy/rehearse-cash-migration.sh
+      - run: bash -n ../deploy/install-cash-direct-account.sh
       - run: php tests/cash_smoke.php
       - run: php artisan route:list --path=api
       - name: HTTP smoke test (Laravel local)
