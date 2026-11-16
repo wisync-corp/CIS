@@ -4,7 +4,7 @@
  * não são transcrições do Contractos.frm. A API recalcula tudo na gravação.
  */
 export type InterestType='Fixo'|'Variável'|'Composto';
-export type PaymentMethod='Mensal'|'Uma Parcela';
+export type PaymentMethod='Mensal'|'Semanal'|'Uma Parcela';
 export type Strategy=
  |'Amortização fixa com juro decrescente'
  |'Amortização fixa com juro fixo'
@@ -22,6 +22,11 @@ function roundUp(value:number):number{
  if(!Number.isFinite(value)||value<0||value>1e9)throw new Error('Resultado financeiro inválido.');
  return Math.ceil(value-1e-9);
 }
+export function addWeeks(iso:string,weeks:number):string{
+ const [y,m,d]=iso.split('-').map(Number);
+ const next=new Date(Date.UTC(y,m-1,d+7*weeks));
+ return next.toISOString().slice(0,10);
+}
 export function addMonthsVba(iso:string,months:number):string{
  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))throw new Error('Data inválida.');
  const [year,month,day]=iso.split('-').map(Number);
@@ -32,12 +37,12 @@ export function addMonthsVba(iso:string,months:number):string{
 }
 export function previewContractVba(input:{
  montante:number;taxa:number;tipo:InterestType;modalidade:PaymentMethod;
- prazoMeses:number;dataInicio:string;estrategia:Strategy;
+ prazoMeses:number;dataInicio:string;estrategia:Strategy;prazo?:string;periodoDias?:number;
 }):ContractPreview{
  const {montante,taxa,tipo,prazoMeses,dataInicio,estrategia}=input;
  if(!Number.isSafeInteger(montante)||montante<=0||montante>100000000||
   !Number.isFinite(taxa)||taxa<0||taxa>100||
-  !Number.isInteger(prazoMeses)||prazoMeses<1||prazoMeses>3)
+  !Number.isInteger(prazoMeses)||prazoMeses<0||prazoMeses>3)
   throw new Error('Montante inteiro, taxa ou prazo inválidos.');
  const compatible:Record<InterestType,Strategy[]>={
   Fixo:['Amortização fixa com juro fixo','Prestação fixa pelo total','Prestação fixa simples'],
@@ -48,8 +53,18 @@ export function previewContractVba(input:{
  if(tipo==='Variável'&&input.modalidade!=='Uma Parcela'||
     tipo==='Composto'&&input.modalidade!=='Mensal')
    throw new Error('Modalidade incompatível com o tipo de juro.');
- const k=tipo==='Variável'||input.modalidade==='Uma Parcela'?1:prazoMeses;
- if(montante<k)throw new Error('Montante insuficiente para o número de prestações.');
+ const prazo=input.prazo??(prazoMeses+' '+(prazoMeses===1?'Mês':'Meses'));
+ const isWeeklyTerm=/^[123] Semanas?$/.test(prazo);
+ const weeks=isWeeklyTerm?Number(prazo[0]):0;
+ const isoFinal=isWeeklyTerm?addWeeks(input.dataInicio,weeks):addMonthsVba(input.dataInicio,prazoMeses);
+ const startMs=Date.parse(input.dataInicio+'T00:00:00Z');
+ const finalMs=Date.parse(isoFinal+'T00:00:00Z');
+ const days=(finalMs-startMs)/86400000;
+ if(!Number.isInteger(days)||days<=0)throw new Error('Prazo inválido.');
+ if(tipo==='Composto'&&input.modalidade==='Semanal')throw new Error('Juros compostos semanais exigem política da taxa de referência.');
+ const k=tipo==='Variável'||input.modalidade==='Uma Parcela'?1:
+  input.modalidade==='Semanal'?Math.ceil(days/7):prazoMeses;
+ if(k<1||montante<k)throw new Error('Montante insuficiente para o número de prestações.');
  const r=taxa/100;
  const totalInterest=['Amortização fixa com juro fixo','Prestação fixa pelo total'].includes(estrategia)
   ?roundUp(montante*r):0;
@@ -89,7 +104,7 @@ export function previewContractVba(input:{
   remaining-=amortizacao;
   accruedInterest+=juros;
   totalPaid+=valorPagar;
-  const vencimento=addMonthsVba(dataInicio,last?prazoMeses:i);
+  const vencimento=last?isoFinal:input.modalidade==='Semanal'?addWeeks(dataInicio,i):addMonthsVba(dataInicio,i);
   linhas.push({parcela:i,vencimento,capital,amortizacao,juros,
    valorPagar,multa:0,valorPago:0,estado:'Pendente'});
  }
