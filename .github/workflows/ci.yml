@@ -36,7 +36,18 @@ jobs:
       - run: sed -i '/^DB_DATABASE=/d' .env
       - run: touch database/database.sqlite
       - run: php artisan key:generate
-      - run: php artisan migrate --force
+      # A migração de estratégia do legado exige Contractos real, ausente na BD SQLite de CI.
+      # Validar isoladamente as novas tabelas sem modificar a migração financeira do legado.
+      - name: Migrate isolated CIS schema (SQLite test DB only)
+        run: |
+          for migration in \\
+            2026_10_22_000001_create_cis_auth_tables.php \\
+            2026_10_22_000001_create_client_drafts_table.php \\
+            2026_10_28_000001_create_clients_table.php \\
+            2026_11_14_000010_create_cis_financial_reference_tables.php \\
+            2026_11_16_000030_create_cis_cash_tables.php; do
+            php artisan migrate --path="database/migrations/$migration" --force
+          done
       - run: php -l app/Http/Controllers/Api/CashController.php
       - run: php -l database/migrations/2026_11_16_000030_create_cis_cash_tables.php
       - run: php tests/cash_smoke.php
