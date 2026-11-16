@@ -28,12 +28,13 @@ final class LegacyContractPricing
     }
 
     public static function plan(float $principal, float $taxa, string $tipo, string $modalidade,
-        int $meses, string $dataInicio, ?string $estrategia = null): array
+        int $meses, string $dataInicio, ?string $estrategia = null,
+        ?string $prazo = null, int $periodoDias = 30): array
     {
         if (!is_finite($principal) || $principal <= 0 || $principal > 100000000
             || abs($principal-round($principal)) > 1e-8
             || !is_finite($taxa) || $taxa < 0 || $taxa > 100
-            || $meses < 1 || $meses > 3) {
+            || $meses < 0 || $meses > 3 || !in_array($periodoDias,[15,30],true)) {
             throw ValidationException::withMessages(['montante'=>
                 'Montante inteiro positivo, taxa e prazo válidos são obrigatórios.']);
         }
@@ -43,22 +44,43 @@ final class LegacyContractPricing
                 'A estratégia não é compatível com o tipo de juro.']);
         }
         if (($tipo === 'Variável' && $modalidade !== 'Uma Parcela')
-            || ($tipo === 'Composto' && $modalidade !== 'Mensal')
-            || !in_array($modalidade,['Mensal','Uma Parcela'],true)) {
+            || ($tipo === 'Composto' && !in_array($modalidade,['Mensal'],true))
+            || !in_array($modalidade,['Semanal','Mensal','Uma Parcela'],true)) {
             throw ValidationException::withMessages(['modalidade'=>'Modalidade incompatível com esta estratégia.']);
         }
         $inicio=CarbonImmutable::createFromFormat('!Y-m-d',$dataInicio);
         if (!$inicio || $inicio->format('Y-m-d')!==$dataInicio) {
             throw ValidationException::withMessages(['data_inicio'=>'Data de início inválida.']);
         }
-        $k=$tipo==='Variável'||$modalidade==='Uma Parcela'?1:$meses;
+        $prazo ??= $meses.' '.($meses===1?'Mês':'Meses');
+        $weeklyTerm = preg_match('/^([123]) Semanas?$/u',$prazo,$matches)===1;
+        $expectedMonths=$weeklyTerm?0:(int)explode(' ',$prazo)[0];
+        if ($meses!==$expectedMonths || (!$weeklyTerm && !in_array($prazo,['1 Mês','2 Meses','3 Meses'],true))
+            || ($weeklyTerm && $periodoDias===15 && (int)$matches[1]>2)) {
+            throw ValidationException::withMessages(['prazo'=>'Prazo e período não são compatíveis.']);
+        }
+        // Regra semanal CIS: semanas de 7 dias. Num prazo mensal, o último
+        // vencimento semanal ajusta-se ao dia final do calendário.
+        $fimDate=$weeklyTerm
+            ? $inicio->addDays(((int)$matches[1])*7)
+            : $inicio->addMonthsNoOverflow($meses);
+        $fim=$fimDate->format('Y-m-d');
+        $dias=(int)$inicio->diffInDays($fimDate);
+        $k=$tipo==='Variável'||$modalidade==='Uma Parcela'?1:
+            ($modalidade==='Semanal'?(int)ceil($dias/7):$meses);
+        if ($weeklyTerm && $modalidade==='Mensal') {
+            throw ValidationException::withMessages(['modalidade'=>'Não existem mensalidades num prazo de semanas.']);
+        }
+        if ($tipo==='Composto' && $modalidade==='Semanal') {
+            throw ValidationException::withMessages(['modalidade'=>
+                'Para juros compostos semanais falta aprovação da conversão da taxa de referência de 15/30 dias.']);
+        }
         $P=(int)$principal;
         if ($P<$k) {
             throw ValidationException::withMessages(['montante'=>
                 'O capital não chega para amortizar pelo menos 1 MT por prestação.']);
         }
         $r=$taxa/100;
-        $fim=$inicio->addMonthsNoOverflow($meses)->format('Y-m-d');
         $totalInterest=match($estrategia) {
             ContractCalculationStrategy::FIXED_AMORTIZATION,
             ContractCalculationStrategy::TOTAL => self::upwards($P*$r),
@@ -119,7 +141,7 @@ final class LegacyContractPricing
             $paidTotal+=$pagar;
             $rows[]=[
                 'parcela'=>$i,
-                'vencimento'=>$last?$fim:$inicio->addMonthsNoOverflow($i)->format('Y-m-d'),
+                'vencimento'=>$last?$fim:($modalidade==='Semanal'?$inicio->addDays(7*$i)->format('Y-m-d'):$inicio->addMonthsNoOverflow($i)->format('Y-m-d')),
                 'capital'=>$capital,
                 'amortizacao'=>$amortizacao,
                 'juros'=>$juros,
@@ -134,7 +156,7 @@ final class LegacyContractPricing
         return [
             'data_final'=>$fim,'modalidade'=>$modalidade,'prestacoes'=>$rows,
             'total_juros'=>$paidInterest,'total_pagar'=>$paidTotal,
-            'estrategia_calculo'=>$estrategia,
+            'estrategia_calculo'=>$estrategia,'prazo'=>$prazo,
         ];
     }
 }
