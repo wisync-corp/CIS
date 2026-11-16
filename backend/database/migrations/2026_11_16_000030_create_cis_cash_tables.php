@@ -6,36 +6,38 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Modelo híbrido aprovado:
- * Extracto = fonte única do movimento financeiro;
- * cis_cash_accounts = contas e saldos iniciais homologados;
- * cis_cash_links = associação 1:1 entre cada linha do Extracto e uma conta.
- *
- * NÃO migra Extracto/Contractos e NÃO imputa movimentos legados.
- * Instalar somente depois de backup e revisão na cópia de ensaio.
+ * Caixa Geral padrão: uma tabela nova, cis_cash_accounts,
+ * e uma coluna NULLABLE account_id na tabela Extracto legada.
+ * Não classifica movimentos históricos, não muda valores do Extracto.
+ * NÃO executar sem preflight, backup/restauro testado e ensaio em cópia.
  */
 return new class extends Migration {
     public function up(): void {
-        // Falha segura se houver instalação prévia da versão independente.
-        if (Schema::hasTable('cis_cash_movements') || Schema::hasTable('cis_cash_links')
-            || Schema::hasTable('cis_cash_accounts')) {
-            throw new RuntimeException('Esquema anterior ou parcial detectado: migração híbrida bloqueada. Rever manualmente sem perda de dados.');
+        if (Schema::hasTable('cis_cash_links') || Schema::hasTable('cis_cash_movements')) {
+            throw new RuntimeException('Encontrada versão antiga de Caixa: migração automática bloqueada. Requer transição manual sem perda de dados.');
+        }
+        if (Schema::hasTable('cis_cash_accounts') || Schema::hasColumn('Extracto', 'account_id')) {
+            throw new RuntimeException('Esquema Caixa já existe ou está parcialmente instalado. Não substituir nem eliminar tabelas automaticamente.');
         }
         if (!Schema::hasTable('Extracto')) {
-            // CI SQLite cria Extracto somente como fixture vazia isolada.
-            throw new RuntimeException('A tabela financeira Extracto deve existir antes de instalar a associação.');
+            throw new RuntimeException('A tabela Extracto deve existir antes da migração.');
         }
         foreach (['Nr','Tipo de Movimento','Valor','Descrição','Data da Operação'] as $column) {
-            if (!Schema::hasColumn('Extracto',$column)) {
-                throw new RuntimeException('Extracto incompatível: falta coluna '.$column.'. Não foi feita migração.');
+            if (!Schema::hasColumn('Extracto', $column)) {
+                throw new RuntimeException('Extracto incompatível: falta a coluna '.$column);
             }
         }
         if (DB::getDriverName()==='mysql') {
             $table=DB::selectOne("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Extracto'");
             if (!$table || strtoupper((string)$table->ENGINE)!=='INNODB') {
-                throw new RuntimeException('Extracto deve ser InnoDB para associar movimentos atomicamente.');
+                throw new RuntimeException('Extracto deve ser InnoDB; migração bloqueada.');
+            }
+            $nr=DB::selectOne("SELECT DATA_TYPE,COLUMN_TYPE,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Extracto' AND COLUMN_NAME='Nr'");
+            if (!$nr || !in_array(strtolower((string)$nr->DATA_TYPE),['int','bigint'],true)) {
+                throw new RuntimeException('Tipo de Extracto.Nr não homologado para o marcador de abertura.');
             }
         }
+
         Schema::create('cis_cash_accounts', function (Blueprint $t) {
             $t->id();
             $t->string('code',40)->unique();
@@ -43,9 +45,13 @@ return new class extends Migration {
             $t->enum('type',['banco','numerario','carteira_movel']);
             $t->string('identifier',120)->nullable();
             $t->char('currency',3)->default('MZN');
-            $t->enum('status',['em_preparacao','pendente_validacao','activa','suspensa'])->default('em_preparacao');
+            $t->enum('status',['em_preparacao','pendente_validacao','activa','suspensa'])
+                ->default('em_preparacao');
             $t->decimal('opening_balance',18,2)->nullable();
             $t->dateTime('cut_at')->nullable();
+            // Maior Extracto.Nr no momento da validação do saldo.
+            // Evita contar movimentos anteriores ao saldo de abertura.
+            $t->unsignedBigInteger('opening_extracto_nr')->nullable();
             $t->string('evidence_reference',255)->nullable();
             $t->unsignedBigInteger('created_by');
             $t->unsignedBigInteger('validated_by')->nullable();
@@ -53,38 +59,32 @@ return new class extends Migration {
             $t->timestamps();
             $t->index(['status','currency']);
         });
-        Schema::create('cis_cash_links', function (Blueprint $t) {
-            $t->id();
-            // O movimento financeiro existe apenas em Extracto.Nr.
-            // Não criar uma segunda coluna de valor ou tipo de movimento.
-            $t->unsignedBigInteger('extracto_nr')->unique();
-            $t->boolean('counts_after_opening')->default(true); // associação histórica: false
-            $t->foreignId('account_id')->constrained('cis_cash_accounts')->restrictOnDelete();
-            $t->uuid('operation_id')->nullable()->index(); // transf.: duas pernas
-            $t->string('idempotency_key',100)->unique();
-            $t->enum('nature',['desembolso','recebimento','receita_geral','despesa_geral','transferencia','ajuste','estorno']);
-            $t->string('category',90)->nullable();
-            $t->string('evidence_reference',255)->nullable();
-            $t->enum('confirmation',['manual','automatica'])->default('manual');
-            $t->dateTime('confirmed_at');
-            $t->unsignedBigInteger('confirmed_by');
-            $t->timestamps();
-            $t->index(['account_id','extracto_nr']);
-            $t->index(['nature','confirmed_at']);
-            // Sem FK física para Extracto na primeira etapa: a tabela é legado
-            // e o tipo exacto de Nr / motor tem de ser validado na VPS.
-            // Antes de confirmar um link, a API deve validar Extracto.Nr
-            // e gravar os dois registos na MESMA transacção MySQL/InnoDB.
+
+        // Não-NUL para movimentos NOVOS será exigido na API financeira;
+        // manter NULL para todos os Extracto históricos sem origem conhecida.
+        Schema::table('Extracto', function (Blueprint $t) {
+            $t->unsignedBigInteger('account_id')->nullable()->index('cis_extracto_account_id_idx');
         });
+        // FK física adiada até homologar privilégios, tipos e escritores legados
+        // no ambiente real. A API deve verificar conta, bloquear a linha,
+        // e inserir Extracto na mesma transacção MySQL.
     }
+
     public function down(): void {
-        if (Schema::hasTable('cis_cash_links') && DB::table('cis_cash_links')->exists()) {
-            throw new RuntimeException('Associacoes financeiras existentes: rollback destrutivo recusado.');
+        // Não remover a coluna se já houver um Extracto a ela associado.
+        if (Schema::hasTable('Extracto') && Schema::hasColumn('Extracto','account_id')
+            && DB::table('Extracto')->whereNotNull('account_id')->exists()) {
+            throw new RuntimeException('Extracto contém movimentos com conta: rollback destrutivo proibido.');
         }
         if (Schema::hasTable('cis_cash_accounts') && DB::table('cis_cash_accounts')->exists()) {
-            throw new RuntimeException('Contas cadastradas: rollback destrutivo recusado.');
+            throw new RuntimeException('Existem contas financeiras: rollback destrutivo proibido.');
         }
-        Schema::dropIfExists('cis_cash_links');
+        if (Schema::hasColumn('Extracto','account_id')) {
+            Schema::table('Extracto',function (Blueprint $t) {
+                $t->dropIndex('cis_extracto_account_id_idx');
+                $t->dropColumn('account_id');
+            });
+        }
         Schema::dropIfExists('cis_cash_accounts');
     }
 };
