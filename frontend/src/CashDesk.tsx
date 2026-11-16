@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
-import {Landmark,Wallet,ArrowDownLeft,ArrowUpRight,ArrowLeftRight,RefreshCw,ShieldCheck,AlertCircle,CheckCircle2,Plus,CircleDollarSign,LockKeyhole,Clock3,Search,Filter,ArrowRight,Eye,Info,X,ClipboardCheck,ChevronRight} from 'lucide-react';
+import {Landmark,Wallet,ArrowDownLeft,ArrowUpRight,ArrowLeftRight,RefreshCw,ShieldCheck,AlertCircle,CheckCircle2,Plus,Building2,Smartphone,Layers,Hash,BookOpen,LockKeyhole,Clock3,Search,Filter,ArrowRight,Eye,Info,X,ClipboardCheck,ChevronRight} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type CashAccount={
@@ -33,6 +33,7 @@ export default function CashDesk({token}:{token:string}){
  const [movementType,setMovementType]=useState('todas');
  const [movementAccount,setMovementAccount]=useState('');
  const [accountDetail,setAccountDetail]=useState<number|null>(null);
+ const [showIdentifier,setShowIdentifier]=useState(false);
  const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'>('none');
  const [selected,setSelected]=useState('');
  const [newAccount,setNewAccount]=useState({code:'',name:'',type:'banco' as CashAccount['type'],identifier:''});
@@ -78,6 +79,7 @@ export default function CashDesk({token}:{token:string}){
    accounts.find(a=>a.id===m.account_id)?.code??''].some(x=>x.toLocaleLowerCase('pt').includes(q)));
  }),[movements,accounts,movementAccount,movementType,movementQuery]);
  const pendingCount=accounts.filter(a=>a.status==='pendente_validacao').length;
+ const preparingCount=accounts.filter(a=>a.status==='em_preparacao').length;
  const hasAvailableBalance=active.some(a=>a.saldo_disponivel!==null);
  const total=active.reduce((sum,a)=>sum+Number(a.saldo_disponivel??0),0);
  const readableDate=(raw:string|null)=>raw?raw.replace('T',' ').slice(0,16):'—';
@@ -94,7 +96,7 @@ export default function CashDesk({token}:{token:string}){
   if(what==='activate'&&!window.confirm('Confirma que conferiu o saldo, a data de corte e a evidência documental desta conta?'))return;
   setBusy(true);
   try{
-   if(what==='create')await request('contas','POST',{...newAccount,identifier:newAccount.identifier||null});
+   if(what==='create')await request('contas','POST',{...newAccount,code:newAccount.code.trim().toUpperCase(),name:newAccount.name.trim(),identifier:newAccount.identifier.trim()||null});
    if(what==='opening')await request('contas/'+selected+'/abertura','POST',{
     opening_balance:opening.opening_balance,cut_at:opening.cut_at.replace('T',' ')+':00',
     evidence_reference:opening.evidence_reference
@@ -113,8 +115,8 @@ export default function CashDesk({token}:{token:string}){
  }
  return <section className="cis-cash">
   <div className="cis-cash-intro"><div><div className="cis-cash-eyebrow"><span className="cis-cash-live-dot"/> GESTÃO FINANCEIRA · MÓDULO PADRÃO</div>
-   <h2>Caixa Geral</h2><p>Disponibilidades e operações financeiras de todas as contas da instituição.</p>
-   <div className="cis-cash-hero-flags"><span><ShieldCheck size={14}/> Contas independentes</span><span><LockKeyhole size={14}/> Acesso protegido</span></div></div>
+   <h2>Caixa Geral</h2><p>Organize as contas financeiras da instituição num único espaço seguro.</p>
+   <div className="cis-cash-hero-flags"><span><ShieldCheck size={14}/> Uma fonte financeira: Extracto</span><span><LockKeyhole size={14}/> Movimentos protegidos</span></div></div>
    <button type="button" onClick={()=>void reload()} disabled={busy||loading}><RefreshCw size={16}/> Actualizar dados</button>
   </div>
   {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/><span>{error}</span><button type="button" onClick={()=>setError('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
@@ -122,12 +124,13 @@ export default function CashDesk({token}:{token:string}){
   {!enabled&&!loading&&<div className="cis-cash-message caution" role="status"><LockKeyhole size={18}/>
    <span><strong>{canCreateAccounts?'Preparação de contas activa.':'Modo de consulta.'}</strong> {canCreateAccounts?'Pode cadastrar contas sem saldo. Abertura, validação, transferências e desembolsos permanecem bloqueados.':'Cadastros e movimentos financeiros continuam bloqueados até autorização no servidor.'}</span>
   </div>}
-  <div className="cis-cash-stats" aria-label="Resumo da Caixa">
-   <article className="cis-cash-stat-feature"><span><Wallet size={17}/> Disponível nas contas activas</span><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong>
-    <small>{loading?'A consultar dados…':!accounts.length?'Cadastre e valide uma conta para começar.':'Saldo de abertura validado e movimentos registados na Caixa.'}</small></article>
-   <article><span><Landmark size={17}/> Contas activas</span><strong>{loading||error?'—':active.length}</strong><small>{loading?'A consultar…':accounts.length+' conta(s) cadastrada(s)'}</small></article>
-   <article><span><ClipboardCheck size={17}/> Por validar</span><strong>{loading||error?'—':pendingCount}</strong><small>Contas à espera de confirmação documental</small></article>
+  <div className="cis-cash-overview">
+    <article className="cis-cash-metric featured"><span className="cis-cash-metric-icon"><Wallet size={19}/></span><div><small>Saldo disponível</small><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong><p>{active.length?'Contas activas com saldo confirmado':'Indisponível até validação dos saldos iniciais'}</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Landmark size={19}/></span><div><small>Contas cadastradas</small><strong>{loading||error?'—':accounts.length}</strong><p>Bancos, numerário e carteiras móveis</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Layers size={19}/></span><div><small>Em preparação</small><strong>{loading||error?'—':preparingCount}</strong><p>Contas ainda sem saldo validado</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><ClipboardCheck size={19}/></span><div><small>Por validar</small><strong>{loading||error?'—':pendingCount}</strong><p>Validação documental pendente</p></div></article>
   </div>
+  <div className="cis-cash-process" role="status"><div className={canCreateAccounts?'ready':''}><span>01</span><b>Cadastro de contas</b>{canCreateAccounts?<CheckCircle2 size={15}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div><span>02</span><b>Validação de saldos</b><LockKeyhole size={14}/></div><ChevronRight size={15}/><div><span>03</span><b>Movimentos financeiros</b><LockKeyhole size={14}/></div></div>
   <div className="cis-cash-sectionbar">
    <nav className="cis-cash-tabs" aria-label="Áreas do módulo Caixa">
     <button type="button" className={section==='contas'?'active':''} aria-current={section==='contas'?'page':undefined} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
@@ -146,26 +149,26 @@ export default function CashDesk({token}:{token:string}){
     </select></label>
     <span className="cis-cash-result-count">{filteredAccounts.length} de {accounts.length} conta(s)</span>
    </div>
-   {action==='create'&&<form className="cis-cash-form" onSubmit={e=>void submit(e,'create')}>
-    <div className="cis-cash-form-title"><span className="cis-cash-step">NOVA CONTA · 01 / 02</span><h4>Cadastrar conta financeira</h4><p>Identifique a conta. O saldo inicial será introduzido e validado posteriormente; não é criado automaticamente.</p></div>
-    <label>Código único<input required maxLength={40} pattern="[A-Za-z0-9_-]{2,40}" value={newAccount.code} onChange={e=>setNewAccount(p=>({...p,code:e.target.value}))} placeholder="BCI-001"/></label>
-    <label>Designação<input required minLength={3} maxLength={150} value={newAccount.name} onChange={e=>setNewAccount(p=>({...p,name:e.target.value}))} placeholder="Conta corrente principal"/></label>
-    <label>Tipo<select value={newAccount.type} onChange={e=>setNewAccount(p=>({...p,type:e.target.value as CashAccount['type']}))}><option value="banco">Banco</option><option value="numerario">Numerário</option><option value="carteira_movel">Carteira móvel</option></select></label>
-    <label>Identificador (conta, referência ou carteira)<input maxLength={120} value={newAccount.identifier} onChange={e=>setNewAccount(p=>({...p,identifier:e.target.value}))}/></label>
-    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy}>{busy?'A criar conta…':'Criar conta em preparação'} <ArrowRight size={16}/></button></div>
-   </form>}
+   {action==='create'&&<div className="cis-cash-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)resetAction();}}><form className="cis-cash-form cis-cash-dialog" role="dialog" aria-modal="true" aria-labelledby="cash-form-title" onSubmit={e=>void submit(e,'create')}>
+    <div className="cis-cash-form-title"><span className="cis-cash-step">NOVA CONTA · 01 / 02</span><h4 id="cash-form-title">Cadastrar conta financeira</h4><p>Identifique a conta. O saldo inicial será introduzido e validado posteriormente; não é criado automaticamente.</p></div>
+    <label>Código único <small>Obrigatório</small><input autoFocus required maxLength={40} pattern="[A-Za-z0-9_-]{2,40}" value={newAccount.code} onChange={e=>setNewAccount(p=>({...p,code:e.target.value}))} placeholder="Ex.: CONTA-001"/><small>Letras, números, hífen ou sublinhado.</small>{accounts.some(a=>a.code.toUpperCase()===newAccount.code.trim().toUpperCase())&&<small className="cis-cash-validation">Este código já existe.</small>}</label>
+    <label>Designação <small>Obrigatório</small><input required minLength={3} maxLength={150} value={newAccount.name} onChange={e=>setNewAccount(p=>({...p,name:e.target.value}))} placeholder="Ex.: Conta corrente principal"/></label>
+    <div className="cis-cash-kind-options"><span>Tipo de conta</span><div>{([['banco','Conta bancária'],['numerario','Numerário'],['carteira_movel','Carteira móvel']] as const).map(([key,label])=><button key={key} type="button" aria-pressed={newAccount.type===key} className={newAccount.type===key?'selected':''} onClick={()=>setNewAccount(p=>({...p,type:key}))}>{key==='banco'?<Landmark size={18}/>:key==='numerario'?<Wallet size={18}/>:<Smartphone size={18}/>}<span>{label}</span>{newAccount.type===key&&<CheckCircle2 size={14}/>}</button>)}</div></div>
+    <label className="cis-cash-wide">{newAccount.type==='banco'?'Número / identificador bancário':newAccount.type==='carteira_movel'?'Identificador da carteira':'Referência da caixa'} <small>Opcional</small><input maxLength={120} value={newAccount.identifier} onChange={e=>setNewAccount(p=>({...p,identifier:e.target.value}))} placeholder="Introduza apenas se aplicável"/></label><div className="cis-cash-form-note"><Info size={16}/> Esta conta será criada em preparação, sem saldo disponível e sem autorização para movimentações.</div>
+    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction} disabled={busy}>Cancelar</button><button type="submit" disabled={busy||newAccount.name.trim().length<3||accounts.some(a=>a.code.toUpperCase()===newAccount.code.trim().toUpperCase())}>{busy?'A guardar…':'Gravar conta'} <ArrowRight size={16}/></button></div>
+   </form></div>}
    {loading?<div className="cis-cash-loading" role="status"><RefreshCw size={18}/> A consultar contas…</div>:accounts.length===0?<div className="cis-cash-empty"><div className="cis-cash-empty-icon"><Landmark size={26}/></div><strong>Comece por cadastrar a primeira conta</strong><p>Adicione uma conta bancária, numerário ou carteira móvel real. Depois, documente o saldo de abertura para validação.</p>{!canCreateAccounts&&<small>O cadastro encontra-se temporariamente indisponível.</small>}</div>:filteredAccounts.length===0?<div className="cis-cash-empty"><Search size={23}/><strong>Nenhuma conta corresponde à pesquisa</strong><p>Altere os filtros ou o termo de pesquisa.</p><button type="button" onClick={()=>{setAccountQuery('');setAccountStatus('todas');}}>Limpar filtros</button></div>:
     <div className="cis-cash-accounts">{filteredAccounts.map(a=><article className="cis-cash-account" key={a.id}>
-     <div className="cis-cash-account-top"><div className="cis-cash-account-icon"><Landmark size={19}/></div><span className={'cis-cash-badge '+a.status}>{statusName[a.status]}</span></div>
+     <div className="cis-cash-account-top"><div className="cis-cash-account-icon">{a.type==='banco'?<Landmark size={19}/>:a.type==='numerario'?<Wallet size={19}/>:<Smartphone size={19}/>}</div><span className={'cis-cash-badge '+a.status}>{statusName[a.status]}</span></div>
      <span className="cis-cash-account-code">{a.code} · {typeName[a.type]}</span><h4>{a.name}</h4>
-     <div className="cis-cash-account-balance"><small>{a.status==='activa'?'Saldo disponível':'Saldo não disponível'}</small><strong>{formatMoney(a.saldo_disponivel)}</strong>{a.status!=='activa'&&<small>Disponível apenas após validação</small>}</div>
+     <div className="cis-cash-account-balance"><small>{a.status==='activa'?'Saldo disponível':'Saldo pendente de validação'}</small><strong>{formatMoney(a.saldo_disponivel)}</strong>{a.status!=='activa'&&<small>Nenhuma movimentação autorizada</small>}</div>
      <div className="cis-cash-account-info"><span>{a.currency}</span><span>Data de corte: {readableDate(a.cut_at)}</span></div>
      <div className="cis-cash-account-actions">
       <button type="button" onClick={()=>setAccountDetail(a.id)}><Eye size={15}/> Ver detalhes</button>
       {a.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(a.id)}>Movimentos <ChevronRight size={15}/></button>}
      </div>
     </article>)}</div>}
-   {detailAccount&&<div className="cis-cash-detail" role="region" aria-label={'Detalhes da conta '+detailAccount.name}>
+   {detailAccount&&<div className="cis-cash-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setAccountDetail(null);}}><div className="cis-cash-detail cis-cash-dialog" role="dialog" aria-modal="true" aria-label={'Detalhes da conta '+detailAccount.name}>
     <div className="cis-cash-detail-head"><div><span className="cis-cash-step">FICHA DA CONTA</span><h4>{detailAccount.name}</h4><p>{detailAccount.code} · {typeName[detailAccount.type]}</p></div><button type="button" aria-label="Fechar detalhes da conta" onClick={()=>setAccountDetail(null)}><X size={19}/></button></div>
     <div className="cis-cash-detail-grid">
      <div><small>Estado</small><strong>{statusName[detailAccount.status]}</strong></div>
@@ -173,7 +176,7 @@ export default function CashDesk({token}:{token:string}){
      <div><small>Saldo inicial documentado</small><strong>{formatMoney(detailAccount.opening_balance)}</strong></div>
      <div><small>Data de corte</small><strong>{readableDate(detailAccount.cut_at)}</strong></div>
      <div><small>Moeda</small><strong>{detailAccount.currency}</strong></div>
-     <div><small>Identificador</small><strong>{detailAccount.identifier||'Não informado'}</strong></div>
+     <div><small>Identificador</small><strong>{detailAccount.identifier?(showIdentifier?detailAccount.identifier:'•••• '+detailAccount.identifier.slice(-4)):'Não informado'}</strong>{detailAccount.identifier&&<button type="button" className="cis-cash-reveal" onClick={()=>setShowIdentifier(v=>!v)}>{showIdentifier?'Ocultar':'Mostrar'}</button>}</div>
      <div className="cis-cash-detail-wide"><small>Referência documental</small><strong>{detailAccount.evidence_reference||'Não apresentada'}</strong></div>
     </div>
     {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>Validação manual: confirme o documento e a data de corte antes de activar esta conta. Esta acção não realiza reconciliação bancária independente.</span></div>}
@@ -181,7 +184,7 @@ export default function CashDesk({token}:{token:string}){
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
      <button type="button" onClick={()=>setAccountDetail(null)}>Fechar</button>
     </div>
-   </div>}
+   </div></div>}
    {action==='opening'&&selectedAccount&&<form className="cis-cash-form cis-cash-opening" onSubmit={e=>void submit(e,'opening')}>
     <div className="cis-cash-form-title"><span className="cis-cash-step">SALDO INICIAL · 02 / 02</span><h4>Abertura · {selectedAccount.name}</h4><p>Introduza o saldo comprovado e a data de corte. A referência documental será registada, mas não verificada automaticamente.</p></div>
     <label>Saldo documentado (MT)<input type="text" inputMode="decimal" required value={opening.opening_balance} onChange={e=>setOpening(p=>({...p,opening_balance:e.target.value}))} placeholder="0.00"/></label>
