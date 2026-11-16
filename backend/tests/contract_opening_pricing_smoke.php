@@ -1,46 +1,45 @@
 <?php
-// Executar após composer install: php tests/contract_opening_pricing_smoke.php
-// Não exige ligação MySQL nem modifica qualquer dado financeiro.
+// Sem gravações ou acesso ao MySQL. Executar com o Laravel instalado:
+// php tests/contract_opening_pricing_smoke.php
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(\\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Services\LegacyContractPricing as Pricing;
+use App\Services\ContractCalculationStrategy as Strategy;
 
-function check(bool $condition, string $name): void {
-    if (!$condition) throw new RuntimeException('FALHA: '.$name);
+function check(bool $condition,string $message): void {
+    if (!$condition) throw new RuntimeException('FALHA: '.$message);
 }
-function near(float $actual,float $expected,string $name): void {
-    check(abs($actual-$expected)<0.000001,$name.' (obtido '.$actual.')');
+check(Pricing::upwards(100.01)===101,'arredonda 100.01 para 101');
+check(Pricing::upwards(100)===100,'montante inteiro permanece 100');
+check(Pricing::upwards(0.0001)===1,'juros positivos sobem sempre');
+$cases=[
+    ['Fixo',Strategy::FIXED_AMORTIZATION,3000,20,3,3600,600,[1200,1200,1200]],
+    ['Fixo',Strategy::TOTAL,1000,25,3,1250,250,[417,417,416]],
+    ['Fixo',Strategy::SIMPLE,1000,20,3,1600,600,[534,533,533]],
+    ['Composto',Strategy::DECLINING,1000,10,3,1223,223,[434,400,389]],
+    ['Composto',Strategy::PRICE,1000,10,3,1211,211,[403,403,405]],
+    ['Composto',Strategy::PRICE,1200,0,3,1200,0,[400,400,400]],
+    ['Variável',Strategy::VARIABLE_COLLECTION,1000,20,1,1000,0,[1000]],
+];
+foreach ($cases as [$tipo,$strategy,$amount,$taxa,$months,$due,$interest,$expectedPayments]) {
+    $modo=$tipo==='Variável'?'Uma Parcela':'Mensal';
+    $result=Pricing::plan($amount,$taxa,$tipo,$modo,$months,'2026-11-16',$strategy);
+    $lines=$result['prestacoes'];
+    check(array_sum(array_column($lines,'amortizacao'))===$amount,$strategy.': capital totalmente liquidado');
+    check($result['total_juros']===$interest,$strategy.': juros esperados');
+    check($result['total_pagar']===$due,$strategy.': total previsto');
+    check(array_column($lines,'pagar')===$expectedPayments,$strategy.': distribuição');
+    foreach ($lines as $line) {
+        foreach (['capital','amortizacao','juros','pagar'] as $field) {
+            check(is_int($line[$field]),$strategy.': '.$field.' não inteiro');
+        }
+        check($line['pagar']===$line['amortizacao']+$line['juros'],$strategy.': reconciliação da prestação');
+    }
 }
-near(Pricing::round(2.345),2.34,'round para par 2.345');
-near(Pricing::round(2.355),2.36,'round para par 2.355');
-
-$fixo=Pricing::plan(3000,20,'Fixo','Mensal',3,'2026-11-14');
-check(count($fixo['prestacoes'])===3,'3 parcelas do fixo');
-near($fixo['prestacoes'][0]['amortizacao'],1000,'amortização fixa');
-near($fixo['prestacoes'][0]['juros'],200,'juros fixos');
-near($fixo['prestacoes'][0]['pagar'],1200,'valor a pagar fixo');
-check($fixo['data_final']==='2027-02-14','data final fixa');
-check($fixo['prestacoes'][2]['vencimento']==='2027-02-14','vencimento última parcela');
-
-$unica=Pricing::plan(5000,25,'Fixo','Uma Parcela',3,'2026-11-14');
-check(count($unica['prestacoes'])===1,'uma parcela em três meses');
-check($unica['prestacoes'][0]['vencimento']==='2027-02-14','parcela única vence na data final');
-near($unica['prestacoes'][0]['pagar'],6250,'parcela única');
-
-$variavel=Pricing::plan(1000,1,'Variável','Uma Parcela',1,'2026-11-14');
-near($variavel['prestacoes'][0]['juros'],0,'juro variável só na cobrança');
-near($variavel['prestacoes'][0]['pagar'],1000,'principal variável');
-
-$composto=Pricing::plan(1200,0,'Composto','Mensal',3,'2026-11-14');
-check(count($composto['prestacoes'])===3,'composto três parcelas');
-near($composto['prestacoes'][2]['pagar'],400,'composto 0%');
-
 try {
-    Pricing::plan(1000,20,'Fixo','Mensal',3,'2026-11-14');
-    throw new RuntimeException('Era esperada a rejeição de centavos em coluna INT.');
-} catch (\Illuminate\Validation\ValidationException $e) {
-    // Comportamento seguro: não truncar capital em contratos de 3 parcelas.
-}
-echo "OK: motor Contractos.frm — 5 grupos de verificações sem gravação.\n";
+    Pricing::plan(1000.5,20,'Fixo','Mensal',2,'2026-11-16',Strategy::FIXED_AMORTIZATION);
+    throw new RuntimeException('Era obrigatório recusar principal com centavos.');
+} catch (\Illuminate\Validation\ValidationException $e) {}
+echo "OK: sete estratégias/casos, arredondamento para cima e reconciliação de MT inteiros.\n";
