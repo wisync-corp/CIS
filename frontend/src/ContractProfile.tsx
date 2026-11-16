@@ -81,7 +81,8 @@ function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
  }
  return String(left).localeCompare(String(right),'pt',{numeric:kind==='number'});
 }
-const money=new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0});
+const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const integerMoney=new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0});
 function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  const raw=item[name];
  if(raw===null||raw===undefined||raw==='')return 'Não informado';
@@ -94,7 +95,7 @@ function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
   }
   return v; // preservar representações legadas sem inventar uma data
  }
- if(kind==='money'&&Number.isFinite(Number(raw)))return money.format(Number(raw))+' MT';
+ if(kind==='money'&&Number.isFinite(Number(raw)))return (Number.isInteger(Number(raw))?integerMoney:money).format(Number(raw))+' MT';
  if(kind==='percent')return String(raw)+'%';
  return String(raw);
 }
