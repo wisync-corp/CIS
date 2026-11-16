@@ -87,11 +87,11 @@ sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/c
 sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml exec -T api-preview php -r '
 require "/srv/cis/vendor/autoload.php";
 $app=require "/srv/cis/bootstrap/app.php";
-$app->make(\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 foreach (["CIS_NEW_CONTRACTS_APPROVED","CIS_EXTENDED_CALCULATIONS_APPROVED","CIS_WEEKLY_CONTRACTS_APPROVED","CIS_COLLECTION_WRITES_APPROVED"] as $key) {
   if (!filter_var(env($key,false),FILTER_VALIDATE_BOOLEAN)) {fwrite(STDERR,"DESACTIVADO: ".$key."\n");exit(3);}
 }
-$db=\Illuminate\\Support\\Facades\\DB::connection("mysql_contract_writer");
+$db=\Illuminate\Support\Facades\DB::connection("mysql_contract_writer");
 $db->select("SELECT 1 AS ok");
 if (!$db->getSchemaBuilder()->hasColumn("Contractos","Estratégia de Cálculo"))exit(4);
 echo "CONFIGURAÇÃO PRONTA: 4 sinalizadores, ligação writer e coluna de estratégia.\n";
