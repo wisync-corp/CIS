@@ -47,6 +47,7 @@ return new class extends Migration {
             // O movimento financeiro existe apenas em Extracto.Nr.
             // Não criar uma segunda coluna de valor ou tipo de movimento.
             $t->unsignedBigInteger('extracto_nr')->unique();
+            $t->boolean('counts_after_opening')->default(true); // associação histórica: false
             $t->foreignId('account_id')->constrained('cis_cash_accounts')->restrictOnDelete();
             $t->uuid('operation_id')->nullable()->index(); // transf.: duas pernas
             $t->string('idempotency_key',100)->unique();
