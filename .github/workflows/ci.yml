@@ -64,6 +64,31 @@ jobs:
           status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/auth/me)
           test "$status" = 401 || { echo "Expected auth 401, got $status"; exit 1; }
 
+  cash-repair:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_sqlite, pdo_mysql
+          tools: composer:v2
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - run: cp .env.example .env
+      - run: sed -i '/^DB_DATABASE=/d' .env
+      - run: touch database/database.sqlite
+      - run: php artisan key:generate
+      - run: php artisan migrate:install
+      - run: php tests/create_cash_legacy_fixture.php
+      - run: php tests/create_cash_repair_fixture.php
+      - run: php artisan migrate --path=database/migrations/2026_11_17_000032_repair_legacy_cash_schema_to_direct_accounts.php --force
+      - run: php tests/cash_smoke.php
+      - run: php -l database/migrations/2026_11_17_000032_repair_legacy_cash_schema_to_direct_accounts.php
+      - run: bash -n ../deploy/rehearse-cash-repair.sh
+
   streamlit:
     runs-on: ubuntu-latest
     defaults:
