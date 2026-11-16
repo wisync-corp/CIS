@@ -1,10 +1,10 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,ArrowRightLeft,Eye,ArrowUpRight,Clock3,CheckCircle2,Info,ChevronRight} from 'lucide-react';
+import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 
 type Item=Record<string,string|number|null>;
 type CollectionQuote={parcela:number;dias_atraso:number;juros:number;multa:number;total:number;estado:string;data_pagamento:string;aviso:string};
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Pagamentos'|'Aumento de crédito'|'Documento original';
+type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Pagamentos'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
 function paymentTodayMozambique():string{
  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
@@ -83,8 +83,6 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [sortColumn,setSortColumn]=useState<InstallmentSort>('Nº da Parcela');
- const [targetInstallment,setTargetInstallment]=useState<number|null>(null);
- const [increaseAmount,setIncreaseAmount]=useState('');
  const [collectionOrd,setCollectionOrd]=useState('');
  const [collectPenalty,setCollectPenalty]=useState(false);
  const [collectionQuote,setCollectionQuote]=useState<CollectionQuote|null>(null);
@@ -123,7 +121,6 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  },[data]);
  const firstLoanAmount=contract?.['Quantia Creditada'];
  const currency=(value:number)=>money.format(value)+' MT';
- const selectedInstallment=targetInstallment===null?null:data?.installments[targetInstallment]??null;
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
   return cmp===0?a.index-b.index:(sortDirection==='asc'?cmp:-cmp);
@@ -209,7 +206,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
       <Icon size={19}/><span>{name}<small>{detail}</small></span><ChevronRight className="cis-credit-nav-chevron" size={15}/></button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab==='Aumento de crédito'?'Aumento de crédito · prestação '+(selectedInstallment?format(selectedInstallment,'Nº da Parcela'):'não seleccionada'):tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Histórico e cobrança separados do contrato.':tab==='Aumento de crédito'?'Revisão sem gravação.':'Informações essenciais do contrato.'}</p></div></header>
+     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Histórico e cobrança separados do contrato.':'Informações essenciais do contrato.'}</p></div></header>
      {tab==='Pagamentos'?<section className="cis-contract-operation">
       <div className="cis-contract-payment-summary" aria-label="Resumo de pagamentos">
        <article><span>Total recebido</span><strong>{currency(financialSnapshot.paid)}</strong><small>Registos de Valor Pago</small></article>
@@ -245,21 +242,6 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
       {collectionError&&<div className="cis-table-error" role="alert">{collectionError}</div>}
       {collectionStatus&&<div className="cis-contract-review" role="status">{collectionStatus}</div>}
       <p>A cobrança real requer activação pelo administrador e permissões limitadas no MySQL. Contratos históricos e pagamentos parciais continuam protegidos.</p>
-     </section>:tab==='Aumento de crédito'?<section className="cis-contract-operation">
-      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>YourButton_Click</strong> do Contractos.frm permite aumento directo apenas para juro fixo. Contém uma atribuição a «Valor Pago» que exige reconciliação antes da migração. Esta página é de preparação; não altera o contrato.</span></div>
-      <button className="cis-contract-draft-button" type="button" onClick={()=>{setTab('Plano de prestações');setTargetInstallment(null);setIncreaseAmount('');}}>← Voltar às prestações</button>
-      {selectedInstallment?<><h4>Prestação {format(selectedInstallment,'Nº da Parcela')} · contrato {numero}</h4>
-       <div className="cis-profile-fields">
-        <div className="cis-profile-field"><span>Estado da prestação</span><div className="cis-profile-field-value">{format(selectedInstallment,'Estado')}</div></div>
-        <div className="cis-profile-field"><span>Valor a pagar registado</span><div className="cis-profile-field-value">{format(selectedInstallment,'Valor a Pagar','money')}</div></div>
-        <div className="cis-profile-field"><span>Valor pago registado</span><div className="cis-profile-field-value">{format(selectedInstallment,'Valor Pago','money')}</div></div>
-        <div className="cis-profile-field"><span>Tipo de juro</span><div className="cis-profile-field-value">{format(contract,'Tipo de Juro')}</div></div>
-        <label className="cis-profile-field"><span>Montante de aumento pretendido (MT) — não gravado</span>
-         <input type="number" min="0.01" step="0.01" disabled={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'} value={increaseAmount} onChange={e=>setIncreaseAmount(e.target.value)} placeholder="Indicar montante adicional"/>
-        </label>
-       </div>
-       <p>{String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'?'O VBA só permite aumento directo para contratos de juro fixo.':Number(increaseAmount)>0?'Valor de aumento introduzido, ainda sujeito à validação dos movimentos e do histórico de pagamento.':'Introduza o montante para preparar a revisão da prestação.'} Não existe cálculo, aprovação ou gravação de aumento nesta etapa.</p>
-      </>:<p>Abra o separador Plano de prestações e escolha «Aumentar crédito» na prestação que pretende consultar.</p>}
      </section>:tab==='Documento original'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
       <h4>Documento associado ao contrato</h4>
@@ -276,12 +258,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        </button></th>)}<th>Operação da prestação</th></tr></thead>
        <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
         {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
-        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{
-         const sourceIndex=data.installments.indexOf(item);
-         setTargetInstallment(sourceIndex);
-         setIncreaseAmount('');
-         setTab('Aumento de crédito');
-        }} disabled={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'} title={String(contract['Tipo de Juro']??'').trim().toLowerCase()!=='fixo'?'O aumento directo no VBA aplica-se apenas a juro fixo':'Rever aumento associado a esta prestação'}><ArrowRightLeft size={15}/> Aumentar crédito</button></td>
+        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{setTab('Pagamentos');setCollectionOrd(String(item.Ordem??''));setCollectionQuote(null);setReceivedConfirmed(false);}}><ReceiptText size={15}/> Ver pagamentos</button></td>
        </tr>)}</tbody></table></div>
      </>:<div className="cis-credit-section">
       {tab==='Contrato'&&<div className="cis-credit-section-lead"><CheckCircle2 size={19}/><div><strong>Informação do contrato</strong><p>Os elementos essenciais, sem campos técnicos do antigo Excel.</p></div></div>}
