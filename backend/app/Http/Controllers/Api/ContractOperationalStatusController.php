@@ -19,7 +19,7 @@ final class ContractOperationalStatusController extends Controller
             'cobranca'=>filter_var(env('CIS_COLLECTION_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
         ];
         $checks=['coluna_estrategia'=>false,'conexao_financeira'=>false,
-            'tabelas_transaccionais'=>false];
+            'tabelas_transaccionais'=>false,'permissoes_abertura'=>false,'permissoes_cobranca'=>false];
         try {
             $db=DB::connection('mysql_contract_writer');
             $db->select('SELECT 1 AS ok');
@@ -30,13 +30,24 @@ final class ContractOperationalStatusController extends Controller
                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('Contractos','Extracto')");
             $checks['tabelas_transaccionais']=count($tables)===2
                 && collect($tables)->every(fn($table)=>strtoupper((string)$table->ENGINE)==='INNODB');
+            $grants=collect($db->select('SHOW GRANTS'))->flatMap(
+                fn($item)=>array_values((array)$item))->map(fn($grant)=>strtoupper((string)$grant));
+            $hasInsert=$grants->contains(fn($grant)=>str_contains($grant,'INSERT')
+                || str_contains($grant,'ALL PRIVILEGES'));
+            $hasUpdate=$grants->contains(fn($grant)=>str_contains($grant,'UPDATE')
+                || str_contains($grant,'ALL PRIVILEGES'));
+            $checks['permissoes_abertura']=$hasInsert;
+            $checks['permissoes_cobranca']=$hasUpdate;
+
         } catch (\Throwable $e) {
             // Não revelar credenciais, detalhes de servidor ou SQL no endpoint.
         }
-        $ready=$flags['abertura']&&collect($checks)->every(fn($ok)=>$ok);
+        $ready=$flags['abertura']&&$checks['conexao_financeira']
+            &&$checks['coluna_estrategia']&&$checks['tabelas_transaccionais']
+            &&$checks['permissoes_abertura'];
         return response()->json([
             'abertura_desembolso_prontos'=>$ready,
-            'cobranca_pronta'=>$ready&&$flags['cobranca'],
+            'cobranca_pronta'=>$ready&&$flags['cobranca']&&$checks['permissoes_cobranca'],
             'semanal_pronto'=>$ready&&$flags['semanal'],
             'formulas_adicionais_prontas'=>$ready&&$flags['formulas_adicionais'],
             'sinalizadores'=>$flags,
