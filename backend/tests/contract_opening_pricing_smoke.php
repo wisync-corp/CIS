@@ -17,9 +17,9 @@ check(Pricing::upwards(0.0001)===1,'juros positivos sobem sempre');
 $cases=[
     ['Fixo',Strategy::FIXED_AMORTIZATION,3000,20,3,3600,600,[1200,1200,1200]],
     ['Fixo',Strategy::TOTAL,1000,25,3,1250,250,[417,417,416]],
-    ['Fixo',Strategy::SIMPLE,1000,20,3,1600,600,[534,533,533]],
-    ['Composto',Strategy::DECLINING,1000,10,3,1223,223,[434,400,389]],
-    ['Composto',Strategy::PRICE,1000,10,3,1211,211,[403,403,405]],
+    ['Fixo',Strategy::SIMPLE,1000,20,3,1600,600,[534,534,532]],
+    ['Composto',Strategy::DECLINING,1000,10,3,1201,201,[434,401,366]],
+    ['Composto',Strategy::PRICE,1000,10,3,1207,207,[403,403,401]],
     ['Composto',Strategy::PRICE,1200,0,3,1200,0,[400,400,400]],
     ['Variável',Strategy::VARIABLE_COLLECTION,1000,20,1,1000,0,[1000]],
 ];
