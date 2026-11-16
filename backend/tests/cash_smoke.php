@@ -26,16 +26,18 @@ foreach (['-1','1.234','1,20','abc','01','1e4'] as $invalid) {
 }
 checkCash(\Illuminate\Support\Facades\Schema::hasTable('cis_cash_accounts'),
     'tabela de contas em falta');
-checkCash(\Illuminate\Support\Facades\Schema::hasTable('cis_cash_links'),
-    'tabela de movimentos em falta');
-foreach (['opening_balance','cut_at','evidence_reference','status'] as $field) {
+checkCash(\Illuminate\Support\Facades\Schema::hasColumn('Extracto','account_id'),
+    'coluna de conta em Extracto em falta');
+foreach (['opening_balance','cut_at','evidence_reference','status','opening_extracto_nr'] as $field) {
     checkCash(\Illuminate\Support\Facades\Schema::hasColumn('cis_cash_accounts',$field),
         'coluna '.$field.' em falta');
 }
-foreach (['account_id','extracto_nr','operation_id','idempotency_key','counts_after_opening','nature'] as $field) {
-    checkCash(\Illuminate\Support\Facades\Schema::hasColumn('cis_cash_links',$field),
-        'coluna '.$field.' em falta');
-}
-checkCash(\Illuminate\Support\Facades\DB::table('cis_cash_accounts')->count()===0,'CI deve iniciar com contas vazias');
-checkCash(\Illuminate\Support\Facades\DB::table('cis_cash_links')->count()===0,'CI deve iniciar sem movimentos');
+checkCash(!\Illuminate\Support\Facades\Schema::hasTable('cis_cash_links'),
+    'tabela cis_cash_links não deve existir');
+checkCash(!\Illuminate\Support\Facades\Schema::hasTable('cis_cash_movements'),
+    'livro de caixa duplicado não deve existir');
+checkCash(\Illuminate\Support\Facades\DB::table('cis_cash_accounts')->count()===0,
+    'CI deve iniciar com contas vazias');
+checkCash(\Illuminate\Support\Facades\DB::table('Extracto')->count()===0,
+    'CI deve iniciar sem movimentos financeiros');
 echo "OK: Caixa Geral, schema e precisão monetária. Nenhum desembolso criado nem movimentos financeiros duplicados.\n";
