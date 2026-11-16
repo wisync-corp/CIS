@@ -50,3 +50,14 @@ Origem: ficheiro VBA Contractos.frm fornecido pelo utilizador em 14-11-2026. Có
 - Alterar período limpa prazo e modalidade; alterar prazo limpa modalidade.
 - Para juro Variável/Composto, as limitações adicionais da rotina legada continuam verificadas no servidor (Variável apenas Uma Parcela; Composto apenas Mensal). Combinações novas sem fórmula homologada não autorizam desembolso.
 - Modalidade Semanal e prazos semanais **podem ser preparados no formulário**, mas a gravação real permanece bloqueada pela API até se aprovar número de prestações, datas e cálculo de juros, não inferidos do módulo VBA original.
+
+## Estratégias de cálculo das prestações — 16-11-2026
+A nova lista visual foi fornecida em captura pelo operador; o código **Contractos.frm** é a fonte para determinar as opções já homologadas:
+- **Amortização fixa com juro fixo:** corresponde à ramificação FIXO do VBA, que distribui a amortização e o juro total pelas prestações, ajustando a última (linhas 666–682, 878–925).
+- **Tabela Price:** corresponde à fórmula de prestação constante com capitalização do ramo COMPOSTO do VBA (linhas 685–710, 837–870).
+- **Juro variável na cobrança:** opção adicional explicativa para o tipo VARIÁVEL, pois o VBA cria uma prestação sem juros e delega o cálculo à Cobrança (linhas 523–539, 810–834).
+- **Amortização fixa com juro decrescente, Prestação fixa pelo total, Prestação fixa simples:** constam da imagem enviada, mas **não têm implementações autónomas demonstradas no Contractos.frm**. Aparecem no menu com indicação de não homologadas e não autorizam a escrita financeira.
+- O selector de estratégia depende do tipo de juro e selecciona automaticamente a estratégia correspondente comprovada, sem permitir mudar para cálculo não homologado.
+- Uma migração aditiva fornece a coluna nullable **Estratégia de Cálculo** (VARCHAR 90) na tabela Contractos. As prestações históricas ficam com NULL; todas as prestações de novos contratos guardam a estratégia escolhida.
+- A API verifica tipo/estratégia novamente antes da gravação e recusa qualquer estratégia não implementada no motor real. A ficha do contrato apresenta a estratégia quando a coluna já existe.
+- Para aplicar no VPS com backup recente: `bash deploy/add-contract-calculation-strategy-column.sh`. O script exige confirmação explícita; nenhuma alteração à base de produção foi efectuada pelo desenvolvimento no GitHub.
