@@ -31,7 +31,7 @@ final class LegacyContractPricing
         int $meses, string $dataInicio, ?string $estrategia = null,
         ?string $prazo = null, int $periodoDias = 30): array
     {
-        if (!is_finite($principal) || $principal <= 0 || $principal > 100000000
+        if (!is_finite($principal) || $principal <= 0 || $principal > 16777216
             || abs($principal-round($principal)) > 1e-8
             || !is_finite($taxa) || $taxa < 0 || $taxa > 100
             || $meses < 0 || $meses > 3 || !in_array($periodoDias,[15,30],true)) {
@@ -130,6 +130,12 @@ final class LegacyContractPricing
                     $pagar=$last?$saldo+$juros:$price;
                     $amortizacao=$last?$saldo:$pagar-$juros;
                     break;
+            }
+            // As colunas financeiras do legado são FLOAT(32 bits).
+            // Inteiros acima de 2^24 deixariam de ser representáveis exactamente.
+            if ($capital>16777216 || $juros>16777216 || $pagar>16777216) {
+                throw ValidationException::withMessages(['montante'=>
+                    'Valor excede precisão exacta do FLOAT legado; operação bloqueada.']);
             }
             if ($amortizacao<=0 || $amortizacao>$saldo || $juros<0 || $pagar<0
                 || $pagar!==$amortizacao+$juros) {
