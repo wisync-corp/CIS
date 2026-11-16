@@ -1,4 +1,8 @@
-# CIS / CAPTA — desenho funcional e técnico do módulo Caixa (proposta v0.1)
+# CIS / CAPTA — histórico de decisões da Caixa (substituído pela arquitectura híbrida)
+
+**DOCUMENTO HISTÓRICO:** as referências seguintes a `cis_cash_movements` correspondem à proposta inicial **revogada**. O modelo final confirmado é **C — `Extracto` + `cis_cash_accounts` + `cis_cash_links`**, com apenas duas tabelas novas e sem dupla contagem. **Consultar `docs/cash-hybrid-treasury-architecture.md` como referência técnica actual**, incluindo a extensão futura de Tesouraria opcional.
+
+
 
 Estado: **PROPOSTA PARA DECISÃO — NÃO IMPLEMENTAR ESCRITAS FINANCEIRAS**.
 
