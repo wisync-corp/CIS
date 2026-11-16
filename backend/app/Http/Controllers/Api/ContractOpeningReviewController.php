@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Services\ContractCalculationStrategy;
 
 final class ContractOpeningReviewController extends Controller
 {
@@ -74,6 +75,7 @@ final class ContractOpeningReviewController extends Controller
             'cliente_id' => ['required', 'integer', 'min:1'],
             'montante' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'tipo_juro' => ['required','in:Fixo,Variável,Composto'],
+            'estrategia_calculo' => ['required','string','max:90'],
             'periodo_dias' => ['required','integer','in:15,30'],
             'prazo' => ['required','in:1 Semana,2 Semanas,3 Semanas,1 Mês,2 Meses,3 Meses'],
             'taxa_informada' => ['required','numeric','between:0,100'],
@@ -92,6 +94,14 @@ final class ContractOpeningReviewController extends Controller
 
         $issues = [];
         $rate = null;
+        if (!in_array($values['estrategia_calculo'], ContractCalculationStrategy::OPTIONS, true)) {
+            $issues[] = 'Estratégia de cálculo não reconhecida.';
+        } elseif (!ContractCalculationStrategy::compatible($values['tipo_juro'], $values['estrategia_calculo'])) {
+            $issues[] = 'A estratégia escolhida não tem fórmula homologada para o tipo de juro; seleccione a estratégia compatível com o VBA.';
+        }
+        if (!DB::connection('mysql_legacy')->getSchemaBuilder()->hasColumn('Contractos','Estratégia de Cálculo')) {
+            $issues[] = 'A nova coluna Estratégia de Cálculo ainda não foi criada na tabela Contractos. Execute a migração autorizada.';
+        }
         $terms = (int)$values['periodo_dias']===15
             ? ['1 Semana','2 Semanas']
             : ['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
