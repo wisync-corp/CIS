@@ -27,13 +27,13 @@ for path in \
   deploy/backup-before-auth.sh \
   deploy/compose.api-test.yaml \
   deploy/compose.preview.yaml \
-  tests/contract_opening_pricing_smoke.php \
-  tests/contract_calculation_strategy_smoke.php \
-  tests/financial_workflows_smoke.php \
-  app/Services/LegacyContractPricing.php \
-  app/Http/Controllers/Api/ContractOpeningController.php \
-  app/Http/Controllers/Api/ContractCollectionController.php \
-  app/Http/Controllers/Api/ContractOperationalStatusController.php
+  backend/tests/contract_opening_pricing_smoke.php \
+  backend/tests/contract_calculation_strategy_smoke.php \
+  backend/tests/financial_workflows_smoke.php \
+  backend/app/Services/LegacyContractPricing.php \
+  backend/app/Http/Controllers/Api/ContractOpeningController.php \
+  backend/app/Http/Controllers/Api/ContractCollectionController.php \
+  backend/app/Http/Controllers/Api/ContractOperationalStatusController.php
 do
   if [[ -f "$path" ]]; then echo "OK: $path"; else echo "EM FALTA: $path"; missing=1; fi
 done
