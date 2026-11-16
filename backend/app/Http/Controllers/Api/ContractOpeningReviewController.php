@@ -121,8 +121,9 @@ final class ContractOpeningReviewController extends Controller
         if ((int)$values['prazo_meses'] !== $expectedMonths) {
             $issues[] = 'O prazo enviado não corresponde à duração indicada.';
         }
-        if ($isWeekly) {
-            $issues[] = 'O prazo semanal está disponível para selecção e consulta de taxa, mas as fórmulas e os vencimentos semanais ainda necessitam de homologação antes de criar e desembolsar.';
+        if (($isWeekly || $values['modalidade']==='Semanal')
+            && !filter_var(env('CIS_WEEKLY_CONTRACTS_APPROVED',false),FILTER_VALIDATE_BOOLEAN)) {
+            $issues[] = 'O cálculo semanal está preparado, mas precisa de testes e activação específica para criar e desembolsar.';
         }
         $allowedModalities = match ($values['prazo']) {
             '1 Semana' => ['Uma Parcela'],
@@ -133,8 +134,8 @@ final class ContractOpeningReviewController extends Controller
         if (!in_array($values['modalidade'],$allowedModalities,true)) {
             $issues[] = 'A modalidade de pagamento não é compatível com o prazo seleccionado.';
         }
-        if ($values['modalidade'] === 'Semanal') {
-            $issues[] = 'A modalidade semanal está disponível no formulário, mas a geração e gravação das prestações semanais requerem homologação.';
+        if ($values['tipo_juro']==='Composto' && $values['modalidade']==='Semanal') {
+            $issues[] = 'É necessário definir a conversão da taxa de 15/30 dias para juro composto semanal.';
         }
         if ($values['tipo_juro'] === 'Fixo') {
             if (!isset($values['periodo_dias'])) {
