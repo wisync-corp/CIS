@@ -20,6 +20,19 @@ function allowedPaymentMethods(term:string):string[]{
  if(term==='2 Meses'||term==='3 Meses')return ['Semanal','Mensal','Uma Parcela'];
  return [];
 }
+const calculationStrategies=[
+ 'Amortização fixa com juro decrescente',
+ 'Amortização fixa com juro fixo',
+ 'Prestação fixa pelo total',
+ 'Prestação fixa simples',
+ 'Tabela Price',
+ 'Juro variável na cobrança',
+] as const;
+const supportedStrategyByInterest:Record<string,string>={
+ Fixo:'Amortização fixa com juro fixo',
+ Composto:'Tabela Price',
+ Variável:'Juro variável na cobrança',
+};
 function monthAfter(date:string,months:number):string {
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return '';
  const [year,month,day]=date.split('-').map(Number);
@@ -38,6 +51,7 @@ const fields:Field[]=[
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
+ {key:'estrategia_calculo',label:'Estratégia de cálculo das prestações',type:'select',required:true,hint:'A estratégia depende do tipo de juro. As fórmulas ainda não comprovadas no VBA ficam indisponíveis para desembolso.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
@@ -48,7 +62,7 @@ const fields:Field[]=[
 ];
 const groupings=[
  {name:'Mutuário',icon:UserRound,keys:['cliente','cliente_id','cidade']},
- {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
+ {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','estrategia_calculo','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
 ];
 export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
@@ -127,6 +141,9 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  };
  const matchingClients=clients.slice(0,12);
  const fixedRate=values.tipo_juro==='Fixo';
+ const strategyForType=supportedStrategyByInterest[values.tipo_juro??'']??'';
+ const strategySelected=values.estrategia_calculo??'';
+ const strategyCompatible=!!strategyForType&&strategySelected===strategyForType;
  const periodo=values.periodo_tabela??'';
  const availableTerms=periodo==='15'?['1 Semana','2 Semanas']:periodo==='30'?['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses']:[];
  const selectedTerm=availableTerms.includes(values.prazo??'')?values.prazo??'':'';
@@ -192,6 +209,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify({
      cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
+     estrategia_calculo:strategySelected,
      taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
@@ -205,7 +223,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
-   if(body.cadastro_confirmado&&!unsupportedSchedule){
+   if(body.cadastro_confirmado&&!unsupportedSchedule&&strategyCompatible){
     try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
    }
@@ -214,7 +232,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   finally{setReviewBusy(false);}
  };
  const openContract=async()=>{
-  if(!review?.dados_verificados||!review.autorizado_para_gravar||unsupportedSchedule||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||unsupportedSchedule||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
   if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
   setOpeningBusy(true);setOpeningError('');
   try{
@@ -247,7 +265,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm));
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
     const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
@@ -291,11 +309,12 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
-     {field.choices||key==='prazo'||key==='modalidade'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):({...prev,[key]:e.target.value}))}>
-       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:field.choices??[]).map(choice=><option key={choice} value={choice}>{choice}</option>)}
+     {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:supportedStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
+       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&choice!==strategyForType}>{choice}{key==='estrategia_calculo'&&choice!==strategyForType?' — não homologada para este juro':''}</option>)}
       </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'0.01':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
+     {key==='estrategia_calculo'&&tipo&&<small role="status">{strategyCompatible?'Estratégia disponível e correspondente à fórmula actual do Contractos.frm.':'Escolha a estratégia compatível com o tipo de juro. As outras aguardam validação das respectivas fórmulas.'}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
      {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;
