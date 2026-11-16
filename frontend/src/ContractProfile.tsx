@@ -159,8 +159,8 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  function sortBy(column:InstallmentSort){if(sortColumn===column)setSortDirection(prev=>prev==='asc'?'desc':'asc');else{setSortColumn(column);setSortDirection('asc');}}
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Ficha individual</span></div>
-  {error&&<div className="cis-table-error" role="alert"><AlertCircle size={18}/>{error}</div>}
-  {loading&&<div className="cis-panel cis-loading">A consultar contrato e prestações…</div>}
+  {error&&<div className="cis-credit-error-state" role="alert"><AlertCircle size={22}/><div><strong>Não foi possível carregar a ficha</strong><p>{error}</p></div><button type="button" onClick={()=>void load()}><RefreshCw size={16}/> Tentar novamente</button></div>}
+  {loading&&<div className="cis-credit-loading-state" role="status"><RefreshCw size={19} className="cis-credit-loading-icon"/> A consultar contrato e prestações…</div>}
   {justCreated&&<div className="cis-contract-created-banner" role="status" aria-live="polite">
     <div><ShieldCheck size={24}/><span><strong>Crédito criado e desembolso registado</strong><small>A operação foi confirmada pelo servidor. Está agora na ficha do contrato {numero}. Não volte a submeter a abertura.</small></span></div>
     <button type="button" onClick={onBack}>Ir à carteira</button>
