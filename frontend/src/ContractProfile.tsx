@@ -105,7 +105,7 @@ function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  if(kind==='percent')return String(raw)+'%';
  return String(raw);
 }
-export default function ContractProfile({numero,token,onBack}:{numero:string;token:string;onBack:()=>void}){
+export default function ContractProfile({numero,token,onBack,justCreated=false}:{numero:string;token:string;onBack:()=>void;justCreated?:boolean}){
  const [tab,setTab]=useState<Tab>('Contrato');
  const [data,setData]=useState<Payload|null>(null);
  const [loading,setLoading]=useState(true);
@@ -136,6 +136,18 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
  },[numero,token]);
  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
  const contract=data?.contract;
+ // Indicadores calculados apenas a partir das prestações efectivamente lidas.
+ const financialSnapshot=useMemo(()=>{
+  const rows=data?.installments??[];
+  const sum=(key:string)=>rows.reduce((total,row)=>total+(Number.isFinite(Number(row[key]))?Number(row[key]):0),0);
+  const paid=sum('Valor Pago');
+  const scheduled=sum('Valor a Pagar');
+  const outstanding=Math.max(0,scheduled-paid);
+  const pending=rows.filter(row=>!['Pago','Pago em Atraso'].includes(String(row.Estado??''))).length;
+  return {paid,scheduled,outstanding,pending,installments:rows.length};
+ },[data]);
+ const firstLoanAmount=contract?.['Quantia Creditada'];
+ const currency=(value:number)=>money.format(value)+' MT';
  const selectedInstallment=targetInstallment===null?null:data?.installments[targetInstallment]??null;
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
@@ -178,11 +190,22 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={18}/>{error}</div>}
   {loading&&<div className="cis-panel cis-loading">A consultar contrato e prestações…</div>}
   {data&&contract&&<>
+   {justCreated&&<div className="cis-contract-created-banner" role="status" aria-live="polite">
+    <div><ShieldCheck size={24}/><span><strong>Crédito criado e desembolso registado</strong><small>A operação foi confirmada pelo servidor. Está agora na ficha do contrato {numero}. Não volte a submeter a abertura.</small></span></div>
+    <button type="button" onClick={onBack}>Ir à carteira</button>
+   </div>}
    <header className="cis-profile-hero">
     <div className="cis-profile-avatar"><FileText size={31}/></div>
     <div className="cis-profile-heading"><span>FICHA DE CONTRATO</span><h2>{format(contract,'Nr do Contracto')}</h2><p>{format(contract,'Nome do Cliente')} · {format(contract,'Estado do Contrato')}</p></div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
+   <div className="cis-contract-overview-grid" aria-label="Indicadores deste contrato">
+    <article><span>Crédito concedido</span><strong>{firstLoanAmount==null?'Não informado':currency(Number(firstLoanAmount))}</strong><small>Valor registado no contrato</small></article>
+    <article><span>Total previsto</span><strong>{currency(financialSnapshot.scheduled)}</strong><small>Soma das prestações registadas</small></article>
+    <article><span>Total pago</span><strong>{currency(financialSnapshot.paid)}</strong><small>Valor Pago nas prestações</small></article>
+    <article><span>Por liquidar · previsto</span><strong>{currency(financialSnapshot.outstanding)}</strong><small>{financialSnapshot.pending} de {financialSnapshot.installments} prestações não liquidadas</small></article>
+   </div>
+   <div className="cis-contract-overview-note"><AlertCircle size={15}/> Valores calculados das prestações existentes; juros variáveis e multas futuras podem alterar o total efectivo a receber.</div>
    <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Os dados históricos são preservados. A cobrança integral exige contrato CIS novo, validação no servidor, confirmação de recebimento e activação financeira. Pagamentos parciais e renovações não estão disponíveis.</span></div>
    {!!data.contract_fields_divergent?.length&&<div className="cis-contract-warning" role="status">Os seguintes campos não são uniformes entre as prestações deste contrato: {data.contract_fields_divergent.join(', ')}. Confirme as linhas originais antes de interpretar os valores gerais.</div>}
    {!!data.columns_missing_in_database?.length&&<div className="cis-contract-warning" role="status">Campos previstos no formulário VBA mas ausentes desta versão da base de dados: {data.columns_missing_in_database.join(', ')}.</div>}
