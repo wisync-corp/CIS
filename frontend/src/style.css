@@ -293,3 +293,54 @@ html{font-size:16px}
 .cis-profile-tabs{gap:6px}
 .cis-profile-content .cis-contract-operation>h4{margin:12px 0 0}
 @media(max-width:650px){.cis-contract-payment-summary{grid-template-columns:1fr}}
+
+/* CAPTA CIS — ficha operacional: contexto primeiro, pagamentos numa área independente. */
+.cis-profile-page:has(.cis-credit-hero){gap:16px}
+.cis-credit-hero{min-height:134px;padding:23px 28px;box-shadow:none}
+.cis-credit-hero .cis-profile-avatar{width:58px;height:58px;border-radius:14px}
+.cis-credit-hero .cis-profile-heading>span{font-size:11px;letter-spacing:1.2px}
+.cis-credit-hero .cis-profile-heading h2{font-size:clamp(23px,2.6vw,31px);margin:5px 0 12px}
+.cis-credit-hero-meta{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;font-size:12px;color:var(--cis-hero-soft)}
+.cis-credit-hero-meta>span{display:inline-flex;align-items:center;gap:7px}
+.cis-credit-status{border:1px solid #ffffff35;border-radius:20px;background:#ffffff1d;padding:6px 11px;color:#fff;font-weight:750}
+.cis-credit-status-dot{width:7px;height:7px;border-radius:50%;background:#9cf0b6;flex:none}
+.cis-credit-highlights{display:grid;grid-template-columns:1.2fr 0.8fr 1fr;gap:13px}
+.cis-credit-highlight{display:flex;flex-direction:column;gap:8px;min-width:0;padding:19px 21px;border:1px solid var(--cis-border);border-radius:13px;background:var(--cis-surface,#fff)}
+.cis-credit-highlight>span{font-size:12px;color:var(--cis-text-muted);font-weight:700}
+.cis-credit-highlight>strong{font-size:clamp(19px,2.2vw,26px);line-height:1.15;font-weight:800;letter-spacing:-.5px;color:var(--cis-heading);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cis-credit-highlight>small{font-size:12px;line-height:1.45;color:var(--cis-text-muted)}
+.cis-credit-highlight-main{background:var(--cis-tint);border-color:var(--cis-input-border)}
+.cis-credit-disclosure{border:1px solid var(--cis-border);background:var(--cis-surface-subtle);border-radius:10px;padding:10px 14px;color:var(--cis-text-muted);font-size:12px}
+.cis-credit-disclosure summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:var(--cis-heading);list-style:none}
+.cis-credit-disclosure summary::-webkit-details-marker{display:none}
+.cis-credit-disclosure summary svg:last-child{margin-left:auto}
+.cis-credit-disclosure[open] summary svg:last-child{transform:rotate(180deg)}
+.cis-credit-disclosure p{line-height:1.65;margin:9px 0 0}
+.cis-profile-layout:has(.cis-credit-navigation){grid-template-columns:minmax(210px,235px) minmax(0,1fr);gap:16px}
+.cis-credit-navigation{padding:8px;gap:3px;position:sticky;top:76px}
+.cis-credit-navigation button{width:100%;gap:11px;min-height:59px;padding:10px 13px;text-align:left;transition:background .15s,border-color .15s}
+.cis-credit-navigation button>span{display:flex;flex:1;flex-direction:column;gap:4px;line-height:1.1}
+.cis-credit-navigation button small{font-size:11px;line-height:1.3;color:var(--cis-text-muted);font-weight:450}
+.cis-credit-navigation button.selected{box-shadow:inset 3px 0 0 var(--cis-primary)}
+.cis-credit-navigation button.selected small{color:var(--cis-primary)}
+.cis-credit-nav-chevron{opacity:.55}
+.cis-credit-navigation button:focus-visible,.cis-credit-next-action:focus-visible,.cis-contract-operation button:focus-visible{outline:2px solid var(--cis-primary);outline-offset:2px}
+.cis-profile-layout:has(.cis-credit-navigation) .cis-profile-content{padding:24px 26px;min-height:300px}
+.cis-credit-section{display:grid;gap:18px}
+.cis-credit-section-lead{display:flex;align-items:center;gap:11px;border-radius:11px;background:var(--cis-tint);padding:13px 16px;color:var(--cis-heading)}
+.cis-credit-section-lead strong{display:block;font-size:13px}
+.cis-credit-section-lead p{font-size:12px;color:var(--cis-text-muted);line-height:1.5;margin:3px 0 0}
+.cis-profile-layout:has(.cis-credit-navigation) .cis-profile-fields{gap:14px}
+.cis-profile-layout:has(.cis-credit-navigation) .cis-profile-field-value{background:transparent;border:0;border-bottom:1px solid var(--cis-border);padding:7px 0 13px;border-radius:0;min-height:auto;font-weight:650}
+.cis-credit-next-action{display:inline-flex;align-items:center;justify-content:center;gap:9px;justify-self:start;background:var(--cis-primary);color:#fff;border:0;border-radius:9px;padding:12px 17px;font-size:13px;font-weight:750;cursor:pointer}
+.cis-credit-next-action:hover{filter:brightness(.94)}
+.cis-credit-progress{background:var(--cis-surface-subtle);padding:16px 18px;border-radius:12px;border:1px solid var(--cis-border);display:grid;gap:10px}
+.cis-credit-progress>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--cis-heading)}
+.cis-credit-progress>div:first-child span{font-weight:800;color:var(--cis-primary)}
+.cis-credit-progress-track{height:9px;background:var(--cis-border);border-radius:999px;overflow:hidden}
+.cis-credit-progress-track span{display:block;height:100%;border-radius:999px;background:var(--cis-primary);transition:width .35s ease}
+.cis-credit-progress small{font-size:11px;color:var(--cis-text-muted);line-height:1.5}
+@media(max-width:1050px){.cis-credit-highlights{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-credit-highlight-main{grid-column:1 / -1}}
+@media(max-width:900px){.cis-profile-layout:has(.cis-credit-navigation){grid-template-columns:1fr}.cis-credit-navigation{position:static;display:flex;overflow-x:auto;scrollbar-width:thin}.cis-credit-navigation button{flex:0 0 auto;width:auto;min-width:150px;min-height:55px}.cis-credit-navigation button>span{white-space:normal}.cis-credit-navigation .cis-credit-nav-chevron{display:none}}
+@media(max-width:600px){.cis-credit-highlights{grid-template-columns:1fr}.cis-credit-highlight-main{grid-column:auto}.cis-credit-hero{padding:20px}.cis-credit-hero-meta{gap:10px}.cis-credit-hero .cis-profile-avatar{height:50px;width:50px}.cis-profile-layout:has(.cis-credit-navigation) .cis-profile-content{padding:20px}.cis-credit-navigation button{min-width:140px}.cis-credit-progress>div:first-child{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.cis-credit-progress-track span,.cis-credit-navigation button{transition:none}}
