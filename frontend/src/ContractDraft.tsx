@@ -56,7 +56,7 @@ const fields:Field[]=[
  {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
- {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. As fórmulas ainda não comprovadas no VBA ficam indisponíveis para desembolso.'},
+ {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. Três fórmulas adicionais são regras CIS. A sua gravação exige testes e activação específica no servidor.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
@@ -346,7 +346,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     <p>Prévia sem gravação, segundo a estratégia seleccionada. Regra CIS: valores em MT inteiros com arredondamento para cima e capital totalmente reconciliado. As fórmulas novas são extensões ao VBA original.</p>
     <div className="cis-table-scroll"><table><thead><tr>{['Parcela','Vencimento','Capital (MT)','Amortização (MT)','Juros (MT)','A pagar (MT)','Estado'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{preview.linhas.map(row=><tr key={row.parcela}>
      <td>{row.parcela}</td><td>{row.vencimento.split('-').reverse().join('/')}</td>{[row.capital,row.amortizacao,row.juros,row.valorPagar].map((amount,index)=><td key={index}>{new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(amount)}</td>)}<td>{row.estado}</td>
-    </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalJuros)} MT.
+    </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalJuros)} MT.
     {tipo==='Variável'?' Os juros variáveis são calculados na Cobrança quando for conhecida a data efectiva de pagamento.':''}</p>
    </div>}
    {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}</p>
