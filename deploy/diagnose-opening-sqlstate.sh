@@ -36,18 +36,18 @@ echo '=== Ligacao financeira e capacidade SQL (apenas leitura) ==='
 "${COMPOSE[@]}" exec -T api-preview php -r '
 require "/srv/cis/vendor/autoload.php";
 $app=require "/srv/cis/bootstrap/app.php";
-$app->make(\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 try{
- $db=\Illuminate\\Support\\Facades\\DB::connection("mysql_contract_writer");
+ $db=\Illuminate\Support\Facades\DB::connection("mysql_contract_writer");
  $user=$db->selectOne("SELECT CURRENT_USER() AS account");
  echo "DB_WRITER_LOGIN=".($user?"OK":"INDEFINIDO").PHP_EOL;
  foreach(["Clientes","Contractos","Extracto","cis_tabela_juros"] as $name){
    try{$db->table($name)->limit(1)->get();echo "SELECT_".$name."=OK".PHP_EOL;}
-   catch(\\Throwable $e){
+   catch(\Throwable $e){
      $code=preg_match("/SQLSTATE\\[([A-Z0-9]{5})\\]/",$e->getMessage(),$m)?$m[1]:"UNKNOWN";
      echo "SELECT_".$name."=ERRO_SQLSTATE_".$code.PHP_EOL;
    }
  }
-}catch(\\Throwable $e){$code=preg_match("/SQLSTATE\\[([A-Z0-9]{5})\\]/",$e->getMessage(),$m)?$m[1]:"UNKNOWN";echo "CONEXAO_WRITER=ERRO_SQLSTATE_".$code.PHP_EOL;exit(1);}
+}catch(\Throwable $e){$code=preg_match("/SQLSTATE\\[([A-Z0-9]{5})\\]/",$e->getMessage(),$m)?$m[1]:"UNKNOWN";echo "CONEXAO_WRITER=ERRO_SQLSTATE_".$code.PHP_EOL;exit(1);}
 '
 echo '=== FIM: NENHUMA escrita, nao repetir desembolso ==='
