@@ -354,3 +354,65 @@ html{font-size:16px}
 @keyframes cis-credit-spin{to{transform:rotate(360deg)}}
 @media(max-width:600px){.cis-credit-error-state{flex-wrap:wrap}.cis-credit-error-state button{margin-left:35px}}
 @media(prefers-reduced-motion:reduce){.cis-credit-loading-icon{animation:none}}
+
+/* CAPTA — Caixa Geral padrão, interface responsiva */
+.cis-cash{display:grid;gap:19px;min-width:0}
+.cis-cash-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 32px;border:1px solid var(--cis-border);border-radius:17px;background:linear-gradient(115deg,var(--cis-hero-from),var(--cis-hero-to));color:#fff}
+.cis-cash-eyebrow{font-size:10px;letter-spacing:1.8px;font-weight:800;opacity:.73}
+.cis-cash-intro h2{font-size:clamp(26px,3vw,34px);margin:6px 0 6px;color:#fff}
+.cis-cash-intro p{font-size:13px;line-height:1.6;max-width:690px;color:var(--cis-hero-soft);margin:0}
+.cis-cash-intro>button{display:inline-flex;align-items:center;gap:8px;border:1px solid #ffffff50;border-radius:9px;padding:10px 15px;background:#ffffff1a;color:#fff;font-weight:750;cursor:pointer}
+.cis-cash-intro>button:disabled{opacity:.5}
+.cis-cash-stats{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:15px}
+.cis-cash-stats article{border:1px solid var(--cis-border);border-radius:13px;padding:21px 23px;background:var(--cis-surface,#fff);display:grid;gap:10px}
+.cis-cash-stats article>span{display:flex;align-items:center;gap:8px;color:var(--cis-text-muted);font-size:12px;font-weight:700}
+.cis-cash-stats strong{font-size:clamp(22px,2.6vw,30px);line-height:1.2;color:var(--cis-heading);font-variant-numeric:tabular-nums}
+.cis-cash-stats small{font-size:11px;color:var(--cis-text-muted);line-height:1.5}
+.cis-cash-tabs{display:flex;gap:7px;border-bottom:1px solid var(--cis-border);overflow-x:auto}
+.cis-cash-tabs button{display:flex;align-items:center;gap:9px;padding:13px 18px;color:var(--cis-text-muted);font-size:13px;font-weight:750;border:0;border-bottom:3px solid transparent;background:transparent;cursor:pointer;white-space:nowrap}
+.cis-cash-tabs button.active{border-bottom-color:var(--cis-primary);color:var(--cis-primary)}
+.cis-cash-panel{background:var(--cis-surface,#fff);border:1px solid var(--cis-border);border-radius:14px;padding:25px;min-width:0;display:grid;gap:18px}
+.cis-cash-panel-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.cis-cash-panel-head h3{font-size:19px;margin:0 0 4px;color:var(--cis-heading)}
+.cis-cash-panel-head p{font-size:12px;color:var(--cis-text-muted);margin:0;line-height:1.5}
+.cis-cash-primary,.cis-cash-toolbar button{border:0;background:var(--cis-primary);color:#fff;border-radius:9px;padding:11px 14px;font-size:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.cis-cash-toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.cis-cash-toolbar button+button{background:var(--cis-tint);color:var(--cis-primary);border:1px solid var(--cis-input-border)}
+.cis-cash-accounts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.cis-cash-account{border:1px solid var(--cis-border);border-radius:13px;padding:20px;display:flex;flex-direction:column;gap:12px;background:var(--cis-surface,#fff);min-width:0}
+.cis-cash-account-top{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.cis-cash-account-icon{display:grid;place-items:center;width:38px;height:38px;background:var(--cis-tint);color:var(--cis-primary);border-radius:11px}
+.cis-cash-badge{border-radius:20px;padding:6px 10px;background:var(--cis-surface-subtle);font-size:10px;color:var(--cis-text-muted);font-weight:800;white-space:nowrap}
+.cis-cash-badge.activa{background:#e5f6ed;color:#1d7447}
+.cis-cash-badge.pendente_validacao{background:#fff4dc;color:#93610a}
+.cis-cash-badge.suspensa{background:#fff1ed;color:#a13c28}
+.cis-cash-account-code{font-size:11px;color:var(--cis-text-muted);font-weight:700}
+.cis-cash-account h4{margin:0;font-size:17px;line-height:1.35;color:var(--cis-heading)}
+.cis-cash-account-balance{border-top:1px solid var(--cis-border);padding-top:14px;display:grid;gap:5px}
+.cis-cash-account-balance small{font-size:11px;color:var(--cis-text-muted)}
+.cis-cash-account-balance strong{font-size:23px;font-weight:800;color:var(--cis-heading);font-variant-numeric:tabular-nums}
+.cis-cash-account-info{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px;font-size:11px;color:var(--cis-text-muted)}
+.cis-cash-account>button{margin-top:auto;border:1px solid var(--cis-input-border);border-radius:9px;background:var(--cis-tint);padding:10px 12px;color:var(--cis-primary);font-weight:750;cursor:pointer}
+.cis-cash-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;background:var(--cis-surface-subtle);border:1px solid var(--cis-border);padding:21px;border-radius:12px}
+.cis-cash-form-title{grid-column:1/-1}.cis-cash-form-title h4{margin:0 0 5px;font-size:16px;color:var(--cis-heading)}
+.cis-cash-form-title p{margin:0;color:var(--cis-text-muted);font-size:12px;line-height:1.55}
+.cis-cash-form label{display:grid;align-content:start;gap:7px;font-size:12px;font-weight:750;color:var(--cis-heading);min-width:0}
+.cis-cash-form .cis-cash-wide,.cis-cash-form-actions{grid-column:1/-1}
+.cis-cash-form input,.cis-cash-form select{border:1px solid var(--cis-input-border);border-radius:9px;padding:12px 13px;background:var(--cis-surface,#fff);min-width:0;width:100%;font:inherit;color:var(--cis-heading)}
+.cis-cash-form-actions{display:flex;justify-content:flex-end;gap:10px}
+.cis-cash-form-actions button{border:1px solid var(--cis-border);background:#fff;border-radius:9px;padding:11px 17px;font-weight:750;color:var(--cis-heading);cursor:pointer}
+.cis-cash-form-actions button[type=submit]{background:var(--cis-primary);color:#fff;border-color:var(--cis-primary)}
+.cis-cash-form-actions button:disabled{opacity:.5;cursor:wait}
+.cis-cash-empty{display:grid;justify-items:center;gap:8px;text-align:center;padding:40px 22px;background:var(--cis-surface-subtle);border:1px dashed var(--cis-border);border-radius:12px;color:var(--cis-text-muted);font-size:13px}
+.cis-cash-empty strong{color:var(--cis-heading);font-size:14px}.cis-cash-empty p{max-width:500px;line-height:1.5;margin:0}
+.cis-cash-message{display:flex;align-items:center;gap:10px;border:1px solid var(--cis-border);border-radius:10px;padding:13px 16px;font-size:13px;line-height:1.5}
+.cis-cash-message.error{color:#a43c20;background:#fff1ed;border-color:#f1d2c7}
+.cis-cash-message.success{color:#13653d;background:#e9f7ef;border-color:#b9e6c8}
+.cis-cash-message.caution{color:#885e16;background:#fff8e9;border-color:#f6dfad}
+.cis-cash-table{min-width:850px}.cis-cash-table td{font-size:12px;white-space:nowrap}.cis-cash-money{font-weight:800;color:var(--cis-heading);font-variant-numeric:tabular-nums}
+.cis-cash-type{display:inline-flex;align-items:center;gap:5px;text-transform:capitalize}
+.cis-cash-footnote{display:flex;gap:8px;color:var(--cis-text-muted);font-size:12px;line-height:1.6;margin:0}
+.cis-cash-footnote svg{flex:none}
+@media(max-width:1160px){.cis-cash-accounts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.cis-cash-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-cash-stats article:first-child{grid-column:1/-1}}
+@media(max-width:670px){.cis-cash-intro{align-items:flex-start;flex-direction:column;padding:22px}.cis-cash-stats{grid-template-columns:1fr}.cis-cash-stats article:first-child{grid-column:auto}.cis-cash-panel{padding:17px}.cis-cash-accounts{grid-template-columns:1fr}.cis-cash-form{grid-template-columns:1fr}.cis-cash-form-title,.cis-cash-form .cis-cash-wide,.cis-cash-form-actions{grid-column:1}.cis-cash-form-actions button{flex:1}}
