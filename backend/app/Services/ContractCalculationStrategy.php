@@ -3,24 +3,32 @@
 namespace App\Services;
 
 /**
- * A lista visual inclui as cinco estratégias fornecidas pelo operador.
- * A rotina Contractos.frm só confirma matematicamente dois mecanismos:
- * juros fixos totais distribuídos com amortização igual e prestação
- * Price para COMPOSTO. Variável é apurado no módulo Cobrança.
+ * Compatibilidade financeira definida para o CIS.
+ * As opções além das duas fórmulas do VBA são regras novas solicitadas pelo
+ * operador: não devem ser apresentadas como transcrição do Contractos.frm.
  */
 final class ContractCalculationStrategy
 {
+    public const DECLINING = 'Amortização fixa com juro decrescente';
     public const FIXED_AMORTIZATION = 'Amortização fixa com juro fixo';
+    public const TOTAL = 'Prestação fixa pelo total';
+    public const SIMPLE = 'Prestação fixa simples';
     public const PRICE = 'Tabela Price';
     public const VARIABLE_COLLECTION = 'Juro variável na cobrança';
 
     public const OPTIONS = [
-        'Amortização fixa com juro decrescente',
+        self::DECLINING,
         self::FIXED_AMORTIZATION,
-        'Prestação fixa pelo total',
-        'Prestação fixa simples',
+        self::TOTAL,
+        self::SIMPLE,
         self::PRICE,
         self::VARIABLE_COLLECTION,
+    ];
+
+    public const COMPATIBILITY = [
+        'Fixo' => [self::FIXED_AMORTIZATION, self::TOTAL, self::SIMPLE],
+        'Composto' => [self::DECLINING, self::PRICE],
+        'Variável' => [self::VARIABLE_COLLECTION],
     ];
 
     public static function supportedFor(string $type): ?string
@@ -33,8 +41,13 @@ final class ContractCalculationStrategy
         };
     }
 
+    public static function forType(string $type): array
+    {
+        return self::COMPATIBILITY[$type] ?? [];
+    }
+
     public static function compatible(string $type, string $strategy): bool
     {
-        return self::supportedFor($type) === $strategy;
+        return in_array($strategy, self::forType($type), true);
     }
 }
