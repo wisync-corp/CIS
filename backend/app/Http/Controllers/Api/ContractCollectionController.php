@@ -111,7 +111,7 @@ final class ContractCollectionController extends Controller
                 throw ValidationException::withMessages(['valor_recebido'=>
                     'O valor recebido não corresponde ao valor devido calculado no servidor.']);
             }
-            abort_unless($calc['total']>0&&$calc['total']<=1000000000,422,'Valor inválido.');
+            abort_unless($calc['total']>0&&$calc['total']<=16777216,422,'Valor inválido.');
             $updated=$db->table('Contractos')->where('Ordem',$ordem)
                 ->where('Nr do Contracto',$numero)
                 ->whereIn('Estado',['Pendente','Pagamento Atrasado'])
