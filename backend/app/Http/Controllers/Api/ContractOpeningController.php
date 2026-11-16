@@ -49,6 +49,13 @@ final class ContractOpeningController extends Controller
             throw ValidationException::withMessages(['estrategia_calculo'=>
                 'Esta estratégia não está homologada para este tipo de juro no motor VBA.']);
         }
+        if (in_array($d['estrategia_calculo'], [
+            ContractCalculationStrategy::TOTAL,
+            ContractCalculationStrategy::SIMPLE,
+            ContractCalculationStrategy::DECLINING,
+        ], true) && !filter_var(env('CIS_EXTENDED_CALCULATIONS_APPROVED', false), FILTER_VALIDATE_BOOLEAN)) {
+            abort(503,'A estratégia adicional ainda não foi activada para gravação financeira após os testes.');
+        }
         $validTerms=(int)$d['periodo_dias']===15
             ? ['1 Semana','2 Semanas']
             : ['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
