@@ -37,6 +37,9 @@ jobs:
       - run: touch database/database.sqlite
       - run: php artisan key:generate
       - run: php artisan migrate --force
+      - run: php -l app/Http/Controllers/Api/CashController.php
+      - run: php -l database/migrations/2026_11_16_000030_create_cis_cash_tables.php
+      - run: php tests/cash_smoke.php
       - run: php artisan route:list --path=api
       - name: HTTP smoke test (Laravel local)
         run: |
