@@ -37,7 +37,7 @@ final class ContractOpeningController extends Controller
             'prazo'=>['required','in:1 Semana,2 Semanas,3 Semanas,1 Mês,2 Meses,3 Meses'],
             'taxa_informada'=>['required','numeric','between:0,100'],
             'taxa_multa'=>['required','numeric','between:0,100'],
-            'prazo_meses'=>['required','integer','in:1,2,3'],
+            'prazo_meses'=>['required','integer','min:0','max:3'],
             'modalidade'=>['required','in:Semanal,Mensal,Uma Parcela'],
             'forma_pagamento'=>['required','in:Transferência/Depósito Bancário,Transferência Móvel,Numerário'],
             'disponibilidade'=>['required','in:Transferência/Depósito Bancário,Transferência Móvel,Numerário'],
@@ -73,17 +73,17 @@ final class ContractOpeningController extends Controller
             throw ValidationException::withMessages(['modalidade'=>
                 'Modalidade incompatível com o prazo seleccionado.']);
         }
-        if ($d['modalidade']==='Semanal') {
+        $isWeeklyTerm=str_contains($d['prazo'],'Semana');
+        $requiresWeekly=$isWeeklyTerm || $d['modalidade']==='Semanal';
+        if ($requiresWeekly && !filter_var(env('CIS_WEEKLY_CONTRACTS_APPROVED',false),FILTER_VALIDATE_BOOLEAN)) {
+            abort(503,'Abertura semanal disponível apenas após os testes e aprovação específica do calendário semanal.');
+        }
+        if ($d['tipo_juro']==='Composto' && $d['modalidade']==='Semanal') {
             throw ValidationException::withMessages(['modalidade'=>
-                'Pagamento semanal ainda não homologado para gravação de prestações; nenhuma operação foi efectuada.']);
+                'Capitalização composta semanal ainda carece de política explícita da taxa de 15/30 dias.']);
         }
-        // Os prazos de semanas foram autorizados para a interface, não para
-        // gravações financeiras com cálculos mensais de Contractos.frm.
-        if (str_contains($d['prazo'],'Semana')) {
-            throw ValidationException::withMessages(['prazo'=>
-                'Abertura semanal ainda suspensa: faltam regras homologadas para juros, modalidades e prestações semanais. Nenhum dado foi gravado.']);
-        }
-        if ((int)explode(' ',$d['prazo'])[0] !== (int)$d['prazo_meses']) {
+        if ((int)explode(' ',$d['prazo'])[0] !== (int)$d['prazo_meses'] && !$isWeeklyTerm
+            || ($isWeeklyTerm && (int)$d['prazo_meses']!==0)) {
             throw ValidationException::withMessages(['prazo'=>'Prazo e meses inconsistentes.']);
         }
         // Esquema antigo: juros/multa INT. Não truncar percentagens silenciosamente.
@@ -177,7 +177,7 @@ final class ContractOpeningController extends Controller
                 }
                 $plan=LegacyContractPricing::plan((float)$d['montante'],$rate,
                     $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio'],
-                    $d['estrategia_calculo']);
+                    $d['estrategia_calculo'],$d['prazo'],(int)$d['periodo_dias']);
                 $cashRows=$db->table('Extracto')
                     ->select(['Tipo de Movimento','Valor'])->get();
                 $saldo=0.0;
@@ -216,7 +216,7 @@ final class ContractOpeningController extends Controller
                         'Nº de Cliente'=>$buyer->ID,'Quantia Creditada'=>$d['montante'],
                         'M. Pagamento'=>$plan['modalidade'],
                         'Estratégia de Cálculo'=>$d['estrategia_calculo'],
-                        'Prazo/Duração'=>$d['prazo_meses'].' '.((int)$d['prazo_meses']===1?'Mês':'Meses'),
+                        'Prazo/Duração'=>$d['prazo'],
                         '% de Juro'=>$rate,'Tipo de Juro'=>$d['tipo_juro'],
                         '% de Multa'=>$d['taxa_multa'],
                         'Forma de Pagamento'=>$d['forma_pagamento'],
@@ -235,7 +235,7 @@ final class ContractOpeningController extends Controller
                         'Estado do Contrato'=>'Em Progresso',
                         'Nº da Parcela'=>$row['parcela'],
                         'Nº de Prestações'=>count($plan['prestacoes']),
-                        'Column1'=>'Mensal','Dias'=>0,'Intervalo'=>$band,
+                        'Column1'=>$d['modalidade'],'Dias'=>0,'Intervalo'=>$band,
                         'Situação de Pagamento'=>'Em Progresso','usuario'=>$actor,
                     ]);
                 }
