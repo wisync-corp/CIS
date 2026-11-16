@@ -208,6 +208,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
   event.preventDefault();
   setReview(null);setReviewError('');setMessage('');setChecked(false);
   if(fixedRate&&!priced){setQuoteError('Não existe taxa parametrizada válida para este montante e período.');return;}
+  if(!validAmount){setReviewError('O montante do crédito deve ser um número inteiro de meticais.');return;}
   if(!selectedBorrower){setClientError('Seleccione um cliente existente no cadastro.');return;}
   setReviewBusy(true);
   try{
@@ -272,7 +273,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
     const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
-    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(quote?.taxa??''):''):values[key]??'';
+    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -322,7 +323,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
      {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
      {key==='estrategia_calculo'&&tipo&&<small role="status">{strategyCompatible?'Estratégia compatível. Os valores são calculados em MT inteiros e arredondados para cima; a última amortização reconcilia o capital.':'Escolha uma estratégia compatível com o tipo de juro.'}</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
-     {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${quote?.taxa}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
+     {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${Number(quote?.taxa)}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;
    })}</div>
   </section>)}
@@ -341,11 +342,11 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
-   {preview&&<div className="cis-contract-plan-preview"><h4>Pré-visualização das prestações (Contractos.frm)</h4>
+   {preview&&<div className="cis-contract-plan-preview"><h4>Pré-visualização das prestações · estratégia seleccionada</h4>
     <p>Prévia sem gravação, segundo a estratégia seleccionada. Regra CIS: valores em MT inteiros com arredondamento para cima e capital totalmente reconciliado. As fórmulas novas são extensões ao VBA original.</p>
     <div className="cis-table-scroll"><table><thead><tr>{['Parcela','Vencimento','Capital (MT)','Amortização (MT)','Juros (MT)','A pagar (MT)','Estado'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{preview.linhas.map(row=><tr key={row.parcela}>
      <td>{row.parcela}</td><td>{row.vencimento.split('-').reverse().join('/')}</td>{[row.capital,row.amortizacao,row.juros,row.valorPagar].map((amount,index)=><td key={index}>{new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(amount)}</td>)}<td>{row.estado}</td>
-    </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalJuros)} MT.
+    </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(preview.totalJuros)} MT.
     {tipo==='Variável'?' Os juros variáveis são calculados na Cobrança quando for conhecida a data efectiva de pagamento.':''}</p>
    </div>}
    {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}</p>
