@@ -41,4 +41,27 @@ try {
     Strategy::PRICE,'2 Meses',30);
  throw new RuntimeException('A conversão de juros compostos semanais devia estar bloqueada.');
 } catch (\Illuminate\Validation\ValidationException $e) {}
-echo "OK: oito calendários semanais/mensais, juro variável, capital inteiro e protecção do composto semanal.\n";
+// Prévia real do módulo Cobrança.frm, SEM abertura de transacções.
+$controller=new \\App\\Http\\Controllers\\Api\\ContractCollectionController();
+$quoteMethod=new ReflectionMethod($controller,'quote');
+$fixed=(object)[
+ 'Data de Cobrança'=>'2026-11-20','Data de Inicio'=>'2026-11-16',
+ 'Amortização'=>100,'Capital'=>100,'Valor de Juros'=>20,
+ 'Valor a Pagar'=>120,'% de Juro'=>20,'% de Multa'=>10,
+ 'Tipo de Juro'=>'Fixo','Nº da Parcela'=>1,
+];
+$late=$quoteMethod->invoke($controller,$fixed,'2026-11-25',true);
+assertFlow($late['dias_atraso']===5,'atraso de cinco dias');
+assertFlow($late['multa']===2&&$late['total']===122,'multa sobre juros e pagamento integral');
+assertFlow($late['estado']==='Pago em Atraso','estado pago em atraso');
+$variable=(object)[
+ 'Data de Cobrança'=>'2026-11-23','Data de Inicio'=>'2026-11-16',
+ 'Amortização'=>1000,'Capital'=>1000,'Valor de Juros'=>0,
+ 'Valor a Pagar'=>1000,'% de Juro'=>1,'% de Multa'=>10,
+ 'Tipo de Juro'=>'Variável','Nº da Parcela'=>1,
+];
+$quote=$quoteMethod->invoke($controller,$variable,'2026-11-20',false);
+assertFlow($quote['juros']===40&&$quote['total']===1040,
+    'juro variável: capital * taxa * quatro dias, arredondado para cima');
+assertFlow($quote['dias_atraso']===0,'sem multa antes do vencimento');
+echo "OK: calendários semanais, reconciliação, juro variável e cálculo de multa sem escrita.\\n";
