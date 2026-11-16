@@ -208,6 +208,8 @@ final class CashController extends Controller
         $d=$request->validate([
             'source_account_id'=>['required','integer','min:1'],
             'destination_account_id'=>['required','integer','min:1','different:source_account_id'],
+            'confirmed_source_debit'=>['required','accepted'],
+            'confirmed_destination_credit'=>['required','accepted'],
             'amount'=>['required','string','max:20'],
             'description'=>['required','string','min:4','max:500'],
             'evidence_reference'=>['required','string','min:5','max:255'],
