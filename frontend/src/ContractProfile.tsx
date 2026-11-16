@@ -19,6 +19,7 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
   {name:'Quantia Creditada',label:'Quantia creditada',kind:'money'},
   {name:'% de Juro',label:'Taxa de juro (%)',kind:'percent'},
   {name:'Tipo de Juro',label:'Tipo de juro'},
+  {name:'Estratégia de Cálculo',label:'Estratégia de cálculo das prestações'},
   {name:'% de Multa',label:'Taxa de multa (%)',kind:'percent'},
   {name:'M. Pagamento',label:'Modalidade de pagamento'},
   {name:'Forma de Pagamento',label:'Forma de pagamento'},
@@ -43,7 +44,7 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
 // Os 33 campos originais são copiados do INSERT INTO Contractos do ficheiro Contractos.frm.
 const allLegacyColumns=[
  'Nr do Contracto','Nº','Nome do Cliente','Nº de Cliente',
- 'Quantia Creditada','M. Pagamento','Prazo/Duração','% de Juro','Tipo de Juro','% de Multa',
+ 'Quantia Creditada','M. Pagamento','Prazo/Duração','% de Juro','Tipo de Juro','Estratégia de Cálculo','% de Multa',
  'Forma de Pagamento','Disponibilidade','Data de Inicio','Cidade','Data Final',
  'Data de Cobrança','Capital','Amortização','Valor a Pagar','Data de Pagamento',
  'Valor de Juros','Valor de Multa','Valor Pago','Estado','Codigo Cliente',
@@ -190,7 +191,7 @@ export default function ContractProfile({numero,token,onBack}:{numero:string;tok
       </div>
       <p>Será necessário importar os PDFs originais e confirmar a correspondência de cada documento com o seu contrato, protegendo os ficheiros por permissões. Não será criado um documento fictício.</p>
      </section>:tab==='Todos os campos'?<div className="cis-contract-all-fields">
-      <p className="cis-contract-count">Consulta integral das 33 colunas do INSERT original do Contractos.frm, para cada prestação. Os valores permanecem os da base MySQL.</p>
+      <p className="cis-contract-count">Consulta das 33 colunas originais do Contractos.frm e da estratégia de cálculo acrescentada pelo CIS, para cada prestação. Os valores permanecem os da base MySQL.</p>
       <div className="cis-table-scroll"><table><thead><tr>{allLegacyColumns.map(name=><th key={name}>{name}</th>)}</tr></thead>
       <tbody>{(data.legacy_rows??[]).map((row,index)=><tr key={String(row.Ordem??index)}>
        {allLegacyColumns.map(name=><td key={name}>{Object.prototype.hasOwnProperty.call(row,name)
