@@ -63,6 +63,10 @@ final class ContractOpeningController extends Controller
             throw ValidationException::withMessages(['prazo'=>
                 'Prazo incompatível com o período escolhido.']);
         }
+        if ($requiresWeekly && $d['estrategia_calculo']===ContractCalculationStrategy::SIMPLE) {
+            throw ValidationException::withMessages(['estrategia_calculo'=>
+                'Prestação fixa simples semanal exige política específica da taxa por período; abertura bloqueada.']);
+        }
         $allowedModalities=match ($d['prazo']) {
             '1 Semana' => ['Uma Parcela'],
             '2 Semanas','3 Semanas','1 Mês' => ['Semanal','Uma Parcela'],
