@@ -41,7 +41,14 @@ echo 'A criar backup integral e protegido antes de alterar a base…'
 bash deploy/backup-before-auth.sh
 echo 'A executar os testes financeiros SEM registos reais…'
 for test_file in contract_opening_pricing_smoke.php contract_calculation_strategy_smoke.php financial_workflows_smoke.php; do
- sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps --build api-test php "tests/$test_file"
+ case "$test_file" in
+  contract_opening_pricing_smoke.php) marker='OK: sete estratégias/casos' ;;
+  contract_calculation_strategy_smoke.php) marker='OK: seis estratégias compatíveis' ;;
+  financial_workflows_smoke.php) marker='OK: calendários semanais' ;;
+ esac
+ output="$(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps --build api-test php "tests/$test_file" 2>&1)" || { printf '%s\n' "$output"; echo "BLOQUEADO: falha no teste $test_file" >&2; exit 1; }
+ printf '%s\n' "$output"
+ grep -Fq "$marker" <<< "$output" || { echo "BLOQUEADO: teste $test_file sem confirmação de sucesso." >&2; exit 1; }
 done
 echo 'A verificar sintaxe PHP e compilação React/TypeScript antes de alterar configurações…'
 for source in app/Services/LegacyContractPricing.php app/Http/Controllers/Api/ContractOpeningController.php app/Http/Controllers/Api/ContractCollectionController.php app/Http/Controllers/Api/ContractOperationalStatusController.php; do
