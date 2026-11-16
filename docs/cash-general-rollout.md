@@ -1,28 +1,26 @@
-# CAPTA — Caixa Geral padrão: entrega inicial e activação segura
+# CAPTA — Caixa Geral: instalação pendente do modelo híbrido
 
-**Entrega:** código do módulo Caixa Geral, contas independentes, saldos de abertura com referência documental, diário de receitas/despesas gerais, transferências internas confirmadas e API privada.
+**Decisão confirmada:** a Caixa padrão utiliza `Extracto` como **fonte única dos lançamentos**, acrescentando apenas `cis_cash_accounts` (contas) e `cis_cash_links` (associação de Extracto.Nr a conta). A Tesouraria é opcional e disponibiliza reconciliação bancária e gestão avançada **sem criar outro livro de movimentos**.
 
-**Estado operativo após git pull:** **DESACTIVADO PARA ESCRITAS** (`CIS_CASH_WRITES_APPROVED=false`). A aplicação pode apresentar o módulo Caixa em modo de consulta **após instalar apenas as novas tabelas**. Não há contas nem saldos de demonstração e não foram importados movimentos históricos.
+**Arquitectura detalhada:** `docs/cash-hybrid-treasury-architecture.md`.
 
-## Limites desta etapa
+## Estado actual
+- Código e interface actualizados no GitHub; **nenhuma migração aplicada pelo assistente na VPS**.
+- A Caixa é consulta apenas até homologar o novo processo; criação de movimentos e transferências pelo fluxo antigo é bloqueada com HTTP 503.
+- Abertura de crédito com desembolso continua bloqueada até ligar `Contractos + Extracto + cis_cash_links` numa transacção atómica e validar a conta/saldo/permissão.
+- Nenhum movimento ou saldo fictício foi introduzido.
+- Os saldos iniciais carecem de evidência documental e data de corte por conta; não atribuir o legado automaticamente.
 
-- **Administração exclusivamente por administradores activos**. A matriz híbrida por perfil, utilizador, limite e conta está desenhada, mas **ainda não implementada** nesta entrega. Não distribuir credenciais de administrador para contornar esta restrição.
-- **Abertura real de novos créditos está deliberadamente bloqueada** (`ContractOpeningController`) até associar a saída a uma conta activa, saldo e movimento da Caixa numa operação atómica. Esta entrega não reabre desembolsos.
-- `Extracto`, `Contractos` e `Clientes` legados não foram modificados nem associados automaticamente a contas.
-- Cobranças de crédito legadas continuam fora do livro de caixa novo. **Não lançar manualmente as mesmas cobranças no formulário de receita geral**, pois causaria duplicação.
-- As contas abertas com saldo e referência documental são **validadas manualmente** por administrador, não reconciliadas automaticamente com um banco. A introdução de uma referência não verifica a autenticidade do documento. O anexo digital de comprovativos ainda não está implementado.
-- **Caixa** permite confirmar movimentos manuais e consultar os seus saldos. **Tesouraria opcional** ficará responsável pela importação e conciliação de extractos, previsões e outros controlos avançados.
-- Lançamentos do livro de caixa são confirmados e imutáveis pela interface actual; **o fluxo de estorno auditável ainda não existe** e terá de ser implementado antes de uso amplo.
-- Transferências internas só podem ser registadas após confirmação documental de **débito da origem e crédito do destino**. Se estiverem pendentes, não registar como concluídas.
+## Antes de executar qualquer migração
 
-## Antes de qualquer execução na VPS
+1. **Não aplicar a migração anterior** do modelo independente com `cis_cash_movements`. O mesmo nome de ficheiro foi revisto para a arquitectura híbrida.
+2. Confirmar **backup restaurável** e testar numa **cópia** da base real; não executar em produção por mera indicação deste documento.
+3. Consultar `information_schema.TABLES` para identificar instalações anteriores de `cis_cash_accounts`, `cis_cash_links` ou `cis_cash_movements`. Se alguma existir, **parar** e definir migração de transição sem eliminar dados.
+4. Confirmar a estrutura de `Extracto.Nr`, `Extracto.Valor`, as restrições, a engine InnoDB e o impacto dos escritores legados externos.
+5. Validar as regras de associação de movimentos históricos `counts_after_opening=false`, evitando dupla contagem.
+6. Só depois homologar a migração isolada; não executar `php artisan migrate` sem `--path` na base legada.
 
-1. Confirmar plano de backup e restauração verificável da base usada para a Caixa.
-2. Obter data de corte e comprovativos de cada conta real; não inventar saldos ou atribuir movimentos antigos.
-3. Testar a migração numa cópia da base, identificar riscos de privilégios e validar as permissões MySQL.
-4. Aprovar operacionalmente as escritas financeiras, os responsáveis e o processo de correcção/estorno antes de mudar a flag.
-
-## Actualizar o código — não activa escrituras
+## Actualização do frontend sem activação financeira
 
 ```bash
 cd /opt/cis
@@ -30,37 +28,25 @@ git pull origin main
 bash deploy/refresh-private-preview.sh
 ```
 
-O módulo permanecerá em estado de esquema não instalado até migrar as duas tabelas isoladas.
+A interface poderá manter aviso **"O esquema da Caixa ainda não foi instalado"** enquanto as duas tabelas híbridas não forem instaladas.
 
-## Migração estritamente isolada (após backup e homologação)
+## Migração isolada — apenas após validação e autorização expressa
 
-**NÃO executar `php artisan migrate` sem `--path` na base legada.** Há outras migrações com dependências do esquema histórico.
+O ficheiro de migração continua a chamar-se:
 
-Depois de garantir cópia de segurança e testar em cópia, aplicar apenas:
+`backend/database/migrations/2026_11_16_000030_create_cis_cash_tables.php`
 
-```bash
-cd /opt/cis
-sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml exec -T api-preview \
-  php artisan migrate --path=database/migrations/2026_11_16_000030_create_cis_cash_tables.php --force
-```
+Agora cria **`cis_cash_accounts` + `cis_cash_links`**, não cria `cis_cash_movements`.
 
-**Sem seed ou saldos iniciais fictícios.** Para validar a instalação:
+**Não usar um comando de instalação de migração em produção antes de executar o pré-voo acima e testar em cópia.** Se existir tabela anterior ou parcial, o código bloqueia a migração em vez de sobrescrever dados.
 
-```bash
-sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml exec -T api-preview \
-  php artisan route:list --path=api/cis/caixa
-```
+## Próximas tarefas antes de operações reais
 
-## Activação separada de movimentos (requer decisão operacional posterior)
+- Cadastro da conta e abertura documental com validação das permissões por utilizador.
+- Registo de despesas e receitas gerais pelo Extracto + associação, atomicamente.
+- Transferências com duas linhas Extracto e duas ligações com `operation_id` comum.
+- Integração de desembolsos e cobranças usando conta obrigatória.
+- Permissões híbridas, controlo de reserva, correcção/estorno e testes concorrentes.
+- Módulo Tesouraria futuro: importação de extractos, conciliação bancária, planeamento e pré-contabilidade. Não duplicar movimentos.
 
-Depois da validação do ambiente, os administradores poderão configurar a flag privada `CIS_CASH_WRITES_APPROVED=true` em `deploy/.env` e reconstruir o serviço com `bash deploy/refresh-private-preview.sh`. **Não activar essa flag apenas com base neste documento.** Ela permite escritas reais em contas novas e exige procedimentos definidos de evidência, auditoria, estornos e suporte.
-
-## Critérios para avançar para desembolsos integrados
-
-1. Cada conta tem data de corte, saldo e comprovativo verificado.
-2. Permissões híbridas por perfil/utilizador/conta/limite aplicadas no servidor.
-3. Fluxo explícito de confirmação da saída conforme numerário, banco ou carteira móvel.
-4. `Contractos` + `Extracto` + `cis_cash_movements` gravados na mesma transacção, com rollback completo e chave idempotente.
-5. Contas inactivas ou insuficientes recusadas no backend.
-6. Não existem lançamentos duplicados por reenvio, falha de rede ou concorrência.
-7. Testes de segurança e reconciliação histórica aprovados.
+**Nota:** a flag `CIS_CASH_WRITES_APPROVED` NÃO permite reactivar os endpoints de movimentos do fluxo antigo; esses endpoints foram explicitamente bloqueados enquanto o backend híbrido não estiver pronto.
