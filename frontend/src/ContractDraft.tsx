@@ -5,6 +5,7 @@ import {previewContractVba,type ContractPreview} from './contractVbaPreview';
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
 type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string;Cidade:string|null};
 type InterestQuote={found:boolean;taxa?:string|number;periodo_dias?:number;limite_inferior?:number;limite_superior?:number;message?:string};
+type OperationalStatus={abertura_desembolso_prontos:boolean;cobranca_pronta:boolean;semanal_pronto:boolean;formulas_adicionais_prontas:boolean;nota:string};
 type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:boolean;pendencias:string[]};
 const API=import.meta.env.VITE_API_URL||'/api';
 function todayMaputo():string{
@@ -81,6 +82,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  const [activeSuggestion,setActiveSuggestion]=useState(0);
  const [cashBalance,setCashBalance]=useState<string>('');
  const [cashError,setCashError]=useState('');
+ const [operational,setOperational]=useState<OperationalStatus|null>(null);
  const [suggestedNumber,setSuggestedNumber]=useState('');
  const [numberError,setNumberError]=useState('');
  const [numberLoading,setNumberLoading]=useState(true);
@@ -136,6 +138,18 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    if(error.name!=='AbortError'&&!controller.signal.aborted)
     setNumberError(error instanceof Error?error.message:'Falha na consulta da numeração.');
   }).finally(()=>{if(!controller.signal.aborted)setNumberLoading(false);});
+  return ()=>controller.abort();
+ },[token]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  fetch(API+'/cis/contractos/estado-operacional',{
+   headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+   signal:controller.signal,
+  }).then(async res=>{
+   if(!res.ok)throw new Error('Estado operacional ainda não disponível.');
+   return res.json() as Promise<OperationalStatus>;
+  }).then(data=>{if(!controller.signal.aborted)setOperational(data);})
+   .catch(()=>{if(!controller.signal.aborted)setOperational(null);});
   return ()=>controller.abort();
  },[token]);
  const chooseBorrower=(borrower:Borrower)=>{
@@ -268,7 +282,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Preparação de novo contrato</span></div>
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>FORMULÁRIO CONTRATOS.FRM</span><h2>Preparar novo contrato</h2><p>Mesmos elementos de entrada do formulário VBA · sem gravar dados</p></div></header>
-  <div className="cis-contract-notice"><LockKeyhole size={18}/><span><strong>Abertura controlada:</strong> a gravação e o desembolso reais apenas são possíveis após validação no servidor, activação autorizada e confirmação expressa de que os fundos foram disponibilizados. O sistema grava contrato, prestações e movimento do Extracto numa única transacção.</span></div>
+  <div className="cis-contract-notice" role="status"><LockKeyhole size={18}/><span><strong>Estado da abertura e desembolso:</strong> {operational?(operational.abertura_desembolso_prontos?'CONFIGURAÇÃO ACTIVA no servidor':'INACTIVA ou incompleta no servidor'):'A confirmar no servidor'}. {operational?('Prestações semanais: '+(operational.semanal_pronto?'activadas':'não activadas')+' · Cobrança: '+(operational.cobranca_pronta?'activada':'não activada')+' · Fórmulas adicionais: '+(operational.formulas_adicionais_prontas?'activadas':'não activadas')+'.'):''} A confirmação de configuração não substitui a validação de cada desembolso ou cobrança.</span></div>
   <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({data_inicio:todayMaputo()});setSelectedBorrower(null);setClientSearch('');setClients([]);setSuggestionsOpen(false);setActiveSuggestion(0);setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
