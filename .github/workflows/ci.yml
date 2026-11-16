@@ -49,6 +49,7 @@ jobs:
       - run: bash -n ../deploy/preflight-cash-direct-account.sh
       - run: bash -n ../deploy/rehearse-cash-migration.sh
       - run: bash -n ../deploy/install-cash-direct-account.sh
+      - run: bash -n ../deploy/activate-cash-account-registration.sh
       - run: bash -n ../deploy/postflight-cash-direct-account.sh
       - run: bash -n ../deploy/inspect-cash-migration-mismatch.sh
       - run: php tests/cash_smoke.php
