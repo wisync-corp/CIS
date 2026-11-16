@@ -15,7 +15,7 @@ $cases=[
     ['3 Semanas',0,'Semanal',3,'2026-12-07'],
     ['1 Mês',1,'Semanal',5,'2026-12-16'],
     ['2 Meses',2,'Semanal',9,'2027-01-16'],
-    ['3 Meses',3,'Semanal',13,'2027-02-16'],
+    ['3 Meses',3,'Semanal',14,'2027-02-16'],
     ['2 Meses',2,'Mensal',2,'2027-01-16'],
     ['3 Meses',3,'Uma Parcela',1,'2027-02-16'],
 ];
