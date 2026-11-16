@@ -26,6 +26,11 @@ echo 'A executar os testes financeiros SEM registos reais…'
 for test_file in contract_opening_pricing_smoke.php contract_calculation_strategy_smoke.php financial_workflows_smoke.php; do
  sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps --build api-test php "tests/$test_file"
 done
+echo 'A verificar sintaxe PHP e compilação React/TypeScript antes de alterar configurações…'
+for source in app/Services/LegacyContractPricing.php app/Http/Controllers/Api/ContractOpeningController.php app/Http/Controllers/Api/ContractCollectionController.php app/Http/Controllers/Api/ContractOperationalStatusController.php; do
+ sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.api-test.yaml run --rm --no-deps api-test php -l "$source"
+done
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml build web-preview
 echo
 echo 'A activação inclui:'
 echo '  1. Geração de prestações semanais (juros fixos e variável/parcela única).'
