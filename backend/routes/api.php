@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ContractClientLookupController;
 use App\Http\Controllers\Api\FinancialReferenceController;
 use App\Http\Controllers\Api\ContractOpeningReviewController;
 use App\Http\Controllers\Api\ContractOpeningController;
+use App\Http\Controllers\Api\ContractCollectionController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -39,6 +40,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('contractos/saldo',[ContractOpeningReviewController::class,'cashBalance'])->middleware('throttle:10,1');
         Route::get('contractos/proximo-numero',[ContractOpeningReviewController::class,'suggestedNumber'])->middleware('throttle:15,1');
         Route::post('contractos/abrir',[ContractOpeningController::class,'store'])->middleware('throttle:3,1');
+        Route::post('contractos/{numero}/prestacoes/{ordem}/simular-cobranca',[ContractCollectionController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
+        Route::post('contractos/{numero}/prestacoes/{ordem}/cobrar',[ContractCollectionController::class,'collect'])->whereNumber('ordem')->middleware('throttle:3,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
