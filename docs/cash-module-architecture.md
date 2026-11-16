@@ -183,6 +183,27 @@ As alterações às políticas e permissões devem ser auditadas e só afectar o
 
 Implementar primeiro **cadastro e reconciliação de contas com consulta apenas**, a seguir permissões e fluxos de aprovação, e só depois a integração atómica de desembolsos. Não activar escritas ou alterar o Extracto legado por esta confirmação.
 
+## Decisão confirmada — Caixa operacional e Tesouraria opcional (sem reconciliação no módulo padrão)
+
+**Confirmado pelo cliente:** a Caixa Geral deve garantir **registo e confirmação operacional manual** de movimentos, mas não incluir importação e reconciliação de extractos bancários. Essas capacidades pertencem ao módulo **Tesouraria opcional**.
+
+- Caixa padrão: contas, saldos, entradas/saídas de receitas e despesas, transferências concluídas, desembolsos/recebimentos após integração dedicada, comprovativo ou referência, histórico e auditoria.
+- Para movimentação bancária no módulo padrão, guardar referência e evidência de transferência **confirmada manualmente**. Não alegar reconciliação bancária independente.
+- Tesouraria opcional: importação de extractos, conciliação de transacções, detecção de divergências, previsões, compromissos e mapas financeiros avançados.
+- A Tesouraria usa **a mesma base financeira da Caixa**, sem duplicação de movimentos ou saldos.
+- A escolha comercial por módulos é **independente** das regras de autorização por perfil, utilizador e limite.
+- Operações de transferência entre contas só são marcadas como concluídas após confirmação documental de débito e crédito. As transferências bancárias pendentes exigem fluxo separado a desenvolver.
+- É proibido lançar movimentos do Extracto antigo em Caixa sem reconciliação controlada, para evitar dupla contabilização.
+
+### Implementação inicial no repositório
+
+- Ficheiros: `backend/app/Http/Controllers/Api/CashController.php`, migração `2026_11_16_000030_create_cis_cash_tables.php`, `frontend/src/CashDesk.tsx`.
+- Interfaces: Contas e saldos; Livro de movimentos; Novo registo de conta; Saldo inicial documentado; Validação manual; Entrada/saída geral; Transferência confirmada entre duas contas.
+- API restrita inicialmente a administradores; a matriz híbrida ainda precisa de implementação.
+- As escritas estão desligadas por defeito (`CIS_CASH_WRITES_APPROVED=false`). Sem contas fictícias e sem importação automática do Extracto antigo.
+- `ContractOpeningController::store` **bloqueado até integração efectiva da saída por conta**, para impedir desembolso sem conta.
+- Ver `docs/cash-general-rollout.md` para migração isolada e homologação.
+
 ## Decisões necessárias
 
 1. **Modelo de contas:** todas as contas reais (bancos, numerário e carteiras móveis) na mesma tabela? Moeda inicial MZN?
