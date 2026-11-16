@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\LegacyContractPricing;
+use App\Services\LegacyContractInsert;
 use App\Services\ContractCalculationStrategy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -214,7 +215,7 @@ final class ContractOpeningController extends Controller
 
                 $actor=mb_substr((string)$user->name,0,255);
                 foreach ($plan['prestacoes'] as $row) {
-                    $db->table('Contractos')->insert([
+                    $contractAttributes = [
                         'Nr do Contracto'=>$number,'Nº'=>$sequence,
                         'Nome do Cliente'=>$buyer->{'Nome Completo'},
                         'Nº de Cliente'=>$buyer->ID,'Quantia Creditada'=>$d['montante'],
@@ -241,7 +242,11 @@ final class ContractOpeningController extends Controller
                         'Nº de Prestações'=>count($plan['prestacoes']),
                         'Column1'=>$d['modalidade'],'Dias'=>0,'Intervalo'=>$band,
                         'Situação de Pagamento'=>'Em Progresso','usuario'=>$actor,
-                    ]);
+                    ];
+                    // Query Builder divide nomes com ponto em tabela.coluna:
+                    // `M. Pagamento` deve ser citado como identificador único.
+                    [$insertSql, $insertBindings] = LegacyContractInsert::statement($contractAttributes);
+                    $db->insert($insertSql, $insertBindings);
                 }
                 $db->table('Extracto')->insert([
                     'Contracto'=>$number,'Cliente'=>$buyer->{'Nome Completo'},
