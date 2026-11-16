@@ -88,6 +88,7 @@ jobs:
       - run: php tests/cash_smoke.php
       - run: php -l database/migrations/2026_11_17_000032_repair_legacy_cash_schema_to_direct_accounts.php
       - run: bash -n ../deploy/rehearse-cash-repair.sh
+      - run: bash -n ../deploy/apply-cash-repair.sh
 
   streamlit:
     runs-on: ubuntu-latest
