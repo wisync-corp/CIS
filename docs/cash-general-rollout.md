@@ -8,6 +8,20 @@
 - Os contratos existentes e o Extracto original permanecem intactos. Novos desembolsos continuam bloqueados pela protecção de segurança já implementada.
 - Os saldos históricos não serão atribuídos automaticamente às contas.
 
+## Primeiro passo autorizado: diagnóstico sem alteração de dados
+
+Na VPS, após obter a versão actual do código, executar exclusivamente:
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/preflight-cash-direct-account.sh
+```
+
+Este procedimento **não executa migrações nem altera dados**. Mostra apenas o esquema, a compatibilidade da tabela `Extracto`, a existência de tabelas antigas e o estado de migração. A saída termina em **PRE-VOO ESTRUTURAL OK** quando os requisitos estruturais são satisfeitos. Qualquer resultado **BLOQUEADO** exige análise antes de prosseguir.
+
+O preflight não constitui autorização de migração e não verifica, por si só, a qualidade do backup, o restauro nem possíveis escritores externos. **Não executar a migração produtiva apenas por este resultado.**
+
 ## Pré-voo obrigatório na VPS (apenas leitura)
 
 Antes de aplicar qualquer migração, efectuar backup restaurável e ensaio numa **cópia** da base. Verificar:
