@@ -125,6 +125,10 @@ final class ContractOpeningReviewController extends Controller
             && !filter_var(env('CIS_WEEKLY_CONTRACTS_APPROVED',false),FILTER_VALIDATE_BOOLEAN)) {
             $issues[] = 'O cálculo semanal está preparado, mas precisa de testes e activação específica para criar e desembolsar.';
         }
+        if (($isWeekly || $values['modalidade']==='Semanal')
+            && $values['estrategia_calculo']===ContractCalculationStrategy::SIMPLE) {
+            $issues[] = 'A prestação fixa simples cobra juros por prestação: com frequência semanal é preciso definir e aprovar uma taxa semanal.';
+        }
         $allowedModalities = match ($values['prazo']) {
             '1 Semana' => ['Uma Parcela'],
             '2 Semanas', '3 Semanas', '1 Mês' => ['Semanal','Uma Parcela'],
