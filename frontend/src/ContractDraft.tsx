@@ -255,6 +255,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
  };
  const openContract=async()=>{
   if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
+  if(!strategySelected.trim()){setOpeningError('Seleccione uma fórmula de cálculo antes de criar e desembolsar o crédito.');return;}
   if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
   setOpeningBusy(true);setOpeningError('');
   try{
@@ -262,6 +263,7 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify({
      cliente_id:selectedBorrower.ID,montante:values.quantia,tipo_juro:tipo,
+     estrategia_calculo:strategySelected,
      taxa_informada:fixedRate?Number(quote?.taxa):Number(values.juros),
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
