@@ -71,7 +71,7 @@ const groupings=[
  {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
  {name:'Estratégia de cálculo das prestações',icon:Wallet,keys:['estrategia_calculo']},
 ];
-export default function ContractDraft({onBack,token}:{onBack:()=>void;token:string}){
+export default function ContractDraft({onBack,onContractCreated,token}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
  const [clientSearch,setClientSearch]=useState('');
  const [clients,setClients]=useState<Borrower[]>([]);
@@ -297,6 +297,8 @@ export default function ContractDraft({onBack,token}:{onBack:()=>void;token:stri
    }
    if(!payload?.numero||payload.prestacoes===undefined||payload.desembolso===undefined)throw new Error('Resposta inesperada: confirme a carteira antes de repetir.');
    setOpenedContract({numero:payload.numero,prestacoes:payload.prestacoes,desembolso:payload.desembolso});
+   // A API confirmou a transacção: abrir imediatamente a ficha do contrato criado.
+   onContractCreated(payload.numero);
   }catch(e){setOpeningError(e instanceof Error?e.message:'Erro na abertura. Verifique a carteira antes de repetir.');}
   finally{setOpeningBusy(false);}
  };
