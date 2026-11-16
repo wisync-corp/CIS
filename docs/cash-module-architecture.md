@@ -100,6 +100,41 @@ A escolha **B — Caixa Geral** resolve o âmbito do produto, **não** autoriza 
 
 Manter a implementação financeira desactivada até definir e testar estas regras; não atribuir a contas os registos legados sem reconciliação.
 
+## Decisão confirmada — Abertura de contas por saldo reconciliado (Opção B)
+
+**Confirmado pelo cliente:** cada conta da Caixa Geral deve iniciar a operação com um **saldo de abertura reconciliado**, comprovado por extracto bancário, comprovativo de carteira móvel ou contagem física de numerário, numa data de corte definida. A confirmação não estabelece, por si só, os valores, a data de corte nem as regras de autorização.
+
+### Fluxo de abertura e homologação de conta
+
+1. **Cadastrar conta real** (nome, identificador, instituição, tipo, moeda, estado `Em preparação`). Não criar caixa fictícia nem saldo automático a partir do total do Extracto.
+2. **Indicar data/hora de corte** da reconciliação (fuso `Africa/Maputo`) e saldo documentado nessa data, em montante exacto.
+3. **Associar evidência** (extracto, comprovativo ou folha de contagem) e identificar utilizador responsável.
+4. **Confrontar movimentos anteriores à data de corte** com os comprovativos, identificando diferenças e os registos legados sem conta atribuída. Não distribuir movimentos históricos automaticamente.
+5. **Submeter à validação** de um utilizador autorizado; resolução de divergências deve ser documentada. A regra de aprovação independente depende da política institucional ainda a definir.
+6. **Activar a conta** apenas após validação e reconciliação; manter registos e comprovativos imutáveis e auditáveis. Só contas activas e autorizadas ficam disponíveis para novos desembolsos.
+7. **Registar movimentos posteriores à data de corte** no livro de caixa por conta, com chave idempotente e vínculo ao crédito ou categoria de receita/despesa. Não contabilizar duas vezes movimentos importados.
+
+### Estados sugeridos
+
+`Em preparação` → `Em reconciliação` → `Pendente de validação` → `Activa` / `Rejeitada` / `Suspensa`.
+
+### Garantias de integridade
+
+- O saldo inicial é um **ponto de partida contabilizado uma única vez por conta**, nunca uma entrada repetida em todas as consultas.
+- O saldo disponível resulta do saldo reconciliado e dos movimentos confirmados posteriores à data de corte, descontadas reservas válidas se forem implementadas.
+- Divergência não justificada, ausência de documento, conta inactiva ou moeda incompatível **bloqueiam a utilização dessa conta para desembolso**.
+- Correções de saldo exigem movimento de ajuste ou estorno auditável, nunca alteração silenciosa do saldo inicial homologado.
+- Testar saldos com `DECIMAL` e fusos horários, inclusive operação na data de corte; determinar a regra de inclusão dos movimentos exactamente na hora do corte.
+- Preservar os históricos de `Contractos` e `Extracto`; qualquer migração requer plano de reconciliação e backup verificado.
+- **Nenhuma migração financeira nem bloqueio operacional é autorizado apenas pela escolha desta opção.**
+
+### Decisões por definir antes de implementar
+
+1. **Data de corte e contas iniciais**: por conta ou data comum? Montantes, moedas e comprovativos reais.
+2. **Política de desembolsos**: permissões e limites por perfil/indivíduo; aprovação directa ou independente; momento de confirmação das transferências bancárias/móveis.
+3. **Activação operacional**: como impedir novas saídas sem conta reconciliada e como migrar os créditos em preparação, sem perda de operações.
+4. **Gestão de diferenças**: responsáveis, tolerâncias e procedimento formal de ajustes.
+
 ## Decisões necessárias
 
 1. **Modelo de contas:** todas as contas reais (bancos, numerário e carteiras móveis) na mesma tabela? Moeda inicial MZN?
