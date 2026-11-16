@@ -11,6 +11,9 @@ if (Schema::hasTable('Extracto')) throw new RuntimeException('Extracto preexiste
 Schema::create('Extracto', function(Blueprint $t) {
   $t->id('Nr');
   $t->string('Tipo de Movimento',30);
+  $t->string('Contracto')->nullable();
+  $t->unsignedInteger('Parcela')->nullable();
+  $t->string('usuario')->nullable();
   $t->decimal('Valor',18,2);
   $t->string('Descrição');
   $t->date('Data da Operação');
