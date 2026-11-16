@@ -52,6 +52,24 @@ Resultado esperado: `ENSAIO DE RESTAURO E MIGRACAO: APROVADO (somente ambiente i
 
 **Importante:** esta validação não verifica toda a compatibilidade de escritores externos (Excel/VBA) nem substitui janela de manutenção e autorização de alteração produtiva.
 
+## Instalação controlada após ensaio aprovado (alteração real; requer confirmação no terminal)
+
+O cliente confirmou que CAPTA é o único escritor do `Extracto`. O teste de restauro e migração isolados foi concluído com preservação de **1.295** linhas no `Extracto` e **680** registos em `Contractos`. Isto permite preparar a janela de manutenção, **mas não equivale a aprovar automaticamente alterações produtivas**.
+
+Disponível o instalador supervisionado:
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/install-cash-direct-account.sh
+```
+
+O script efectua pré-voo de leitura, gera novo backup, solicita confirmação textual `MIGRAR-CAIXA`, pára temporariamente a API, compara a contagem e soma de Extracto, executa **apenas** a migração do esquema de Caixa e verifica que os movimentos e contratos não foram alterados. Reinicia a API ao sair, inclusive se ocorrer erro. O comando usa a conta MySQL configurada no serviço Laravel, que **precisa de privilégios `CREATE` e `ALTER`**. Um erro de permissão não autoriza alteração manual sem revisão.
+
+**Antes de confirmar no terminal:** garantir acesso de manutenção, indisponibilidade temporária da API aceite, ausência de outras sessões/escritores, backup testado e autorização de alteração. Se algo não estiver confirmado, digitar qualquer coisa diferente de `MIGRAR-CAIXA` e cancelar.
+
+Não repetir automaticamente após erro: o MySQL pode deixar DDL parcialmente aplicado. Inspeccionar o esquema e preparar recuperação específica. O instalador não activa gravação de novos movimentos; a Caixa permanece protegida.
+
 ## Ficheiro de migração proposto
 
 `backend/database/migrations/2026_11_16_000030_create_cis_cash_tables.php`
