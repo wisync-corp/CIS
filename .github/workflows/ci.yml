@@ -50,6 +50,7 @@ jobs:
       - run: bash -n ../deploy/rehearse-cash-migration.sh
       - run: bash -n ../deploy/install-cash-direct-account.sh
       - run: bash -n ../deploy/postflight-cash-direct-account.sh
+      - run: bash -n ../deploy/inspect-cash-migration-mismatch.sh
       - run: php tests/cash_smoke.php
       - run: php artisan route:list --path=api
       - name: HTTP smoke test (Laravel local)
