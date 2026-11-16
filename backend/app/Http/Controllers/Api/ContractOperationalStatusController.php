@@ -42,17 +42,21 @@ final class ContractOperationalStatusController extends Controller
         } catch (\Throwable $e) {
             // Não revelar credenciais, detalhes de servidor ou SQL no endpoint.
         }
-        $ready=$flags['abertura']&&$checks['conexao_financeira']
+        // O desembolso legado foi bloqueado ate integrar conta e movimento da Caixa.
+        // Nao apresentar o endpoint como pronto por flags antigas.
+        $cashAccountDisbursementIntegrated=false;
+        $ready=$cashAccountDisbursementIntegrated&&$flags['abertura']&&$checks['conexao_financeira']
             &&$checks['coluna_estrategia']&&$checks['tabelas_transaccionais']
             &&$checks['permissoes_abertura'];
         return response()->json([
             'abertura_desembolso_prontos'=>$ready,
+            'caixa_desembolso_integrado'=>$cashAccountDisbursementIntegrated,
             'cobranca_pronta'=>$ready&&$flags['cobranca']&&$checks['permissoes_cobranca'],
             'semanal_pronto'=>$ready&&$flags['semanal'],
             'formulas_adicionais_prontas'=>$ready&&$flags['formulas_adicionais'],
             'sinalizadores'=>$flags,
             'verificacoes'=>$checks,
-            'nota'=>'Confirma apenas configuração e ligações; não confirma que uma transacção financeira real já foi executada.',
+            'nota'=>'Abertura com desembolso bloqueada ate associar atomicamente conta activa e movimento de Caixa. A verificacao de flags nao autoriza nova concessao.',
         ])->header('Cache-Control','no-store, private');
     }
 }
