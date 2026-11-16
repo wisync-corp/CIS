@@ -163,7 +163,6 @@ export default function CashDesk({token}:{token:string}){
      <div className="cis-cash-account-actions">
       <button type="button" onClick={()=>setAccountDetail(a.id)}><Eye size={15}/> Ver detalhes</button>
       {a.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(a.id)}>Movimentos <ChevronRight size={15}/></button>}
-      {false&&a.status==='em_preparacao'&&<button type="button" className="primary" onClick={()=>{setSelected(String(a.id));beginAction('opening');setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});}}>Definir saldo inicial <ArrowRight size={15}/></button>}
      </div>
     </article>)}</div>}
    {detailAccount&&<div className="cis-cash-detail" role="region" aria-label={'Detalhes da conta '+detailAccount.name}>
@@ -180,7 +179,6 @@ export default function CashDesk({token}:{token:string}){
     {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>Validação manual: confirme o documento e a data de corte antes de activar esta conta. Esta acção não realiza reconciliação bancária independente.</span></div>}
     <div className="cis-cash-detail-actions">
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
-     {false&&detailAccount.status==='pendente_validacao'&&<button type="button" className="primary" disabled={busy} onClick={e=>void submit(e,'activate',detailAccount.id)}><ClipboardCheck size={16}/>{busy?'A validar…':'Validar documentação e activar'}</button>}
      <button type="button" onClick={()=>setAccountDetail(null)}>Fechar</button>
     </div>
    </div>}
