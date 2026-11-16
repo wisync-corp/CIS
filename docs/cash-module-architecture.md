@@ -61,6 +61,45 @@ A verificação do formulário é informativa: **o backend deve repetir todas as
 9. Nenhuma migração muda os 679 registos de contratos e 1294 movimentos existentes sem decisão expressa.
 10. Nenhum teste cria um desembolso real ou move fundos.
 
+## Decisão funcional confirmada — Caixa Geral (Opção B)
+
+**Confirmado pelo cliente em 16/11/2026:** a **Caixa é um módulo padrão** do CAPTA, com âmbito **geral** e não limitado à concessão e cobrança de créditos.
+
+### Alcance mínimo da Caixa padrão
+
+- Múltiplas contas reais, com saldo independente: numerário, contas bancárias e carteiras móveis.
+- Entradas: pagamentos de prestações e outras receitas da instituição, com classificação e referência.
+- Saídas: desembolsos de crédito, despesas operacionais e outras saídas, com conta de origem explícita.
+- Transferências entre contas: saída de uma conta e entrada noutra com vínculo comum, sem afectar indevidamente o resultado financeiro consolidado.
+- Livro diário, saldos por conta, histórico, comprovantes e estornos controlados.
+- Cada movimento possui natureza, conta, montante, data efectiva, operador, referência e relação opcional a crédito/contrato.
+- A caixa geral tem uma única fonte de movimentos. **Não** criar segunda caixa para quem activar Tesouraria.
+
+### Tesouraria como módulo opcional
+
+A Tesouraria é uma **camada adicional**, contratada ou activada conforme a escolha de cada instituição. Reutiliza as contas, saldos e movimentos da Caixa padrão e acrescenta planeamento, previsões, gestão de compromissos, reconciliação avançada, classificações pré-contabilísticas e relatórios de gestão. Não introduz uma segunda base de saldos.
+
+**A contratação da Tesouraria não determina automaticamente aprovação em duas fases.** Fluxos de aprovação são definidos por permissões de utilizador, limites e políticas institucionais, independentemente do pacote de módulos.
+
+### Requisitos de lançamento de despesas e receitas gerais
+
+- Natureza distinta do movimento: crédito/desembolso, cobrança, receita geral, despesa operacional, transferência, ajuste e estorno.
+- Categoria e descrição obrigatórias para movimentos gerais; ligação ao contrato obrigatória para operações de crédito.
+- Guardar utilizador, data de registo, data efectiva e comprovativo quando exigido pela política.
+- Não permitir alterar nem eliminar movimento confirmado; corrigir por estorno com autorização e referência.
+- Contabilização avançada **não** é obrigatória para utilizar Caixa padrão.
+- Conta de origem/destino, moeda, saldo e permissões são sempre validados no servidor. Para desembolsos, saldo global agregado nunca substitui saldo da conta escolhida.
+
+### Decisões técnicas ainda em aberto
+
+A escolha **B — Caixa Geral** resolve o âmbito do produto, **não** autoriza automaticamente:
+1. O procedimento de saldos iniciais e a data de corte de reconciliação.
+2. O tratamento de transferências bancárias/móveis ainda pendentes de confirmação.
+3. Os perfis, limites e regras de autorização de desembolsos.
+4. A alteração imediata do endpoint de desembolso existente (bloqueio operacional).
+
+Manter a implementação financeira desactivada até definir e testar estas regras; não atribuir a contas os registos legados sem reconciliação.
+
 ## Decisões necessárias
 
 1. **Modelo de contas:** todas as contas reais (bancos, numerário e carteiras móveis) na mesma tabela? Moeda inicial MZN?
