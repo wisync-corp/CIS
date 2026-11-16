@@ -48,10 +48,10 @@ echo 'A verificar conexão do utilizador de cadastro e privilégios restritos...
 sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml exec -T api-preview php -r '
 require "/srv/cis/vendor/autoload.php";
 $app=require "/srv/cis/bootstrap/app.php";
-$app->make(\\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 if (!filter_var(env("CIS_CASH_ACCOUNT_SETUP_APPROVED",false),FILTER_VALIDATE_BOOLEAN)) exit(2);
 if (filter_var(env("CIS_CASH_WRITES_APPROVED",false),FILTER_VALIDATE_BOOLEAN)) exit(3);
-$conn=\\Illuminate\\Support\\Facades\\DB::connection("mysql_cash_setup");
+$conn=\Illuminate\Support\Facades\DB::connection("mysql_cash_setup");
 if ($conn->getDatabaseName()!=="cis") exit(4);
 $conn->select("SELECT id FROM cis_cash_accounts LIMIT 0");
 echo "CADASTRO DE CONTAS CONFIGURADO. Movimentos financeiros bloqueados.\n";
