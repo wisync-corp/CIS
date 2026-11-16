@@ -37,7 +37,7 @@ try {
     Pricing::plan(9000,25,'Fixo','Semanal',0,'2026-11-16',
         Strategy::FIXED_AMORTIZATION,'3 Semanas',15);
     throw new RuntimeException('Três semanas com período de 15 dias deviam ser recusadas.');
-} catch (\\Illuminate\\Validation\\ValidationException $e) {}
+} catch (\Illuminate\Validation\ValidationException $e) {}
 $variable=Pricing::plan(1000,25,'Variável','Uma Parcela',0,'2026-11-16',
     Strategy::VARIABLE_COLLECTION,'2 Semanas',15);
 assertFlow($variable['prestacoes'][0]['juros']===0,'Variável: juros apenas na cobrança');
