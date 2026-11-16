@@ -73,7 +73,7 @@ final class ContractOpeningReviewController extends Controller
 
         $values = $request->validate([
             'cliente_id' => ['required', 'integer', 'min:1'],
-            'montante' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'montante' => ['required', 'integer', 'min:1', 'max:100000000'],
             'tipo_juro' => ['required','in:Fixo,Variável,Composto'],
             'estrategia_calculo' => ['required','string','max:90'],
             'periodo_dias' => ['required','integer','in:15,30'],
@@ -97,7 +97,7 @@ final class ContractOpeningReviewController extends Controller
         if (!in_array($values['estrategia_calculo'], ContractCalculationStrategy::OPTIONS, true)) {
             $issues[] = 'Estratégia de cálculo não reconhecida.';
         } elseif (!ContractCalculationStrategy::compatible($values['tipo_juro'], $values['estrategia_calculo'])) {
-            $issues[] = 'A estratégia escolhida não tem fórmula homologada para o tipo de juro; seleccione a estratégia compatível com o VBA.';
+            $issues[] = 'A estratégia escolhida não é compatível com o tipo de juro.';
         }
         if (!DB::connection('mysql_legacy')->getSchemaBuilder()->hasColumn('Contractos','Estratégia de Cálculo')) {
             $issues[] = 'A nova coluna Estratégia de Cálculo ainda não foi criada na tabela Contractos. Execute a migração autorizada.';
@@ -182,7 +182,7 @@ final class ContractOpeningReviewController extends Controller
             'autorizado_para_gravar' => count($issues) === 0 && filter_var(env('CIS_NEW_CONTRACTS_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
             'pendencias' => [
                 'O servidor verificará novamente saldo disponível, taxa, cliente e esquema antes de gravar.',
-                'Os campos Capital/Amortização originais são INT: operações com perda de cêntimos serão recusadas.',
+                'Todas as quantias e parcelas são inteiras; os juros são arredondados para cima e o capital é reconciliado integralmente.',
                 'O desembolso deve ser confirmado pelo operador; contrato e Extracto são gravados na mesma transacção.',
             ],
         ])->header('Cache-Control', 'no-store, private');
