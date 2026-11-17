@@ -18,7 +18,7 @@ type ScenarioQuote={resultado:string;aviso:string;consulta_apenas:boolean;[key:s
 type ParcelasQuote={
  consulta_apenas:boolean;modo:'multa'|'reparcelamento';prazo:string;periodo_referencia:number;
  dias_propostos:number;base:string;valor_recebido:string|null;valor_a_pagar_original:string;
- juros_originais:string;taxa_faixa:string;limite_inferior:string;limite_superior:string;
+ juros_originais:string;taxa_faixa:string;taxa_aplicada:string;taxa_manual:boolean;limite_inferior:string;limite_superior:string;
  juros_ou_multa_calculados:string;total_calculado:string;calculo:string;arredondamento:string;
  taxa_multa_contrato?:string|null;multa_pela_taxa_contratual?:string|null;metodos_divergentes?:boolean;
  aviso:string;
@@ -81,6 +81,7 @@ export default function CollectionsDesk({token}:{token:string}){
  const [scenarioQuote,setScenarioQuote]=useState<ScenarioQuote|null>(null);
  const [capitalPeriod,setCapitalPeriod]=useState('');
  const [parcelaPrazo,setParcelaPrazo]=useState('');
+ const [taxaManual,setTaxaManual]=useState('');
  const [parcelaBusy,setParcelaBusy]=useState(false);
  const [parcelaQuote,setParcelaQuote]=useState<ParcelasQuote|null>(null);
  const [accountId,setAccountId]=useState('');
@@ -159,9 +160,9 @@ export default function CollectionsDesk({token}:{token:string}){
  const canQuote=mode==='total'&&!!selectedInstallment&&isPending(selectedInstallment);
  const cannotExecute=true; // Cobranças reais sem Extracto.account_id são recusadas pelo backend.
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);setParcelaQuote(null);setParcelaPrazo('');window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);setParcelaQuote(null);setParcelaPrazo('');setTaxaManual('');window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setParcelaQuote(null);setParcelaPrazo('');setReviewDate(today());setMessage('');}
+ function chooseMode(value:Mode){setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setParcelaQuote(null);setParcelaPrazo('');setTaxaManual('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setOrd(value);setQuote(null);setScenarioQuote(null);setParcelaQuote(null);setPaymentAmount('');setMessage('');}
  async function simulateParcelas(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -170,7 +171,8 @@ export default function CollectionsDesk({token}:{token:string}){
   setParcelaQuote(null);setParcelaBusy(true);setMessage('');
   try{
    const payload={modo:mode==='parcial'?'reparcelamento':'multa',prazo:parcelaPrazo,
-    ...(mode==='parcial'?{valor_recebido:paymentAmount.trim()}: {})};
+    ...(mode==='parcial'?{valor_recebido:paymentAmount.trim()}: {}),
+    ...(taxaManual.trim()?{taxa_manual:taxaManual.trim()}: {})};
    const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(ord)+'/simular-parcelas',{
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
     body:JSON.stringify(payload)
@@ -292,6 +294,9 @@ export default function CollectionsDesk({token}:{token:string}){
             <option value="Mês">Mês</option>
            </select>
           </label>
+          <label>Taxa manual (%) <span className="cis-collections-required">Opcional · só para simulação</span>
+           <input inputMode="decimal" value={taxaManual} maxLength={6} onChange={e=>{setTaxaManual(e.target.value);setParcelaQuote(null);}} placeholder="Usar taxa automática da faixa"/>
+          </label>
           <small>No VBA, o prazo inicial é «2 Semanas» e fica oculto no modo multa. Aqui é explicitado para evitar aplicação silenciosa de taxas.</small>
           <button type="submit" disabled={!parcelaPrazo||parcelaBusy||(mode==='parcial'&&!partialValid)}>
            {parcelaBusy?'A calcular…':mode==='parcial'?'Simular nova parcela':'Comparar cálculo de multa'} <ArrowRight size={16}/>
@@ -302,6 +307,7 @@ export default function CollectionsDesk({token}:{token:string}){
           <dl>
            <div><dt>Base calculada</dt><dd>{fmt(parcelaQuote.base)}</dd></div>
            <div><dt>Taxa da faixa</dt><dd>{parcelaQuote.taxa_faixa}%</dd></div>
+           <div><dt>Taxa aplicada</dt><dd>{parcelaQuote.taxa_aplicada}%{parcelaQuote.taxa_manual?' (manual)':''}</dd></div>
            <div><dt>Faixa de valor</dt><dd>{parcelaQuote.limite_inferior} – {parcelaQuote.limite_superior} MT</dd></div>
            <div><dt>Período de referência</dt><dd>{parcelaQuote.periodo_referencia} dias</dd></div>
            <div><dt>Prazo seleccionado</dt><dd>{parcelaQuote.dias_propostos} dias</dd></div>
