@@ -1,17 +1,11 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
+import CollectionsDesk from './CollectionsDesk';
 
 type Item=Record<string,string|number|null>;
-type CollectionQuote={parcela:number;dias_atraso:number;juros:number;multa:number;total:number;estado:string;data_pagamento:string;aviso:string};
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
 type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Pagamentos'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
-function paymentTodayMozambique():string{
- const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
-  year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
- const val=(kind:string)=>parts.find(part=>part.type===kind)?.value??'';
- return val('year')+'-'+val('month')+'-'+val('day');
-}
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
 
@@ -58,8 +52,6 @@ function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
  return String(left).localeCompare(String(right),'pt',{numeric:kind==='number'});
 }
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
-const validAmount=(raw:unknown):raw is number|string=>raw!==null&&raw!==undefined&&raw!==''&&Number.isFinite(Number(raw));
-const isPaid=(row:Item)=>['pago','pago em atraso','liquidado','finalizado'].includes(String(row.Estado??'').trim().toLowerCase());
 const integerMoney=new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0});
 function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  const raw=item[name];
@@ -83,13 +75,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [sortColumn,setSortColumn]=useState<InstallmentSort>('Nº da Parcela');
- const [collectionOrd,setCollectionOrd]=useState('');
- const [collectPenalty,setCollectPenalty]=useState(false);
- const [collectionQuote,setCollectionQuote]=useState<CollectionQuote|null>(null);
- const [collectionBusy,setCollectionBusy]=useState(false);
- const [collectionError,setCollectionError]=useState('');
- const [collectionStatus,setCollectionStatus]=useState('');
- const [receivedConfirmed,setReceivedConfirmed]=useState(false);
+ const [paymentOrder,setPaymentOrder]=useState<string|undefined>();
  const [sortDirection,setSortDirection]=useState<'asc'|'desc'>('asc');
  const load=useCallback(async(signal?:AbortSignal)=>{
   setLoading(true);setError('');
@@ -106,56 +92,11 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  },[numero,token]);
  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
  const contract=data?.contract;
- // Indicadores calculados apenas a partir das prestações efectivamente lidas.
- const financialSnapshot=useMemo(()=>{
-  const rows=data?.installments??[];
-  const sum=(key:string)=>rows.reduce((total,row)=>total+(validAmount(row[key])?Number(row[key]):0),0);
-  const paid=sum('Valor Pago');
-  const scheduled=sum('Valor a Pagar');
-  const outstanding=Math.max(0,scheduled-paid);
-  const pendingRows=rows.filter(row=>!isPaid(row));
-  const nextDue=[...pendingRows].filter(row=>/^\d{4}-\d{2}-\d{2}/.test(String(row['Data de Cobrança']??'')))
-   .sort((a,b)=>String(a['Data de Cobrança']).localeCompare(String(b['Data de Cobrança'])))[0]??null;
-  const progress=scheduled>0?Math.min(100,Math.max(0,(paid/scheduled)*100)):0;
-  return {paid,scheduled,outstanding,pending:pendingRows.length,installments:rows.length,nextDue,progress};
- },[data]);
  const firstLoanAmount=contract?.['Quantia Creditada'];
- const currency=(value:number)=>money.format(value)+' MT';
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
   return cmp===0?a.index-b.index:(sortDirection==='asc'?cmp:-cmp);
  }).map(({item})=>item)??[],[data,sortColumn,sortDirection]);
- const quoteCollection=async()=>{
-  if(!collectionOrd)return;
-  setCollectionBusy(true);setCollectionError('');setCollectionQuote(null);setReceivedConfirmed(false);setCollectionStatus('');
-  try{
-   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(numero)+'/prestacoes/'+encodeURIComponent(collectionOrd)+'/simular-cobranca',{
-    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',Accept:'application/json'},
-    body:JSON.stringify({data_pagamento:paymentTodayMozambique(),cobrar_multa:collectPenalty})
-   });
-   const payload=await response.json().catch(()=>null) as CollectionQuote&{message?:string};
-   if(!response.ok)throw new Error(payload?.message??'Não foi possível preparar a cobrança. Apenas contratos CIS novos são elegíveis.');
-   setCollectionQuote(payload);
-  }catch(e){setCollectionError(e instanceof Error?e.message:'Falha na consulta de cobrança.');}
-  finally{setCollectionBusy(false);}
- };
- const settleCollection=async()=>{
-  if(!collectionOrd||!collectionQuote||!receivedConfirmed||collectionBusy)return;
-  if(!window.confirm('Confirma que recebeu efectivamente '+collectionQuote.total+' MT do mutuário? Esta operação lançará a entrada no Extracto e liquidará a prestação.'))return;
-  setCollectionBusy(true);setCollectionError('');
-  try{
-   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(numero)+'/prestacoes/'+encodeURIComponent(collectionOrd)+'/cobrar',{
-    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',Accept:'application/json'},
-    body:JSON.stringify({data_pagamento:collectionQuote.data_pagamento,cobrar_multa:collectPenalty,valor_recebido:collectionQuote.total,confirmacao_recebimento:true})
-   });
-   const payload=await response.json().catch(()=>null) as {message?:string;total?:number};
-   if(!response.ok)throw new Error(payload?.message??'Cobrança não efectuada. Verifique o histórico antes de repetir.');
-   setCollectionStatus('Pagamento registado: '+payload.total+' MT. O Extracto foi actualizado.');
-   setCollectionQuote(null);setCollectionOrd('');setReceivedConfirmed(false);
-   await load();
-  }catch(e){setCollectionError(e instanceof Error?e.message:'Falha de cobrança. Confirme o histórico antes de repetir.');}
-  finally{setCollectionBusy(false);}
- };
  function sortBy(column:InstallmentSort){if(sortColumn===column)setSortDirection(prev=>prev==='asc'?'desc':'asc');else{setSortColumn(column);setSortDirection('asc');}}
  return <section className="cis-profile-page">
   <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos contratos</button><span>Contratos / Ficha individual</span></div>
@@ -206,43 +147,8 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
       <Icon size={19}/><span>{name}<small>{detail}</small></span><ChevronRight className="cis-credit-nav-chevron" size={15}/></button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Histórico e cobrança separados do contrato.':'Informações essenciais do contrato.'}</p></div></header>
-     {tab==='Pagamentos'?<section className="cis-contract-operation">
-      <div className="cis-contract-payment-summary" aria-label="Resumo de pagamentos">
-       <article><span>Total recebido</span><strong>{currency(financialSnapshot.paid)}</strong><small>Registos de Valor Pago</small></article>
-       <article><span>Previsto por liquidar</span><strong>{currency(financialSnapshot.outstanding)}</strong><small>Conforme prestações actuais</small></article>
-      </div>
-      <div className="cis-credit-progress" role="group" aria-label="Progresso financeiro previsto">
-       <div><strong>Progresso de recebimentos</strong><span>{financialSnapshot.progress.toFixed(0)}% do total previsto</span></div>
-       <div className="cis-credit-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(financialSnapshot.progress)} aria-label="Percentagem prevista recebida"><span style={{width:financialSnapshot.progress+'%'}}/></div>
-       <small>O total previsto pode variar com juros variáveis, multas e outros encargos. Não representa uma reconciliação contabilística.</small>
-      </div>
-      <h4>Histórico de pagamentos</h4>
-      {data.installments.some(row=>Number(row['Valor Pago']??0)>0)?<div className="cis-table-scroll"><table><thead><tr><th>Parcela</th><th>Data de pagamento</th><th>Valor recebido</th><th>Estado</th></tr></thead><tbody>
-       {sortedInstallments.filter(row=>Number(row['Valor Pago']??0)>0).map((row,index)=><tr key={String(row.Ordem??index)}><td>{format(row,'Nº da Parcela')}</td><td>{format(row,'Data de Pagamento','date')}</td><td>{format(row,'Valor Pago','money')}</td><td>{format(row,'Estado')}</td></tr>)}
-      </tbody></table></div>:<p>Não existem pagamentos registados nas prestações deste contrato.</p>}
-      <h4>Registar pagamento</h4>
-      <div className="cis-contract-notice"><LockKeyhole size={18}/><span>Cobrança sujeita a autorização financeira no servidor. Pagamentos parciais e renovações continuam indisponíveis.</span></div>
-      <div className="cis-profile-fields">
-       <label className="cis-profile-field"><span>Prestação a receber</span><select value={collectionOrd} onChange={e=>{setCollectionOrd(e.target.value);setCollectionQuote(null);setReceivedConfirmed(false);setCollectionError('');}}>
-        <option value="">Seleccionar prestação pendente</option>
-        {data.installments.filter(item=>['Pendente','Pagamento Atrasado'].includes(String(item.Estado??''))).map(item=><option key={String(item.Ordem)} value={String(item.Ordem)}>
-         Parcela {format(item,'Nº da Parcela')} · {format(item,'Data de Cobrança','date')}</option>)}
-       </select></label>
-       <label className="cis-profile-field cis-contract-confirm"><input type="checkbox" checked={collectPenalty} onChange={e=>{setCollectPenalty(e.target.checked);setCollectionQuote(null);setReceivedConfirmed(false);}}/> Cobrar multa por atraso (quando aplicável)</label>
-      </div>
-      <button type="button" className="cis-contract-draft-button" disabled={!collectionOrd||collectionBusy} onClick={()=>void quoteCollection()}>{collectionBusy?'A consultar…':'Calcular valor para cobrança'}</button>
-      {collectionQuote&&<div className="cis-contract-review"><strong>Prévia da cobrança</strong>
-       <p>Data: {collectionQuote.data_pagamento} · Dias de atraso: {collectionQuote.dias_atraso}</p>
-       <p>Juros: {collectionQuote.juros} MT · Multa: {collectionQuote.multa} MT</p>
-       <p><strong>Total a receber: {collectionQuote.total} MT</strong></p>
-       <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Prévia apenas. O registo definitivo só será activado quando for possível seleccionar uma conta da Caixa e confirmar a entrada com comprovativo.</span></div>
-       <button type="button" className="cis-contract-draft-button" disabled onClick={()=>void settleCollection()}><LockKeyhole size={15}/> Registo financeiro temporariamente indisponível</button>
-      </div>}
-      {collectionError&&<div className="cis-table-error" role="alert">{collectionError}</div>}
-      {collectionStatus&&<div className="cis-contract-review" role="status">{collectionStatus}</div>}
-      <p>A cobrança real requer activação pelo administrador e permissões limitadas no MySQL. Contratos históricos e pagamentos parciais continuam protegidos.</p>
-     </section>:tab==='Documento original'?<section className="cis-contract-operation">
+     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':'Informações essenciais do contrato.'}</p></div></header>
+     {tab==='Pagamentos'?<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder}/>:tab==='Documento original'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
       <h4>Documento associado ao contrato</h4>
       <div className="cis-profile-fields">
@@ -258,7 +164,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        </button></th>)}<th>Operação da prestação</th></tr></thead>
        <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
         {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
-        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{setTab('Pagamentos');setCollectionOrd(String(item.Ordem??''));setCollectionQuote(null);setReceivedConfirmed(false);}}><ReceiptText size={15}/> Ver pagamentos</button></td>
+        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{setPaymentOrder(String(item.Ordem??''));setTab('Pagamentos');}}><ReceiptText size={15}/> Ver pagamentos</button></td>
        </tr>)}</tbody></table></div>
      </>:<div className="cis-credit-section">
       {tab==='Contrato'&&<div className="cis-credit-section-lead"><CheckCircle2 size={19}/><div><strong>Informação do contrato</strong><p>Os elementos essenciais, sem campos técnicos do antigo Excel.</p></div></div>}
