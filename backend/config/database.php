@@ -41,6 +41,16 @@ return [
             'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
             'prefix'=>'','strict'=>true,'engine'=>null,
         ],
+        // Escritor mínimo dos fechos: SELECT contas e Extracto; SELECT/INSERT
+        // só na tabela de controlo. Não escrever/alterar Extracto.
+        'mysql_cash_closures' => [
+            'driver'=>'mysql','host'=>env('DB_HOST','127.0.0.1'),'port'=>env('DB_PORT','3306'),
+            'database'=>env('DB_DATABASE','cis'),
+            'username'=>env('CASH_CLOSURES_DB_USERNAME','cis_cash_closures'),
+            'password'=>env('CASH_CLOSURES_DB_PASSWORD',''),
+            'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
+            'prefix'=>'','strict'=>true,'engine'=>null,
+        ],
         'mysql_cash_setup' => [
             'driver' => 'mysql',
             'host' => env('DB_HOST', '127.0.0.1'), 'port' => env('DB_PORT', '3306'),
