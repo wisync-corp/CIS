@@ -90,12 +90,14 @@ final class CashController extends Controller
         $accounts = $this->accountRows((int)$request->user()->id);
         return response()->json([
             'accounts' => $accounts,
-            'can_write' => false, // Movimentações financeiras desactivadas.
+            'can_write' => filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
+                && filter_var(env('CIS_CASH_LEDGER_POSTING_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
+                && Schema::hasColumn('Extracto','operation_key'), // Nunca activar só com a coluna.
             'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'single_admin_opening' => $this->singleAdminOpening(),
-            'notice' => 'Contas CIS; a fonte única é Extracto, com account_id opcional para preservar históricos. Escritas aguardam integração segura.'
+            'notice' => 'Fonte única de movimentos: Extracto; contas identificadas por account_id. A escrita real depende de autorização operacional adicional.'
         ])->header('Cache-Control', 'no-store, private');
     }
 
