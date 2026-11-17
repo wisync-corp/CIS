@@ -134,7 +134,7 @@ export default function CashDesk({token}:{token:string}){
  return <section className="cis-cash">
   <div className="cis-cash-intro"><div><div className="cis-cash-eyebrow"><span className="cis-cash-live-dot"/> GESTÃO FINANCEIRA · MÓDULO PADRÃO</div>
    <h2>Caixa Geral</h2><p>Organize as contas financeiras da instituição num único espaço seguro.</p>
-   <div className="cis-cash-hero-flags"><span><ShieldCheck size={14}/> Uma fonte financeira: Extracto</span><span><LockKeyhole size={14}/> Movimentos protegidos</span></div></div>
+   <div className="cis-cash-hero-flags"><span><ShieldCheck size={14}/> Uma fonte financeira: Extracto</span><span><LockKeyhole size={14}/> {enabled?'Escrituração autorizada':'Movimentos protegidos'}</span></div></div>
    <button type="button" onClick={()=>void reload()} disabled={busy||loading}><RefreshCw size={16}/> Actualizar dados</button>
   </div>
   {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/><span>{error}</span><button type="button" onClick={()=>setError('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
@@ -239,31 +239,32 @@ export default function CashDesk({token}:{token:string}){
     <span className="cis-cash-result-count">{filteredMovements.length} de {movements.length} movimentos</span>
    </div>
    {action==='record'&&<form className="cis-cash-form" onSubmit={e=>void simulate(e,'record')}>
-    <div className="cis-cash-form-note"><Info size={16}/> Simulação sem gravação. Não é recibo, comprovativo nem reserva de saldo. A execução real continua bloqueada.</div>
-    <div className="cis-cash-form-title"><span className="cis-cash-step">SIMULAÇÃO FINANCEIRA</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Os desembolsos e cobranças seguem processos próprios; nenhum lançamento será efectuado.</p></div>
+    <div className="cis-cash-form-note"><Info size={16}/> A prévia não movimenta dinheiro. {enabled?'Após conferência, poderá confirmar o registo no Extracto.':'O registo real continua bloqueado.'}</div>
+    <div className="cis-cash-form-title"><span className="cis-cash-step">{enabled?'ENTRADA / SAÍDA FINANCEIRA':'SIMULAÇÃO FINANCEIRA'}</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Desembolsos e cobranças exigem integração própria com os contratos.</p></div>
     <label>Conta financeira<select required value={record.account_id} onChange={e=>{setRecord(p=>({...p,account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar conta activa</option>{active.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Natureza<select value={record.type} onChange={e=>{setRecord(p=>({...p,type:e.target.value as 'entrada'|'saida'}));setEstimate(null);}}><option value="entrada">Entrada / receita</option><option value="saida">Saída / despesa</option></select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={record.amount} onChange={e=>{setRecord(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/><small>Utilize um valor positivo com até duas casas decimais.</small></label>
-    <label>Categoria<input required minLength={3} maxLength={90} value={record.category} onChange={e=>setRecord(p=>({...p,category:e.target.value}))} placeholder="Despesa operacional"/></label>
-    <label className="cis-cash-wide">Descrição<input required minLength={4} maxLength={500} value={record.description} onChange={e=>setRecord(p=>({...p,description:e.target.value}))}/></label>
-    <label className="cis-cash-wide">Referência ou comprovativo<input value={record.evidence_reference} onChange={e=>setRecord(p=>({...p,evidence_reference:e.target.value}))} placeholder="Obrigatório em saídas bancárias e de carteiras móveis"/></label>
+    <label>Categoria<input required minLength={2} maxLength={32} pattern="[A-Za-zÀ-ÿ0-9 _-]{2,32}" value={record.category} onChange={e=>{setRecord(p=>({...p,category:e.target.value}));setEstimate(null);}} placeholder="Despesa operacional"/></label>
+    <label className="cis-cash-wide">Descrição<input required minLength={5} maxLength={100} value={record.description} onChange={e=>{setRecord(p=>({...p,description:e.target.value}));setEstimate(null);}}/></label>
+    <label className="cis-cash-wide">Referência ou comprovativo<input required minLength={6} maxLength={70} value={record.evidence_reference} onChange={e=>{setRecord(p=>({...p,evidence_reference:e.target.value}));setEstimate(null);}} placeholder="Referência documental obrigatória em qualquer operação"/></label>
     {record.account_id&&<div className="cis-cash-form-summary">
      <div><span>Conta seleccionada</span><strong>{active.find(a=>String(a.id)===record.account_id)?.name??'—'}</strong></div>
      <div><span>Saldo actual</span><strong>{formatMoney(active.find(a=>String(a.id)===record.account_id)?.saldo_disponivel??null)}</strong></div>
      <div><span>{record.type==='entrada'?'Entrada prevista':'Saída prevista'}</span><strong>{moneyInput(record.amount)?formatMoney(record.amount):'—'}</strong></div>
      <div className="cis-cash-form-summary-total"><span>Saldo após lançamento (indicativo)</span><strong>{moneyInput(record.amount)?formatMoney(Number(active.find(a=>String(a.id)===record.account_id)?.saldo_disponivel??0)+(record.type==='entrada'?1:-1)*Number(record.amount)):'—'}</strong></div>
     </div>}
-    <div className="cis-cash-form-note"><Info size={16}/> A prévia consulta o saldo no servidor, mas não o reserva nem efectua qualquer movimento. Os valores podem mudar até à futura confirmação.</div>
-    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!active.length||!record.account_id||!moneyInput(record.amount)}>{busy?'A calcular…':'Simular '+(record.type==='entrada'?'entrada':'saída')} <ArrowRight size={16}/></button></div>
+    <div className="cis-cash-form-note"><Info size={16}/> A prévia consulta o saldo no servidor, mas não o reserva. O saldo será novamente verificado sob bloqueio de conta antes de qualquer lançamento.</div>
+    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!active.length||!record.account_id||!moneyInput(record.amount)||record.category.trim().length<2||record.description.trim().length<5||record.evidence_reference.trim().length<6}>{busy?'A calcular…':'Simular '+(record.type==='entrada'?'entrada':'saída')} <ArrowRight size={16}/></button></div>
+    {enabled&&estimate&&<div className="cis-cash-form-actions"><button type="button" disabled={busy} onClick={()=>void submit(null,'record')}><ShieldCheck size={17}/> {busy?'A confirmar…':'Confirmar e lançar no Extracto'}</button></div>}
    </form>}
    {action==='transfer'&&<form className="cis-cash-form" onSubmit={e=>void simulate(e,'transfer')}>
-    <div className="cis-cash-form-note"><Info size={16}/> Simulação sem transferência real. Não é necessário confirmar transferências executadas para calcular esta prévia.</div>
+    <div className="cis-cash-form-note"><Info size={16}/> A simulação não altera saldos. {enabled?'A confirmação exige comprovativos reais das duas contas.':'A transferência real permanece bloqueada.'}</div>
     <div className="cis-cash-form-title"><span className="cis-cash-step">SIMULAÇÃO DE TRANSFERÊNCIA</span><h4>Prévia entre contas</h4><p>Consulte o efeito estimado nas duas contas. Não é necessário executar qualquer transferência real para esta simulação.</p></div>
     <label>Conta de origem<select required value={transfer.source_account_id} onChange={e=>{setTransfer(p=>({...p,source_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar origem</option>{active.map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Conta de destino<select required value={transfer.destination_account_id} onChange={e=>{setTransfer(p=>({...p,destination_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar destino</option>{active.filter(a=>String(a.id)!==transfer.source_account_id).map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={transfer.amount} onChange={e=>{setTransfer(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/></label>
-    <label>Referência / comprovativo<input required minLength={5} value={transfer.evidence_reference} onChange={e=>setTransfer(p=>({...p,evidence_reference:e.target.value}))}/></label>
-    <label className="cis-cash-wide">Descrição<input required minLength={4} value={transfer.description} onChange={e=>setTransfer(p=>({...p,description:e.target.value}))}/></label>
+    <label>Referência / comprovativo<input required minLength={6} maxLength={70} value={transfer.evidence_reference} onChange={e=>{setTransfer(p=>({...p,evidence_reference:e.target.value}));setEstimate(null);}}/></label>
+    <label className="cis-cash-wide">Descrição<input required minLength={5} maxLength={100} value={transfer.description} onChange={e=>{setTransfer(p=>({...p,description:e.target.value}));setEstimate(null);}}/></label>
     {transfer.source_account_id&&transfer.destination_account_id&&<div className="cis-cash-form-summary">
      <div><span>Origem</span><strong>{active.find(a=>String(a.id)===transfer.source_account_id)?.name??'—'}</strong></div>
      <div><span>Destino</span><strong>{active.find(a=>String(a.id)===transfer.destination_account_id)?.name??'—'}</strong></div>
@@ -271,7 +272,8 @@ export default function CashDesk({token}:{token:string}){
      <div className="cis-cash-form-summary-total"><span>Saldo previsto na origem</span><strong>{moneyInput(transfer.amount)?formatMoney(Number(active.find(a=>String(a.id)===transfer.source_account_id)?.saldo_disponivel??0)-Number(transfer.amount)):'—'}</strong></div>
     </div>}
     <div className="cis-cash-form-note"><Info size={16}/> A transferência regista uma saída e uma entrada vinculadas. É obrigatória a confirmação de ambas as operações.</div>
-    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||active.length<2||!moneyInput(transfer.amount)||!transfer.source_account_id||!transfer.destination_account_id||transfer.source_account_id===transfer.destination_account_id}>{busy?'A calcular…':'Simular transferência'} <ArrowRight size={16}/></button></div>
+    <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||active.length<2||!moneyInput(transfer.amount)||!transfer.source_account_id||!transfer.destination_account_id||transfer.source_account_id===transfer.destination_account_id||transfer.evidence_reference.trim().length<6||transfer.description.trim().length<5}>{busy?'A calcular…':'Simular transferência'} <ArrowRight size={16}/></button></div>
+    {enabled&&estimate&&<div className="cis-cash-form-actions"><button type="button" disabled={busy} onClick={()=>void submit(null,'transfer')}><ShieldCheck size={17}/> {busy?'A confirmar…':'Confirmar transferência nas duas contas'}</button></div>}
    </form>}
    {loading?<div className="cis-cash-loading" role="status"><RefreshCw size={18}/> A consultar movimentos…</div>:movements.length===0?
     <div className="cis-cash-empty"><div className="cis-cash-empty-icon"><Clock3 size={25}/></div><strong>O livro de Caixa ainda está vazio</strong><p>Os movimentos serão apresentados aqui após a activação das contas. O Extracto legado permanece separado.</p></div>:
