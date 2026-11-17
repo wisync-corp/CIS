@@ -34,7 +34,14 @@ echo "Administradores activos encontrados: $admins (não são mostradas identida
 # A flag de novos contratos pode estar TRUE sem ser uma via de
 # desembolso habilitada: o controlador legado bloqueia logo no inicio com 503.
 # Verificar o bloqueio de forma conservadora; se mudar o codigo, parar.
-if grep -Eq '^CIS_CASH_WRITES_APPROVED=true$|^CIS_COLLECTION_WRITES_APPROVED=true
+if grep -Eq '^(CIS_CASH_WRITES_APPROVED|CIS_COLLECTION_WRITES_APPROVED)=true$' deploy/.env; then
+ echo 'BLOQUEADO: movimentos da Caixa ou cobranças reais habilitados.' >&2
+ exit 1
+fi
+if grep -qx 'CIS_NEW_CONTRACTS_APPROVED=true' deploy/.env; then
+ echo 'Abertura de contratos marcada como activa: a verificar bloqueio seguro do desembolso...'
+ python3 -c 'from pathlib import Path; s=Path("backend/app/Http/Controllers/Api/ContractOpeningController.php").read_text(); start=s.find("public function store(Request $request)"); assert start>=0, "BLOQUEADO: método store não encontrado"; body=s[start:]; block=body.find("abort(503, '\''Abertura com desembolso temporariamente suspensa:"); actor=body.find("$user = $request->user()"); assert block>=0 and actor>=0 and block<actor, "BLOQUEADO: desembolso não está explicitamente suspenso"; print("OK: desembolso legado continua bloqueado antes de qualquer escrita.")' || { echo 'BLOQUEADO: verificar manualmente ContractOpeningController.' >&2; exit 1; }
+fi
 if grep -Eq '^CIS_CASH_OPENING_(SETUP|VALIDATE)_APPROVED=true$|^CASH_OPENING_(SUBMIT|VALIDATE)_DB_PASSWORD=' deploy/.env; then
  echo 'BLOQUEADO: configuracao previa encontrada; rever manualmente, nao repetir.' >&2; exit 1
 fi
