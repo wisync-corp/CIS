@@ -130,7 +130,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const isFifteenDayTerm=/^(?:15\s*dias?|2\s*semanas)$/i.test(currentTerm.trim());
  const contractStatus=text(profile?.contract['Estado do Contrato']);
  const contractClosed=/finalizado|liquidado|cancelado|anulado/i.test(contractStatus);
- const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed);
+ const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed&&
+  !/^(?:completo|liquidado|finalizado)$/i.test(String(row?.['Situação de Pagamento']??'').trim()));
  const eligibleModes:Mode[]=selectedInstallment&&installmentEligible(selectedInstallment)?[
   'total','parcial','renovar_juros','capitalizar','remanescente','actualizar_data',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])
  ]:[];
@@ -235,7 +236,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
      {!!profile.contract_fields_divergent?.length&&<div className="cis-collections-risk"><AlertCircle size={17}/> Campos divergentes no contrato: {profile.contract_fields_divergent.join(', ')}. Não assumir valores únicos sem reconciliação.</div>}
      <div className="cis-collections-switch" role="tablist" aria-label="Pagamentos deste contrato">
       <button type="button" role="tab" aria-selected={view==='resumo'} className={view==='resumo'?'selected':''} onClick={()=>setView('resumo')}><Wallet size={16}/> Resumo</button>
-      <button type="button" role="tab" aria-selected={view==='tratamento'} disabled={!activeOrder} className={view==='tratamento'?'selected':''} onClick={()=>setView('tratamento')}><ReceiptText size={16}/> Tratamento do pagamento</button>
+      {activeOrder&&<button type="button" role="tab" aria-selected={view==='tratamento'} className={view==='tratamento'?'selected':''} onClick={()=>setView('tratamento')}><ReceiptText size={16}/> Tratamento do pagamento</button>}
       <button type="button" role="tab" aria-selected={view==='historico'} className={view==='historico'?'selected':''} onClick={()=>setView('historico')}><BookOpen size={16}/> Histórico</button>
      </div>
      {view==='resumo'?<div className="cis-collections-panel cis-collections-overview">
