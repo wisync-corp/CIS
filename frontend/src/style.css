@@ -834,11 +834,9 @@ html{font-size:16px}
 @media(max-width:670px){.cis-cash-posting-header{padding:18px}.cis-cash-posting-page>.cis-cash-form{padding:17px}}
 
 
-/* Caixa Geral — densidade visual ajustada a monitores grandes.
-   Expande apenas o módulo Caixa, preservando as outras páginas. */
-@media(min-width:1150px){
-  .cis-main:has(> .cis-cash){max-width:none;width:100%;margin:0;padding:24px clamp(20px,2.2vw,42px) 38px}
-}
+/* Caixa Geral — refinamento de indicadores e tabela.
+   A largura do conteúdo é agora controlada globalmente para todos os módulos. */
+
 .cis-cash{width:100%;font-size:14px;gap:20px}
 .cis-cash-intro{min-height:178px;padding:30px 34px}
 .cis-cash-intro h2{font-size:clamp(30px,2.5vw,39px)}
@@ -885,4 +883,67 @@ html{font-size:16px}
   .cis-cash-panel-head h3{font-size:18px}
   .cis-cash-table td{padding:14px}
   .cis-cash-posting-page{max-width:100%}
+}
+
+
+/* CAPTA | Escala de interface global — todos os módulos do sistema.
+   Usa o espaço disponível no desktop sem criar scroll horizontal forçado. */
+.cis-stage{width:calc(100% - 268px);min-width:0}
+.cis-main{
+  width:100%;
+  max-width:none;
+  margin:0;
+  padding:clamp(22px,2.1vw,34px) clamp(20px,2.5vw,48px) 48px;
+  min-width:0;
+  font-size:14px;
+}
+.cis-main>*,.cis-stage>*,.cis-panel,.cis-stat,.cis-table-scroll{min-width:0}
+.cis-top{padding-inline:clamp(20px,2.5vw,48px)}
+.cis-breadcrumb{font-size:14px}
+.cis-kicker{font-size:11px}
+.cis-title-row{margin:15px 0 25px}
+.cis-title-row h1{font-size:clamp(29px,2.15vw,38px)}
+.cis-title-row p{font-size:14px}
+.cis-side nav{gap:6px}
+.cis-side nav button{font-size:14px;padding-block:14px;min-height:46px}
+.cis-brand{padding-bottom:38px}
+.cis-stat-grid{gap:clamp(12px,1.15vw,20px)}
+.cis-stat{padding:clamp(19px,1.55vw,28px);min-height:148px}
+.cis-stat-top{font-size:13px}
+.cis-stat>strong{font-size:clamp(30px,2.5vw,40px);margin-block:16px}
+.cis-stat>small{font-size:12px;line-height:1.5}
+.cis-home-grid{gap:clamp(14px,1.3vw,23px)}
+.cis-panel{padding:clamp(22px,1.75vw,32px)}
+.cis-panel h2{font-size:19px}
+.cis-panel p{font-size:13px}
+.cis-action-row button{padding:20px;min-height:78px}
+.cis-action-row button b,.cis-ledger b{font-size:13px}
+.cis-action-row button small,.cis-ledger small{font-size:12px}
+.cis-table-controls{gap:12px}
+.cis-table-controls input,.cis-table-controls button,.cis-table-scroll table{font-size:13px}
+.cis-table-scroll th{font-size:12px;padding:16px 18px}
+.cis-table-scroll td{padding:17px 18px}
+.cis-table-footer{font-size:12px}
+.cis-main input:not([type=checkbox]):not([type=radio]),
+.cis-main select,.cis-main textarea{min-height:42px}
+.cis-main input,.cis-main select,.cis-main textarea,.cis-main button{font-size:inherit}
+.cis-main .cis-profile-page,.cis-main .cis-cash,.cis-main .cis-simulator-layout{width:100%;max-width:none}
+@media(min-width:1700px){
+  .cis-main{padding-inline:clamp(34px,2.4vw,64px)}
+  .cis-stat-grid{gap:22px}
+  .cis-home-grid{gap:24px}
+}
+@media(max-width:1130px){
+  .cis-main{padding:26px 24px 42px}
+  .cis-top{padding-inline:24px}
+}
+@media(max-width:750px){
+  .cis-stage{width:100%}
+  .cis-main{padding:22px 14px 35px}
+  .cis-top{padding-inline:16px}
+  .cis-title-row h1{font-size:26px}
+  .cis-stat{min-height:120px;padding:18px}
+  .cis-panel{padding:18px}
+  .cis-table-scroll th,.cis-table-scroll td{padding:13px}
+  .cis-side nav button{font-size:14px}
 }
