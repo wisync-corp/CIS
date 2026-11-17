@@ -72,7 +72,10 @@ final class CollectionScenarioPreviewController extends Controller
         if ($capital===0) $capital=self::cents((string)($r->{'Quantia Creditada'}??0),'capital');
         $interest=self::cents((string)($r->{'Valor de Juros'}??0),'juros');
         $due=self::cents((string)($r->{'Valor a Pagar'}??0),'valor_a_pagar');
-        abort_unless($capital>0 && $due>0,409,'Capital ou valor a pagar incompatível com simulação.');
+        if (in_array($operation,['parcial','renovar_juros','capitalizar','actualizar_data'],true)) {
+            abort_unless($capital>0 && $due>0,409,
+                'Capital ou valor a pagar incompatível com simulação.');
+        }
 
         if ($operation==='parcial') {
             $paid=self::cents($d['valor_pago']??'','valor_pago');
@@ -109,6 +112,8 @@ final class CollectionScenarioPreviewController extends Controller
             $period=(int)$d['periodo_referencia'];
             // O VBA prefere período 30 e usa a primeira faixa como fallback.
             // Em vez de escolher uma taxa silenciosamente, exigir o período.
+            abort_unless(\Illuminate\Support\Facades\Schema::hasTable('cis_tabela_juros'),503,
+                'Tabela de referência de juros não instalada.');
             $matches=DB::table('cis_tabela_juros')
                 ->where('limite_inferior','<=',self::fmt($newCapital))
                 ->where('limite_superior','>=',self::fmt($newCapital))
