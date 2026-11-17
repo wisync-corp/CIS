@@ -12,6 +12,7 @@ if [[ -z "$backup" ]]; then
 fi
 [[ -n "$backup" && -r "$backup" && -s "$backup" ]] || { echo 'Backup ausente, vazio ou ilegível.' >&2; exit 1; }
 command -v openssl >/dev/null || exit 1
+sudo -v # pedir autenticação uma única vez antes de iniciar o ensaio
 nonce="$(openssl rand -hex 5)"
 db="cis_cash_opkey_db_$nonce"
 network="cis_cash_opkey_net_$nonce"
@@ -23,10 +24,10 @@ db_created=0; net_created=0; vol_created=0; image_created=0
 cleanup() {
   result=$?
   trap - EXIT
-  if [[ "$db_created" == 1 ]]; then sudo docker rm -f "$db" >/dev/null 2>&1 || true; fi
-  if [[ "$net_created" == 1 ]]; then sudo docker network rm "$network" >/dev/null 2>&1 || true; fi
-  if [[ "$vol_created" == 1 ]]; then sudo docker volume rm "$volume" >/dev/null 2>&1 || true; fi
-  if [[ "$image_created" == 1 ]]; then sudo docker image rm "$image_name" >/dev/null 2>&1 || true; fi
+  if [[ "$db_created" == 1 ]]; then sudo -n docker rm -f "$db" >/dev/null 2>&1 || true; fi
+  if [[ "$net_created" == 1 ]]; then sudo -n docker network rm "$network" >/dev/null 2>&1 || true; fi
+  if [[ "$vol_created" == 1 ]]; then sudo -n docker volume rm "$volume" >/dev/null 2>&1 || true; fi
+  if [[ "$image_created" == 1 ]]; then sudo -n docker image rm "$image_name" >/dev/null 2>&1 || true; fi
   if [[ "$result" -eq 0 ]]; then
     echo 'ENSAIO DE CORRECCAO APROVADO; base real intocada.'
   else
@@ -38,21 +39,21 @@ trap cleanup EXIT
 echo '=== ENSAIO ISOLADO DA IDEMPOTENCIA DO EXTRACTO ==='
 echo "Backup: $(basename "$backup")"
 echo "SHA256: $(sha256sum "$backup" | cut -d' ' -f1)"
-sudo docker network create --internal "$network" >/dev/null; net_created=1
-sudo docker volume create "$volume" >/dev/null; vol_created=1
-sudo docker run -d --name "$db" --network "$network" --network-alias cash-opkey-mysql \
+sudo -n docker network create --internal "$network" >/dev/null; net_created=1
+sudo -n docker volume create "$volume" >/dev/null; vol_created=1
+sudo -n docker run -d --name "$db" --network "$network" --network-alias cash-opkey-mysql \
  --mount "type=volume,src=$volume,dst=/var/lib/mysql" \
  -e "MYSQL_ROOT_PASSWORD=$password" -e MYSQL_DATABASE=cis mysql:8.0 >/dev/null; db_created=1
 ready=0
 for i in $(seq 1 90); do
- if sudo docker exec -e "MYSQL_PWD=$password" "$db" mysql -uroot -N -e 'SELECT 1;' >/dev/null 2>&1; then ready=1; break; fi
+ if sudo -n docker exec -e "MYSQL_PWD=$password" "$db" mysql -uroot -N -e 'SELECT 1;' >/dev/null 2>&1; then ready=1; break; fi
  sleep 2
 done
 [[ "$ready" == 1 ]] || { echo 'MySQL temporario indisponivel.' >&2; exit 1; }
 echo 'A restaurar copia num MySQL temporario...'
-sudo docker exec -i -e "MYSQL_PWD=$password" "$db" mysql -uroot --default-character-set=utf8mb4 cis < "$backup"
+sudo -n docker exec -i -e "MYSQL_PWD=$password" "$db" mysql -uroot --default-character-set=utf8mb4 cis < "$backup"
 sql() {
- sudo docker exec -e "MYSQL_PWD=$password" "$db" mysql -uroot --batch --skip-column-names cis -e "$1"
+ sudo -n docker exec -e "MYSQL_PWD=$password" "$db" mysql -uroot --batch --skip-column-names cis -e "$1"
 }
 # A origem é obrigatoriamente um backup da Caixa directa já existente.
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='cis_cash_accounts';")" == 1 ]] || { echo 'Backup anterior à Caixa directa; ensaio recusado.' >&2; exit 1; }
@@ -66,9 +67,9 @@ accounts="$(sql 'SELECT COUNT(*),COALESCE(SUM(opening_balance),0) FROM cis_cash_
 associated="$(sql 'SELECT COUNT(*) FROM Extracto WHERE account_id IS NOT NULL;')"
 echo "Extracto antes: $before; Contractos: $contracts; Contas: $accounts; Associados: $associated"
 echo 'A compilar imagem actualizada com a migração exacta...'
-sudo docker build --quiet -t "$image_name" backend >/dev/null; image_created=1
+sudo -n docker build --quiet -t "$image_name" backend >/dev/null; image_created=1
 echo 'A executar APENAS a nova migração no MySQL ISOLADO...'
-sudo docker run --rm --network "$network" --entrypoint php \
+sudo -n docker run --rm --network "$network" --entrypoint php \
  -e APP_ENV=production -e APP_DEBUG=false -e "APP_KEY=$app_key" \
  -e CIS_RUN_MIGRATIONS=false -e DB_CONNECTION=mysql \
  -e DB_HOST=cash-opkey-mysql -e DB_PORT=3306 -e DB_DATABASE=cis \
