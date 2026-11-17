@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\ContractOperationalStatusController;
 use App\Http\Controllers\Api\CashController;
 use App\Http\Controllers\Api\CashReportController;
 use App\Http\Controllers\Api\CashDailyController;
+use App\Http\Controllers\Api\CashClosureController;
 use App\Http\Controllers\Api\CashReversalController;
 use App\Http\Controllers\Api\CashPostingController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
@@ -39,6 +40,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('movimentos',[CashController::class,'movements'])->middleware('throttle:30,1');
         Route::get('relatorio',[CashReportController::class,'index'])->middleware('throttle:15,1');
         Route::get('conferencia-diaria',[CashDailyController::class,'index'])->middleware('throttle:15,1');
+        Route::get('fecho-diario',[CashClosureController::class,'show'])->middleware('throttle:15,1');
+        Route::post('fecho-diario',[CashClosureController::class,'store'])->middleware('throttle:5,1');
         Route::get('estornos/{nr}/previsualizar',[CashReversalController::class,'preview'])->whereNumber('nr')->middleware('throttle:15,1');
         Route::post('estornos/{nr}',[CashReversalController::class,'reverse'])->whereNumber('nr')->middleware('throttle:5,1');
         Route::post('contas',[CashController::class,'createAccount'])->middleware('throttle:8,1');
