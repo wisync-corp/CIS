@@ -50,7 +50,7 @@ final class CashReportController extends Controller
 
         $accounts=DB::table('cis_cash_accounts')
             ->when(isset($data['account_id']),fn($q)=>$q->where('id',$data['account_id']))
-            ->orderBy('code')->get(['id','code','name','status','cut_at']);
+            ->orderBy('code')->get(['id','code','name','status','cut_at','opening_extracto_nr']);
         abort_if(isset($data['account_id']) && $accounts->isEmpty(),404,'Conta financeira inexistente.');
         $byAccount=$accounts->keyBy('id');
         $ids=$accounts->pluck('id')->all();
@@ -61,7 +61,7 @@ final class CashReportController extends Controller
             ->whereNotNull('account_id');
 
         $entries=0;$exits=0;$internalIn=0;$internalOut=0;
-        $count=0;$categoryCents=[];$pendingTransferKeys=[];
+        $count=0;$categoryCents=[];
         $rows=$query->orderBy('Nr')->select([
             'Nr','account_id','Valor','Tipo de Movimento','Descrição',
             ...(Schema::hasColumn('Extracto','operation_key')?['operation_key']:[]),
@@ -72,7 +72,7 @@ final class CashReportController extends Controller
             if(!$account)continue;
             // O reporte inclui apenas movimentos a partir da abertura
             // documental da conta; contratos históricos não atribuídos ficam fora.
-            if($account->cut_at && $data['to']<substr((string)$account->cut_at,0,10))continue;
+            if($account->opening_extracto_nr===null || (int)$row->Nr<=(int)$account->opening_extracto_nr)continue;
             $value=$this->cents((string)$row->Valor);
             $kind=(string)$row->{'Tipo de Movimento'};
             abort_unless(in_array($kind,['Entradas','Saídas'],true),409,
