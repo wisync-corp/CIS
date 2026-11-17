@@ -59,6 +59,9 @@ jobs:
       - run: bash -n ../deploy/rehearse-cash-operation-key.sh
       - run: bash -n ../deploy/install-cash-operation-key.sh
       - run: bash -n ../deploy/verify-cash-operation-key.sh
+      - run: bash -n ../deploy/rehearse-cash-real-posting.sh
+      - run: bash -n ../deploy/prepare-cash-ledger-writer.sh
+      - run: php -l tests/cash_real_mysql_rehearsal.php
       - run: php -l app/Http/Controllers/Api/CashController.php
       - run: php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap(); foreach(["mysql_cash_opening_submit","mysql_cash_opening_validate"] as $name) if(!array_key_exists($name,config("database.connections",[]))) exit(1);'
 
