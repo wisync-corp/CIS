@@ -971,3 +971,14 @@ html{font-size:16px}
 .cis-cash-report-categories strong{color:var(--cis-heading);font-variant-numeric:tabular-nums}
 @media(max-width:1050px){.cis-cash-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-cash-report-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.cis-cash-report-grid,.cis-cash-report-filters{grid-template-columns:1fr}.cis-cash-report-grid article{padding:18px}.cis-cash-report-details{align-items:flex-start;flex-direction:column}}
+
+/* Estorno controlado — página dedicada, sem poluir resumo ou livro de Caixa. */
+.cis-cash-reversal{display:grid;gap:17px;min-width:0}
+.cis-cash-reversal-legs{border:1px solid var(--cis-border);border-radius:13px;overflow:hidden;background:var(--cis-surface,#fff)}
+.cis-cash-reversal-label{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--cis-surface-subtle);padding:17px 19px;font-size:13px;color:var(--cis-heading)}
+.cis-cash-reversal-label span{font-size:12px;color:var(--cis-text-muted)}
+.cis-cash-reversal-leg{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border-top:1px solid var(--cis-border);color:var(--cis-heading);font-size:13px}
+.cis-cash-reversal-leg>div{display:grid;gap:6px}.cis-cash-reversal-leg small{color:var(--cis-text-muted);font-size:11px}
+.cis-cash-reversal-leg>strong{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cis-cash-reversal>.cis-cash-form{padding:24px;border:1px solid var(--cis-border);border-radius:12px;background:var(--cis-surface,#fff)}
+@media(max-width:720px){.cis-cash-reversal-leg{grid-template-columns:1fr;gap:8px}.cis-cash-reversal-label{align-items:flex-start;flex-direction:column}}
