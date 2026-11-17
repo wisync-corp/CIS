@@ -79,4 +79,9 @@ sudo -n docker run --rm --network "$network" --entrypoint php \
 [[ "$(sql 'SELECT COUNT(*) FROM Contractos;')" == "$contracts" ]] || { echo 'Contratos mudaram.' >&2; exit 1; }
 [[ "$(sql 'SELECT COUNT(*),COALESCE(SUM(opening_balance),0) FROM cis_cash_accounts;')" == "$accounts" ]] || { echo 'Contas mudaram.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM migrations WHERE migration='2026_11_17_000060_create_cis_cash_daily_closures';")" == 1 ]] || { echo 'Migração não registada.' >&2; exit 1; }
+proof_dir="$HOME/cis-private/cash-verification"
+mkdir -p "$proof_dir"
+chmod 700 "$proof_dir"
+sha256sum backend/database/migrations/2026_11_17_000060_create_cis_cash_daily_closures.php | awk '{print $1}' > "$proof_dir/daily-closure-migration.sha256"
+chmod 600 "$proof_dir/daily-closure-migration.sha256"
 echo 'ENSAIO DO FECHO DIÁRIO APROVADO: controlo independente, números financeiros intactos.'
