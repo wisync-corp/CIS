@@ -178,8 +178,8 @@ final class CashController extends Controller
             'cut_at'=>['required','date_format:Y-m-d H:i:s'],
             'evidence_reference'=>['required','string','min:6','max:255'],
         ]);
-        abort_if(\\Carbon\\CarbonImmutable::parse($data['cut_at'],'Africa/Maputo')
-            ->greaterThan(\\Carbon\\CarbonImmutable::now('Africa/Maputo')),422,
+        abort_if(\Carbon\CarbonImmutable::parse($data['cut_at'],'Africa/Maputo')
+            ->greaterThan(\Carbon\CarbonImmutable::now('Africa/Maputo')),422,
             'A data de corte não pode estar no futuro.');
         $writer=DB::connection('mysql_cash_opening_submit');
         abort_unless($writer->getDatabaseName()===DB::connection()->getDatabaseName(),503,
