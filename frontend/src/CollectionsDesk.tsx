@@ -262,10 +262,24 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       <div className="cis-collections-payment-grid">
       <div className="cis-collections-panel">
        <div className="cis-collections-sectionhead"><div><h3>1. Prestação em tratamento</h3><p>Os dados abaixo são exclusivos da prestação seleccionada.</p></div><span>{text(selectedInstallment?.Estado)}</span></div>
-       {selectedInstallment&&<div className="cis-collections-breakdown">
-        <h4>Composição da prestação</h4>
-        <dl><div><dt>Capital</dt><dd>{fmt(selectedInstallment.Capital)}</dd></div><div><dt>Taxa de juro</dt><dd>{text(profile.contract['% de Juro'])}%</dd></div><div><dt>Tipo de juro</dt><dd>{text(profile.contract['Tipo de Juro'])}</dd></div><div><dt>Taxa de multa</dt><dd>{text(profile.contract['% de Multa'])}%</dd></div><div><dt>Modalidade contratual</dt><dd>{text(profile.contract['M. Pagamento'])}</dd></div><div><dt>Amortização</dt><dd>{fmt(selectedInstallment['Amortização'])}</dd></div><div><dt>Juros</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div><div><dt>Multa registada</dt><dd>{fmt(selectedInstallment['Valor de Multa'])}</dd></div><div><dt>Valor a pagar</dt><dd>{fmt(selectedInstallment['Valor a Pagar'])}</dd></div><div><dt>Valor já pago</dt><dd>{fmt(selectedInstallment['Valor Pago'])}</dd></div><div><dt>Vencimento</dt><dd>{date(selectedInstallment['Data de Cobrança'])}</dd></div><div><dt>Estado de pagamento</dt><dd>{text(selectedInstallment['Situação de Pagamento'])}</dd></div></dl>
-       </div>}
+       {selectedInstallment&&<>
+        <div className="cis-collections-focus-amount"><small>Valor previsto para esta prestação</small><strong>{fmt(selectedInstallment['Valor a Pagar'])}</strong><span>Vencimento: {date(selectedInstallment['Data de Cobrança'])}</span></div>
+        <dl className="cis-collections-focus-lines">
+         <div><dt>Estado</dt><dd>{text(selectedInstallment.Estado)}</dd></div>
+         <div><dt>Situação</dt><dd>{text(selectedInstallment['Situação de Pagamento'])}</dd></div>
+         <div><dt>Valor já pago (registo)</dt><dd>{fmt(selectedInstallment['Valor Pago'])}</dd></div>
+         <div><dt>Juros previstos</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div>
+        </dl>
+        <details className="cis-collections-technical"><summary>Ver composição financeira e taxas</summary>
+         <dl><div><dt>Capital</dt><dd>{fmt(selectedInstallment.Capital)}</dd></div>
+          <div><dt>Amortização</dt><dd>{fmt(selectedInstallment['Amortização'])}</dd></div>
+          <div><dt>Juros</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div>
+          <div><dt>Multa registada</dt><dd>{fmt(selectedInstallment['Valor de Multa'])}</dd></div>
+          <div><dt>Taxa de juro</dt><dd>{text(profile.contract['% de Juro'])}</dd></div>
+          <div><dt>Taxa de multa</dt><dd>{text(profile.contract['% de Multa'])}</dd></div>
+          <div><dt>Tipo de juro</dt><dd>{text(profile.contract['Tipo de Juro'])}</dd></div></dl>
+        </details>
+       </>}
       </div>
       <div className="cis-collections-panel">
        <div className="cis-collections-sectionhead"><div><h3>2. Tratamento do pagamento</h3><p>Escolha o cenário equivalente ao formulário Cobrança.</p></div></div>
