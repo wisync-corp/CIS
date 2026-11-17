@@ -69,6 +69,8 @@ export default function CollectionsDesk({token}:{token:string}){
  const [quote,setQuote]=useState<Quote|null>(null);
  const [quoting,setQuoting]=useState(false);
  const [accountId,setAccountId]=useState('');
+ const [channel,setChannel]=useState('');
+ const [evidenceRef,setEvidenceRef]=useState('');
  const [accounts,setAccounts]=useState<{id:number;code:string;name:string;status:string}[]>([]);
  const [view,setView]=useState<'operacao'|'historico'>('operacao');
  const [refresh,setRefresh]=useState(0);
@@ -142,7 +144,7 @@ export default function CollectionsDesk({token}:{token:string}){
  const canQuote=mode==='total'&&!!selectedInstallment&&isPending(selectedInstallment);
  const cannotExecute=true; // Cobranças reais sem Extracto.account_id são recusadas pelo backend.
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setPenalty(false);setQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){setMode(value);setQuote(null);setPaymentAmount('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setOrd(value);setQuote(null);setPaymentAmount('');setMessage('');}
@@ -208,13 +210,15 @@ export default function CollectionsDesk({token}:{token:string}){
       <div className="cis-collections-panel">
        <div className="cis-collections-sectionhead"><div><h3>2. Tratamento do pagamento</h3><p>Escolha o cenário equivalente ao formulário Cobrança.</p></div></div>
        <div className="cis-collections-mode-grid">
-        {(['total','parcial','renovar_juros','capitalizar','remanescente','renovar_credito','actualizar_data','finalizar_contrato'] as Mode[]).map(value=><button type="button" key={value} disabled={!ord} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
+        {(['total','parcial','renovar_juros','capitalizar','remanescente','renovar_credito','actualizar_data','finalizar_contrato'] as Mode[]).map(value=><button type="button" key={value} disabled={!ord&&!['renovar_credito','finalizar_contrato'].includes(value)} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
          {modeIcon(value)}<span><strong>{statuses[value].name}</strong><small>{statuses[value].group}</small></span>{mode===value&&<CheckCircle2 size={16}/>}</button>)}
        </div>
        <p className="cis-collections-mode-hint">{statuses[mode].details}</p>
        <div className="cis-collections-fields">
         <label>Data real de pagamento (Maputo)<input type="date" value={datePayment} readOnly/><small>Para simulação de liquidação integral, apenas a data de hoje é aceite.</small></label>
+        <label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>
         <label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória para cobrança futura</span><select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select><small>{activeAccount?'Conta seleccionada (nenhuma gravação será feita).':'Contas sem saldo validado não podem receber cobranças.'}</small></label>
+        <label>Referência do comprovativo / operação <small>Preparação, não será guardada</small><input type="text" maxLength={120} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>O comprovativo deverá ser validado antes do registo definitivo.</small></label>
         {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
@@ -238,7 +242,7 @@ export default function CollectionsDesk({token}:{token:string}){
        {quote&&mode==='total'&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
         <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Multa</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>Total proposto</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{quote.estado}</dd></div></dl>
         <div className="cis-collections-planned"><LockKeyhole size={17}/><span>Esta prévia não significa cobrança concluída. O backend recusa pagamentos sem associação obrigatória a Extracto.account_id.</span></div></div>}
-       <div className="cis-collections-disabled"><button type="button" disabled={cannotExecute}><LockKeyhole size={16}/> Confirmar e registar pagamento</button><small>Desactivado até integrar conta, permissões, idempotência e confirmação de entrada real.</small></div>
+       <div className="cis-collections-disabled"><button type="button" disabled={cannotExecute}><LockKeyhole size={16}/> Confirmar e registar pagamento</button><small>Desactivado até integrar conta, permissões, idempotência, referência documental e confirmação de entrada real. Nenhum dado introduzido nesta preparação é gravado.</small></div>
       </div>
      </div>:
      <div className="cis-collections-panel">
