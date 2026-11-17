@@ -79,6 +79,10 @@ jobs:
       - run: php -l database/migrations/2026_11_17_000060_create_cis_cash_daily_closures.php
       - run: php -l app/Http/Controllers/Api/CashClosureController.php
       - run: php tests/cash_daily_closure_smoke.php
+      - run: php -l tests/cash_daily_closure_mysql_rehearsal.php
+      - run: bash -n ../deploy/rehearse-cash-daily-closures.sh
+      - run: bash -n ../deploy/install-cash-daily-closure-schema.sh
+      - run: bash -n ../deploy/prepare-cash-daily-closure-writer.sh
       - run: php -l app/Http/Controllers/Api/CashPostingController.php
       - run: php tests/cash_real_posting_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReportController.php
