@@ -37,7 +37,7 @@ read -r -p 'Confirma activar estornos reais? Digite ACTIVAR-ESTORNOS-REAIS: ' an
 bash deploy/backup-before-auth.sh
 mkdir -p "$HOME/cis-private/cash-verification"
 cp -p deploy/.env "$HOME/cis-private/cash-verification/deploy-env-before-reversal-activation.backup"
-python3 -c 'import pathlib; p=pathlib.Path("deploy/.env"); x=[line for line in p.read_text().splitlines() if not line.startswith("CIS_CASH_REVERSALS_APPROVED=")]; x.append("CIS_CASH_REVERSALS_APPROVED=true"); p.write_text("\n".join(x)+"\n"); p.chmod(0o600)'
+python3 -c 'import pathlib,os,tempfile; p=pathlib.Path("deploy/.env"); x=[v for v in p.read_text().splitlines() if not v.startswith("CIS_CASH_REVERSALS_APPROVED=")]; x.append("CIS_CASH_REVERSALS_APPROVED=true"); fd,n=tempfile.mkstemp(prefix=".cash-reversal-activate-",dir=str(p.parent)); os.fchmod(fd,0o600); f=os.fdopen(fd,"w"); f.write("\n".join(x)+"\n"); f.flush(); os.fsync(f.fileno()); f.close(); os.replace(n,p)'
 if ! "${APP[@]}" up -d --no-deps --force-recreate api-preview; then
   echo 'Reinicio falhou. Desactivando estornos.' >&2
   bash deploy/disable-cash-reversals.sh || true
