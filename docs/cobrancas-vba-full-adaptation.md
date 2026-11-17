@@ -143,3 +143,15 @@ Fluxo único:
 A partir da tabela `Plano de prestações`, `Ver pagamentos` envia directamente a prestação seleccionada para a aba `Pagamentos`. A aba utiliza a implementação única `CollectionsDesk` em modo `embedded`, recebendo `numero`, os dados já lidos da ficha e `initialOrder`. **Não faz uma segunda pesquisa de contratos nem uma segunda consulta da ficha**, e mantém todos os oito tratamentos de pagamento, a calculadora Parcelas, histórico e simulações no mesmo local.
 
 A Caixa Geral continua como módulo próprio, transversal a contratos, para contas, saldos e movimentos da instituição. Simulações financeiras são somente leitura; executar pagamentos permanece bloqueado até associação obrigatória da conta e homologação.
+
+
+## Reorganização — Simulador independente e cards de pagamentos (17/11/2026)
+
+Foi aprovada a separação entre **simulação genérica** e **operação específica do contrato**:
+
+- **Simulador** é agora uma área autónoma no menu principal. Não requer cliente, contrato ou prestação e utiliza valores introduzidos manualmente pelo utilizador. O backend `POST /api/cis/simulador/calcular` consulta somente `cis_tabela_juros` e apresenta taxa da faixa, eventual taxa manual, prazo, base, acréscimo e total indicativo. Não tem permissões de escrita e exige utilizador administrador autenticado em pré-visualização privada.
+- **Contratos e prestações → Ficha → Pagamentos** mantém apenas tratamentos da prestação real: pagamento total, parcial, atraso, renovação, capitalização, remanescente e encerramento, com prévias específicas do contrato. O bloco **Calculadora de Parcelas** genérico, juntamente com os seus inputs e o botão duplicado, foi **retirado desta ficha**. A rota legada `simular-parcelas` continua protegida, sem gravações; não é uma operação de cobrança.
+- **Cards da ficha Pagamentos** passaram a ter hierarquia: dois cards principais (pendente e recebido), três indicadores operacionais (prestações, atrasos e próximo vencimento) e dois indicadores complementares (juros/multas e total previsto/pago). Layout de 6 colunas com **container queries** para adaptar ao espaço útil real à direita da navegação do contrato, não apenas à largura total do ecrã.
+- Opções de tratamento de pagamento organizadas em cards maiores e responsivos, sem sobrepor campo de cálculo genérico com operação contratual.
+
+**Continua desactivado** o registo definitivo de cobranças e qualquer alteração financeira do Extracto até que existam a conta receptora activa, autorização, prova documental, idempotência e escrita atómica em Contractos/Extracto. 
