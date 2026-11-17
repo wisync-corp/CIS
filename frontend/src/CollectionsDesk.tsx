@@ -14,6 +14,7 @@ type ProfileResponse={
  contract:Row;installments:Row[];installment_rows:number;notice:string;
  contract_fields_divergent?:string[];columns_missing_in_database?:string[];
 };
+type ScenarioQuote={resultado:string;aviso:string;consulta_apenas:boolean;[key:string]:unknown};
 type Quote={
  parcela:number;dias_atraso:number;juros:number;multa:number;total:number;
  estado:string;data_pagamento:string;aviso:string
@@ -68,6 +69,9 @@ export default function CollectionsDesk({token}:{token:string}){
  const [reviewDate,setReviewDate]=useState(today());
  const [quote,setQuote]=useState<Quote|null>(null);
  const [quoting,setQuoting]=useState(false);
+ const [scenarioBusy,setScenarioBusy]=useState(false);
+ const [scenarioQuote,setScenarioQuote]=useState<ScenarioQuote|null>(null);
+ const [capitalPeriod,setCapitalPeriod]=useState('');
  const [accountId,setAccountId]=useState('');
  const [channel,setChannel]=useState('');
  const [evidenceRef,setEvidenceRef]=useState('');
@@ -144,10 +148,30 @@ export default function CollectionsDesk({token}:{token:string}){
  const canQuote=mode==='total'&&!!selectedInstallment&&isPending(selectedInstallment);
  const cannotExecute=true; // Cobranças reais sem Extracto.account_id são recusadas pelo backend.
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){setMode(value);setQuote(null);setPaymentAmount('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setOrd(value);setQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseMode(value:Mode){setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
+ function chooseOrd(value:string){setOrd(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ async function simulateScenario(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();if(!selected||scenarioBusy||mode==='total')return;
+  const key=ord||String(rows[0]?.Ordem??'');
+  if(!key){setMessage('O contrato não possui uma prestação que permita simulação.');return;}
+  setScenarioBusy(true);setScenarioQuote(null);setMessage('');
+  try{
+   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(key)+'/simular-cenario',{
+    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+    body:JSON.stringify({operacao:mode,
+     ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
+     ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod)}:{}),
+     ...(mode==='actualizar_data'?{data_pagamento:reviewDate}:{})})
+   });
+   const data=await response.json().catch(()=>({})) as ScenarioQuote&{message?:string;errors?:Record<string,string[]>};
+   if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível simular a operação.');
+   setScenarioQuote(data);
+  }catch(err){setMessage(err instanceof Error?err.message:'Falha na simulação.');}
+  finally{setScenarioBusy(false);}
+ }
+
  async function simulate(e:FormEvent){
   e.preventDefault();if(!selected||!ord||!canQuote)return;
   setQuote(null);setQuoting(true);setMessage('');
@@ -222,12 +246,15 @@ export default function CollectionsDesk({token}:{token:string}){
         <label>Referência do comprovativo / operação <small>Preparação, não será guardada</small><input type="text" maxLength={120} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>O comprovativo deverá ser validado antes do registo definitivo.</small></label>
         {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
-        {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
+        {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
+        {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
        {mode==='total'&&<form onSubmit={e=>void simulate(e)}>
         <button type="submit" className="cis-collections-primary" disabled={!canQuote||quoting}>{quoting?'A calcular…':'Simular pagamento integral'} <Calculator size={16}/></button>
        </form>}
-       {modeLocked&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span><strong>Operação não activada.</strong> O cenário foi identificado no VBA, mas a sua execução depende da homologação de regras financeiras, conta receptora e lançamento atómico.</span></div>}
+       {modeLocked&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span><strong>Operação não activada.</strong> O cenário foi identificado no VBA. O CAPTA pode apresentar uma prévia informativa, mas nenhuma alteração financeira será gravada.</span></div>}
+       {modeLocked&&<form onSubmit={e=>void simulateScenario(e)}><button className="cis-collections-primary" type="submit" disabled={scenarioBusy||!(ord||rows.length)||mode==='parcial'&&!partialValid||mode==='capitalizar'&&!capitalPeriod}>{scenarioBusy?'A consultar regras…':'Simular cenário sem gravar'} <Calculator size={16}/></button></form>}
+       {scenarioQuote&&modeLocked&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><ShieldCheck size={18}/><strong>Prévia informativa do servidor</strong></div><dl>{(['capital_historico','juros_historicos','valor_pago','juros_cobertos','amortizacao','diferenca_aritmetica','capital','juros_actual','juros_novo','prestacao_nova','capital_anterior','juros_anteriores','capital_novo','taxa','periodo_referencia','faixa','juros_novos','data_revisao','dias_atraso','estado_proposto','prestacoes_em_atraso','prestacoes_nao_liquidadas','elegivel_para_analise'] as const).filter(key=>scenarioQuote[key]!==undefined).map(key=><div key={key}><dt>{({'capital_historico':'Capital histórico','juros_historicos':'Juros históricos','valor_pago':'Valor parcial','juros_cobertos':'Juros cobertos','amortizacao':'Amortização indicativa','diferenca_aritmetica':'Diferença aritmética','capital':'Capital','juros_actual':'Juros actuais','juros_novo':'Juros revistos','prestacao_nova':'Prestação indicativa','capital_anterior':'Capital anterior','juros_anteriores':'Juros anteriores','capital_novo':'Novo capital indicativo','taxa':'Taxa (%)','periodo_referencia':'Período (dias)','faixa':'Faixa de capital','juros_novos':'Juros novos','data_revisao':'Data revista','dias_atraso':'Dias em atraso','estado_proposto':'Estado proposto','prestacoes_em_atraso':'Prestações em atraso','prestacoes_nao_liquidadas':'Prestações não liquidadas','elegivel_para_analise':'Elegível para análise'} as Record<string,string>)[key]}</dt><dd>{Array.isArray(scenarioQuote[key])?(scenarioQuote[key] as unknown[]).join(' – '):typeof scenarioQuote[key]==='boolean'?(scenarioQuote[key]?'Sim':'Não'):String(scenarioQuote[key])}</dd></div>)}</dl><div className="cis-collections-planned"><Info size={16}/><span>{scenarioQuote.aviso}</span></div></div>}
        {mode==='parcial'&&paymentAmount&&<div className="cis-collections-breakdown">
         <h4>Verificação indicativa do pagamento parcial</h4>
         {!partialValid?<div className="cis-collections-risk"><AlertCircle size={16}/> Verifique o valor: deve ser positivo, inferior ao valor a pagar e não inferior aos juros, conforme o VBA. Não foi efectuado qualquer lançamento.</div>:
