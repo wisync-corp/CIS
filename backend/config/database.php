@@ -31,6 +31,16 @@ return [
             'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
             'prefix'=>'','strict'=>true,'engine'=>null,
         ],
+        // Escritor financeiro isolado. Deve receber SELECT em contas e
+        // SELECT/INSERT em Extracto, SEM UPDATE/DELETE nem ALTER.
+        'mysql_cash_ledger' => [
+            'driver'=>'mysql','host'=>env('DB_HOST','127.0.0.1'),'port'=>env('DB_PORT','3306'),
+            'database'=>env('DB_DATABASE','cis'),
+            'username'=>env('CASH_LEDGER_DB_USERNAME','cis_cash_ledger'),
+            'password'=>env('CASH_LEDGER_DB_PASSWORD',''),
+            'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
+            'prefix'=>'','strict'=>true,'engine'=>null,
+        ],
         'mysql_cash_setup' => [
             'driver' => 'mysql',
             'host' => env('DB_HOST', '127.0.0.1'), 'port' => env('DB_PORT', '3306'),
