@@ -213,10 +213,7 @@ final class CashController extends Controller
         $this->openingSetupAllowed();
         abort_unless(filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'Validação independente de saldos ainda não autorizada.');
-        $data=$request->validate([
-            'confirmed_document'=>['required','accepted'],
-            'confirmation_reference'=>['required','string','min:6','max:255'],
-        ]);
+        $request->validate(['confirmed_document'=>['required','accepted']]);
         $validator=$request->user();
         $writer=DB::connection('mysql_cash_opening_validate');
         abort_unless($writer->getDatabaseName()===DB::connection()->getDatabaseName(),503,
@@ -230,8 +227,6 @@ final class CashController extends Controller
             && $account->evidence_reference!==null
             && trim((string)$account->evidence_reference)!=='',409,
             'A proposta não possui saldo, data de corte e comprovativo completos.');
-        abort_unless(trim($data['confirmation_reference'])!==trim((string)$account->evidence_reference),
-            422,'A referência da conferência deve identificar uma evidência independente.');
         abort_unless(!DB::table('Extracto')->where('account_id',$id)->exists(),409,
             'Há movimentos associados: bloqueada a validação de abertura.');
         // O marcador é capturado no momento da validação; nenhuma escrituração
