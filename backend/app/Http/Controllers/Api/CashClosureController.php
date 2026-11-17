@@ -122,7 +122,16 @@ final class CashClosureController extends Controller
         abort_unless($account,404,'Conta inexistente.');
         $existing=$db->table('cis_cash_daily_closures')
             ->where('account_id',$account->id)->where('closing_date',$d['date'])->first();
-        $snapshot=$this->calculate($db,$account,$d['date']);
+        // Um fecho confirmado é uma fotografia imutável. Não apresentar
+        // valores recalculados de hoje como se fossem os da assinatura.
+        $snapshot=$existing ? [
+            'opening_amount'=>(string)$existing->opening_amount,
+            'entries_amount'=>(string)$existing->entries_amount,
+            'exits_amount'=>(string)$existing->exits_amount,
+            'expected_balance'=>(string)$existing->expected_balance,
+            'movement_count'=>(int)$existing->movement_count,
+            'ledger_max_nr'=>(int)$existing->ledger_max_nr,
+        ] : $this->calculate($db,$account,$d['date']);
         return response()->json([
             'date'=>$d['date'],'account_id'=>(int)$account->id,
             'code'=>$account->code,'name'=>$account->name,'account_type'=>$account->type,
@@ -130,7 +139,9 @@ final class CashClosureController extends Controller
             'existing'=>$existing,
             'can_confirm'=>!$existing
                 && filter_var(env('CIS_CASH_DAILY_CLOSE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            'notice'=>'Fecho de controlo por conta e dia. Não altera saldos, não bloqueia períodos e não substitui a reconciliação bancária da Tesouraria.',
+            'notice'=>$existing
+                ?'Fotografia do fecho original, não recalculada. Movimentos posteriores podem alterar o saldo corrente; a Tesouraria faz a conciliação externa.'
+                :'Fecho de controlo por conta e dia. Não altera saldos, não bloqueia períodos e não substitui a reconciliação bancária da Tesouraria.',
         ])->header('Cache-Control','no-store, private');
     }
 
