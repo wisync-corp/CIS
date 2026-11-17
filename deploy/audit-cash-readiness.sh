@@ -37,12 +37,17 @@ sql "SELECT COUNT(*) FROM Extracto WHERE account_id IS NOT NULL;"
 echo "Movimentos com account_id sem conta correspondente:"
 orphan="$(sql 'SELECT COUNT(*) FROM Extracto e LEFT JOIN cis_cash_accounts a ON e.account_id=a.id WHERE e.account_id IS NOT NULL AND a.id IS NULL;')"
 echo "$orphan"
-if [[ "$invalid" != 0 || "$same_user" != 0 || "$orphan" != 0 ]]; then
+single_admin=false
+if grep -qx 'CIS_CASH_SINGLE_ADMIN_APPROVED=true' deploy/.env; then single_admin=true; fi
+if [[ "$single_admin" == true && "$same_user" != 0 ]]; then
+ echo "AVISO: $same_user abertura(s) confirmada(s) pelo próprio administrador; permitido apenas no modo administrador único."
+fi
+if [[ "$invalid" != 0 || "$orphan" != 0 ]] || [[ "$single_admin" == false && "$same_user" != 0 ]]; then
  echo 'DIAGNOSTICO REPROVADO: existem inconsistencias financeiras; NAO activar movimentos.' >&2
  exit 1
 fi
-echo 'INTEGRIDADE E SEGREGACAO BASICA: APROVADAS.'
+echo 'INTEGRIDADE DOS DADOS: APROVADA. O modo de administrador único não oferece segregação humana.'
 echo 'Flags do modulo (nao exibem palavras-passe):'
-for k in CIS_CASH_ACCOUNT_SETUP_APPROVED CIS_CASH_OPENING_SETUP_APPROVED CIS_CASH_OPENING_VALIDATE_APPROVED CIS_CASH_WRITES_APPROVED CIS_COLLECTION_WRITES_APPROVED; do flag "$k"; done
+for k in CIS_CASH_ACCOUNT_SETUP_APPROVED CIS_CASH_OPENING_SETUP_APPROVED CIS_CASH_OPENING_VALIDATE_APPROVED CIS_CASH_SINGLE_ADMIN_APPROVED CIS_CASH_WRITES_APPROVED CIS_COLLECTION_WRITES_APPROVED; do flag "$k"; done
 echo 'AVISO: este diagnostico nao prova saldo bancario ou reconciliação externa.'
 echo 'Nenhuma alteracao executada na base.'
