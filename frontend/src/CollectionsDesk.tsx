@@ -134,7 +134,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed&&
   !/^(?:completo|liquidado|finalizado)$/i.test(String(row?.['Situação de Pagamento']??'').trim()));
  const eligibleModes:Mode[]=selectedInstallment&&installmentEligible(selectedInstallment)?(
-   paymentNature==='recebido'?['total','parcial',...(String(selectedInstallment['Situação de Pagamento']??'').toLowerCase().includes('parcial')?['remanescente' as Mode]:[])]:
+   paymentNature==='recebido'?['total','parcial',...((String(selectedInstallment['Situação de Pagamento']??'').toLowerCase().includes('parcial')||num(selectedInstallment['Valor Pago'])>0)?['remanescente' as Mode]:[])]:
    paymentNature==='nao_recebido'?['renovar_juros','capitalizar',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])]:[]
  ):[];
  const paidRows=rows.filter(r=>paid(r)||num(r['Valor Pago'])>0);
