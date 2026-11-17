@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FASE 2 CAIXA: aprovar apenas abertura/validacao de saldos sob 2 identidades.
+# FASE 2 CAIXA: abertura com administrador unico expressamente autorizado.
 # NUNCA activa entradas, saidas, transferencias, cobrancas ou desembolsos.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,12 +26,11 @@ assert_eq "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DA
 assert_eq "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_cash_movements';" 0 'Livro duplicado detectado.'
 assert_eq "SELECT COUNT(*) FROM mysql.user WHERE User IN ('cis_cash_open_submit','cis_cash_open_validate');" 0 'Utilizadores de abertura ja existem; nao recriar.'
 admins="$(sql "SELECT COUNT(*) FROM users WHERE role='administrador' AND active=1;")"
-if [[ "$admins" -lt 2 ]]; then
- echo 'BLOQUEADO: a validação exige pelo menos dois administradores activos distintos.' >&2
- echo 'Criar e autenticar o segundo responsável antes de activar o fluxo.' >&2
+if [[ "$admins" -lt 1 ]]; then
+ echo 'BLOQUEADO: não existe administrador activo.' >&2
  exit 1
 fi
-echo "Controlo de dupla validação: $admins administradores activos (identidades não mostradas)."
+echo "Administradores activos encontrados: $admins (não são mostradas identidades)."
 if grep -Eq '^CIS_CASH_WRITES_APPROVED=true$|^CIS_COLLECTION_WRITES_APPROVED=true$|^CIS_NEW_CONTRACTS_APPROVED=true$' deploy/.env; then
  echo 'BLOQUEADO: outra via financeira pode estar habilitada. Exige revisao independente.' >&2; exit 1
 fi
@@ -39,10 +38,11 @@ if grep -Eq '^CIS_CASH_OPENING_(SETUP|VALIDATE)_APPROVED=true$|^CASH_OPENING_(SU
  echo 'BLOQUEADO: configuracao previa encontrada; rever manualmente, nao repetir.' >&2; exit 1
 fi
 echo 'Privilégios previstos: SELECT e UPDATE SOMENTE campos de abertura de cis_cash_accounts.'
-echo 'Responsavel pelo cadastro prepara a proposta; segundo administrador valida.'
+echo 'Modo solicitado: o mesmo administrador prepara e confirma a abertura.'
+echo 'ATENCAO: sem segregacao de funções humanas; confirmacao de documento obrigatoria.'
 echo 'Sem permissoes de escrita no Extracto e sem insercoes financeiras.'
-read -r -p 'Autoriza esta fase de abertura com dois responsaveis? Digite PREPARAR-CAIXA: ' approval
-[[ "$approval" == PREPARAR-CAIXA ]] || { echo 'Cancelado sem alteracoes.'; exit 0; }
+read -r -p 'Autoriza abertura com administrador unico? Digite ADMIN-UNICO-CAIXA: ' approval
+[[ "$approval" == ADMIN-UNICO-CAIXA ]] || { echo 'Cancelado sem alteracoes.'; exit 0; }
 echo 'A criar backup antes da alteracao de permissoes...'
 bash deploy/backup-before-auth.sh
 submit_pw="$(openssl rand -hex 32)"
@@ -62,6 +62,7 @@ GRANT UPDATE (opening_extracto_nr,validated_by,validated_at,status,updated_at) O
  printf 'CASH_OPENING_VALIDATE_DB_PASSWORD=%s\n' "$validate_pw"
  printf 'CIS_CASH_OPENING_SETUP_APPROVED=true\n'
  printf 'CIS_CASH_OPENING_VALIDATE_APPROVED=true\n'
+ printf 'CIS_CASH_SINGLE_ADMIN_APPROVED=true\n'
 } >> deploy/.env
 chmod 600 deploy/.env
 echo 'A reconstruir API privada com as credenciais de abertura...'
@@ -79,5 +80,5 @@ foreach(["mysql_cash_opening_submit","mysql_cash_opening_validate"] as $name){
 if(filter_var(env("CIS_CASH_WRITES_APPROVED",false),FILTER_VALIDATE_BOOLEAN))exit(3);
 echo "OK: dois utilizadores separados, SELECT sem escrita; movimentos permanecem bloqueados.\n";
 '
-echo 'ABERTURA DE CONTAS PREPARADA. Exige segundo administrador para validar saldos.'
+echo 'ABERTURA PREPARADA PARA ADMINISTRADOR UNICO, COM CONFIRMACAO DOCUMENTAL.'
 echo 'ATENCAO: em caso de falha, nao repetir este script; inspeccionar estado das credenciais e grants.'
