@@ -11,8 +11,9 @@ use Carbon\CarbonImmutable;
 /**
  * Prévia (NUNCA escrita) dos caminhos do UserForm Cobrança.frm.
  * Os resultados NÃO são uma liquidação aprovada nem geram recibo/Extracto.
- * Sem a implementação do outro UserForm Parcelas.frm, a recalendarização
- * de parciais e o remanescente não podem ser confirmados.
+ * O UserForm Parcelas.frm foi recebido e as suas regras de cálculo
+ * estão no ParcelasQuoteController. A recalendarização financeira real
+ * e o remanescente continuam sem homologação e sem autorização de escrita.
  */
 final class CollectionScenarioPreviewController extends Controller
 {
@@ -93,7 +94,7 @@ final class CollectionScenarioPreviewController extends Controller
                 'capital_historico'=>self::fmt($capital),
                 'juros_historicos'=>self::fmt($interest),
                 'diferenca_aritmetica'=>self::fmt($due-$paid),
-                'aviso'=>'Ordem juros primeiro, capital depois, conforme VBA. NÃO corresponde à prestação remanescente homologada, que depende do formulário Parcelas.frm.',
+                'aviso'=>'Ordem juros primeiro, capital depois, conforme VBA. NÃO corresponde à prestação remanescente homologada, que exige regras de recalendarização homologadas.',
             ])->header('Cache-Control','no-store, private');
         }
         if ($operation==='renovar_juros') {
@@ -160,7 +161,7 @@ final class CollectionScenarioPreviewController extends Controller
                 'resultado'=>'analise_pre_condicoes',
                 'prestacoes_em_atraso'=>$late,
                 'elegivel_para_analise'=>$late===0,
-                'aviso'=>'Não calcular ou liquidar remanescente sem conciliar parciais, calendário e pagamento real; Parcelas.frm ainda não fornecido.',
+                'aviso'=>'Não calcular ou liquidar remanescente sem conciliar parciais, calendário e pagamento real; Os formulários estão disponíveis, mas o tratamento de parciais sucessivos e o lançamento ainda exigem homologação.',
             ])->header('Cache-Control','no-store, private');
         }
         if ($operation==='finalizar_contrato') {
