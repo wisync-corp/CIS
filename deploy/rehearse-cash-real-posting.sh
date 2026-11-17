@@ -58,7 +58,15 @@ sql() {
 echo 'A confirmar existência de esquema completo de contas e idempotência...'
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='cis_cash_accounts';")" == 1 ]] || { echo 'Sem contas da Caixa.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND COLUMN_NAME='account_id';")" == 1 ]] || { echo 'Sem account_id.' >&2; exit 1; }
-[[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND COLUMN_NAME='operation_key';")" == 1 ]] || { echo 'Sem operation_key; instalar e verificar primeiro.' >&2; exit 1; }
+if [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND COLUMN_NAME='operation_key';")" != 1 ]]; then
+ echo 'BACKUP DESACTUALIZADO: a cópia restaurada é anterior à instalação de Extracto.operation_key.' >&2
+ echo "Backup utilizado: $(basename "$backup")" >&2
+ echo 'O banco operacional já tinha operation_key confirmado pela verificação de apenas leitura.' >&2
+ echo 'Não reinstalar migração e não modificar a base operacional.' >&2
+ echo 'Crie uma cópia ACTUAL com: bash deploy/backup-before-auth.sh' >&2
+ echo 'Depois repita: bash deploy/rehearse-cash-real-posting.sh' >&2
+ exit 1
+fi
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='cis' AND TABLE_NAME IN ('cis_cash_movements','cis_cash_links');")" == 0 ]] || { echo 'Encontrado livro paralelo.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND ENGINE='InnoDB';")" == 1 ]] || { echo 'Extracto não é InnoDB.' >&2; exit 1; }
 echo 'A preservar indicadores exactos anteriores ao teste...'
