@@ -982,3 +982,10 @@ html{font-size:16px}
 .cis-cash-reversal-leg>strong{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .cis-cash-reversal>.cis-cash-form{padding:24px;border:1px solid var(--cis-border);border-radius:12px;background:var(--cis-surface,#fff)}
 @media(max-width:720px){.cis-cash-reversal-leg{grid-template-columns:1fr;gap:8px}.cis-cash-reversal-label{align-items:flex-start;flex-direction:column}}
+/* Identidade visual v7 — logótipos oficiais (ver docs/identidade-visual.md) */
+.cis-brand img{display:block;width:170px;height:auto}
+.cis-login-brand img{display:block;width:260px;height:auto}
+.cis-login-mobile-mark img{display:block;width:150px;height:auto}
+.cis-top-logo{display:none;width:120px;height:auto}
+.cis-loading::before{content:"";display:block;width:44px;height:53px;margin:0 auto 14px;border-radius:9px;background:url('./assets/brand/cis-carregamento.svg') center/contain no-repeat}
+@media(max-width:750px){.cis-top-logo{display:block}.cis-breadcrumb>span:first-of-type{display:none}}
