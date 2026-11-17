@@ -100,3 +100,36 @@ O controlador `CollectionScenarioPreviewController` aceita `operacao` e só exec
 
 Todas as respostas têm `consulta_apenas=true`, `movimento_registado=false` e `comprovativo_verificado=false`. **Não são transacções, lançamentos, recibos nem aprovação de cobrança.** Os testes de parsing monetário e registo de rota são executados no CI em `backend/tests/collection_scenarios_smoke.php`.
 
+
+
+## Revisão suplementar — Parcelas.frm e A_Cobrança.frx (17/11/2026)
+
+Foram recebidos e inspeccionados **\`Parcelas.frm\` (5.976 bytes)** e **\`A_Cobrança.frx\` (~1,7 MB, dados binários OLE)**. O \`Parcelas.frm\` é código-fonte VBA, com procedimentos \`cmb_prazo_Change\`, \`txt_juro_Change\`, \`txt_vrem_Change\`, \`UserForm_Initialize\`, \`faixa\` e \`UserForm_Activate\`. O nome declarado do seu recurso de interface é **\`Parcelas.frx\`**, ficheiro que **não foi fornecido**. O \`A_Cobrança.frx\` é um ficheiro binário distinto e não substitui automaticamente o recurso de \`Parcelas\`. O posicionamento visual exacto do UserForm de Parcelas não pode ser inferido apenas a partir dos ficheiros disponíveis.
+
+### Regras extraídas directamente de Parcelas.frm
+
+| Controlo VBA | Regra de origem | Tratamento CAPTA |
+|---|---|---|
+| \`cmb_prazo\` | Valores 1 Semana, 2 Semanas, 3 Semanas, Mês. Inicializa com **2 Semanas**. | Mostrar as quatro opções; exigir escolha explícita para não presumir taxa. |
+| \`faixa\` | Percorre Table4 por \`Limite inferior\`/ \`Limite Superior\`. Para 1 ou 2 semanas procura \`Period=15\`; para 3 semanas ou Mês procura \`Period=30\`. | Consultar \`cis_tabela_juros\` com faixa e período únicos. Recusar lacunas e faixas sobrepostas. |
+| \`txt_vrem\` | Representa a base usada pela calculadora. | No parcial, apresentar diferença entre \`Valor a Pagar\` e valor recebido como **hipótese indicativa** (o código original usa \`txt_vpago\` do campo \`Valor Pago\` e pode produzir valores negativos). |
+| \`txt_juro\` | É editável; por omissão vem da faixa de juros. | Expor taxa da faixa e campo opcional de taxa manual em simulação **sem persistir**. |
+| \`txt_vpagar\` (normal) | \`base × (1+taxa/100)\` | Calcular novo valor indicativo com duas casas. |
+| \`c_multa=True\` | Reusa \`c_vrem\` como **valor de juros**; oculta prazo, mostra dias a dever; \`txt_vpagar = base × taxa/100\` (sem somar capital). | Separar modo multa do modo remanescente, explicitar prazo oculto no VBA e mostrar comparação. |
+| \`WasOpenedByPrincipal\` | Abre calculadora independente, taxa inicial 10%, base 0, sem botão de retorno, formulário reduzido. | Dependência do módulo Principal, não lançar cobrança; ainda não corresponde a uma acção financeira CAPTA. |
+| \`CommandButton1_Click\` | Oculta Parcelas e reabre Cobrança. | Retornar à operação de cobrança no próprio ecrã, sem abrir o formulário Windows. |
+
+**Regra adicional observada em Cobrança.frm:** ao preparar recalendarizações de parcial, o prazo é convertido em **7 dias para 1 Semana, 15 dias para 2 Semanas, 21 dias para 3 Semanas, 30 dias para Mês**, e uma nova prestação é adicionada no VBA. Esta criação não é activada no CAPTA antes de definir política de datas, juros, prestações sucessivas e idempotência.
+
+**Divergência financeira significativa:** a simulação antiga de cobrança integral usa \`% de Multa\` contratual sobre os juros, mas **o formulário Parcelas em modo multa consulta uma taxa da Table4 com base no próprio valor dos juros**, potencialmente produzindo outra multa. O CAPTA agora mostra **ambas as taxas/valores** em prévia, e identifica quando divergem. **Não aplicar automaticamente nenhum dos métodos em cobrança real** sem aprovação institucional da política de multa.
+
+### Funcionalidade entregue nesta fase
+
+- \`ParcelasQuoteController.php\` e rota privada \`POST /api/cis/contractos/{numero}/prestacoes/{ordem}/simular-parcelas\` com \`modo=reparcelamento|multa\`, \`prazo\` escolhido e \`valor_recebido\` obrigatório para parcial; \`taxa_manual\` é opcional para prévia.
+- O controlador usa apenas consultas SELECT, não grava saldo, contrato, recibo, plano ou lançamento em Extracto.
+- A interface \`CollectionsDesk.tsx\` apresenta uma **Calculadora de Parcelas** integrada nos caminhos **Pagamento parcial** e **Pagamento integral com multa**, incluindo taxas de faixa/manuais, períodos, base, juros/multa e alertas de divergência.
+- A prévia usa DECIMAL em centésimos e arredondamento **HALF_UP a 2 casas decimais**, identificado no resultado; \`Format\` do Excel/VBA pode ter diferenças em empates com meio cêntimo. A regra final de arredondamento necessita de homologação antes de lançamentos.
+- Os testes \`backend/tests/parcelas_quote_smoke.php\` validam intervalos de prazo, conversão das taxas, montantes, campos inválidos e autenticação exigida pela rota, sem gravar dados.
+
+**Pendente para equivalência operacional integral:** aprovação da fórmula legal/contratual da multa, decisão sobre o significado correcto de \`txt_vpago\` no parcial, data base para vencimentos futuros, recalendarização com várias prestações, apuramento do remanescente, actualização transaccional de Contractos e Extracto.account_id, prova de recebimento, idempotência e matriz de permissões. O \`Parcelas.frx\` original continua necessário para replicação visual **pixel a pixel**, caso isso seja exigido.
+
