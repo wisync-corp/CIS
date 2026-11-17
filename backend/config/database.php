@@ -15,6 +15,22 @@ return [
             'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '', 'strict' => true, 'engine' => null,
         ],
+        'mysql_cash_opening_submit' => [
+            'driver'=>'mysql','host'=>env('DB_HOST','127.0.0.1'),'port'=>env('DB_PORT','3306'),
+            'database'=>env('DB_DATABASE','cis'),
+            'username'=>env('CASH_OPENING_SUBMIT_DB_USERNAME','cis_cash_open_submit'),
+            'password'=>env('CASH_OPENING_SUBMIT_DB_PASSWORD',''),
+            'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
+            'prefix'=>'','strict'=>true,'engine'=>null,
+        ],
+        'mysql_cash_opening_validate' => [
+            'driver'=>'mysql','host'=>env('DB_HOST','127.0.0.1'),'port'=>env('DB_PORT','3306'),
+            'database'=>env('DB_DATABASE','cis'),
+            'username'=>env('CASH_OPENING_VALIDATE_DB_USERNAME','cis_cash_open_validate'),
+            'password'=>env('CASH_OPENING_VALIDATE_DB_PASSWORD',''),
+            'charset'=>'utf8mb4','collation'=>'utf8mb4_unicode_ci',
+            'prefix'=>'','strict'=>true,'engine'=>null,
+        ],
         'mysql_cash_setup' => [
             'driver' => 'mysql',
             'host' => env('DB_HOST', '127.0.0.1'), 'port' => env('DB_PORT', '3306'),
