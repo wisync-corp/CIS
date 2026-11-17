@@ -118,7 +118,7 @@ final class CashPostingController extends Controller
             'Valor'=>$this->amount($value),
             'Data da Operação'=>now('Africa/Maputo')->format('Y-m-d'),
             'Descrição'=>$description,
-            'Contracto'=>null,'Cliente'=>'CAIXA GERAL',
+            'Contracto'=>'','Cliente'=>'CAIXA GERAL',
             'Parcela'=>0,'usuario'=>(string)$userId,
         ];
     }
