@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ContractOpeningReviewController;
 use App\Http\Controllers\Api\ContractOpeningController;
 use App\Http\Controllers\Api\ContractCollectionController;
 use App\Http\Controllers\Api\CollectionScenarioPreviewController;
+use App\Http\Controllers\Api\ParcelasQuoteController;
 use App\Http\Controllers\Api\ContractOperationalStatusController;
 use App\Http\Controllers\Api\CashController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
@@ -56,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('contractos/abrir',[ContractOpeningController::class,'store'])->middleware('throttle:3,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/simular-cobranca',[ContractCollectionController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/simular-cenario',[CollectionScenarioPreviewController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
+        Route::post('contractos/{numero}/prestacoes/{ordem}/simular-parcelas',[ParcelasQuoteController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/cobrar',[ContractCollectionController::class,'collect'])->whereNumber('ordem')->middleware('throttle:3,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
     });
