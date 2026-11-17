@@ -219,3 +219,41 @@ bash deploy/refresh-private-preview.sh
 ```
 
 Após actualizar, no CAPTA, entre em `Caixa Geral → Livro de movimentos` e experimente as simulações com contas realmente activas. Se existir apenas uma conta activa, a prévia de transferência precisa de outra conta real; não criar conta fictícia para testar. A fase de abertura com administrador único não implica necessariamente que o saldo inicial já tenha sido proposto e confirmado; verificar `status=activa` antes de simular.
+
+
+## Decisão aprovada — operação única persistente em Extracto (17/11/2026)
+
+O utilizador **autorizou a inclusão da coluna `operation_key`**. Foi criada a migração **NOVA e aditiva**
+`backend/database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php`, sem modificar migrações já registadas.
+
+- Campo `Extracto.operation_key`: `VARCHAR(120) NULL`, índice `UNIQUE cis_extracto_operation_key_uq`.
+- `NULL` em todas as linhas históricas: nunca gerar artificialmente chaves em movimentos antigos.
+- Não se adiciona nenhuma tabela. `cis_cash_accounts` e `Extracto.account_id` continuam intactos.
+- A chave deve ser obrigatória **na API para qualquer lançamento NOVO da Caixa**, antes de activar escritas.
+- Transferências terão duas chaves distintas e correlacionáveis (`...:source` e `...:destination`), ambas na mesma transacção, para respeitar o UNIQUE por linha.
+- O índice UNIQUE é condição necessária, **não suficiente**, para impedir duplicações: antes da escrita real faltam ainda replay sem efeitos repetidos, locks e transacção completa, autorização e prova documental.
+
+**Scripts de segurança criados:**
+`deploy/rehearse-cash-operation-key.sh` — restaura o backup privado em MySQL Docker isolado, executa SOMENTE a nova migração, compara contagens/somas do Extracto, contratos e contas, verifica coluna/index e elimina recursos temporários.
+
+`deploy/install-cash-operation-key.sh` — preflight e conferência dos dados, compila imagem atual, verifica SHA do ficheiro de migração dentro da imagem, exige confirmação literal `ADICIONAR-OPERATION-KEY`, efectua backup privado, pára apenas API privada, confirma novamente e executa SOMENTE esta migração; reinicia API e faz postflight. MySQL DDL não é automaticamente reversível.
+
+`deploy/verify-cash-operation-key.sh` — diagnóstico posterior SOMENTE LEITURA.
+
+**Sequência sugerida na VPS (não executar instalador antes de ensaio aprovado):**
+
+```bash
+cd /opt/cis
+git pull origin main
+sudo -v
+bash -n deploy/rehearse-cash-operation-key.sh
+bash -n deploy/install-cash-operation-key.sh
+bash deploy/backup-before-auth.sh
+bash deploy/rehearse-cash-operation-key.sh
+# PROSSEGUIR APENAS se o ensaio isolado for aprovado e sem outros escritores:
+bash deploy/install-cash-operation-key.sh
+bash deploy/verify-cash-operation-key.sh
+```
+
+**A instalação ainda não foi executada no servidor real por este desenvolvimento.**
+As rotas de `record()` e `transfer()` continuam a devolver HTTP 503. Não activar `CIS_CASH_WRITES_APPROVED` com base apenas na presença da nova coluna. O passo seguinte será implementar e testar lançamentos idempotentes atomicamente e a integração com cobranças/desembolsos.
