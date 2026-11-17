@@ -12,6 +12,7 @@ type CashMovement={id:number;account_id:number;type:string;amount:string;referen
  category:string;description:string;effective_at:string;evidence_reference:string|null;operation_key?:string|null;operator?:string|null};
 type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
+type ReversalPreview={consulta_apenas:boolean;already_reversed:boolean;can_submit:boolean;mode:'single'|'transfer';origin_nr:number;legs:{original_nr:number;account_id:number;account_code:string|null;original_type:string;reversal_type:string;amount:string}[];notice:string};
 type CashReport={from:string;to:string;account_id:number|null;accounts_count:number;movements_count:number;entries:string;exits:string;net_external:string;internal_in:string;internal_out:string;internal_net:string;categories:Record<string,string>;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const formatMoney=(v:string|number|null)=>v===null||!Number.isFinite(Number(v))?'—':fmt.format(Number(v))+' MT';
@@ -47,8 +48,12 @@ export default function CashDesk({token}:{token:string}){
  const [movementAccount,setMovementAccount]=useState('');
  const [accountDetail,setAccountDetail]=useState<number|null>(null);
  const [movementDetail,setMovementDetail]=useState<number|null>(null);
+ const [reversalPreview,setReversalPreview]=useState<ReversalPreview|null>(null);
+ const [reversalNr,setReversalNr]=useState<number|null>(null);
+ const [reversalReason,setReversalReason]=useState('');
+ const [reversalEvidence,setReversalEvidence]=useState('');
  const [showIdentifier,setShowIdentifier]=useState(false);
- const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'>('none');
+ const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'|'reversal'>('none');
  const [selected,setSelected]=useState('');
  const [newAccount,setNewAccount]=useState({code:'',name:'',type:'banco' as CashAccount['type'],identifier:''});
  const [opening,setOpening]=useState({opening_balance:'',cut_at:todayCut(),evidence_reference:''});
@@ -109,10 +114,34 @@ export default function CashDesk({token}:{token:string}){
  const hasAvailableBalance=active.some(a=>a.saldo_disponivel!==null);
  const total=active.reduce((sum,a)=>sum+Number(a.saldo_disponivel??0),0);
  const readableDate=(raw:string|null)=>raw?raw.replace('T',' ').slice(0,16):'—';
- const postingView=action==='record'||action==='transfer';
- function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setEstimate(null);setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
+ const postingView=action==='record'||action==='transfer'||action==='reversal';
+ function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setEstimate(null);setReversalPreview(null);setReversalNr(null);setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
  function showMovementsFor(id:number){setMovementAccount(String(id));setMovementQuery('');setMovementType('todas');setSection('movimentos');setAction('none');setAccountDetail(null);}
  function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');setEstimate(null);if(value==='record'||value==='transfer'){setSection('movimentos');setOperationKey(crypto.randomUUID());}}
+ async function startReversal(nr:number){
+  setMovementDetail(null);setAction('reversal');setEstimate(null);setReversalNr(nr);
+  setReversalReason('');setReversalEvidence('');setReversalPreview(null);setError('');
+  setBusy(true);
+  try{
+   const detail=await request<ReversalPreview>('estornos/'+nr+'/previsualizar');
+   if(!detail.consulta_apenas)throw new Error('Prévia de estorno não reconhecida.');
+   setReversalPreview(detail);
+  }catch(e){setError(e instanceof Error?e.message:'Não foi possível consultar o estorno.');}
+  finally{setBusy(false);}
+ }
+ async function confirmReversal(event:FormEvent){
+  event.preventDefault();
+  if(!reversalPreview?.can_submit||reversalPreview.already_reversed||reversalNr===null)return;
+  if(!window.confirm('CONFIRMAR ESTORNO DEFINITIVO? O movimento original será preservado e será criado um lançamento contrário no Extracto. Para transferências, ambas as contas serão afectadas.'))return;
+  setBusy(true);setError('');
+  try{
+   await request('estornos/'+reversalNr,'POST',{reason:reversalReason.trim(),evidence_reference:reversalEvidence.trim(),confirmation_phrase:'CONFIRMO-ESTORNO-REAL'});
+   setNotice('Estorno confirmado no Extracto. O lançamento original foi preservado.');
+   setAction('none');setReversalPreview(null);setReversalNr(null);setSection('movimentos');
+   await reload();
+  }catch(e){setError(e instanceof Error?e.message:'Estorno não confirmado. Consulte o histórico antes de repetir.');}
+  finally{setBusy(false);}
+ }
  async function simulate(event:FormEvent,what:'record'|'transfer'){
   event.preventDefault();setError('');setEstimate(null);setNotice('');
   setBusy(true);
@@ -167,9 +196,28 @@ export default function CashDesk({token}:{token:string}){
     <header className="cis-cash-posting-header">
      <button type="button" className="cis-cash-posting-back" onClick={resetAction} disabled={busy}><ArrowRight size={16}/> Voltar ao livro de movimentos</button>
      <span className="cis-cash-step">CAIXA GERAL · OPERAÇÃO FINANCEIRA</span>
-     <h3>{action==='transfer'?'Transferência entre contas':record.type==='entrada'?'Registar entrada':'Registar saída'}</h3>
+     <h3>{action==='reversal'?'Analisar estorno':action==='transfer'?'Transferência entre contas':record.type==='entrada'?'Registar entrada':'Registar saída'}</h3>
      <p>Introduza os dados, consulte a prévia e, quando autorizado, confirme o lançamento no Extracto.</p>
     </header>
+   {action==='reversal'&&<div className="cis-cash-reversal">
+    <div className="cis-cash-form-note"><Info size={17}/> O estorno é uma operação financeira de sentido contrário. O lançamento original permanece no Extracto. Não elimina documentos nem executa devoluções bancárias.</div>
+    {busy&&!reversalPreview&&<div className="cis-cash-loading" role="status"><RefreshCw size={17}/> A consultar o movimento…</div>}
+    {reversalPreview&&<><div className="cis-cash-reversal-legs">
+     <div className="cis-cash-reversal-label"><strong>{reversalPreview.mode==='transfer'?'Estorno da transferência completa':'Estorno do movimento'} · EXT-{reversalPreview.origin_nr}</strong><span>{reversalPreview.legs.length} lançamento(s) inverso(s)</span></div>
+     {reversalPreview.legs.map(leg=><div key={leg.original_nr} className="cis-cash-reversal-leg">
+      <div><small>Original EXT-{leg.original_nr}</small><strong>{leg.account_code||String(leg.account_id)}</strong></div>
+      <span>{leg.original_type} → {leg.reversal_type}</span><strong>{formatMoney(leg.amount)}</strong>
+     </div>)}
+    </div>
+    <div className="cis-cash-form-note"><Info size={17}/>{reversalPreview.notice}</div>
+    {reversalPreview.already_reversed?<div className="cis-cash-message caution"><LockKeyhole size={17}/> Este movimento já possui um estorno registado. Não é permitido repetir.</div>
+     :reversalPreview.can_submit?<form className="cis-cash-form" onSubmit={e=>void confirmReversal(e)}>
+      <label className="cis-cash-wide">Motivo do estorno<input required minLength={10} maxLength={80} value={reversalReason} onChange={e=>setReversalReason(e.target.value)} placeholder="Descrever a razão concreta da reversão"/></label>
+      <label className="cis-cash-wide">Referência do comprovativo<input required minLength={6} maxLength={65} value={reversalEvidence} onChange={e=>setReversalEvidence(e.target.value)} placeholder="Documento que comprova a necessidade do estorno"/></label>
+      <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||reversalReason.trim().length<10||reversalEvidence.trim().length<6}><ShieldCheck size={17}/>{busy?'A confirmar…':'Confirmar estorno real'}</button></div>
+     </form>:<div className="cis-cash-message caution"><LockKeyhole size={17}/> Apenas prévia: os estornos reais permanecem desactivados até homologação e autorização financeira independente.</div>}
+    </>}
+   </div>}
    {action==='record'&&<form className="cis-cash-form" onSubmit={e=>void simulate(e,'record')}>
     <div className="cis-cash-form-note"><Info size={16}/> A prévia não movimenta dinheiro. {enabled?'Após conferência, poderá confirmar o registo no Extracto.':'O registo real continua bloqueado.'}</div>
     <div className="cis-cash-form-title"><span className="cis-cash-step">{enabled?'ENTRADA / SAÍDA FINANCEIRA':'SIMULAÇÃO FINANCEIRA'}</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Desembolsos e cobranças exigem integração própria com os contratos.</p></div>
@@ -342,7 +390,12 @@ export default function CashDesk({token}:{token:string}){
       {detailMovement.operation_key&&<div className="cis-cash-detail-wide"><small>Chave da operação</small><strong className="cis-cash-long-value">{detailMovement.operation_key}</strong></div>}
      </div>
      <div className="cis-cash-detail-review"><Info size={17}/><span>Esta informação provém do Extracto. A referência documental não representa um comprovativo anexado. A consulta não efectua estornos nem altera o movimento.</span></div>
-     <div className="cis-cash-detail-actions"><button type="button" onClick={()=>setMovementDetail(null)}>Fechar</button></div>
+     <div className="cis-cash-detail-actions">
+      {detailMovement.operation_key&&/^cash:[0-9a-f-]{36}:[12]$/i.test(detailMovement.operation_key)
+       &&(detailMovement.description.startsWith('[CAIXA:')||detailMovement.description.startsWith('[TRANSFER '))
+       &&<button type="button" onClick={()=>void startReversal(detailMovement.id)}><ArrowLeftRight size={16}/> Analisar estorno</button>}
+      <button type="button" onClick={()=>setMovementDetail(null)}>Fechar</button>
+     </div>
     </div>
    </div>}
     <div className="cis-cash-table-foot"><span>Consulta limitada aos últimos 200 movimentos confirmados da Caixa.</span><span>Movimentos não reconciliados com bancos.</span></div>
