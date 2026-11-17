@@ -33,6 +33,56 @@ Artisan::command('cis:bootstrap-admin {email}', function (string $email) {
     return 0;
 })->purpose('Criar primeiro administrador do CIS com palavra-passe segura');
 
+// Provisionamento LOCAL e interactivo de um segundo responsável real.
+// Não cria administrador genérico, não imprime segredos, não altera Extracto.
+Artisan::command('cis:add-admin {email}', function (string $email) {
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $this->error('Email institucional inválido.');
+        return 1;
+    }
+    if (!\App\Models\User::query()->where('role','administrador')->where('active',true)->exists()) {
+        $this->error('Primeiro administrador activo não encontrado; não utilizar este comando para bootstrap.');
+        return 1;
+    }
+    if (\App\Models\User::query()->where('email',$email)->exists()) {
+        $this->error('Utilizador existente. Não elevar privilégios nem substituir credenciais automaticamente.');
+        return 1;
+    }
+    $name=trim((string)$this->ask('Nome real do segundo responsável'));
+    if (mb_strlen($name)<3 || mb_strlen($name)>150) {
+        $this->error('Nome inválido.');
+        return 1;
+    }
+    if (!$this->confirm('A identidade e autorização para administrador foram verificadas fora do sistema?',false)) {
+        $this->warn('Cancelado; nenhum utilizador criado.');
+        return 1;
+    }
+    $password=$this->secret('Palavra-passe individual do novo administrador (mínimo 12 caracteres)');
+    $again=$this->secret('Confirmar palavra-passe');
+    if (!is_string($password) || mb_strlen($password)<12 || !hash_equals($password,(string)$again)) {
+        $this->error('Palavra-passe insuficiente ou confirmação diferente.');
+        return 1;
+    }
+    try {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($email,$name,$password) {
+            if (\App\Models\User::query()->where('email',$email)->exists()) {
+                throw new \RuntimeException('Utilizador registado por outra operação.');
+            }
+            \App\Models\User::create([
+                'name'=>$name,'email'=>$email,'password'=>$password,
+                'role'=>'administrador','active'=>true,
+            ]);
+        });
+    } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+        $this->error('Email já utilizado; não foi criado um segundo administrador.');
+        return 1;
+    }
+    $this->info('Segundo administrador criado com identidade própria. Não foi alterado qualquer movimento financeiro.');
+    $this->warn('O segundo responsável deve autenticar-se com as suas próprias credenciais.');
+    return 0;
+})->purpose('Criar responsavel administrativo real adicional para segregacao de saldos (CLI privado)');
+
 Artisan::command('cis:reset-password {email}', function (string $email) {
     $user = \App\Models\User::query()->where('email', $email)->first();
     if (!$user) { $this->error('Conta não encontrada.'); return 1; }
