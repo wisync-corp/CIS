@@ -229,8 +229,8 @@ export default function CashDesk({token}:{token:string}){
   </div>:<div className="cis-cash-panel">
    <div className="cis-cash-panel-head"><div><h3>Livro de movimentos</h3><p>Entradas, saídas e transferências confirmadas; não inclui movimentos do Extracto antigo.</p></div>
    <div className="cis-cash-toolbar">
-    <button type="button" onClick={()=>beginAction('record')}><Plus size={16}/> Novo movimento</button>
-    <button type="button" onClick={()=>beginAction('transfer')}><ArrowLeftRight size={16}/> Transferir entre contas</button>
+    <button type="button" onClick={()=>beginAction('record')}><Plus size={16}/> Simular entrada/saída</button>
+    <button type="button" onClick={()=>beginAction('transfer')}><ArrowLeftRight size={16}/> Simular transferência</button>
    </div></div>
    <div className="cis-cash-filters" role="search" aria-label="Filtros do livro de Caixa">
     <label className="cis-cash-search"><Search size={17}/><span className="cis-sr-only">Pesquisar movimentos</span><input placeholder="Pesquisar referência, categoria ou descrição…" value={movementQuery} onChange={e=>setMovementQuery(e.target.value)}/></label>
@@ -240,7 +240,7 @@ export default function CashDesk({token}:{token:string}){
    </div>
    {action==='record'&&<form className="cis-cash-form" onSubmit={e=>void simulate(e,'record')}>
     <div className="cis-cash-form-note"><Info size={16}/> Simulação sem gravação. Não é recibo, comprovativo nem reserva de saldo. A execução real continua bloqueada.</div>
-    <div className="cis-cash-form-title"><span className="cis-cash-step">MOVIMENTO FINANCEIRO</span><h4>Registar entrada ou saída geral</h4><p>Exclusivo para receitas e despesas gerais. Desembolsos de crédito e pagamentos de prestações terão integração própria.</p></div>
+    <div className="cis-cash-form-title"><span className="cis-cash-step">SIMULAÇÃO FINANCEIRA</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Os desembolsos e cobranças seguem processos próprios; nenhum lançamento será efectuado.</p></div>
     <label>Conta financeira<select required value={record.account_id} onChange={e=>{setRecord(p=>({...p,account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar conta activa</option>{active.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Natureza<select value={record.type} onChange={e=>{setRecord(p=>({...p,type:e.target.value as 'entrada'|'saida'}));setEstimate(null);}}><option value="entrada">Entrada / receita</option><option value="saida">Saída / despesa</option></select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={record.amount} onChange={e=>{setRecord(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/><small>Utilize um valor positivo com até duas casas decimais.</small></label>
@@ -253,12 +253,12 @@ export default function CashDesk({token}:{token:string}){
      <div><span>{record.type==='entrada'?'Entrada prevista':'Saída prevista'}</span><strong>{moneyInput(record.amount)?formatMoney(record.amount):'—'}</strong></div>
      <div className="cis-cash-form-summary-total"><span>Saldo após lançamento (indicativo)</span><strong>{moneyInput(record.amount)?formatMoney(Number(active.find(a=>String(a.id)===record.account_id)?.saldo_disponivel??0)+(record.type==='entrada'?1:-1)*Number(record.amount)):'—'}</strong></div>
     </div>}
-    <div className="cis-cash-form-note"><Info size={16}/> O servidor verifica novamente o saldo e confirma a operação apenas após a validação. Não se trata de reconciliação bancária.</div>
+    <div className="cis-cash-form-note"><Info size={16}/> A prévia consulta o saldo no servidor, mas não o reserva nem efectua qualquer movimento. Os valores podem mudar até à futura confirmação.</div>
     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!active.length||!record.account_id||!moneyInput(record.amount)}>{busy?'A calcular…':'Simular '+(record.type==='entrada'?'entrada':'saída')} <ArrowRight size={16}/></button></div>
    </form>}
    {action==='transfer'&&<form className="cis-cash-form" onSubmit={e=>void simulate(e,'transfer')}>
     <div className="cis-cash-form-note"><Info size={16}/> Simulação sem transferência real. Não é necessário confirmar transferências executadas para calcular esta prévia.</div>
-    <div className="cis-cash-form-title"><span className="cis-cash-step">TRANSFERÊNCIA INTERNA</span><h4>Movimentar entre contas</h4><p>Registe somente quando a saída da origem e a entrada no destino estiverem ambas comprovadas. Transferências pendentes ainda não são suportadas.</p></div>
+    <div className="cis-cash-form-title"><span className="cis-cash-step">SIMULAÇÃO DE TRANSFERÊNCIA</span><h4>Prévia entre contas</h4><p>Consulte o efeito estimado nas duas contas. Não é necessário executar qualquer transferência real para esta simulação.</p></div>
     <label>Conta de origem<select required value={transfer.source_account_id} onChange={e=>{setTransfer(p=>({...p,source_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar origem</option>{active.map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Conta de destino<select required value={transfer.destination_account_id} onChange={e=>{setTransfer(p=>({...p,destination_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar destino</option>{active.filter(a=>String(a.id)!==transfer.source_account_id).map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={transfer.amount} onChange={e=>{setTransfer(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/></label>
