@@ -397,9 +397,13 @@ bash deploy/backup-before-auth.sh
 bash deploy/rehearse-cash-daily-closures.sh
 # Continuar APENAS com a mensagem ENSAIO DO FECHO DIÁRIO APROVADO:
 bash deploy/install-cash-daily-closure-schema.sh
+bash deploy/verify-cash-daily-closures.sh
 # Depois, se a instalação e postflight forem aprovados:
 bash deploy/prepare-cash-daily-closure-writer.sh
+bash deploy/verify-cash-daily-closure-writer.sh
 bash deploy/refresh-private-preview.sh
 ```
+
+`verify-cash-daily-closure-writer.sh` (somente leitura) confirma que `cis_cash_closures` tem apenas SELECT em `Extracto`, SELECT/INSERT na tabela de fechos e `UPDATE(updated_at)` nas contas (necessário ao lock), sem privilégios globais ou de base; e testa, dentro da API e numa transacção revertida, o mesmo `lockForUpdate` do POST e a recusa de UPDATE no `Extracto`.
 
 **Não activar ainda `CIS_CASH_DAILY_CLOSE_APPROVED`**. Primeiro validar no MySQL real as permissões e a consulta de fecho; só depois preparar activação específica com confirmação explícita. A Tesouraria não foi alterada por esta fase.
