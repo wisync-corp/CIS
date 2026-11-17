@@ -41,7 +41,9 @@ final class CollectionScenarioPreviewController extends Controller
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'Consulta financeira privada não autorizada.');
         $d=$request->validate([
-            'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato'],
+            'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato,prorrogar_15_30'],
+            'prazo_origem_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:15'],
+            'prazo_destino_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:30'],
             'valor_pago'=>['required_if:operacao,parcial','nullable','string','max:20'],
             'data_pagamento'=>['required_if:operacao,actualizar_data','nullable','date_format:Y-m-d'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
@@ -65,6 +67,27 @@ final class CollectionScenarioPreviewController extends Controller
             'movimento_registado'=>false,
         ];
         $supported=['Pendente','Pagamento Atrasado'];
+        if ($operation==='prorrogar_15_30') {
+            abort_unless(in_array($r->Estado,$supported,true),409,'Não é possível alterar o prazo de uma prestação liquidada.');
+            $contractRows=$db->table('Contractos')->where('Nr do Contracto',$numero)->limit(501)->get();
+            abort_if($contractRows->count()===501,409,'Demasiadas linhas para verificar o prazo com segurança.');
+            $termValues=$contractRows->pluck('Prazo/Duração')->map(fn($v)=>trim((string)$v))->filter()->unique()->values();
+            abort_unless($termValues->count()===1,409,'Prazo do contrato divergente ou não identificado.');
+            $term=strtolower($termValues[0]);
+            abort_unless(preg_match('/^(?:15\s*dias?|2\s*semanas)$/u',$term)===1,409,'Esta operação exige prazo actual comprovado de 15 dias / 2 semanas.');
+            abort_unless(\Illuminate\Support\Facades\Schema::hasTable('cis_tabela_juros'),503,'Tabela de taxas indisponível.');
+            $capital=(string)($r->Capital??'0');
+            $rows30=DB::table('cis_tabela_juros')->where('limite_inferior','<=',$capital)
+              ->where('limite_superior','>=',$capital)->where('periodo_referencia',30)
+              ->limit(2)->get(['taxa']);
+            abort_unless($rows30->count()===1,409,'Não existe uma taxa única para este capital e o período de 30 dias.');
+            return response()->json($base+[
+              'resultado'=>'proposta_alteracao_prazo_sem_gravacao',
+              'prazo_origem_dias'=>15,'prazo_destino_dias'=>30,
+              'taxa_destino'=>(string)$rows30[0]->taxa,
+              'aviso'=>'Apenas prévia da elegibilidade e taxa de referência. Não altera data de vencimento, juros, capital, prestação nem Extracto. A política de prorrogação necessita de homologação.',
+            ])->header('Cache-Control','no-store, private');
+        }
         if (in_array($operation,['parcial','renovar_juros','capitalizar','actualizar_data','remanescente'],true)) {
             abort_unless(in_array($r->Estado,$supported,true),409,
                 'Simulação limitada às prestações pendentes ou atrasadas.');
