@@ -1,38 +1,29 @@
 /* CIS: three selectable visual identities. Semantic tokens drive the same UI components. */
-/* CIS: três variações alinhadas à identidade visual v7 — equilíbrio 60·30·10:
-   60% neutros claros (fundo/superfícies) · 30% roxo da marca (menu, herói, títulos, acções) ·
-   10% verde/lima (estados activos, concluídos e positivos).
-   Escala roxa derivada do matiz da marca (257°): 900 #170F2B títulos · 600 #452D80 acções (10,8:1 com branco).
-   Lima #B5FA32 só sobre fundo escuro (14,6:1). Em fundo claro: verde #4F9A0F para marcas gráficas (3,5:1)
-   e #3B7311 para texto (5,8:1). O verde intermédio #548C3E fica reservado ao símbolo. */
+/* CIS: três variações CLARAS, todas com o logótipo alternativo para fundo claro (identidade v7).
+   Alto contraste: texto e acções ≥ 7:1 (WCAG AAA); bordas de campos ≥ 3:1; indicadores verdes ≥ 4,9:1.
+   Lima #B5FA32 só nos heróis roxos (14,6:1) — nunca sobre superfícies claras.
+   Equilíbrio 60·30·10: neutros claros · roxo da marca (títulos, acções, heróis) · verde (estados activos/positivos). */
 :root,[data-theme="fintech"]{
- --cis-sidebar:#170F2B;--cis-sidebar-hover:#2A2045;--cis-sidebar-text:#F4F2F9;--cis-sidebar-muted:#BDB6CF;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3052;
- --cis-primary:#452D80;--cis-primary-hover:#342163;--cis-tint:#F1EEF9;--cis-background:#F8F7FB;--cis-surface-subtle:#F6F4FA;
- --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#6B6480;--cis-border:#E6E2EE;--cis-input-border:#CFC7E2;
- --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
- --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
+ --cis-sidebar:#FFFFFF;--cis-sidebar-hover:#EEEAF7;--cis-sidebar-text:#170F2B;--cis-sidebar-muted:#3F3852;--cis-sidebar-indicator:#3B7311;--cis-sidebar-line:#D9D3E6;
+ --cis-primary:#452D80;--cis-primary-hover:#342163;--cis-tint:#EEEAF7;--cis-background:#F7F6FA;--cis-surface-subtle:#F4F2F9;
+ --cis-text:#1F1A2E;--cis-heading:#170F2B;--cis-text-muted:#4A4360;--cis-border:#D9D3E6;--cis-input-border:#8A80A6;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#E4DFF0;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
+ --cis-accent:#3B7311;--cis-accent-ink:#2F5C0D;--cis-accent-tint:#EFF7E3;--cis-accent-line:#B9D99A;--cis-lime:#B5FA32;
  color-scheme:light;
 }
 [data-theme="banking"]{
- --cis-sidebar:#170F2B;--cis-sidebar-hover:#2A2045;--cis-sidebar-text:#F4F2F9;--cis-sidebar-muted:#BDB6CF;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3052;
- --cis-primary:#3B7311;--cis-primary-hover:#2F5C0D;--cis-tint:#EFF7E3;--cis-background:#F8FAF5;--cis-surface-subtle:#F5F9F0;
- --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#646B5E;--cis-border:#E3EADB;--cis-input-border:#C3D3B1;
- --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
- --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
+ --cis-sidebar:#F2F8EA;--cis-sidebar-hover:#E6F2D6;--cis-sidebar-text:#170F2B;--cis-sidebar-muted:#36412D;--cis-sidebar-indicator:#3B7311;--cis-sidebar-line:#D3DEC6;
+ --cis-primary:#2A520B;--cis-primary-hover:#1F3D08;--cis-tint:#E6F2D6;--cis-background:#F7FAF3;--cis-surface-subtle:#F2F7EB;
+ --cis-text:#1F1A2E;--cis-heading:#170F2B;--cis-text-muted:#45503C;--cis-border:#D3DEC6;--cis-input-border:#82947A;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#E4DFF0;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
+ --cis-accent:#3B7311;--cis-accent-ink:#2F5C0D;--cis-accent-tint:#EFF7E3;--cis-accent-line:#B9D99A;--cis-lime:#B5FA32;
 }
 [data-theme="premium"]{
- --cis-sidebar:#1E1E22;--cis-sidebar-hover:#2F2F36;--cis-sidebar-text:#F2F2F4;--cis-sidebar-muted:#B8B8C0;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3A42;
- --cis-primary:#452D80;--cis-primary-hover:#342163;--cis-tint:#F0EFF4;--cis-background:#F5F5F7;--cis-surface-subtle:#F8F8FA;
- --cis-text:#26262C;--cis-heading:#1E1E22;--cis-text-muted:#6B6B76;--cis-border:#E4E4E8;--cis-input-border:#C9C9D1;
- --cis-hero-from:#1E1E22;--cis-hero-to:#3A3A44;--cis-hero-soft:#DCDCE2;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
- --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
-}
-[data-theme="claro"]{
- --cis-sidebar:#FFFFFF;--cis-sidebar-hover:#F1EEF9;--cis-sidebar-text:#170F2B;--cis-sidebar-muted:#5F5873;--cis-sidebar-indicator:#4F9A0F;--cis-sidebar-line:#E6E2EE;
- --cis-primary:#452D80;--cis-primary-hover:#342163;--cis-tint:#F1EEF9;--cis-background:#F8F7FB;--cis-surface-subtle:#F6F4FA;
- --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#6B6480;--cis-border:#E6E2EE;--cis-input-border:#CFC7E2;
- --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
- --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
+ --cis-sidebar:#EFEBF8;--cis-sidebar-hover:#E2DBF2;--cis-sidebar-text:#170F2B;--cis-sidebar-muted:#3A3250;--cis-sidebar-indicator:#3B7311;--cis-sidebar-line:#D6CFE6;
+ --cis-primary:#342163;--cis-primary-hover:#170F2B;--cis-tint:#E6E0F4;--cis-background:#F7F5FB;--cis-surface-subtle:#F2EFF9;
+ --cis-text:#1F1A2E;--cis-heading:#170F2B;--cis-text-muted:#4A4360;--cis-border:#D6CFE6;--cis-input-border:#8A80A6;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#E4DFF0;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
+ --cis-accent:#3B7311;--cis-accent-ink:#2F5C0D;--cis-accent-tint:#EFF7E3;--cis-accent-line:#B9D99A;--cis-lime:#B5FA32;
 }
 body{background:var(--cis-background);color:var(--cis-text)}
 button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
@@ -53,7 +44,7 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-settings-appearance{display:grid;gap:16px;margin-bottom:26px}
 .cis-settings-appearance h2{font:800 19px Manrope;margin:0;color:var(--cis-heading)}
 .cis-settings-appearance>p{color:var(--cis-text-muted);font-size:13px;line-height:1.7}
-.cis-theme-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.cis-theme-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
 .cis-theme-option{display:grid;grid-template-rows:auto auto auto 1fr;gap:10px;text-align:left;background:#fff;border:2px solid var(--cis-border);border-radius:13px;padding:15px;cursor:pointer;min-width:0;transition:border-color .12s,box-shadow .12s}
 .cis-theme-option:hover{border-color:var(--cis-input-border)}
 .cis-theme-option[aria-pressed="true"]{border-color:var(--cis-primary);box-shadow:0 0 0 3px var(--cis-tint)}
@@ -72,8 +63,7 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 @media(max-width:1100px){.cis-theme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.cis-theme-grid{grid-template-columns:1fr}}
 
 /* Equilíbrio de cores — acentos da marca (10%) aplicados a estados, sem alterar a estrutura. */
-.cis-side nav button.current{color:#fff}
-.cis-side nav button.current svg{color:var(--cis-lime)}
+
 .cis-env span,.cis-cash-live-dot{background:var(--cis-accent)}
 .cis-cash-live-dot{background:var(--cis-lime);box-shadow:0 0 0 4px #B5FA3224}
 .cis-cash-intro::after{border-color:#B5FA3218}
@@ -89,18 +79,27 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-cash-badge.activa{background:var(--cis-accent-tint);color:var(--cis-accent-ink)}
 .cis-kicker,.cis-cash-step{color:var(--cis-primary)}
 
-/* CIS Claro — menu e entrada brancos com o logótipo alternativo para fundo claro.
-   Lima nunca sobre branco: indicador e ícone activos em verde (#4F9A0F / #3B7311).
-   Os heróis dos módulos mantêm-se em roxo (contraste e identidade). */
-[data-theme="claro"] .cis-side{border-right:1px solid var(--cis-border)}
-[data-theme="claro"] .cis-side nav button.current,[data-theme="claro"] .cis-side nav button:hover{color:var(--cis-heading)}
-[data-theme="claro"] .cis-side nav button.current svg{color:var(--cis-accent-ink)}
-[data-theme="claro"] .cis-profile button{color:var(--cis-heading)}
-[data-theme="claro"] .cis-login-left{background:var(--cis-surface-subtle);color:var(--cis-heading);border-right:1px solid var(--cis-border)}
-[data-theme="claro"] .cis-login-story h1{color:var(--cis-heading)}
-[data-theme="claro"] .cis-login-story h1 em{color:var(--cis-accent-ink)}
-[data-theme="claro"] .cis-login-eyebrow,[data-theme="claro"] .cis-login-story p,[data-theme="claro"] .cis-login-feature,[data-theme="claro"] .cis-login-caption{color:var(--cis-text-muted)}
-[data-theme="claro"] .cis-login-feature{border-top-color:var(--cis-border)}
-[data-theme="claro"] .cis-login-feature svg{color:var(--cis-accent-ink)}
+/* Menu e entrada claros (todos os temas). */
+.cis-side{border-right:1px solid var(--cis-sidebar-line)}
+.cis-side nav button{color:var(--cis-sidebar-muted);font-weight:600}
+.cis-side nav button.current,.cis-side nav button:hover{color:var(--cis-heading)}
+.cis-side nav button.current{font-weight:750}
+.cis-side nav button.current svg{color:var(--cis-accent)}
+.cis-workspace{color:var(--cis-sidebar-muted)}
+.cis-profile button{color:var(--cis-heading)}
+.cis-login-left{background:var(--cis-sidebar);color:var(--cis-heading);border-right:1px solid var(--cis-sidebar-line)}
+.cis-login-story h1{color:var(--cis-heading)}
+.cis-login-story h1 em{color:var(--cis-accent)}
+.cis-login-eyebrow,.cis-login-story p,.cis-login-feature,.cis-login-caption{color:var(--cis-text-muted)}
+.cis-login-feature{border-top-color:var(--cis-sidebar-line)}
+.cis-login-feature svg{color:var(--cis-accent)}
 .cis-theme-preview-side.light{border-right:1px solid #E6E2EE}
 .cis-theme-preview-side.light i{background:#170F2B2E}
+
+/* Campos de introdução bem visíveis: contorno ≥ 3:1 (WCAG 1.4.11) e foco claro. */
+.cis-cash-search,.cis-cash-select-filter,.cis-collections-search,.cis-table-controls form,.cis-table-controls>input,
+.cis-draft-form input,.cis-edit-dialog input,.cis-extract-dates input,.cis-login-form input,
+.cis-main select,.cis-main textarea,.cis-main input:not([type=checkbox]):not([type=radio]):not([type=range]){border-color:var(--cis-input-border)}
+.cis-cash-search input,.cis-collections-search input,.cis-table-controls form input{border:0}
+.cis-main input:focus-visible,.cis-main select:focus-visible,.cis-main textarea:focus-visible,.cis-login-form input:focus-visible{outline:3px solid var(--cis-tint);outline-offset:0;border-color:var(--cis-primary)}
+.cis-cash-search:focus-within,.cis-collections-search:focus-within,.cis-table-controls form:focus-within{border-color:var(--cis-primary);box-shadow:0 0 0 3px var(--cis-tint)}

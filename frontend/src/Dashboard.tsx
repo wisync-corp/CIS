@@ -1,5 +1,4 @@
 import {useState} from 'react';
-import logoCompactaEscuro from './assets/brand/cis-compacta-escuro.svg';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays} from 'lucide-react';
@@ -26,7 +25,7 @@ export default function Dashboard({token, name, role, theme, onThemeChange, onLo
  const [clientProfileOpen,setClientProfileOpen]=useState(false);
  return <div className="cis-layout">
   <aside className={'cis-side '+(open?'visible':'')}>
-   <div className="cis-brand"><img src={theme==='claro'?logoCompactaClaroTransp:logoCompactaEscuro} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
+   <div className="cis-brand"><img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
    <nav aria-label="Navegação principal">{nav.filter(({label})=>label!=='Caixa'||role==='administrador').map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}</small></div><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>

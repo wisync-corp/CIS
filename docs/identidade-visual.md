@@ -4,9 +4,9 @@ Fonte: `CIS_folha_de_marca_v7.png` (CIS – Credit Insight Shift). Os SVG oficia
 
 | Local | Versão da folha | Ficheiro |
 |---|---|---|
-| Página de login (painel escuro) | Logótipo principal, fundo escuro (≥240 px → 260 px); no tema CIS Claro, principal para fundo claro | `cis-principal-escuro.svg` / `cis-principal-claro.svg` |
+| Página de login (painel claro) | Logótipo principal para fundo claro (260 px) | `cis-principal-claro.svg` |
 | Login em telemóvel (fundo branco) | Compacta, fundo claro (150 px) | `cis-compacta-claro.svg` |
-| Menu lateral expandido | Compacta, fundo escuro (120–239 px → 170 px); no tema CIS Claro, compacta para fundo claro | `cis-compacta-escuro.svg` / `cis-compacta-claro-transparente.svg` |
+| Menu lateral expandido (claro) | Compacta para fundo claro, sem fundo próprio (170 px) | `cis-compacta-claro-transparente.svg` |
 | Cabeçalho do dashboard (≤750 px, menu escondido) | Compacta, fundo claro (120 px) | `cis-compacta-claro.svg` |
 | Favicon | Favicon simplificado (sem contorno) + PNG 16/32 | `public/favicon.svg`, `favicon-16/32.png` |
 | Aplicação móvel / ecrã inicial | Ícone com fundo roxo | `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest` |
@@ -16,23 +16,16 @@ Regras mantidas: sem sombras, gradientes ou distorção nos logótipos (só `wid
 
 Pendente: menu lateral recolhido (símbolo isolado) quando existir esse modo; relatórios/documentos impressos (versão fundo claro) quando forem criados.
 
-## Temas da interface — equilíbrio de cores 60·30·10
+## Temas da interface — três versões claras de alto contraste
 
-- **60% neutros claros**: fundo, cartões e superfícies.
-- **30% roxo da marca**: menu, herói, títulos (`#170F2B`) e acções (`--cis-primary`).
-- **10% verde/lima**: estados activos (separador seleccionado), passos concluídos, saldo disponível, contas activas, indicador do menu.
+Decisão (18/11/2026): os três temas usam menu e entrada claros com o **logótipo alternativo para fundo claro**. As versões para fundo escuro ficam no pacote da marca para outros suportes.
 
-Escala roxa derivada do matiz da marca (257°): 900 `#170F2B` títulos e superfícies escuras · 700 `#342163` hover · 600 `#452D80` acções, ícones e etiquetas (10,8:1 com branco) · tint `#F1EEF9`. Usar o 900 para acções deixava tudo quase preto e sem hierarquia.
-
-Tokens de acento (iguais nos três temas): `--cis-accent #4F9A0F` (marcas gráficas em fundo claro, 3,5:1), `--cis-accent-ink #3B7311` (texto, 5,8:1), `--cis-accent-tint #EFF7E3`, `--cis-accent-line #CFE6B4`, `--cis-lime #B5FA32` (só sobre fundo escuro, 14,6:1). Lima puro sobre branco (1,26:1) nunca é usado.
-
-| Tema (id) | Menu / login | Acções | Acento |
+| Tema (id) | Menu / login | Acções | Contraste das acções (branco) |
 |---|---|---|---|
-| **CIS Roxo** (`fintech`, predefinido) | `#170F2B` | `#452D80` | verde / lima |
-| **CIS Verde** (`banking`) | `#170F2B` | `#3B7311` | verde / lima |
-| **CIS Grafite** (`premium`) | `#1E1E22` | `#452D80` | verde / lima |
-| **CIS Claro** (`claro`) | Branco `#FFFFFF` com **logótipo alternativo claro** (compacta e principal para fundo claro) | `#452D80` | verde (`#4F9A0F` / `#3B7311`; lima nunca sobre branco) |
+| **CIS Branco** (`fintech`, predefinido) | `#FFFFFF` | roxo `#452D80` | 10,8:1 |
+| **CIS Verde** (`banking`) | verde-claro `#F2F8EA` | verde `#2A520B` | 9,1:1 |
+| **CIS Lilás** (`premium`) | lilás `#EFEBF8` | roxo `#342163` | 13,6:1 |
 
-Os verdes-azulados de estado (`#1e7953`, `#9ef0bc`, …) foram substituídos pelos verdes da marca para não haver dois verdes em conflito. Avisos (âmbar) e erros (vermelho) mantêm-se.
+Regras de contraste aplicadas: texto principal ≥ 16:1; texto secundário ≥ 8:1; itens do menu ≥ 9,9:1; acções ≥ 7:1 também sobre os fundos tingidos (AAA); contorno de campos ≥ 3,2:1 com foco visível; indicadores e separador activo em verde `#3B7311` (≥ 4,9:1). Lima `#B5FA32` só nos heróis roxos dos módulos (14,6:1), nunca em superfícies claras. Equilíbrio 60·30·10 mantido (neutros · roxo da marca · verde para estados activos e positivos). A preferência antiga `claro` passa automaticamente para CIS Branco.
 
 `cis-compacta-claro-transparente.svg` é o SVG oficial da versão compacta clara sem o rectângulo branco de fundo (mesmo desenho, para assentar em superfícies claras não brancas).
