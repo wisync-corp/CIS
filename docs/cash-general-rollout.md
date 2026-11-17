@@ -445,3 +445,7 @@ bash deploy/revert-legacy-extracto-numerario.sh      # desfazer (REVERTER-HISTOR
 #### Correcção prévia de linhas ilegíveis
 
 A análise de 17/11/2026 encontrou: `Nr 1209` (Retirada de M-pesa, 2025-07-09) com `Valor=0.420044` (mais de 2 casas) e 1 linha com tipo `Saidas` sem acento — invisível em consultas normais porque `latin1_swedish_ci` ignora acentos. `deploy/fix-legacy-extracto-rows.sh <Nr> <valor>` (ou `--tipos`) corrige apenas essas linhas históricas com comparação `_bin`, guarda os originais e permite `--reverter`.
+
+### Eliminação excepcional de movimentos de uma conta (decisão do proprietário, 17/11/2026)
+
+Para movimentos reais lançados por engano na BIM-001, o proprietário optou por eliminar em vez de estornar. `deploy/delete-cash-account-movements.sh <CÓDIGO>` lista as linhas, bloqueia se houver ligação a contratos/prestações, pernas de transferência/estorno noutra conta ou fechos registados, faz backup e cópia `mysqldump` exacta das linhas, e apaga numa transacção com verificação de contagem/checksum. Conta, saldo inicial e marcador mantêm-se. Reposição: `--restaurar <ficheiro>`.
