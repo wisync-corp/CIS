@@ -16,14 +16,20 @@ Regras mantidas: sem sombras, gradientes ou distorção nos logótipos (só `wid
 
 Pendente: menu lateral recolhido (símbolo isolado) quando existir esse modo; relatórios/documentos impressos (versão fundo claro) quando forem criados.
 
-## Temas da interface (alinhados à marca)
+## Temas da interface — equilíbrio de cores 60·30·10
 
-Os três temas mantêm os identificadores antigos (preferências guardadas continuam válidas) e passam a usar a paleta v7:
+- **60% neutros claros**: fundo, cartões e superfícies.
+- **30% roxo da marca**: menu, herói, títulos (`#170F2B`) e acções (`--cis-primary`).
+- **10% verde/lima**: estados activos (separador seleccionado), passos concluídos, saldo disponível, contas activas, indicador do menu.
 
-| Tema (id) | Menu / login | Acções e destaques em fundo claro | Destaque em fundo escuro |
+Escala roxa derivada do matiz da marca (257°): 900 `#170F2B` títulos e superfícies escuras · 700 `#342163` hover · 600 `#452D80` acções, ícones e etiquetas (10,8:1 com branco) · tint `#F1EEF9`. Usar o 900 para acções deixava tudo quase preto e sem hierarquia.
+
+Tokens de acento (iguais nos três temas): `--cis-accent #4F9A0F` (marcas gráficas em fundo claro, 3,5:1), `--cis-accent-ink #3B7311` (texto, 5,8:1), `--cis-accent-tint #EFF7E3`, `--cis-accent-line #CFE6B4`, `--cis-lime #B5FA32` (só sobre fundo escuro, 14,6:1). Lima puro sobre branco (1,26:1) nunca é usado.
+
+| Tema (id) | Menu / login | Acções | Acento |
 |---|---|---|---|
-| **CIS Roxo** (`fintech`, predefinido) | Roxo profundo `#170F2B` | Roxo `#170F2B` | Lima `#B5FA32` |
-| **CIS Verde** (`banking`) | Roxo profundo `#170F2B` | Texto verde `#3B7311` | Lima `#B5FA32` |
-| **CIS Grafite** (`premium`) | Grafite `#1E1E22` (escala de cinzentos da marca) | Roxo `#170F2B` | Lima `#B5FA32` |
+| **CIS Roxo** (`fintech`, predefinido) | `#170F2B` | `#452D80` | verde / lima |
+| **CIS Verde** (`banking`) | `#170F2B` | `#3B7311` | verde / lima |
+| **CIS Grafite** (`premium`) | `#1E1E22` | `#452D80` | verde / lima |
 
-Contraste (WCAG): lima sobre roxo 14,6:1; branco sobre roxo 18,4:1; branco sobre `#3B7311` 5,8:1. Lima puro sobre branco tem 1,26:1 — por isso nunca é usado como texto ou botão em fundo claro. Os heróis do Simulador e da Cobrança deixaram de ter verde-azulado fixo e seguem o tema. Cores semânticas de estado (sucesso, aviso, erro) mantêm-se.
+Os verdes-azulados de estado (`#1e7953`, `#9ef0bc`, …) foram substituídos pelos verdes da marca para não haver dois verdes em conflito. Avisos (âmbar) e erros (vermelho) mantêm-se.
