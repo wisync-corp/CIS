@@ -54,6 +54,15 @@ try{
         'created_by'=>$user->id,'validated_by'=>$user->id,'validated_at'=>$now,
         'created_at'=>now(),'updated_at'=>now(),
     ]);
+    $destinationId=$db->table('cis_cash_accounts')->insertGetId([
+        'code'=>$code.'-B','name'=>'Segunda conta de ensaio',
+        'type'=>'banco','currency'=>'MZN','status'=>'activa',
+        'opening_balance'=>'25.00','cut_at'=>$now,
+        'opening_extracto_nr'=>(int)($db->table('Extracto')->max('Nr')??0),
+        'evidence_reference'=>'REHEARSAL-NOT-REAL',
+        'created_by'=>$user->id,'validated_by'=>$user->id,'validated_at'=>$now,
+        'created_at'=>now(),'updated_at'=>now(),
+    ]);
     $record=[
         'account_id'=>$id,'type'=>'saida','amount'=>'30.00','category'=>'Operacoes',
         'description'=>'Despesa de ensaio controlada',
@@ -69,7 +78,25 @@ try{
         'não pode haver duplicação');
     assertReal((int)$db->table('Extracto')->where('account_id',$id)->first()->Nr===(int)$first['extracto_nr'],
         'linha idempotente mantém o mesmo Nr');
-    echo "OK: inserção real do Extracto no MySQL restaurado + replay idempotente.\n";
+    $transfer=[
+        'source_account_id'=>$id,'destination_account_id'=>$destinationId,
+        'amount'=>'20.00','description'=>'Transferencia em ensaio real',
+        'evidence_reference'=>'REHEARSAL-TRANSFER-001',
+        'confirmed_source_debit'=>true,'confirmed_destination_credit'=>true,
+        'idempotency_key'=>'00000000-0000-4000-8000-000000000102',
+    ];
+    $postedTransfer=simulatePosting($controller,'transfer',$transfer,$user);
+    assertReal($postedTransfer['registered']===true&&!$postedTransfer['replayed']
+        &&$postedTransfer['source_balance']==='50.00'
+        &&$postedTransfer['destination_balance']==='45.00',
+        'transferência atómica no esquema legado');
+    assertReal($db->table('Extracto')->whereIn('account_id',[$id,$destinationId])->count()===3,
+        'uma saída e duas pernas de transferência');
+    $replayTransfer=simulatePosting($controller,'transfer',$transfer,$user);
+    assertReal($replayTransfer['replayed']===true
+        &&$db->table('Extracto')->whereIn('account_id',[$id,$destinationId])->count()===3,
+        'replay de transferência mantém exactamente duas pernas');
+    echo "OK: inserção no Extracto legado, replay idempotente e duas pernas atómicas em MySQL isolado.\n";
 } finally {
     $db->rollBack();
 }
