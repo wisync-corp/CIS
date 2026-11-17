@@ -166,3 +166,22 @@ Ao seleccionar **Efectuar pagamento**, aparece a aba contextual **Tratamento do 
 **Prazo 15 → 30 dias:** se o campo contratual `Prazo/Duração` indicar inequivocamente `15 dias` ou `2 Semanas`, o tratamento apresenta **Passar de 15 para 30 dias**. A prévia no servidor revalida que a prestação ainda está pendente, que as linhas do contrato têm prazo consistente e que a tabela de juros contém uma taxa única para a faixa de capital e `periodo_referencia=30`. A resposta informa a taxa de referência, mas **não altera** datas, percentagens, capital, prestações ou Extracto. Para qualquer outro prazo, a opção não aparece.
 
 As verificações visuais são conveniência UX; as regras essenciais também são verificadas no servidor. Esta conversão de prazo é uma **proposta de tratamento**, não prova de aceitação pelo mutuário nem autorização para prorrogação financeira.
+
+
+## Revisão de causalidade e origem dos dados — A_Cobrança.frm (17/11/2026)
+
+Foi relido o ficheiro **A_Cobrança.frm**, entregue no contexto desta revisão (151 linhas). **Não é o UserForm principal de liquidação**: o título é `Notificação de Aviso de Cobrança` e o procedimento `Busca_Titulos` prepara uma **lista de avisos** filtrando `Estado = 'Pendente' AND Dias >= 0 AND Dias < 3`. No duplo clique, a interface atribui `s_con`, `s_dat`, `c_cobra=True`, oculta o aviso e abre `Cobrança.Show`. Portanto, o fluxo de origem tem dois momentos separados: **selecção/notificação** e **tratamento efectivo da prestação**. Este filtro de três dias **não deve ser aplicado como restrição global** ao módulo de pagamentos.
+
+**Anomalia identificada no código original:** a coluna rotulada `Valor a Cobrar` recebe `Format(rs2.Fields("Valor Pago").value, "#,##0.00")`. `Valor Pago` pode ser zero em uma prestação pendente; não é uma fonte segura para apurar o devido. No CAPTA, o valor previsto é apresentado explicitamente a partir de `Valor a Pagar`, e o `Valor Pago` aparece separadamente como valor registado. Não há reconciliação presumida.
+
+A anterior grelha plana com sete opções (total, parcial, renovar juros, capitalizar, remanescente, rever data, 15→30) misturava **operações com entrada efectiva de dinheiro** e **revisões de condições sem recebimento**, produzindo uma escolha sem relação causal clara. A nova experiência tem a ordem:
+
+1. **Identificar contrato e prestação elegível** — estado pendente ou em atraso, contrato não encerrado; bloqueio de prestações liquidadas e de `Situação de Pagamento` completa.
+2. **Efectuar pagamento** — abrir a aba contextual, mostrar o montante previsto, vencimento, estado e valor já pago, sem repetir o resumo financeiro da ficha principal.
+3. **Pergunta causal** — `Houve pagamento?`: **sim** revela total/parcial (e remanescente somente quando a situação registada é Parcial); **não** revela propostas sem entrada financeira: renovar juros, capitalização e 15→30 apenas quando `Prazo/Duração` corresponde inequivocamente a 15 dias ou duas semanas.
+4. **Parâmetros específicos** — data, conta receptora, canal e comprovativo aparecem **somente** no ramo com pagamento. No ramo sem recebimento, não se pede comprovativo nem conta, e não se cria movimento de caixa.
+5. **Prévia controlada** — as simulações continuam sem gravação e as alterações de prazo exigem verificação do lado do servidor.
+
+O indicador `Crédito concedido`, número de prestações e próximo vencimento já é mostrado no cabeçalho da ficha do contrato. Por isso foram **retirados sete cards repetidos** da aba Pagamentos, substituídos por uma faixa compacta com **por receber**, **registado como pago** e **prestações marcadas em atraso**. A composição técnica é apresentada apenas sob demanda.
+
+**Estado de homologação:** o arquivo A_Cobrança.frm sozinho não define todas as regras de aprovação, tolerância e efeito financeiro do UserForm Cobrança. Nenhuma dedução de elegibilidade cria direito de alterar capital ou vencimento. Pagamentos e reestruturações reais continuam bloqueados até a política ser formalmente aprovada e os lançamentos atómicos serem implementados.
