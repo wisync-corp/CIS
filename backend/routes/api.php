@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ParcelasQuoteController;
 use App\Http\Controllers\Api\GenericSimulatorController;
 use App\Http\Controllers\Api\ContractOperationalStatusController;
 use App\Http\Controllers\Api\CashController;
+use App\Http\Controllers\Api\CashPostingController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('auth/me',[AuthController::class,'me']);
@@ -38,8 +39,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('contas/{id}/activar',[CashController::class,'activate'])->whereNumber('id')->middleware('throttle:8,1');
         Route::post('simular-movimento',[CashController::class,'previewRecord'])->middleware('throttle:15,1');
         Route::post('simular-transferencia',[CashController::class,'previewTransfer'])->middleware('throttle:15,1');
-        Route::post('movimentos',[CashController::class,'record'])->middleware('throttle:8,1');
-        Route::post('transferencias',[CashController::class,'transfer'])->middleware('throttle:8,1');
+        Route::post('movimentos',[CashPostingController::class,'record'])->middleware('throttle:8,1');
+        Route::post('transferencias',[CashPostingController::class,'transfer'])->middleware('throttle:8,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateClientPreview::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes'])->middleware('throttle:30,1');
