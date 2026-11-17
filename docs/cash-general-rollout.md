@@ -322,3 +322,39 @@ Desactiva ambos os mecanismos de escrita e reinicia apenas a API, sem alterar os
 - A escrita real está condicionada a **ensaios de concorrência MySQL** e verificação dos privilégios em VPS; CI em SQLite, por si só, não demonstra compatibilidade com o MySQL legado.
 
 **Não considerar o módulo de Caixa integralmente concluído** antes destas limitações estarem homologadas.
+
+## Fase 4 — Estornos imutáveis em homologação (17/11/2026)
+
+**Implementação concluída no código e nas verificações SQLite, mas NÃO activada na operação real.** O endpoint de escrita usa a flag exclusiva `CIS_CASH_REVERSALS_APPROVED`, que vem **false por omissão no Docker Compose**. Mesmo com entradas e saídas gerais activadas, os estornos permanecem protegidos independentemente.
+
+### Percurso da interface
+
+`Caixa Geral → Movimentos → Ver → Analisar estorno` abre uma **página própria** com as pernas originais. A API fornece `GET /api/cis/caixa/estornos/{nr}/previsualizar` (somente leitura). Se a autorização não estiver activa, a interface apresenta a prévia, sem botão de lançamento. Quando homologado, o formulário exige motivo (10 a 80 caracteres), referência do comprovativo (6 a 65) e confirmação explícita. `POST /api/cis/caixa/estornos/{nr}` é restrito ao administrador e sujeito a `throttle:5,1`.
+
+### Regras de escrituração
+
+- Só originais `cash:<UUID>:1` ou pernas verificáveis `cash:<UUID>:1/2` de movimentos **gerais**, sem contrato/prestação. Histórico não associado, desembolsos e cobranças contratuais não podem ser estornados por este fluxo.
+- O `Extracto` original não é editado ou apagado: o estorno cria uma linha de sentido contrário por conta com `operation_key` única **derivada do Nr original**, evitando estornos repetidos, mesmo que o utilizador tente outra referência.
+- Para transferências, o estorno cria **duas linhas inversas** na mesma transacção InnoDB; a conta receptora original não pode ficar negativa após o débito de reversão.
+- A API bloqueia as contas em ordem crescente e recalcula o saldo antes de inserir.
+- O relatório de Fluxo de Caixa distingue estornos de transferências internas dos estornos de entradas/saídas externas.
+- O formulário distingue **reversão contabilística** de **devolução efectiva via banco**: uma não prova automaticamente a outra. Exigir comprovativo real e verificação externa.
+
+### Ensaios e próximos controlos
+
+1. `backend/tests/cash_reversal_smoke.php`: SQLite efémero, com teste de falha injectada na segunda perna, prevenção de estornos duplicados, bloqueio por saldo e de estorno de estorno, e rollback integral.
+2. `deploy/rehearse-cash-reversals.sh`: restaura backup privado ACTUAL numa base MySQL Docker isolada; `backend/tests/cash_reversal_mysql_rehearsal.php` faz INSERTs de ensaio em transacção que é revertida e compara contagens/somas depois.
+3. O script de ensaio guarda hash do controlador em `~/cis-private/cash-verification/reversal-rehearsal.sha256` somente após aprovação. Este hash é evidência de teste, não uma autorização para activar a flag.
+4. A **activação de estornos reais fica explicitamente adiada**, pendente de homologação do ensaio MySQL, análise do resultado, comprovativos e procedimento de autorizações. **Não editar manualmente deploy/.env** nem ligar `CIS_CASH_REVERSALS_APPROVED`.
+
+Comandos seguros de preparação:
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/refresh-private-preview.sh
+bash deploy/backup-before-auth.sh
+bash deploy/rehearse-cash-reversals.sh
+```
+
+**Não executar qualquer estorno fictício na VPS operacional.** O ensaio é o próximo passo recomendado.
