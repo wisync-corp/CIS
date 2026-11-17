@@ -176,7 +176,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        </button></th>)}<th>Operação da prestação</th></tr></thead>
        <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
         {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
-        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{setPaymentOrder(String(item.Ordem??''));setTab('Pagamentos');}}><ReceiptText size={15}/> Ver pagamentos</button></td>
+        <td><button type="button" className="cis-contract-draft-button" onClick={()=>{const eligible=['Pendente','Pagamento Atrasado'].includes(String(item.Estado??''))&&!/finalizado|liquidado|cancelado|anulado/i.test(String(contract?.['Estado do Contrato']??''));setPaymentOrder(eligible?String(item.Ordem??''):undefined);setTab('Pagamentos');}}><ReceiptText size={15}/> {['Pendente','Pagamento Atrasado'].includes(String(item.Estado??''))&&!/finalizado|liquidado|cancelado|anulado/i.test(String(contract?.['Estado do Contrato']??''))?'Efectuar pagamento':'Ver histórico'}</button></td>
        </tr>)}</tbody></table></div>
      </>:<div className="cis-credit-section">
       {tab==='Contrato'&&<div className="cis-credit-section-lead"><CheckCircle2 size={19}/><div><strong>Informação do contrato</strong><p>Os elementos essenciais, sem campos técnicos do antigo Excel.</p></div></div>}
