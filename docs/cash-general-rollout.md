@@ -441,3 +441,7 @@ bash deploy/revert-legacy-extracto-numerario.sh      # desfazer (REVERTER-HISTOR
 - Análise só de leitura pela API: contagem, datas, tipos, valores fora do formato de cêntimos, saldo resultante e saldo mínimo histórico. Bloqueia com valores inválidos, tipos desconhecidos, saldo negativo, saldo inicial ≠ 0 ou fechos existentes da conta.
 - Transacção única: só `Extracto.account_id` (NULL → Numerário) e `opening_extracto_nr=0`; `cut_at` recua para o primeiro movimento se necessário. Guardas `CHECK` em tabela temporária abortam e revertem se contagem/checksum de `Nr` ou linhas afectadas divergirem.
 - Movimentos gravados depois pelo sistema Excel antigo continuam sem conta.
+
+#### Correcção prévia de linhas ilegíveis
+
+A análise de 17/11/2026 encontrou: `Nr 1209` (Retirada de M-pesa, 2025-07-09) com `Valor=0.420044` (mais de 2 casas) e 1 linha com tipo `Saidas` sem acento — invisível em consultas normais porque `latin1_swedish_ci` ignora acentos. `deploy/fix-legacy-extracto-rows.sh <Nr> <valor>` (ou `--tipos`) corrige apenas essas linhas históricas com comparação `_bin`, guarda os originais e permite `--reverter`.

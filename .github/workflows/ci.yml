@@ -90,6 +90,7 @@ jobs:
       - run: bash -n ../deploy/open-cash-account-window.sh
       - run: bash -n ../deploy/assign-legacy-extracto-to-numerario.sh
       - run: bash -n ../deploy/revert-legacy-extracto-numerario.sh
+      - run: bash -n ../deploy/fix-legacy-extracto-rows.sh
       - run: php -l app/Http/Controllers/Api/CashPostingController.php
       - run: php tests/cash_real_posting_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReportController.php
