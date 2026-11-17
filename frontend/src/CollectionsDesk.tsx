@@ -211,14 +211,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     {loading?<div className="cis-cash-loading">A carregar a ficha…</div>:profile&&<>
      {!embeddedContract&&<div className="cis-collections-client"><div><small>CONTRATO EM ANÁLISE</small><h3>{text(profile.contract['Nome do Cliente'])}</h3><span>Contrato {selected} · Cliente n.º {text(profile.contract['Nº de Cliente'])}</span></div>
       <span className="cis-collections-client-badge">{text(profile.contract['Estado do Contrato'])}</span></div>}
-     <div className="cis-collections-stats cis-collections-stats-refined">
-      <article className="cis-collections-stat-count"><span>Prestações</span><strong>{rows.length}</strong><small>Total registado</small></article>
+     <div className="cis-collections-stats cis-collections-stats-refined" aria-label="Indicadores do contrato">
       <article className="cis-collections-stat-main"><span>Valor pendente</span><strong>{fmt(totals.pending)}</strong><small>Prestações pendentes e atrasadas</small></article>
-      <article className="cis-collections-stat-main"><span>Valor liquidado</span><strong>{fmt(totals.paid)}</strong><small>Soma de Valor Pago</small></article>
-      <article><span>Juros e multas liquidados</span><strong>{fmt(totals.added)}</strong><small>Componentes das prestações pagas</small></article>
-      <article><span>Valor bruto</span><strong>{fmt(totals.gross)}</strong><small>Pago + pendente, sem reconciliação</small></article>
-      <article><span>Próxima cobrança</span><strong>{date(totals.next?.['Data de Cobrança'])}</strong><small>{totals.next?fmt(totals.next['Valor a Pagar']):'Sem próximas prestações'}</small></article>
-      <article className="cis-collections-stat-alert"><span>Prestações em atraso</span><strong>{totals.late}</strong><small>Estado registado: Pagamento Atrasado</small></article>
+      <article className="cis-collections-stat-main"><span>Valor recebido</span><strong>{fmt(totals.paid)}</strong><small>Valor Pago registado nas prestações</small></article>
+      <article className="cis-collections-stat-count"><span>Prestações</span><strong>{rows.length}</strong><small>Total do plano</small></article>
+      <article className="cis-collections-stat-alert"><span>Em atraso</span><strong>{totals.late}</strong><small>Prestações vencidas no estado original</small></article>
+      <article className="cis-collections-stat-next"><span>Próximo vencimento</span><strong>{date(totals.next?.['Data de Cobrança'])}</strong><small>{totals.next?fmt(totals.next['Valor a Pagar']):'Sem prestações futuras'}</small></article>
+      <article className="cis-collections-stat-secondary"><span>Juros e multas registados nas parcelas pagas</span><strong>{fmt(totals.added)}</strong><small>Componentes das prestações liquidadas, não conciliadas</small></article>
+      <article className="cis-collections-stat-secondary"><span>Total previsto e pago</span><strong>{fmt(totals.gross)}</strong><small>Pago + pendente; não é saldo contabilístico</small></article>
      </div>
      {!!profile.contract_fields_divergent?.length&&<div className="cis-collections-risk"><AlertCircle size={17}/> Campos divergentes no contrato: {profile.contract_fields_divergent.join(', ')}. Não assumir valores únicos sem reconciliação.</div>}
      <div className="cis-collections-switch"><button type="button" className={view==='operacao'?'selected':''} onClick={()=>setView('operacao')}><Calculator size={16}/> Operação de cobrança</button><button type="button" className={view==='historico'?'selected':''} onClick={()=>setView('historico')}><BookOpen size={16}/> Prestações e histórico</button></div>
@@ -235,7 +235,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       </div>
       <div className="cis-collections-panel">
        <div className="cis-collections-sectionhead"><div><h3>2. Tratamento do pagamento</h3><p>Escolha o cenário equivalente ao formulário Cobrança.</p></div></div>
-       <div className="cis-collections-mode-grid cis-collections-mode-grid-refined">
+       <div className="cis-collections-mode-grid cis-collections-mode-grid-refined" role="group" aria-label="Tipos de tratamento do pagamento">
         {(['total','parcial','renovar_juros','capitalizar','remanescente','renovar_credito','actualizar_data','finalizar_contrato'] as Mode[]).map(value=><button type="button" key={value} disabled={!ord&&!['renovar_credito','finalizar_contrato'].includes(value)} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
          {modeIcon(value)}<span><strong>{statuses[value].name}</strong><small>{statuses[value].group}</small></span>{mode===value&&<CheckCircle2 size={16}/>}</button>)}
        </div>
