@@ -89,8 +89,8 @@ export default function CashDesk({token}:{token:string}){
  function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
  function showMovementsFor(id:number){setMovementAccount(String(id));setMovementQuery('');setMovementType('todas');setSection('movimentos');setAction('none');setAccountDetail(null);}
  function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');if(value==='record'||value==='transfer')setOperationKey(crypto.randomUUID());}
- async function submit(event:FormEvent,what:'create'|'opening'|'activate'|'record'|'transfer',id?:number){
-  event.preventDefault();setError('');setNotice('');
+ async function submit(event:FormEvent|null,what:'create'|'opening'|'activate'|'record'|'transfer',id?:number){
+  event?.preventDefault();setError('');setNotice('');
   if(what==='create'?!canCreateAccounts:what==='opening'?!canSubmitOpening:what==='activate'?!canValidateOpening:!enabled){setError('Esta operação ainda não está autorizada neste ambiente.');return;}
   if(what==='record' && !moneyInput(record.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer' && !moneyInput(transfer.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
@@ -187,7 +187,7 @@ export default function CashDesk({token}:{token:string}){
     {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>A validação exige outro administrador, após conferência independente do saldo e respectivo comprovativo. Não substitui reconciliação bancária.</span></div>}
     <div className="cis-cash-detail-actions">
      {canSubmitOpening&&detailAccount.can_prepare&&<button type="button" onClick={()=>{setSelected(String(detailAccount.id));setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});setAccountDetail(null);beginAction('opening');}}>Preparar saldo inicial <ArrowRight size={15}/></button>}
-     {canValidateOpening&&detailAccount.can_validate&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm('Conferiu o comprovativo e o saldo de abertura? O responsável pelo cadastro não pode validar a própria conta.'))void submit({preventDefault:()=>{}} as FormEvent,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
+     {canValidateOpening&&detailAccount.can_validate&&<button type="button" disabled={busy} onClick={()=>{void submit(null,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
      <button type="button" onClick={()=>setAccountDetail(null)}>Fechar</button>
     </div>
