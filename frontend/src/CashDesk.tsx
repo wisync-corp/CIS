@@ -13,6 +13,7 @@ type CashMovement={id:number;account_id:number;type:string;amount:string;referen
 type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
 type ReversalPreview={consulta_apenas:boolean;already_reversed:boolean;can_submit:boolean;mode:'single'|'transfer';origin_nr:number;legs:{original_nr:number;account_id:number;account_code:string|null;original_type:string;reversal_type:string;amount:string}[];notice:string};
+type CashClosePreview={date:string;account_id:number;code:string;name:string;account_type:'banco'|'numerario'|'carteira_movel';snapshot:{opening_amount:string;entries_amount:string;exits_amount:string;expected_balance:string;movement_count:number;ledger_max_nr:number};existing:null|{id:number;expected_balance:string;observed_balance:string;difference_amount:string;closed_by:number;closed_at:string;verification_method:string;evidence_reference:string;difference_reason:string|null};can_confirm:boolean;notice:string};
 type CashDaily={date:string;account_id:number|null;status:string;accounts:{account_id:number;code:string;name:string;opening:string;entries:string;exits:string;internal_in:string;internal_out:string;external_in:string;external_out:string;closing:string;movements_count:number}[];totals:{opening:string;entries:string;exits:string;closing:string;internal_in:string;internal_out:string};warnings:string[];notice:string};
 type CashReport={from:string;to:string;account_id:number|null;accounts_count:number;movements_count:number;entries:string;exits:string;net_external:string;internal_in:string;internal_out:string;internal_net:string;categories:Record<string,string>;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -38,6 +39,12 @@ export default function CashDesk({token}:{token:string}){
  const [section,setSection]=useState<'contas'|'movimentos'|'relatorio'|'conferencia'>('contas');
  const [report,setReport]=useState<CashReport|null>(null);
  const [daily,setDaily]=useState<CashDaily|null>(null);
+ const [closePreview,setClosePreview]=useState<CashClosePreview|null>(null);
+ const [closeDate,setCloseDate]=useState('');
+ const [closeAccount,setCloseAccount]=useState<number|null>(null);
+ const [closeObserved,setCloseObserved]=useState('');
+ const [closeEvidence,setCloseEvidence]=useState('');
+ const [closeReason,setCloseReason]=useState('');
  const [dailyBusy,setDailyBusy]=useState(false);
  const [dailyError,setDailyError]=useState('');
  const [dailyDate,setDailyDate]=useState(todayCut().slice(0,10));
@@ -59,7 +66,7 @@ export default function CashDesk({token}:{token:string}){
  const [reversalReason,setReversalReason]=useState('');
  const [reversalEvidence,setReversalEvidence]=useState('');
  const [showIdentifier,setShowIdentifier]=useState(false);
- const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'|'reversal'>('none');
+ const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'|'reversal'|'closure'>('none');
  const [selected,setSelected]=useState('');
  const [newAccount,setNewAccount]=useState({code:'',name:'',type:'banco' as CashAccount['type'],identifier:''});
  const [opening,setOpening]=useState({opening_balance:'',cut_at:todayCut(),evidence_reference:''});
@@ -129,10 +136,43 @@ export default function CashDesk({token}:{token:string}){
  const hasAvailableBalance=active.some(a=>a.saldo_disponivel!==null);
  const total=active.reduce((sum,a)=>sum+Number(a.saldo_disponivel??0),0);
  const readableDate=(raw:string|null)=>raw?raw.replace('T',' ').slice(0,16):'—';
- const postingView=action==='record'||action==='transfer'||action==='reversal';
- function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setEstimate(null);setReversalPreview(null);setReversalNr(null);setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
+ const postingView=action==='record'||action==='transfer'||action==='reversal'||action==='closure';
+ function resetAction(){if(busy)return;if(action==='create'&&(newAccount.code.trim()||newAccount.name.trim()||newAccount.identifier.trim())&&!window.confirm('Descartar os dados da conta ainda não gravados?'))return;setAction('none');setEstimate(null);setReversalPreview(null);setReversalNr(null);setClosePreview(null);setCloseAccount(null);setError('');setNewAccount({code:'',name:'',type:'banco',identifier:''});}
  function showMovementsFor(id:number){setMovementAccount(String(id));setMovementQuery('');setMovementType('todas');setSection('movimentos');setAction('none');setAccountDetail(null);}
  function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');setEstimate(null);if(value==='record'||value==='transfer'){setSection('movimentos');setOperationKey(crypto.randomUUID());}}
+ async function startClosure(id:number,date:string){
+  setAction('closure');setSection('conferencia');setCloseAccount(id);setCloseDate(date);
+  setCloseObserved('');setCloseEvidence('');setCloseReason('');setClosePreview(null);setError('');
+  setBusy(true);
+  try{
+   const params=new URLSearchParams({date,account_id:String(id)});
+   const result=await request<CashClosePreview>('fecho-diario?'+params.toString());
+   setClosePreview(result);
+  }catch(e){setError(e instanceof Error?e.message:'Não foi possível preparar o fecho.');}
+  finally{setBusy(false);}
+ }
+ async function submitClosure(event:FormEvent){
+  event.preventDefault();
+  if(!closePreview||!closePreview.can_confirm||closeAccount===null)return;
+  const difference=Number(closeObserved)-Number(closePreview.snapshot.expected_balance);
+  if(Math.abs(difference)>=0.005&&closeReason.trim().length<10){
+   setError('Justifique a diferença entre o saldo observado e o saldo contabilístico.');return;
+  }
+  if(!window.confirm('Confirmar fecho de controlo? O registo será permanente e não altera movimentos, saldos nem reconciliação bancária.'))return;
+  setBusy(true);setError('');
+  try{
+   await request('fecho-diario','POST',{
+    date:closeDate,account_id:closeAccount,observed_balance:closeObserved,
+    verification_method:closePreview.account_type==='numerario'?'contagem_numerario':closePreview.account_type==='banco'?'extracto_bancario':'comprovativo_carteira',
+    evidence_reference:closeEvidence.trim(),difference_reason:closeReason.trim(),verified_observed:true,
+   });
+   setNotice('Fecho de controlo registado sem alterar movimentos nem bloquear a Tesouraria.');
+   setAction('none');setClosePreview(null);setCloseAccount(null);
+   setSection('conferencia');
+   await loadDaily();
+  }catch(e){setError(e instanceof Error?e.message:'Fecho não confirmado. Consulte o histórico antes de repetir.');}
+  finally{setBusy(false);}
+ }
  async function startReversal(nr:number){
   setMovementDetail(null);setAction('reversal');setEstimate(null);setReversalNr(nr);
   setReversalReason('');setReversalEvidence('');setReversalPreview(null);setError('');
@@ -211,9 +251,33 @@ export default function CashDesk({token}:{token:string}){
     <header className="cis-cash-posting-header">
      <button type="button" className="cis-cash-posting-back" onClick={resetAction} disabled={busy}><ArrowRight size={16}/> Voltar ao livro de movimentos</button>
      <span className="cis-cash-step">CAIXA GERAL · OPERAÇÃO FINANCEIRA</span>
-     <h3>{action==='reversal'?'Analisar estorno':action==='transfer'?'Transferência entre contas':record.type==='entrada'?'Registar entrada':'Registar saída'}</h3>
+     <h3>{action==='closure'?'Fecho diário de controlo':action==='reversal'?'Analisar estorno':action==='transfer'?'Transferência entre contas':record.type==='entrada'?'Registar entrada':'Registar saída'}</h3>
      <p>Introduza os dados, consulte a prévia e, quando autorizado, confirme o lançamento no Extracto.</p>
     </header>
+   {action==='closure'&&<div className="cis-cash-reversal">
+    <div className="cis-cash-form-note"><Info size={17}/> O fecho é uma fotografia documental da conferência de uma conta. Não executa movimentos, não bloqueia períodos e não faz reconciliação bancária.</div>
+    {busy&&!closePreview&&<div className="cis-cash-loading" role="status"><RefreshCw size={17}/> A consultar dados da conta…</div>}
+    {closePreview&&<><div className="cis-cash-reversal-legs">
+     <div className="cis-cash-reversal-label"><strong>{closePreview.code} · {closePreview.name}</strong><span>Data: {closePreview.date}</span></div>
+     <div className="cis-cash-reversal-leg"><span>Saldo de abertura do dia</span><strong>{formatMoney(closePreview.snapshot.opening_amount)}</strong></div>
+     <div className="cis-cash-reversal-leg"><span>Entradas do dia</span><strong>{formatMoney(closePreview.snapshot.entries_amount)}</strong></div>
+     <div className="cis-cash-reversal-leg"><span>Saídas do dia</span><strong>{formatMoney(closePreview.snapshot.exits_amount)}</strong></div>
+     <div className="cis-cash-reversal-leg"><span>Saldo contabilístico final</span><strong>{formatMoney(closePreview.snapshot.expected_balance)}</strong></div>
+    </div>
+    {closePreview.existing?<div className="cis-cash-message caution"><CheckCircle2 size={18}/>
+     <span>Fecho já registado em {readableDate(closePreview.existing.closed_at)} pelo responsável #{closePreview.existing.closed_by}.
+     Saldo observado: {formatMoney(closePreview.existing.observed_balance)}.
+     Diferença documentada: {formatMoney(closePreview.existing.difference_amount)}.
+     Referência: {closePreview.existing.evidence_reference}. Não é permitido duplicar este fecho.</span>
+    </div>:closePreview.can_confirm?<form className="cis-cash-form" onSubmit={e=>void submitClosure(e)}>
+     <label className="cis-cash-wide">Saldo efectivamente verificado (MT)<input type="text" inputMode="decimal" pattern="(0|[1-9][0-9]*)(\\.[0-9]{1,2})?" required value={closeObserved} onChange={e=>setCloseObserved(e.target.value)} placeholder="0.00" /></label>
+     <label className="cis-cash-wide">Referência da evidência<input required minLength={6} maxLength={180} value={closeEvidence} onChange={e=>setCloseEvidence(e.target.value)} placeholder={closePreview.account_type==='banco'?'Referência do extracto bancário':closePreview.account_type==='numerario'?'Referência da contagem de numerário':'Comprovativo da carteira móvel'}/></label>
+     <label className="cis-cash-wide">Justificação da diferença (obrigatória se houver divergência)<textarea maxLength={255} value={closeReason} onChange={e=>setCloseReason(e.target.value)} placeholder="Descrever a diferença verificada, sem criar movimentos de compensação"/></label>
+     {moneyInput(closeObserved)||closeObserved==='0'||closeObserved==='0.00'?<div className="cis-cash-form-note"><Info size={16}/> Diferença: {formatMoney((Number(closeObserved)-Number(closePreview.snapshot.expected_balance)).toFixed(2))}. O registo não ajusta o saldo contabilístico.</div>:null}
+     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!closeEvidence.trim()||!closeObserved||!(closeObserved==='0'||closeObserved==='0.00'||moneyInput(closeObserved))}><ShieldCheck size={17}/>{busy?'A confirmar…':'Registar fecho de controlo'}</button></div>
+    </form>:<div className="cis-cash-message caution"><LockKeyhole size={17}/> A consulta está disponível, mas a gravação formal dos fechos permanece desactivada até à homologação independente.</div>}
+    <div className="cis-cash-form-note"><Info size={17}/>{closePreview.notice}</div></>}
+   </div>}
    {action==='reversal'&&<div className="cis-cash-reversal">
     <div className="cis-cash-form-note"><Info size={17}/> O estorno é uma operação financeira de sentido contrário. O lançamento original permanece no Extracto. Não elimina documentos nem executa devoluções bancárias.</div>
     {busy&&!reversalPreview&&<div className="cis-cash-loading" role="status"><RefreshCw size={17}/> A consultar o movimento…</div>}
@@ -451,10 +515,10 @@ export default function CashDesk({token}:{token:string}){
     <article><small>Saldo contabilístico final</small><strong>{formatMoney(daily.totals.closing)}</strong></article>
    </div>
    <div className="cis-cash-table-scroll"><table className="cis-cash-table">
-    <thead><tr><th>Conta</th><th>Abertura</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th><th>Movimentos</th></tr></thead>
+    <thead><tr><th>Conta</th><th>Abertura</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th><th>Movimentos</th><th>Fecho</th></tr></thead>
     <tbody>{daily.accounts.map(a=><tr key={a.account_id}>
      <td><strong>{a.code}</strong><small className="cis-cash-table-sub">{a.name}</small></td>
-     <td>{formatMoney(a.opening)}</td><td>{formatMoney(a.entries)}</td><td>{formatMoney(a.exits)}</td><td><strong>{formatMoney(a.closing)}</strong></td><td>{a.movements_count}</td>
+     <td>{formatMoney(a.opening)}</td><td>{formatMoney(a.entries)}</td><td>{formatMoney(a.exits)}</td><td><strong>{formatMoney(a.closing)}</strong></td><td>{a.movements_count}</td><td><button type="button" className="cis-cash-view-movement" onClick={()=>void startClosure(a.account_id,daily.date)}><ClipboardCheck size={16}/> Preparar</button></td>
     </tr>)}</tbody></table></div>
    {daily.warnings.map((w,i)=><div key={i} className="cis-cash-message caution"><Info size={17}/>{w}</div>)}
    <div className="cis-cash-form-note"><Info size={17}/>{daily.notice}</div>
