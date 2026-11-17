@@ -79,7 +79,7 @@ final class CashController extends Controller
                 'can_prepare' => $account->status==='em_preparacao'
                     && (int)$account->created_by===$userId,
                 'can_validate' => $account->status==='pendente_validacao'
-                    && (int)$account->created_by!==$userId,
+                    && ($this->singleAdminOpening() || (int)$account->created_by!==$userId),
             ];
         });
     }
@@ -94,6 +94,7 @@ final class CashController extends Controller
             'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            'single_admin_opening' => $this->singleAdminOpening(),
             'notice' => 'Contas CIS; a fonte única é Extracto, com account_id opcional para preservar históricos. Escritas aguardam integração segura.'
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -159,6 +160,11 @@ final class CashController extends Controller
         ],201)->header('Cache-Control','no-store, private');
     }
 
+    private function singleAdminOpening(): bool
+    {
+        return filter_var(env('CIS_CASH_SINGLE_ADMIN_APPROVED',false), FILTER_VALIDATE_BOOLEAN);
+    }
+
     private function openingSetupAllowed(): void
     {
         abort_unless(filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
@@ -207,7 +213,9 @@ final class CashController extends Controller
         abort_unless($changed===1,409,'A conta mudou de estado; actualize antes de tentar novamente.');
         return response()->json([
             'status'=>'pendente_validacao',
-            'notice'=>'Proposta guardada. A conta permanece sem saldo disponível até validação independente.',
+            'notice'=>$this->singleAdminOpening()
+                ?'Proposta guardada. Confirme separadamente o saldo real e o comprovativo antes de activar a conta.'
+                :'Proposta guardada. A conta permanece sem saldo disponível até validação independente.',
         ])->header('Cache-Control','no-store, private');
     }
 
@@ -217,7 +225,10 @@ final class CashController extends Controller
         $this->openingSetupAllowed();
         abort_unless(filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'Validação independente de saldos ainda não autorizada.');
-        $request->validate(['confirmed_document'=>['required','accepted']]);
+        $request->validate([
+            'confirmed_document'=>['required','accepted'],
+            'confirmation_phrase'=>['required','string','in:CONFIRMO-SALDO-REAL'],
+        ]);
         $validator=$request->user();
         $writer=DB::connection('mysql_cash_opening_validate');
         abort_unless($writer->getDatabaseName()===DB::connection()->getDatabaseName(),503,
@@ -225,8 +236,9 @@ final class CashController extends Controller
         $account=DB::table('cis_cash_accounts')->where('id',$id)->first();
         abort_unless($account && $account->status==='pendente_validacao',409,
             'Só pode validar uma proposta pendente.');
-        abort_unless((int)$account->created_by!==(int)$validator->id,403,
-            'Quem cadastrou a conta não pode aprovar o próprio saldo.');
+        abort_unless($this->singleAdminOpening() ||
+            (int)$account->created_by!==(int)$validator->id,403,
+            'Esta configuração exige um segundo aprovador.');
         abort_unless($account->opening_balance!==null && $account->cut_at!==null
             && $account->evidence_reference!==null
             && trim((string)$account->evidence_reference)!=='',409,
@@ -248,7 +260,9 @@ final class CashController extends Controller
         abort_unless($changed===1,409,'A conta mudou de estado durante a validação.');
         return response()->json([
             'status'=>'activa','opening_extracto_nr'=>$last,
-            'notice'=>'Saldo inicial validado por segundo responsável. Movimentações continuam bloqueadas.',
+            'notice'=>$this->singleAdminOpening()
+                ?'Saldo inicial confirmado pelo administrador único com evidência documental. Não houve validação independente. Movimentações continuam bloqueadas.'
+                :'Saldo inicial validado por segundo responsável. Movimentações continuam bloqueadas.',
         ])->header('Cache-Control','no-store, private');
     }
 
