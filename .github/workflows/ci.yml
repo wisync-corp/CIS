@@ -64,6 +64,9 @@ jobs:
       - run: php tests/cash_smoke.php
       - run: php tests/cash_opening_preview_smoke.php
       - run: php tests/cash_operation_preview_smoke.php
+      - run: php artisan migrate --path=database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php --force
+      - run: php tests/cash_operation_key_smoke.php
+      - run: php -l database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php
       - run: php -l app/Http/Controllers/Api/CollectionScenarioPreviewController.php
       - run: php tests/collection_scenarios_smoke.php
       - run: php -l app/Http/Controllers/Api/ParcelasQuoteController.php
