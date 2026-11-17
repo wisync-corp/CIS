@@ -947,3 +947,9 @@ html{font-size:16px}
   .cis-table-scroll th,.cis-table-scroll td{padding:13px}
   .cis-side nav button{font-size:14px}
 }
+
+/* Caixa: detalhe contextual e acessível, não editável. */
+.cis-cash-view-movement{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--cis-border);border-radius:9px;background:var(--cis-surface,#fff);padding:9px 12px;color:var(--cis-primary);font-size:12px;font-weight:750;white-space:nowrap;cursor:pointer}
+.cis-cash-view-movement:hover{border-color:var(--cis-primary);background:var(--cis-tint)}
+.cis-cash-view-movement:focus-visible{outline:3px solid var(--cis-input-border);outline-offset:2px}
+.cis-cash-long-value{overflow-wrap:anywhere;word-break:break-word;font-size:12px}
