@@ -188,7 +188,7 @@ export default function CashDesk({token}:{token:string}){
     {enabled&&estimate&&<div className="cis-cash-form-actions"><button type="button" disabled={busy} onClick={()=>void submit(null,'transfer')}><ShieldCheck size={17}/> {busy?'A confirmar…':'Confirmar transferência nas duas contas'}</button></div>}
    </form>}
 
-   {estimate&&action!=='none'&&<div className="cis-cash-estimate" role="status">
+   {estimate&&<div className="cis-cash-estimate" role="status">
      <div><CheckCircle2 size={19}/><strong>Prévia calculada pelo servidor · Sem movimento registado</strong></div>
      <dl>
       <div><dt>Montante</dt><dd>{formatMoney(estimate.amount)}</dd></div>
