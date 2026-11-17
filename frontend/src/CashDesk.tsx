@@ -9,7 +9,7 @@ type CashAccount={
  opening_balance:string|null;evidence_reference:string|null;saldo_disponivel:string|null
 };
 type CashMovement={id:number;account_id:number;type:string;amount:string;reference:string;
- category:string;description:string;effective_at:string;evidence_reference:string|null};
+ category:string;description:string;effective_at:string;evidence_reference:string|null;operation_key?:string|null;operator?:string|null};
 type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -39,6 +39,7 @@ export default function CashDesk({token}:{token:string}){
  const [movementType,setMovementType]=useState('todas');
  const [movementAccount,setMovementAccount]=useState('');
  const [accountDetail,setAccountDetail]=useState<number|null>(null);
+ const [movementDetail,setMovementDetail]=useState<number|null>(null);
  const [showIdentifier,setShowIdentifier]=useState(false);
  const [action,setAction]=useState<'none'|'create'|'opening'|'record'|'transfer'>('none');
  const [selected,setSelected]=useState('');
@@ -70,6 +71,8 @@ export default function CashDesk({token}:{token:string}){
  const active=useMemo(()=>accounts.filter(a=>a.status==='activa'),[accounts]);
  const selectedAccount=accounts.find(a=>String(a.id)===selected);
  const detailAccount=accounts.find(a=>a.id===accountDetail);
+ const detailMovement=movements.find(m=>m.id===movementDetail);
+ const detailMovementAccount=detailMovement?accounts.find(a=>a.id===detailMovement.account_id):undefined;
  const filteredAccounts=useMemo(()=>accounts.filter(a=>{
   const matches=accountStatus==='todas'||a.status===accountStatus;
   const q=accountQuery.trim().toLocaleLowerCase('pt');
@@ -289,7 +292,7 @@ export default function CashDesk({token}:{token:string}){
    {loading?<div className="cis-cash-loading" role="status"><RefreshCw size={18}/> A consultar movimentos…</div>:movements.length===0?
     <div className="cis-cash-empty"><div className="cis-cash-empty-icon"><Clock3 size={25}/></div><strong>O livro de Caixa ainda está vazio</strong><p>Os movimentos serão apresentados aqui após a activação das contas. O Extracto legado permanece separado.</p></div>:
     filteredMovements.length===0?<div className="cis-cash-empty"><Search size={23}/><strong>Sem movimentos para estes filtros</strong><p>Altere a pesquisa, conta ou tipo de operação para visualizar outros resultados.</p><button type="button" onClick={()=>{setMovementQuery('');setMovementAccount('');setMovementType('todas');}}>Limpar filtros</button></div>:
-    <div className="cis-table-scroll"><table className="cis-cash-table"><thead><tr><th>Data</th><th>Operação</th><th>Conta</th><th>Categoria / Descrição</th><th>Valor</th><th>Estado</th></tr></thead><tbody>
+    <div className="cis-table-scroll"><table className="cis-cash-table"><thead><tr><th>Data</th><th>Operação</th><th>Conta</th><th>Categoria / Descrição</th><th>Valor</th><th>Estado</th><th>Detalhes</th></tr></thead><tbody>
     {filteredMovements.map(m=>{
      const entry=['entrada','transferencia_entrada','estorno_entrada'].includes(m.type);
      const account=accounts.find(a=>a.id===m.account_id);
@@ -301,9 +304,29 @@ export default function CashDesk({token}:{token:string}){
       <td><strong>{m.category}</strong><small className="cis-cash-table-sub">{m.description}</small></td>
       <td className={'cis-cash-money '+(entry?'positive':'negative')}>{entry?'+':'−'} {formatMoney(m.amount)}</td>
       <td><span className="cis-cash-verified"><CheckCircle2 size={14}/> Confirmado</span></td>
+       <td><button type="button" className="cis-cash-view-movement" onClick={()=>setMovementDetail(m.id)} aria-label={"Ver detalhes do movimento "+m.reference}><Eye size={16}/> Ver</button></td>
      </tr>;
     })}
     </tbody></table></div>}
+   {detailMovement&&<div className="cis-cash-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setMovementDetail(null);}} onKeyDown={e=>{if(e.key==='Escape')setMovementDetail(null);}}>
+    <div className="cis-cash-detail cis-cash-dialog" role="dialog" aria-modal="true" aria-label={'Detalhes do movimento '+detailMovement.reference}>
+     <div className="cis-cash-detail-head"><div><span className="cis-cash-step">MOVIMENTO CONFIRMADO · SÓ LEITURA</span><h4>{detailMovement.reference}</h4><p>{detailMovement.type.split('_').join(' ')} · {readableDate(detailMovement.effective_at)}</p></div><button type="button" aria-label="Fechar detalhes do movimento" onClick={()=>setMovementDetail(null)}><X size={19}/></button></div>
+     <div className="cis-cash-detail-grid">
+      <div><small>Conta financeira</small><strong>{detailMovementAccount?detailMovementAccount.code+' · '+detailMovementAccount.name:'Conta não localizada'}</strong></div>
+      <div><small>Montante</small><strong>{formatMoney(detailMovement.amount)}</strong></div>
+      <div><small>Natureza</small><strong>{detailMovement.type.split('_').join(' ')}</strong></div>
+      <div><small>Data registada</small><strong>{readableDate(detailMovement.effective_at)}</strong></div>
+      <div><small>Categoria</small><strong>{detailMovement.category}</strong></div>
+      <div><small>Referência do Extracto</small><strong>{detailMovement.reference}</strong></div>
+      <div><small>Responsável (identificador)</small><strong>{detailMovement.operator||'Não disponível'}</strong></div>
+      <div><small>Referência documental</small><strong>{detailMovement.evidence_reference||'Não registada num campo próprio'}</strong></div>
+      <div className="cis-cash-detail-wide"><small>Descrição original</small><strong>{detailMovement.description}</strong></div>
+      {detailMovement.operation_key&&<div className="cis-cash-detail-wide"><small>Chave da operação</small><strong className="cis-cash-long-value">{detailMovement.operation_key}</strong></div>}
+     </div>
+     <div className="cis-cash-detail-review"><Info size={17}/><span>Esta informação provém do Extracto. A referência documental não representa um comprovativo anexado. A consulta não efectua estornos nem altera o movimento.</span></div>
+     <div className="cis-cash-detail-actions"><button type="button" onClick={()=>setMovementDetail(null)}>Fechar</button></div>
+    </div>
+   </div>}
     <div className="cis-cash-table-foot"><span>Consulta limitada aos últimos 200 movimentos confirmados da Caixa.</span><span>Movimentos não reconciliados com bancos.</span></div>
   </div>}
 
