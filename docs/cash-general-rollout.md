@@ -358,3 +358,48 @@ bash deploy/rehearse-cash-reversals.sh
 ```
 
 **Não executar qualquer estorno fictício na VPS operacional.** O ensaio é o próximo passo recomendado.
+
+
+## Fase 5 — Fecho diário de controlo sem invadir Tesouraria (17/11/2026)
+
+**Decisão aprovada:** o fecho diário faz parte da **Caixa Geral Padrão**. A Tesouraria Premium mantém as suas funcionalidades de importação e conciliação bancária, previsão e planeamento de tesouraria, liquidez e controlo de pagamentos. **Não foi implementado bloqueio de períodos** nem fecho contabilístico com impacto transaccional.
+
+Foi criada **UMA tabela de controlo não financeiro** `cis_cash_daily_closures`, separada de `cis_cash_accounts` e do livro ÚNICO `Extracto`. A restrição histórica de uma tabela financeira nova mantém-se, pois este registo é documental, não duplica movimentos. **Nenhuma coluna de `Extracto` foi alterada.**
+
+### Regras funcionais
+
+- Fecho por **conta** e **dia**, chave `UNIQUE(account_id, closing_date)`; permanece imutável após gravação. Sem editar/apagar nem recriar fechos.
+- O sistema calcula saldo anterior, entradas, saídas, saldo contabilístico esperado, quantidade de movimentos e marcador `ledger_max_nr` respeitando `opening_extracto_nr`.
+- O administrador informa saldo realmente observado, método conforme tipo de conta (contagem física / extracto bancário / comprovativo de carteira), referência documental e justificação obrigatória se houver diferença.
+- `difference_amount=observed_balance-expected_balance`; mesmo com divergência, **não** se lança regularização automática, **não** se altera o saldo financeiro ou se confirma reconciliação.
+- **Não há fecho geral bloqueante**: fechar uma conta não bloqueia entradas, saídas, transferências ou outras contas. O fecho é uma fotografia auditável na data e hora, sujeita a novas movimentações; exige conciliação externa para aferir discrepâncias posteriores.
+- Não é possível fechar datas futuras, nem antes da data de abertura. Fechos retroactivos de mais de 31 dias são bloqueados.
+- Apenas o administrador activo pode consultar e confirmar. Escrita independente exige `CIS_CASH_DAILY_CLOSE_APPROVED=true`, **false por omissão** e utilizador MySQL `cis_cash_closures` com `SELECT` contas/Extracto, `INSERT/SELECT` na tabela de fechos e **sem UPDATE/DELETE em Extracto**.
+- A página de fecho está **separada do Resumo** e é aberta por `Caixa Geral → Conferência Diária → Conferir saldos → Preparar`. O sistema distingue prévia, fecho já existente e fecho ainda bloqueado.
+
+### Estado de implementação
+
+1. Nova migração `2026_11_17_000060_create_cis_cash_daily_closures.php`, sem edição de migrações existentes.
+2. `CashClosureController`: prévia `GET /api/cis/caixa/fecho-diario?date=YYYY-MM-DD&account_id=N` e gravação independente `POST /api/cis/caixa/fecho-diario`.
+3. UI com formulário documental completo e comparação do saldo observado com o contabilístico. Fechos já gravados não podem ser repetidos.
+4. Testes CI SQLite `cash_daily_closure_smoke.php`; teste MySQL restaurado `cash_daily_closure_mysql_rehearsal.php`, com ROLLBACK de contas e fechos temporários.
+5. `deploy/rehearse-cash-daily-closures.sh` restaura backup actual em MySQL Docker **isolado**, instala tabela e ensaia POST, comparando valores de Extracto/Contractos/contas; só após sucesso guarda hash privado da migração.
+6. `deploy/install-cash-daily-closure-schema.sh` faz preflight, exige esse hash, recompila e confere imagem, cria backup e **somente instala tabela**. Não activa fechos.
+7. `deploy/prepare-cash-daily-closure-writer.sh` cria utilizador técnico com privilégios mínimos, mantém flag **false**, e prepara API. Ainda **não** deve ser executado sem validação do ensaio e da instalação.
+
+### Sequência segura proposta (somente após verificações de CI aprovadas)
+
+```bash
+cd /opt/cis
+git pull origin main
+sudo -v
+bash deploy/backup-before-auth.sh
+bash deploy/rehearse-cash-daily-closures.sh
+# Continuar APENAS com a mensagem ENSAIO DO FECHO DIÁRIO APROVADO:
+bash deploy/install-cash-daily-closure-schema.sh
+# Depois, se a instalação e postflight forem aprovados:
+bash deploy/prepare-cash-daily-closure-writer.sh
+bash deploy/refresh-private-preview.sh
+```
+
+**Não activar ainda `CIS_CASH_DAILY_CLOSE_APPROVED`**. Primeiro validar no MySQL real as permissões e a consulta de fecho; só depois preparar activação específica com confirmação explícita. A Tesouraria não foi alterada por esta fase.
