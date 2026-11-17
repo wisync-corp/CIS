@@ -428,3 +428,16 @@ bash deploy/open-cash-account-window.sh   # confirmação ABRIR-JANELA-SALDO
 ```
 
 O script faz backup da base e do `.env`, suspende apenas `CIS_CASH_WRITES_APPROVED`, espera que o administrador submeta e confirme a abertura na interface, e repõe a flag ao premir ENTER — ou automaticamente em erro, Ctrl+C ou fim de sessão SSH. Compara o Extracto antes/depois e lista o estado final das contas.
+
+### Atribuição do histórico do Extracto à conta de Numerário (decisão do proprietário, 17/11/2026)
+
+Decisão: os movimentos existentes no `Extracto` (sem `account_id`) passam a pertencer à conta de **Numerário**, cujo saldo inicial é 0 e cujo saldo passa a ser o líquido do histórico. Revoga, para esta conta, a regra anterior de não reatribuir histórico.
+
+```bash
+bash deploy/assign-legacy-extracto-to-numerario.sh   # confirmação ATRIBUIR-HISTORICO-NUMERARIO
+bash deploy/revert-legacy-extracto-numerario.sh      # desfazer (REVERTER-HISTORICO-NUMERARIO)
+```
+
+- Análise só de leitura pela API: contagem, datas, tipos, valores fora do formato de cêntimos, saldo resultante e saldo mínimo histórico. Bloqueia com valores inválidos, tipos desconhecidos, saldo negativo, saldo inicial ≠ 0 ou fechos existentes da conta.
+- Transacção única: só `Extracto.account_id` (NULL → Numerário) e `opening_extracto_nr=0`; `cut_at` recua para o primeiro movimento se necessário. Guardas `CHECK` em tabela temporária abortam e revertem se contagem/checksum de `Nr` ou linhas afectadas divergirem.
+- Movimentos gravados depois pelo sistema Excel antigo continuam sem conta.
