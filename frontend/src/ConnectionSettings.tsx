@@ -20,7 +20,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
    <div className="cis-theme-grid" role="group" aria-label="Temas disponíveis">
     {themeOptions.map(option=><button type="button" key={option.id} className="cis-theme-option" aria-pressed={theme===option.id} onClick={()=>onThemeChange(option.id)}>
      <span className="cis-theme-preview" aria-hidden="true">
-      <span className="cis-theme-preview-side" style={{background:option.swatches[0]}}><i/><i/><i/></span>
+      <span className={'cis-theme-preview-side'+(option.id==='claro'?' light':'')} style={{background:option.swatches[0]}}><i/><i/><i/></span>
       <span className="cis-theme-preview-body" style={{background:option.swatches[2]}}><i/><i style={{borderColor:option.swatches[1]}}/></span>
      </span>
      <span className="cis-theme-option-title">{option.name}{theme===option.id&&<CheckCircle2 size={18}/>}</span>

@@ -27,6 +27,13 @@
  --cis-hero-from:#1E1E22;--cis-hero-to:#3A3A44;--cis-hero-soft:#DCDCE2;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
  --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
 }
+[data-theme="claro"]{
+ --cis-sidebar:#FFFFFF;--cis-sidebar-hover:#F1EEF9;--cis-sidebar-text:#170F2B;--cis-sidebar-muted:#5F5873;--cis-sidebar-indicator:#4F9A0F;--cis-sidebar-line:#E6E2EE;
+ --cis-primary:#452D80;--cis-primary-hover:#342163;--cis-tint:#F1EEF9;--cis-background:#F8F7FB;--cis-surface-subtle:#F6F4FA;
+ --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#6B6480;--cis-border:#E6E2EE;--cis-input-border:#CFC7E2;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EFF7E3;
+ --cis-accent:#4F9A0F;--cis-accent-ink:#3B7311;--cis-accent-tint:#EFF7E3;--cis-accent-line:#CFE6B4;--cis-lime:#B5FA32;
+}
 body{background:var(--cis-background);color:var(--cis-text)}
 button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-side{background:var(--cis-sidebar);color:var(--cis-sidebar-text)}
@@ -46,7 +53,7 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-settings-appearance{display:grid;gap:16px;margin-bottom:26px}
 .cis-settings-appearance h2{font:800 19px Manrope;margin:0;color:var(--cis-heading)}
 .cis-settings-appearance>p{color:var(--cis-text-muted);font-size:13px;line-height:1.7}
-.cis-theme-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.cis-theme-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
 .cis-theme-option{display:grid;grid-template-rows:auto auto auto 1fr;gap:10px;text-align:left;background:#fff;border:2px solid var(--cis-border);border-radius:13px;padding:15px;cursor:pointer;min-width:0;transition:border-color .12s,box-shadow .12s}
 .cis-theme-option:hover{border-color:var(--cis-input-border)}
 .cis-theme-option[aria-pressed="true"]{border-color:var(--cis-primary);box-shadow:0 0 0 3px var(--cis-tint)}
@@ -62,7 +69,7 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-theme-option-sub{font-size:11px;color:var(--cis-text-muted)}
 .cis-theme-option-desc{font-size:12px;line-height:1.5;color:var(--cis-text-muted)}
 .cis-settings-status{display:flex;align-items:center;gap:8px;color:var(--cis-primary);font-size:12px;font-weight:700}
-@media(max-width:850px){.cis-theme-grid{grid-template-columns:1fr}}
+@media(max-width:1100px){.cis-theme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.cis-theme-grid{grid-template-columns:1fr}}
 
 /* Equilíbrio de cores — acentos da marca (10%) aplicados a estados, sem alterar a estrutura. */
 .cis-side nav button.current{color:#fff}
@@ -81,3 +88,19 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-cash-verified{border-color:var(--cis-accent-line);background:var(--cis-accent-tint);color:var(--cis-accent-ink)}
 .cis-cash-badge.activa{background:var(--cis-accent-tint);color:var(--cis-accent-ink)}
 .cis-kicker,.cis-cash-step{color:var(--cis-primary)}
+
+/* CIS Claro — menu e entrada brancos com o logótipo alternativo para fundo claro.
+   Lima nunca sobre branco: indicador e ícone activos em verde (#4F9A0F / #3B7311).
+   Os heróis dos módulos mantêm-se em roxo (contraste e identidade). */
+[data-theme="claro"] .cis-side{border-right:1px solid var(--cis-border)}
+[data-theme="claro"] .cis-side nav button.current,[data-theme="claro"] .cis-side nav button:hover{color:var(--cis-heading)}
+[data-theme="claro"] .cis-side nav button.current svg{color:var(--cis-accent-ink)}
+[data-theme="claro"] .cis-profile button{color:var(--cis-heading)}
+[data-theme="claro"] .cis-login-left{background:var(--cis-surface-subtle);color:var(--cis-heading);border-right:1px solid var(--cis-border)}
+[data-theme="claro"] .cis-login-story h1{color:var(--cis-heading)}
+[data-theme="claro"] .cis-login-story h1 em{color:var(--cis-accent-ink)}
+[data-theme="claro"] .cis-login-eyebrow,[data-theme="claro"] .cis-login-story p,[data-theme="claro"] .cis-login-feature,[data-theme="claro"] .cis-login-caption{color:var(--cis-text-muted)}
+[data-theme="claro"] .cis-login-feature{border-top-color:var(--cis-border)}
+[data-theme="claro"] .cis-login-feature svg{color:var(--cis-accent-ink)}
+.cis-theme-preview-side.light{border-right:1px solid #E6E2EE}
+.cis-theme-preview-side.light i{background:#170F2B2E}

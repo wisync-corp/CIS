@@ -4,9 +4,9 @@ Fonte: `CIS_folha_de_marca_v7.png` (CIS – Credit Insight Shift). Os SVG oficia
 
 | Local | Versão da folha | Ficheiro |
 |---|---|---|
-| Página de login (painel escuro) | Logótipo principal, fundo escuro (≥240 px → 260 px) | `cis-principal-escuro.svg` |
+| Página de login (painel escuro) | Logótipo principal, fundo escuro (≥240 px → 260 px); no tema CIS Claro, principal para fundo claro | `cis-principal-escuro.svg` / `cis-principal-claro.svg` |
 | Login em telemóvel (fundo branco) | Compacta, fundo claro (150 px) | `cis-compacta-claro.svg` |
-| Menu lateral expandido | Compacta, fundo escuro (120–239 px → 170 px) | `cis-compacta-escuro.svg` |
+| Menu lateral expandido | Compacta, fundo escuro (120–239 px → 170 px); no tema CIS Claro, compacta para fundo claro | `cis-compacta-escuro.svg` / `cis-compacta-claro-transparente.svg` |
 | Cabeçalho do dashboard (≤750 px, menu escondido) | Compacta, fundo claro (120 px) | `cis-compacta-claro.svg` |
 | Favicon | Favicon simplificado (sem contorno) + PNG 16/32 | `public/favicon.svg`, `favicon-16/32.png` |
 | Aplicação móvel / ecrã inicial | Ícone com fundo roxo | `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest` |
@@ -31,5 +31,8 @@ Tokens de acento (iguais nos três temas): `--cis-accent #4F9A0F` (marcas gráfi
 | **CIS Roxo** (`fintech`, predefinido) | `#170F2B` | `#452D80` | verde / lima |
 | **CIS Verde** (`banking`) | `#170F2B` | `#3B7311` | verde / lima |
 | **CIS Grafite** (`premium`) | `#1E1E22` | `#452D80` | verde / lima |
+| **CIS Claro** (`claro`) | Branco `#FFFFFF` com **logótipo alternativo claro** (compacta e principal para fundo claro) | `#452D80` | verde (`#4F9A0F` / `#3B7311`; lima nunca sobre branco) |
 
 Os verdes-azulados de estado (`#1e7953`, `#9ef0bc`, …) foram substituídos pelos verdes da marca para não haver dois verdes em conflito. Avisos (âmbar) e erros (vermelho) mantêm-se.
+
+`cis-compacta-claro-transparente.svg` é o SVG oficial da versão compacta clara sem o rectângulo branco de fundo (mesmo desenho, para assentar em superfícies claras não brancas).
