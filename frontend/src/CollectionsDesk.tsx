@@ -60,18 +60,19 @@ function modeIcon(mode:Mode){
  case'renovar_credito':return <FileText size={18}/>;case'actualizar_data':return <CalendarDays size={18}/>;
  case'finalizar_contrato':return <ShieldCheck size={18}/>;}
 }
-export default function CollectionsDesk({token}:{token:string}){
+type EmbeddedProfile={contract:Row;installments:Row[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
+export default function CollectionsDesk({token,embeddedContract,embeddedProfile,initialOrder}:{token:string;embeddedContract?:string;embeddedProfile?:EmbeddedProfile;initialOrder?:string}){
  const [query,setQuery]=useState('');
  const [applied,setApplied]=useState('');
  const [page,setPage]=useState(1);
  const [list,setList]=useState<ListResponse|null>(null);
  const [listing,setListing]=useState(true);
- const [selected,setSelected]=useState<string|null>(null);
- const [profile,setProfile]=useState<ProfileResponse|null>(null);
+ const [selected,setSelected]=useState<string|null>(embeddedContract??null);
+ const [profile,setProfile]=useState<ProfileResponse|null>(embeddedProfile??null);
  const [loading,setLoading]=useState(false);
  const [message,setMessage]=useState('');
  const [mode,setMode]=useState<Mode>('total');
- const [ord,setOrd]=useState('');
+ const [ord,setOrd]=useState(initialOrder??'');
  const [penalty,setPenalty]=useState(false);
  const [paymentAmount,setPaymentAmount]=useState('');
  const [reviewDate,setReviewDate]=useState(today());
@@ -97,7 +98,7 @@ export default function CollectionsDesk({token}:{token:string}){
   return()=>{window.clearTimeout(timer);ctrl.abort();};
  },[query]);
  useEffect(()=>{
-  if(selected)return;
+  if(selected||embeddedContract)return;
   const ctrl=new AbortController();setListing(true);setMessage('');
   const params=new URLSearchParams({page:String(page)});if(applied)params.set('q',applied);
   fetch(API+'/cis/contractos?'+params.toString(),{
@@ -110,9 +111,9 @@ export default function CollectionsDesk({token}:{token:string}){
    .catch(e=>{if(!ctrl.signal.aborted){setList(null);setMessage(e instanceof Error?e.message:'Erro na consulta.');}})
    .finally(()=>{if(!ctrl.signal.aborted)setListing(false);});
   return()=>ctrl.abort();
- },[selected,page,applied,refresh,token]);
+ },[selected,page,applied,refresh,token,embeddedContract]);
  useEffect(()=>{
-  if(!selected)return;
+  if(!selected||embeddedContract)return;
   const ctrl=new AbortController();setLoading(true);setMessage('');
   fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/ficha',{
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal
@@ -124,7 +125,7 @@ export default function CollectionsDesk({token}:{token:string}){
    .catch(e=>{if(!ctrl.signal.aborted){setProfile(null);setMessage(e instanceof Error?e.message:'Erro na ficha.');}})
    .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
   return()=>ctrl.abort();
- },[selected,refresh,token]);
+ },[selected,refresh,token,embeddedContract]);
  useEffect(()=>{
   const ctrl=new AbortController();
   fetch(API+'/cis/caixa/contas',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
@@ -218,12 +219,12 @@ export default function CollectionsDesk({token}:{token:string}){
   finally{setQuoting(false);}
  }
 
- return <section className="cis-collections">
-  <div className="cis-collections-hero"><div><span className="cis-collections-kicker"><ReceiptText size={14}/> CAPTA · OPERAÇÕES DE CRÉDITO</span>
+ return <section className={'cis-collections'+(embeddedContract?' cis-collections-embedded':'')}>
+  {!embeddedContract&&<div className="cis-collections-hero"><div><span className="cis-collections-kicker"><ReceiptText size={14}/> CAPTA · OPERAÇÕES DE CRÉDITO</span>
    <h2>Cobranças</h2><p>Gestão de prestações, recebimentos e tratamento de situações de pagamento.</p>
    <div className="cis-collections-hero-badges"><span><ShieldCheck size={14}/> Dados do Contractos</span><span><LockKeyhole size={14}/> Operações financeiras protegidas</span></div></div>
    <button type="button" onClick={()=>{setRefresh(v=>v+1);setQuote(null);}} disabled={listing||loading}><RefreshCw size={16}/> Actualizar</button>
-  </div>
+  </div>}
   <div className="cis-collections-protection"><Info size={18}/><div><strong>Preparação e simulação de cobranças</strong><p>O registo efectivo de pagamentos permanece bloqueado até integrar obrigatoriamente a conta receptora e a entrada no Extracto. As opções do formulário VBA são apresentadas, mas não executam alterações financeiras sem homologação.</p></div></div>
   {message&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{message}</div>}
   {!selected?<div className="cis-collections-panel">
@@ -237,10 +238,10 @@ export default function CollectionsDesk({token}:{token:string}){
     {list&&list.last_page>1&&<div className="cis-collections-pagination"><button type="button" disabled={page<=1} onClick={()=>setPage(p=>p-1)}>Anterior</button><span>Página {page} de {list.last_page}</span><button type="button" disabled={page>=list.last_page} onClick={()=>setPage(p=>p+1)}>Seguinte</button></div>}
    </div>:
    <div className="cis-collections-workspace">
-    <div className="cis-collections-backline"><button type="button" onClick={back}><ArrowLeft size={16}/> Voltar aos contratos</button><span><FileText size={15}/> {selected}</span></div>
+    {!embeddedContract&&<div className="cis-collections-backline"><button type="button" onClick={back}><ArrowLeft size={16}/> Voltar aos contratos</button><span><FileText size={15}/> {selected}</span></div>}
     {loading?<div className="cis-cash-loading">A carregar a ficha…</div>:profile&&<>
-     <div className="cis-collections-client"><div><small>CONTRATO EM ANÁLISE</small><h3>{text(profile.contract['Nome do Cliente'])}</h3><span>Contrato {selected} · Cliente n.º {text(profile.contract['Nº de Cliente'])}</span></div>
-      <span className="cis-collections-client-badge">{text(profile.contract['Estado do Contrato'])}</span></div>
+     {!embeddedContract&&<div className="cis-collections-client"><div><small>CONTRATO EM ANÁLISE</small><h3>{text(profile.contract['Nome do Cliente'])}</h3><span>Contrato {selected} · Cliente n.º {text(profile.contract['Nº de Cliente'])}</span></div>
+      <span className="cis-collections-client-badge">{text(profile.contract['Estado do Contrato'])}</span></div>}
      <div className="cis-collections-stats">
       <article><span>Prestações</span><strong>{rows.length}</strong><small>Total registado</small></article>
       <article><span>Valor pendente</span><strong>{fmt(totals.pending)}</strong><small>Prestações pendentes e atrasadas</small></article>
