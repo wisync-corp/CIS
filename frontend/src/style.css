@@ -756,3 +756,28 @@ html{font-size:16px}
  .cis-collections-embedded .cis-collections-panel{padding:15px}
  .cis-collections-embedded .cis-collections-sectionhead{flex-direction:column}
 }
+
+/* Contract-first payment flow. Treatment appears only after "Efectuar pagamento". */
+.cis-collections-overview{gap:17px}
+.cis-collections-overview-list{display:grid;gap:10px}
+.cis-collections-overview-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(150px,1fr) auto;align-items:center;gap:14px;border:1px solid var(--cis-border);background:var(--cis-surface,#fff);border-radius:12px;padding:14px 16px}
+.cis-collections-overview-id{display:grid;gap:7px;min-width:0}
+.cis-collections-overview-id>span{font-size:11px;font-weight:750;color:var(--cis-text-muted)}
+.cis-collections-overview-id>strong{font-size:17px;line-height:1.3;color:var(--cis-heading);font-variant-numeric:tabular-nums}
+.cis-collections-overview-meta{display:grid;gap:7px;min-width:0;font-size:11px;color:var(--cis-text-muted)}
+.cis-collections-overview-meta>.pending{color:#956019;font-weight:800}
+.cis-collections-overview-meta>.settled{color:#257455;font-weight:800}
+.cis-collections-overview-row button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:41px;white-space:nowrap;padding:10px 14px;border:1px solid var(--cis-primary);background:var(--cis-primary);border-radius:9px;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+.cis-collections-overview-row button:disabled{background:var(--cis-surface-subtle);border-color:var(--cis-border);color:var(--cis-text-muted);cursor:not-allowed}
+.cis-collections-treatment{display:grid;gap:15px}
+.cis-collections-treatment-header{display:flex;align-items:center;gap:14px;padding:17px 19px;background:var(--cis-tint);border:1px solid var(--cis-input-border);border-radius:12px}
+.cis-collections-treatment-header>button{display:flex;align-items:center;gap:7px;flex:none;padding:10px 11px;background:var(--cis-surface,#fff);color:var(--cis-primary);border:1px solid var(--cis-input-border);border-radius:8px;font-size:11px;font-weight:800;cursor:pointer}
+.cis-collections-treatment-header>div{min-width:0;display:grid;gap:4px}
+.cis-collections-treatment-header>div>span{font-size:9px;font-weight:800;letter-spacing:.9px;color:var(--cis-primary)}
+.cis-collections-treatment-header h3{margin:0;font-size:17px}
+.cis-collections-treatment-header small{font-size:11px;line-height:1.5;color:var(--cis-text-muted)}
+.cis-collections-switch{gap:7px;overflow-x:auto}
+.cis-collections-switch button{white-space:nowrap}
+.cis-collections-switch button:disabled{opacity:.4;cursor:not-allowed}
+@container (max-width:660px){.cis-collections-overview-row{grid-template-columns:1fr auto}.cis-collections-overview-meta{grid-column:1}.cis-collections-overview-row button{grid-column:2;grid-row:1/span 2}.cis-collections-treatment-header{align-items:flex-start;flex-direction:column}}
+@container (max-width:420px){.cis-collections-overview-row{grid-template-columns:1fr}.cis-collections-overview-meta,.cis-collections-overview-row button{grid-column:1;grid-row:auto}.cis-collections-overview-row button{width:100%}}
