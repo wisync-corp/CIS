@@ -46,6 +46,7 @@ jobs:
             php artisan migrate --path="database/migrations/$migration" --force
           done
       - run: php -l app/Http/Controllers/Api/CashController.php
+      - run: php -l routes/console.php
       - run: php -l database/migrations/2026_11_16_000030_create_cis_cash_tables.php
       - run: bash -n ../deploy/preflight-cash-direct-account.sh
       - run: bash -n ../deploy/rehearse-cash-migration.sh
