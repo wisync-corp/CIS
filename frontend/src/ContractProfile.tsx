@@ -236,8 +236,8 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        <p>Data: {collectionQuote.data_pagamento} · Dias de atraso: {collectionQuote.dias_atraso}</p>
        <p>Juros: {collectionQuote.juros} MT · Multa: {collectionQuote.multa} MT</p>
        <p><strong>Total a receber: {collectionQuote.total} MT</strong></p>
-       <label className="cis-contract-confirm"><input type="checkbox" checked={receivedConfirmed} onChange={e=>setReceivedConfirmed(e.target.checked)}/> Confirmo que recebi efectivamente o valor integral indicado.</label>
-       <button type="button" className="cis-contract-draft-button" disabled={!receivedConfirmed||collectionBusy} onClick={()=>void settleCollection()}>{collectionBusy?'A registar…':'Confirmar pagamento e entrada no Extracto'}</button>
+       <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Prévia apenas. O registo definitivo só será activado quando for possível seleccionar uma conta da Caixa e confirmar a entrada com comprovativo.</span></div>
+       <button type="button" className="cis-contract-draft-button" disabled onClick={()=>void settleCollection()}><LockKeyhole size={15}/> Registo financeiro temporariamente indisponível</button>
       </div>}
       {collectionError&&<div className="cis-table-error" role="alert">{collectionError}</div>}
       {collectionStatus&&<div className="cis-contract-review" role="status">{collectionStatus}</div>}
