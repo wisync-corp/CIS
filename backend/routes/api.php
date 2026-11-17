@@ -36,6 +36,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('contas',[CashController::class,'createAccount'])->middleware('throttle:8,1');
         Route::post('contas/{id}/abertura',[CashController::class,'submitOpening'])->whereNumber('id')->middleware('throttle:8,1');
         Route::post('contas/{id}/activar',[CashController::class,'activate'])->whereNumber('id')->middleware('throttle:8,1');
+        Route::post('simular-movimento',[CashController::class,'previewRecord'])->middleware('throttle:15,1');
+        Route::post('simular-transferencia',[CashController::class,'previewTransfer'])->middleware('throttle:15,1');
         Route::post('movimentos',[CashController::class,'record'])->middleware('throttle:8,1');
         Route::post('transferencias',[CashController::class,'transfer'])->middleware('throttle:8,1');
     });
