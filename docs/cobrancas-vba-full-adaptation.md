@@ -155,3 +155,14 @@ Foi aprovada a separação entre **simulação genérica** e **operação espec�
 - Opções de tratamento de pagamento organizadas em cards maiores e responsivos, sem sobrepor campo de cálculo genérico com operação contratual.
 
 **Continua desactivado** o registo definitivo de cobranças e qualquer alteração financeira do Extracto até que existam a conta receptora activa, autorização, prova documental, idempotência e escrita atómica em Contractos/Extracto. 
+
+
+## Evolução UX — Tratamento contextual por prestação (17/11/2026)
+
+O separador **Pagamentos** da ficha do contrato abre inicialmente em **Resumo** e mostra os indicadores e prestações existentes. O botão **Efectuar pagamento** aparece somente para prestações cujo `Estado` seja `Pendente` ou `Pagamento Atrasado`, sem `Situação de Pagamento` finalizada e sem `Estado do Contrato` fechado. Para prestações já liquidadas, a ficha oferece **Ver histórico**, não permite iniciar cobrança duplicada.
+
+Ao seleccionar **Efectuar pagamento**, aparece a aba contextual **Tratamento do pagamento**, com identificação da prestação, estado, composição e apenas os cenários aplicáveis. A aba não é apresentada antes de escolher uma prestação elegível. Os outros cenários de encerramento ou abertura de novo crédito não são confundidos com um pagamento pendente.
+
+**Prazo 15 → 30 dias:** se o campo contratual `Prazo/Duração` indicar inequivocamente `15 dias` ou `2 Semanas`, o tratamento apresenta **Passar de 15 para 30 dias**. A prévia no servidor revalida que a prestação ainda está pendente, que as linhas do contrato têm prazo consistente e que a tabela de juros contém uma taxa única para a faixa de capital e `periodo_referencia=30`. A resposta informa a taxa de referência, mas **não altera** datas, percentagens, capital, prestações ou Extracto. Para qualquer outro prazo, a opção não aparece.
+
+As verificações visuais são conveniência UX; as regras essenciais também são verificadas no servidor. Esta conversão de prazo é uma **proposta de tratamento**, não prova de aceitação pelo mutuário nem autorização para prorrogação financeira.
