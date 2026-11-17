@@ -12,7 +12,7 @@ function verifySim(bool $ok,string $message):void {
 $ref=new ReflectionClass(GenericSimulatorController::class);
 $terms=$ref->getConstant('TERMS');
 verifySim($terms['1 Semana']===['periodo'=>15,'dias'=>7],'1 semana');
-verifySim($terms['2 Semanas']===['periodo'=>15,'dias'=>15'],'2 semanas VBA');
+verifySim($terms['2 Semanas']===['periodo'=>15,'dias'=>15],'2 semanas VBA');
 verifySim($terms['3 Semanas']===['periodo'=>30,'dias'=>21'],'3 semanas');
 verifySim($terms['Mês']===['periodo'=>30,'dias'=>30'],'mês');
 $parse=$ref->getMethod('decimal');
