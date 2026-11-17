@@ -68,6 +68,7 @@ final class ParcelasQuoteController extends Controller
             'modo'=>['required','in:reparcelamento,multa'],
             'prazo'=>['required','in:1 Semana,2 Semanas,3 Semanas,Mês'],
             'valor_recebido'=>['required_if:modo,reparcelamento','nullable','string','max:24'],
+            'taxa_manual'=>['nullable','string','regex:/^(?:100(?:\\.0{1,2})?|[0-9]{1,2}(?:\\.[0-9]{1,2})?)$/'],
         ]);
         abort_if(trim($numero)===''||mb_strlen($numero)>155,422,'Número de contrato inválido.');
         abort_unless(Schema::hasTable('cis_tabela_juros'),503,
@@ -113,7 +114,9 @@ final class ParcelasQuoteController extends Controller
         abort_unless($matches->count()===1,409,
             'A tabela de taxas não tem uma faixa única para o montante e período. Não foi presumida qualquer taxa.');
         $rate=(string)$matches[0]->taxa;
-        $rateHundredths=self::rateHundredths($rate);
+        $manualRate=isset($d['taxa_manual']) && $d['taxa_manual']!=='';
+        $appliedRate=$manualRate?(string)$d['taxa_manual']:$rate;
+        $rateHundredths=self::rateHundredths($appliedRate);
         abort_unless($rateHundredths<=10000,409,'Taxa superior a 100% requer homologação.');
         $computedInterest=self::percent($base,$rateHundredths);
         $projected=$mode==='multa'?$computedInterest:$base+$computedInterest;
@@ -132,6 +135,8 @@ final class ParcelasQuoteController extends Controller
             'valor_a_pagar_original'=>self::amount($originalDue),
             'juros_originais'=>self::amount($interest),
             'taxa_faixa'=>$rate,
+            'taxa_aplicada'=>$appliedRate,
+            'taxa_manual'=>$manualRate,
             'limite_inferior'=>(string)$matches[0]->limite_inferior,
             'limite_superior'=>(string)$matches[0]->limite_superior,
             'juros_ou_multa_calculados'=>self::amount($computedInterest),
@@ -139,8 +144,8 @@ final class ParcelasQuoteController extends Controller
             'calculo'=>'Parcelas.frm: '.($mode==='multa'?'base × taxa/100':'base × (1 + taxa/100)'),
             'arredondamento'=>'2 casas decimais, HALF_UP; sujeito a homologação versus Format do VBA',
             'aviso'=>$mode==='multa'
-                ?'O Parcelas.frm consulta a taxa por faixa do valor dos juros, mesmo no modo multa. A taxa contratual de multa pode divergir. Não cobrar nem lançar esta prévia.'
-                :'Valor de referência = Valor a Pagar - recebimento parcial. O VBA original usa txt_vpago alimentado por Valor Pago, podendo produzir saldo negativo. Prévia sem criar/recalendarizar prestações.'
+                ?'O Parcelas.frm consulta a taxa por faixa do valor dos juros, mesmo no modo multa. A taxa contratual de multa pode divergir. Taxa manual, quando escolhida, é apenas indicativa. Não cobrar nem lançar esta prévia.'
+                :'Valor de referência = Valor a Pagar - recebimento parcial. O VBA original usa txt_vpago alimentado por Valor Pago, podendo produzir saldo negativo. Taxa manual é simulação, não aprovação. Prévia sem criar/recalendarizar prestações.'
         ];
         if($mode==='multa') {
             $response['taxa_multa_contrato']=$contractPenalty!==''?$contractPenalty:null;
