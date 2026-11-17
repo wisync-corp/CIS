@@ -75,6 +75,10 @@ jobs:
       - run: php tests/cash_operation_preview_smoke.php
       - run: php artisan migrate --path=database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php --force
       - run: php tests/cash_operation_key_smoke.php
+      - run: php artisan migrate --path=database/migrations/2026_11_17_000060_create_cis_cash_daily_closures.php --force
+      - run: php -l database/migrations/2026_11_17_000060_create_cis_cash_daily_closures.php
+      - run: php -l app/Http/Controllers/Api/CashClosureController.php
+      - run: php tests/cash_daily_closure_smoke.php
       - run: php -l app/Http/Controllers/Api/CashPostingController.php
       - run: php tests/cash_real_posting_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReportController.php
