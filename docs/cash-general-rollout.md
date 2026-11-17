@@ -257,3 +257,68 @@ bash deploy/verify-cash-operation-key.sh
 
 **A instalação ainda não foi executada no servidor real por este desenvolvimento.**
 As rotas de `record()` e `transfer()` continuam a devolver HTTP 503. Não activar `CIS_CASH_WRITES_APPROVED` com base apenas na presença da nova coluna. O passo seguinte será implementar e testar lançamentos idempotentes atomicamente e a integração com cobranças/desembolsos.
+
+
+## Fase 3 — movimentos reais de Caixa Geral (17/11/2026)
+
+**Código implementado, ainda não activado na VPS operacional.** Os endpoints `POST /api/cis/caixa/movimentos` e `POST /api/cis/caixa/transferencias` estão agora encaminhados para `CashPostingController`. A API só permite gravação se **ambas** as flags `CIS_CASH_WRITES_APPROVED` e `CIS_CASH_LEDGER_POSTING_APPROVED` estiverem `true`, além de `CIS_PRIVATE_PREVIEW`. Por omissão ambas permanecem `false`.
+
+### Invariantes do lançamento
+
+- **Somente administrador activo** na pré-visualização privada; no futuro, substituir por matriz fina de funções.
+- **Conta activa com saldo inicial documentado, marcador histórico e moeda MZN**.
+- **Contas bloqueadas com `SELECT FOR UPDATE`**, sempre por ID crescente em transferências, usando a mesma transacção InnoDB para saldo e INSERT.
+- **`Extracto.operation_key` obrigatória e UNIQUE**, chave raiz UUID fornecida pelo browser, duas pernas distintas `:1` e `:2` na transferência. Retry com mesmo pedido devolve referência original; mesma chave com valores diferentes devolve conflito.
+- **Saldo nunca negativo** na saída e na origem da transferência. Entrada só com referência documental.
+- **Transferência interna**: exactamente duas linhas ('Saídas' e 'Entradas'), associadas às duas contas, com `Nr` diferentes, em **uma transacção atómica**, sem ser tratada como receita/despesa externa.
+- **Campos legados preservados**: `Cliente='CAIXA GERAL'`, `Contracto=''`, `Parcela=0`, `usuario=ID`, `Data da Operação` local de Maputo. Categoria e referência documental ficam codificadas na descrição; é necessária futura evolução do modelo para trilho documental mais rico.
+- **O Extracto é sempre o livro único**. Nunca actualizar/apagar movimentos; o utilizador técnico não deve receber privilégios UPDATE/DELETE no Extracto.
+- **Prévia separada da confirmação** na interface; o botão de registo real só aparece com ambas as flags autorizadas.
+
+### Validadores automáticos disponíveis
+
+`backend/tests/cash_real_posting_smoke.php`: entradas/saídas, saldo insuficiente, replay, payload alterado, transferência atómica e **falha injectada na segunda perna com rollback**; SQLite CI descartável.
+
+`backend/tests/cash_real_mysql_rehearsal.php`: insere saídas e transferências reais em **restauro MySQL temporário**, testa replay de ambos e executa `ROLLBACK` integral. Só corre se `DB_HOST=cash-real-mysql` e `CIS_ISOLATED_REHEARSAL=true`.
+
+`deploy/rehearse-cash-real-posting.sh`: restaura backup privado, cria rede/volume/MySQL temporários, testa código actualizado, compara movimentos/contas/contratos e elimina recursos. Produz prova privada por hash do código ensaiado apenas após sucesso.
+
+### Sequência segura de preparação e activação
+
+```bash
+cd /opt/cis
+git pull origin main
+sudo -v
+bash deploy/verify-cash-operation-key.sh
+bash deploy/backup-before-auth.sh
+bash deploy/rehearse-cash-real-posting.sh
+# Continuar somente se o ensaio no MySQL isolado for aprovado.
+bash deploy/prepare-cash-ledger-writer.sh
+bash deploy/verify-cash-ledger-writer.sh
+# Activação real requer pelo menos 1 conta activa, 0 contas em preparação,
+# comprovativos reais, acesso administrativo e autorização expressa:
+bash deploy/activate-cash-real-posting.sh
+```
+
+**ATENÇÃO:** `prepare-cash-ledger-writer.sh` cria apenas o utilizador MySQL restrito com `SELECT` em contas, `UPDATE(updated_at)` em contas para permitir `SELECT FOR UPDATE`, e `SELECT/INSERT` no `Extracto`. Ambas as flags de gravação continuam **falsas** após a preparação.
+
+O comando `activate-cash-real-posting.sh` só deve ser executado depois da prova de ensaio MySQL e da conferência real dos saldos/comprovativos. Ele verifica o hash do código, o esquema, as permissões e a existência de contas activas sem propostas pendentes, faz backup e exige a confirmação literal `ACTIVAR-CAIXA-REAL`. Não activa desembolsos nem cobranças contratuais.
+
+### Interrupção imediata
+
+```bash
+cd /opt/cis
+bash deploy/disable-cash-real-posting.sh
+```
+
+Desactiva ambos os mecanismos de escrita e reinicia apenas a API, sem alterar os movimentos já confirmados.
+
+### Limitações que permanecem nesta entrega
+
+- **Cobranças e desembolsos contratuais não estão ligados à nova transacção financeira**: ainda proibidos.
+- **Estornos, recibos, reconciliação e fecho de caixa** exigem fases adicionais.
+- Enquanto a escrita financeira está activa, **novas propostas de saldos de abertura ficam bloqueadas** por segurança; é necessário implementar novo fluxo concorrente de abertura antes de voltar a permitir novos cadastros com activação.
+- A tabela `Extracto` legada não tem colunas separadas para comprovativo/categoria/identidade de transferência; a informação vai na descrição e está limitada. Isto não equivale a um arquivo documental.
+- A escrita real está condicionada a **ensaios de concorrência MySQL** e verificação dos privilégios em VPS; CI em SQLite, por si só, não demonstra compatibilidade com o MySQL legado.
+
+**Não considerar o módulo de Caixa integralmente concluído** antes destas limitações estarem homologadas.
