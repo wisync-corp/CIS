@@ -282,21 +282,32 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        </>}
       </div>
       <div className="cis-collections-panel">
-       <div className="cis-collections-sectionhead"><div><h3>2. Tratamento do pagamento</h3><p>Escolha o cenário equivalente ao formulário Cobrança.</p></div></div>
-       <div className="cis-collections-mode-grid cis-collections-mode-grid-refined" role="group" aria-label="Tipos de tratamento do pagamento">
-        {eligibleModes.map(value=><button type="button" key={value} disabled={!activeOrder} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
-         {modeIcon(value)}<span><strong>{statuses[value].name}</strong><small>{statuses[value].group}</small></span>{mode===value&&<CheckCircle2 size={16}/>}</button>)}
+       <div className="cis-collections-sectionhead"><div><h3>2. Qual é a natureza desta operação?</h3><p>O tratamento depende primeiro de saber se houve recebimento efectivo.</p></div></div>
+       <div className="cis-collections-nature" role="group" aria-label="Natureza do tratamento">
+        <button type="button" aria-pressed={flowReceived} className={flowReceived?'selected':''} onClick={()=>{setPaymentNature('recebido');setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');}}>
+         <ArrowDownLeft size={19}/><span><strong>Houve pagamento</strong><small>Valor recebido integralmente, parcialmente ou para liquidar saldo</small></span><ChevronRight size={16}/></button>
+        <button type="button" aria-pressed={flowNoReceipt} className={flowNoReceipt?'selected':''} onClick={()=>{setPaymentNature('nao_recebido');setMode('renovar_juros');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setChannel('');setAccountId('');setEvidenceRef('');}}>
+         <Clock3 size={19}/><span><strong>Não houve pagamento</strong><small>Avaliar renovação de juros, capitalização ou alteração de prazo</small></span><ChevronRight size={16}/></button>
        </div>
-       <p className="cis-collections-mode-hint">{statuses[mode].details}</p>
+       {hasChoice&&<>
+        <div className="cis-collections-flow-caption"><span>ETAPA 2</span><strong>{flowReceived?'Qual foi o tipo de recebimento?':'Qual é a medida proposta?'}</strong></div>
+        <div className="cis-collections-mode-grid cis-collections-mode-grid-refined" role="group" aria-label="Tratamentos aplicáveis">
+         {eligibleModes.map(value=><button type="button" key={value} aria-pressed={mode===value} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
+          {modeIcon(value)}<span><strong>{statuses[value].name}</strong><small>{statuses[value].details}</small></span>{mode===value&&<CheckCircle2 size={16}/>}</button>)}
+        </div>
+        <p className="cis-collections-mode-hint">{flowReceived?'Prepare a validação do dinheiro recebido. A escolha não confirma qualquer entrada.':'Sem recebimento não há lançamento de caixa. Estes tratamentos são alterações de condições, sujeitas a aprovação.'}</p>
+       </>
+       }
+       {hasChoice&&<>
        <div className="cis-collections-fields">
-        <label>Data real de pagamento (Maputo)<input type="date" value={datePayment} readOnly/><small>Para simulação de liquidação integral, apenas a data de hoje é aceite.</small></label>
-        <label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>
-        <label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória para cobrança futura</span><select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select><small>{activeAccount?'Conta seleccionada (nenhuma gravação será feita).':'Contas sem saldo validado não podem receber cobranças.'}</small></label>
-        <label>Referência do comprovativo / operação <small>Preparação, não será guardada</small><input type="text" maxLength={120} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>O comprovativo deverá ser validado antes do registo definitivo.</small></label>
-        {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
+        {flowReceived&&<label>Data real de pagamento (Maputo)<input type="date" value={datePayment} readOnly/><small>Para simulação de liquidação integral, apenas a data de hoje é aceite.</small></label>}
+        {flowReceived&&<label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>}
+        {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória para cobrança futura</span><select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select><small>{activeAccount?'Conta seleccionada (nenhuma gravação será feita).':'Contas sem saldo validado não podem receber cobranças.'}</small></label>}
+        {flowReceived&&<label>Referência do comprovativo / operação <small>Preparação, não será guardada</small><input type="text" maxLength={120} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>O comprovativo deverá ser validado antes do registo definitivo.</small></label>}
+        {flowReceived&&mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
-        {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
+        {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
        {mode==='total'&&<form onSubmit={e=>void simulate(e)}>
         <button type="submit" className="cis-collections-primary" disabled={!canQuote||quoting}>{quoting?'A calcular…':'Simular pagamento integral'} <Calculator size={16}/></button>
@@ -320,7 +331,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {quote&&mode==='total'&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
         <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Multa</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>Total proposto</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{quote.estado}</dd></div></dl>
         <div className="cis-collections-planned"><LockKeyhole size={17}/><span>Esta prévia não significa cobrança concluída. O backend recusa pagamentos sem associação obrigatória a Extracto.account_id.</span></div></div>}
-       <div className="cis-collections-disabled"><button type="button" disabled={cannotExecute}><LockKeyhole size={16}/> Confirmar e registar pagamento</button><small>Desactivado até integrar conta, permissões, idempotência, referência documental e confirmação de entrada real. Nenhum dado introduzido nesta preparação é gravado.</small></div>
+       </>}
+       {flowReceived&&<div className="cis-collections-disabled"><button type="button" disabled={cannotExecute}><LockKeyhole size={16}/> Confirmar e registar pagamento</button><small>Desactivado até integrar conta, permissões, idempotência, referência documental e confirmação de entrada real. Nenhum dado introduzido nesta preparação é gravado.</small></div>}
       </div>
      </div>}</div>:
      <div className="cis-collections-panel">
