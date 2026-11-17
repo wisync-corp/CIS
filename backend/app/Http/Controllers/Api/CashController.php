@@ -61,9 +61,9 @@ final class CashController extends Controller
         return $saldo;
     }
 
-    private function accountRows()
+    private function accountRows(int $userId)
     {
-        return DB::table('cis_cash_accounts')->orderBy('code')->get()->map(function ($account) {
+        return DB::table('cis_cash_accounts')->orderBy('code')->get()->map(function ($account) use ($userId) {
             $available = $account->status === 'activa' ? $this->balance($account) : null;
             return [
                 'id' => $account->id, 'code' => $account->code,
@@ -76,6 +76,10 @@ final class CashController extends Controller
                 'created_by' => $account->created_by,
                 'validated_by' => $account->validated_by,
                 'validated_at' => $account->validated_at,
+                'can_prepare' => $account->status==='em_preparacao'
+                    && (int)$account->created_by===$userId,
+                'can_validate' => $account->status==='pendente_validacao'
+                    && (int)$account->created_by!==$userId,
             ];
         });
     }
@@ -83,7 +87,7 @@ final class CashController extends Controller
     public function index(Request $request)
     {
         $this->access($request);
-        $accounts = $this->accountRows();
+        $accounts = $this->accountRows((int)$request->user()->id);
         return response()->json([
             'accounts' => $accounts,
             'can_write' => false, // Movimentações financeiras desactivadas.
