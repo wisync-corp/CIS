@@ -73,6 +73,9 @@ final class CashController extends Controller
                 'opening_balance' => $account->opening_balance,
                 'evidence_reference' => $account->evidence_reference,
                 'saldo_disponivel' => $available === null ? null : $this->decimal($available),
+                'created_by' => $account->created_by,
+                'validated_by' => $account->validated_by,
+                'validated_at' => $account->validated_at,
             ];
         });
     }
@@ -85,6 +88,8 @@ final class CashController extends Controller
             'accounts' => $accounts,
             'can_write' => false, // Movimentações financeiras desactivadas.
             'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
             'notice' => 'Contas CIS; a fonte única é Extracto, com account_id opcional para preservar históricos. Escritas aguardam integração segura.'
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -150,19 +155,102 @@ final class CashController extends Controller
         ],201)->header('Cache-Control','no-store, private');
     }
 
-    // Abertura e activação de saldos requerem validação documental
-    // independente e segregação de funções ainda em desenvolvimento.
-    // A opção de cadastrar contas NÃO activa estes endpoints.
+    private function openingSetupAllowed(): void
+    {
+        abort_unless(filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
+            'A preparação do saldo inicial ainda não foi autorizada.');
+        abort_unless(!filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
+            'Preparação de saldos requer as movimentações gerais bloqueadas.');
+    }
+
+    /**
+     * Duas identidades MySQL distintas:
+     * cash_opening_submit só pode actualizar campos de proposta em contas;
+     * cash_opening_validate só pode activar contas pendentes com os campos de validação.
+     * Nenhuma destas ligações escreve em Extracto.
+     */
     public function submitOpening(Request $request, int $id)
     {
         $this->access($request);
-        abort(503,'Abertura de saldo ainda não homologada. A conta continua em preparação.');
+        $this->openingSetupAllowed();
+        $data=$request->validate([
+            'opening_balance'=>['required','string','regex:/^(0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
+            'cut_at'=>['required','date_format:Y-m-d H:i:s'],
+            'evidence_reference'=>['required','string','min:6','max:255'],
+        ]);
+        abort_if(\\Carbon\\CarbonImmutable::parse($data['cut_at'],'Africa/Maputo')
+            ->greaterThan(\\Carbon\\CarbonImmutable::now('Africa/Maputo')),422,
+            'A data de corte não pode estar no futuro.');
+        $writer=DB::connection('mysql_cash_opening_submit');
+        abort_unless($writer->getDatabaseName()===DB::connection()->getDatabaseName(),503,
+            'A ligação de preparação aponta para outra base.');
+        $account=DB::table('cis_cash_accounts')->where('id',$id)->first();
+        abort_unless($account && $account->status==='em_preparacao',409,
+            'Só é possível preparar a abertura de uma conta em preparação.');
+        abort_unless((int)$account->created_by===(int)$request->user()->id,403,
+            'A proposta deve ser preparada pelo responsável que cadastrou a conta.');
+        abort_unless(!DB::table('Extracto')->where('account_id',$id)->exists(),409,
+            'Esta conta já tem movimentos e não pode receber abertura nova.');
+        $changed=$writer->table('cis_cash_accounts')
+            ->where('id',$id)->where('status','em_preparacao')
+            ->whereNull('validated_at')->whereNull('opening_extracto_nr')
+            ->update([
+                'opening_balance'=>$data['opening_balance'],
+                'cut_at'=>$data['cut_at'],
+                'evidence_reference'=>trim($data['evidence_reference']),
+                'status'=>'pendente_validacao','updated_at'=>now(),
+            ]);
+        abort_unless($changed===1,409,'A conta mudou de estado; actualize antes de tentar novamente.');
+        return response()->json([
+            'status'=>'pendente_validacao',
+            'notice'=>'Proposta guardada. A conta permanece sem saldo disponível até validação independente.',
+        ])->header('Cache-Control','no-store, private');
     }
 
     public function activate(Request $request, int $id)
     {
         $this->access($request);
-        abort(503,'Activação financeira de contas ainda não homologada.');
+        $this->openingSetupAllowed();
+        abort_unless(filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
+            'Validação independente de saldos ainda não autorizada.');
+        $data=$request->validate([
+            'confirmed_document'=>['required','accepted'],
+            'confirmation_reference'=>['required','string','min:6','max:255'],
+        ]);
+        $validator=$request->user();
+        $writer=DB::connection('mysql_cash_opening_validate');
+        abort_unless($writer->getDatabaseName()===DB::connection()->getDatabaseName(),503,
+            'A ligação de validação aponta para outra base.');
+        $account=DB::table('cis_cash_accounts')->where('id',$id)->first();
+        abort_unless($account && $account->status==='pendente_validacao',409,
+            'Só pode validar uma proposta pendente.');
+        abort_unless((int)$account->created_by!==(int)$validator->id,403,
+            'Quem cadastrou a conta não pode aprovar o próprio saldo.');
+        abort_unless($account->opening_balance!==null && $account->cut_at!==null
+            && $account->evidence_reference!==null
+            && trim((string)$account->evidence_reference)!=='',409,
+            'A proposta não possui saldo, data de corte e comprovativo completos.');
+        abort_unless(trim($data['confirmation_reference'])!==trim((string)$account->evidence_reference),
+            422,'A referência da conferência deve identificar uma evidência independente.');
+        abort_unless(!DB::table('Extracto')->where('account_id',$id)->exists(),409,
+            'Há movimentos associados: bloqueada a validação de abertura.');
+        // O marcador é capturado no momento da validação; nenhuma escrituração
+        // vinculada a contas é permitida enquanto esta fase estiver activa.
+        $last=(int)(DB::table('Extracto')->max('Nr')??0);
+        $changed=$writer->table('cis_cash_accounts')
+            ->where('id',$id)->where('status','pendente_validacao')
+            ->whereNull('validated_at')->whereNull('opening_extracto_nr')
+            ->update([
+                'opening_extracto_nr'=>$last,
+                'validated_by'=>$validator->id,
+                'validated_at'=>now(),
+                'status'=>'activa','updated_at'=>now(),
+            ]);
+        abort_unless($changed===1,409,'A conta mudou de estado durante a validação.');
+        return response()->json([
+            'status'=>'activa','opening_extracto_nr'=>$last,
+            'notice'=>'Saldo inicial validado por segundo responsável. Movimentações continuam bloqueadas.',
+        ])->header('Cache-Control','no-store, private');
     }
 
     // NÃO efectuar escrituras financeiras pelo antigo fluxo independente:
