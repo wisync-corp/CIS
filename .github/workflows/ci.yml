@@ -85,6 +85,7 @@ jobs:
       - run: bash -n ../deploy/rehearse-cash-reversals.sh
       - run: bash -n ../deploy/activate-cash-reversals.sh
       - run: bash -n ../deploy/disable-cash-reversals.sh
+      - run: bash -n ../deploy/verify-cash-reversals.sh
       - run: php -l database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php
       - run: php -l app/Http/Controllers/Api/CollectionScenarioPreviewController.php
       - run: php tests/collection_scenarios_smoke.php
