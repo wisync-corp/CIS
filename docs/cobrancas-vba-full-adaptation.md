@@ -133,3 +133,13 @@ Foram recebidos e inspeccionados **\`Parcelas.frm\` (5.976 bytes)** e **\`A_Cobr
 
 **Pendente para equivalência operacional integral:** aprovação da fórmula legal/contratual da multa, decisão sobre o significado correcto de \`txt_vpago\` no parcial, data base para vencimentos futuros, recalendarização com várias prestações, apuramento do remanescente, actualização transaccional de Contractos e Extracto.account_id, prova de recebimento, idempotência e matriz de permissões. O \`Parcelas.frx\` original continua necessário para replicação visual **pixel a pixel**, caso isso seja exigido.
 
+
+## Navegação consolidada — Cobranças dentro do contrato (17/11/2026)
+
+**Decisão UX:** a cobrança pertence à ficha do contrato, não a uma página paralela. O menu independente `Cobranças` foi removido para evitar duas pesquisas, dois ecrãs e duas implementações de pagamentos.
+
+Fluxo único:
+`Contratos e prestações → Abrir ficha do contrato → Pagamentos`.
+A partir da tabela `Plano de prestações`, `Ver pagamentos` envia directamente a prestação seleccionada para a aba `Pagamentos`. A aba utiliza a implementação única `CollectionsDesk` em modo `embedded`, recebendo `numero`, os dados já lidos da ficha e `initialOrder`. **Não faz uma segunda pesquisa de contratos nem uma segunda consulta da ficha**, e mantém todos os oito tratamentos de pagamento, a calculadora Parcelas, histórico e simulações no mesmo local.
+
+A Caixa Geral continua como módulo próprio, transversal a contratos, para contas, saldos e movimentos da instituição. Simulações financeiras são somente leitura; executar pagamentos permanece bloqueado até associação obrigatória da conta e homologação.
