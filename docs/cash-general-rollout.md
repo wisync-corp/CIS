@@ -189,3 +189,33 @@ A confirmação exige o comprovativo real com referência, a data de corte, o va
 O instalador anteriormente exigia dois administradores activos; essa exigência foi retirada. O script de diagnóstico permite uma aprovação pelo criador apenas quando o modo explícito estiver activo e comunica essa ausência de segregação humana.
 
 **Continua proibido** activar cobranças, desembolsos, transferências ou entradas/saídas de caixa. Alterar o modelo de aprovação de saldo não fornece permissões para escrituração financeira.
+
+
+## Etapa seguinte — simulação de movimentos e transferências (17/11/2026)
+
+Foi preparada uma camada de **prévia financeira somente leitura** sem alterar o modelo de dados aprovado. A interface da Caixa Geral dispõe de **Simular entrada/saída** e **Simular transferência**, na secção Livro de Movimentos. As duas operações chamam endpoints autenticados e limitados por frequência:
+
+- `POST /api/cis/caixa/simular-movimento`: exige conta activa em MZN, natureza `entrada` ou `saida`, montante positivo com duas casas, e saldo suficiente nas saídas. Devolve saldo actual e estimado.
+- `POST /api/cis/caixa/simular-transferencia`: exige duas contas activas diferentes em MZN, montante positivo e saldo suficiente na origem. Devolve os dois saldos actuais e os dois saldos estimados.
+
+A API **não executa `INSERT`/`UPDATE`**, não reserva saldo e não cria recibos. Os cálculos são reexecutados no servidor a partir de `cis_cash_accounts` e `Extracto.account_id`; o resultado é provisório e poderá ficar desactualizado caso ocorram movimentos por outra via. O `CashController::record()` e `::transfer()` continuam bloqueados com HTTP 503, independentemente do estado da interface.
+
+**Verificação e teste:** `backend/tests/cash_operation_preview_smoke.php` inspeciona rotas autenticadas e cálculos usando SQLite efémero com `ROLLBACK`, sem tocar no MySQL da VPS. Não faz lançamento real.
+
+### Decisão de esquema ainda pendente
+
+Para concluir a **execução real**, é necessária uma chave de idempotência persistente e única no Extracto, preferencialmente `operation_key` nullable com índice UNIQUE, utilizada em novos lançamentos e transferências. Isto **acrescentaria uma segunda coluna à tabela Extracto**, além de `account_id`; por isso **não foi executado sem aprovação explícita**. A chave deverá ser persistida dentro da mesma transacção InnoDB das linhas financeiras. Numa transferência de duas linhas, o modelo de chave por operação deve distinguir os dois lados sem reutilizar o mesmo valor UNIQUE, por exemplo com sufixos determinísticos validados pelo servidor.
+
+As restantes condições para activação são: ensaio de migração em restauro isolado, backup, permissões mínimas MySQL de INSERT Extracto, bloqueio de saldo na mesma transacção, validação de operações duplicadas, limites e aprovação por conta, comprovativos e estorno auditável. Estas capacidades não foram activadas nesta etapa.
+
+### Verificação operacional antes de testar a interface
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/verify-cash-openings.sh
+bash deploy/audit-cash-readiness.sh
+bash deploy/refresh-private-preview.sh
+```
+
+Após actualizar, no CAPTA, entre em `Caixa Geral → Livro de movimentos` e experimente as simulações com contas realmente activas. Se existir apenas uma conta activa, a prévia de transferência precisa de outra conta real; não criar conta fictícia para testar. A fase de abertura com administrador único não implica necessariamente que o saldo inicial já tenha sido proposto e confirmado; verificar `status=activa` antes de simular.
