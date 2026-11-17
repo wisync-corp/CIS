@@ -953,3 +953,21 @@ html{font-size:16px}
 .cis-cash-view-movement:hover{border-color:var(--cis-primary);background:var(--cis-tint)}
 .cis-cash-view-movement:focus-visible{outline:3px solid var(--cis-input-border);outline-offset:2px}
 .cis-cash-long-value{overflow-wrap:anywhere;word-break:break-word;font-size:12px}
+
+/* Caixa Geral — relatório analítico somente leitura e responsivo. */
+.cis-cash-report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:13px;align-items:end}
+.cis-cash-report-filters label{display:grid;gap:7px;min-width:0;font-size:12px;font-weight:750;color:var(--cis-heading)}
+.cis-cash-report-filters input,.cis-cash-report-filters select{min-width:0;width:100%;min-height:45px;background:var(--cis-surface,#fff);border:1px solid var(--cis-input-border);border-radius:9px;padding:10px;color:var(--cis-heading)}
+.cis-cash-report-filters button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:45px;border:0;border-radius:9px;padding:10px 18px;background:var(--cis-primary);color:#fff;font-weight:800;white-space:nowrap}
+.cis-cash-report-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.cis-cash-report-grid article{min-width:0;display:grid;align-content:start;gap:13px;border:1px solid var(--cis-border);border-radius:12px;background:var(--cis-surface,#fff);padding:23px}
+.cis-cash-report-grid small{font-size:12px;color:var(--cis-text-muted)}
+.cis-cash-report-grid strong{font-size:clamp(17px,1.6vw,25px);color:var(--cis-heading);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.cis-cash-report-details{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:15px 18px;background:var(--cis-surface-subtle);border-radius:9px;font-size:13px;color:var(--cis-heading)}
+.cis-cash-report-details span{color:var(--cis-text-muted);font-size:12px}
+.cis-cash-report-categories{display:grid;gap:0;border:1px solid var(--cis-border);border-radius:11px;overflow:hidden}
+.cis-cash-report-categories h4{margin:0;padding:16px 18px;font-size:14px;background:var(--cis-surface-subtle);color:var(--cis-heading)}
+.cis-cash-report-categories>div{display:flex;justify-content:space-between;gap:12px;padding:15px 18px;border-top:1px solid var(--cis-border);font-size:13px}
+.cis-cash-report-categories strong{color:var(--cis-heading);font-variant-numeric:tabular-nums}
+@media(max-width:1050px){.cis-cash-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-cash-report-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.cis-cash-report-grid,.cis-cash-report-filters{grid-template-columns:1fr}.cis-cash-report-grid article{padding:18px}.cis-cash-report-details{align-items:flex-start;flex-direction:column}}
