@@ -79,6 +79,10 @@ final class ContractCollectionController extends Controller
     public function collect(Request $request, string $numero, int $ordem)
     {
         $this->admin($request);
+        // INTEGRIDADE: o escritor legado não exige account_id; a flag antiga
+        // NÃO pode lançar cobrança sem conta activa, saldo de abertura e
+        // confirmação real de entrada. Reimplementar pela Caixa, atomicamente.
+        abort(503,'Cobrança real suspensa: é obrigatório associar a entrada a uma conta financeira activa da Caixa. A simulação permanece disponível.');
         abort_unless(filter_var(env('CIS_COLLECTION_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'A cobrança real ainda não foi activada no servidor.');
         $data=$request->validate([
