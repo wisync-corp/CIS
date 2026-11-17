@@ -81,3 +81,22 @@
 10. Alinhamento com Tesouraria opcional: conciliar extracto externo com lançamento original `Extracto.Nr`, sem criar um segundo ledger.
 
 **Não activar `CIS_COLLECTION_WRITES_APPROVED` nem remover o bloqueio de gravação antes das condições acima.**
+
+## API de simulação dos cenários (sem escritas)
+
+Além da simulação de liquidação integral já existente, foi criada a rota privada e autenticada:
+
+`POST /api/cis/contractos/{numero}/prestacoes/{ordem}/simular-cenario`.
+
+O controlador `CollectionScenarioPreviewController` aceita `operacao` e só executa **SELECT**:
+
+- `parcial`: recebe `valor_pago` e valida o intervalo; devolve juros cobertos, amortização indicativa e diferença aritmética, mas não cria nova prestação.
+- `renovar_juros`: devolve capital preservado, amortização nula e juros duplicados conforme `ActualizarFinanceiroCobranca`; não muda contrato ou Extracto.
+- `capitalizar`: exige `periodo_referencia` informado explicitamente (15 ou 30), consulta faixa única em `cis_tabela_juros` e calcula previsão; recusa lacunas/ambiguidade. O VBA dava prioridade a 30 dias e fazia fallback para primeira faixa, **o CAPTA não deve escolher silenciosamente essa política**.
+- `actualizar_data`: compara a data proposta com o vencimento e indica dias de atraso/estado informativo; nunca marca pagamento.
+- `remanescente`: informa atrasos que impedem análise, mas não pressupõe como calcular o remanescente.
+- `finalizar_contrato`: informa o número de prestações não liquidadas; não encerra.
+- `renovar_credito`: indica necessidade de novo contrato e autorização; não abre nem desembolsa.
+
+Todas as respostas têm `consulta_apenas=true`, `movimento_registado=false` e `comprovativo_verificado=false`. **Não são transacções, lançamentos, recibos nem aprovação de cobrança.** Os testes de parsing monetário e registo de rota são executados no CI em `backend/tests/collection_scenarios_smoke.php`.
+
