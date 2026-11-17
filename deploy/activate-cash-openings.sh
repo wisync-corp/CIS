@@ -25,6 +25,13 @@ assert_eq "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DAT
 assert_eq "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Extracto' AND COLUMN_NAME='account_id';" 1 'Ligacao directa Extracto.account_id ausente.'
 assert_eq "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_cash_movements';" 0 'Livro duplicado detectado.'
 assert_eq "SELECT COUNT(*) FROM mysql.user WHERE User IN ('cis_cash_open_submit','cis_cash_open_validate');" 0 'Utilizadores de abertura ja existem; nao recriar.'
+admins="$(sql "SELECT COUNT(*) FROM users WHERE role='administrador' AND active=1;")"
+if [[ "$admins" -lt 2 ]]; then
+ echo 'BLOQUEADO: a validação exige pelo menos dois administradores activos distintos.' >&2
+ echo 'Criar e autenticar o segundo responsável antes de activar o fluxo.' >&2
+ exit 1
+fi
+echo "Controlo de dupla validação: $admins administradores activos (identidades não mostradas)."
 if grep -Eq '^CIS_CASH_WRITES_APPROVED=true$|^CIS_COLLECTION_WRITES_APPROVED=true$|^CIS_NEW_CONTRACTS_APPROVED=true$' deploy/.env; then
  echo 'BLOQUEADO: outra via financeira pode estar habilitada. Exige revisao independente.' >&2; exit 1
 fi
