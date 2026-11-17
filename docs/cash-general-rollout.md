@@ -176,3 +176,16 @@ O instalador exige a confirmação textual `PREPARAR-CAIXA`, faz um backup priva
 5. Integração de desembolsos e cobranças de contratos com `Contractos` + `Extracto.account_id` na mesma transacção, sem substituir a lógica legal/contratual das prestações.
 
 **A fase 2 não constitui conclusão dessas pendências.** A Tesouraria premium permanece opcional, mas estas garantias da Caixa padrão são obrigatórias antes de mover dinheiro.
+
+
+## Decisão actualizada — administrador único (17/11/2026)
+
+Por decisão expressa do responsável pela instituição, o CAPTA deve permitir que **um único administrador activo** cadastre contas, prepare o saldo inicial e confirme documentalmente a sua abertura.
+
+A opção é **explícita e desactivada por omissão**: `CIS_CASH_SINGLE_ADMIN_APPROVED=true`, configurada apenas pelo instalador `deploy/activate-cash-openings.sh` após confirmação `ADMIN-UNICO-CAIXA`.
+
+A confirmação exige o comprovativo real com referência, a data de corte, o valor e a frase de confirmação `CONFIRMO-SALDO-REAL`. O campo `validated_by` regista o próprio administrador; **isto não é uma validação independente**, facto que a interface e o relatório de auditoria devem declarar. O sistema mantém duas identidades **técnicas MySQL** de permissões limitadas para preparar e confirmar a abertura, sem exigir duas pessoas nem conceder acesso ao Extracto.
+
+O instalador anteriormente exigia dois administradores activos; essa exigência foi retirada. O script de diagnóstico permite uma aprovação pelo criador apenas quando o modo explícito estiver activo e comunica essa ausência de segregação humana.
+
+**Continua proibido** activar cobranças, desembolsos, transferências ou entradas/saídas de caixa. Alterar o modelo de aprovação de saldo não fornece permissões para escrituração financeira.
