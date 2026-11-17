@@ -81,4 +81,13 @@ sudo -n docker run --rm --network "$network" --entrypoint php \
 [[ "$(sql 'SELECT COUNT(*),COALESCE(SUM(`Valor`),0) FROM `Extracto`;')" == "$before" ]] || { echo 'Extracto mudou durante teste isolado.' >&2; exit 1; }
 [[ "$(sql 'SELECT COUNT(*) FROM Contractos;')" == "$contracts" ]] || { echo 'Contratos mudaram.' >&2; exit 1; }
 [[ "$(sql 'SELECT COUNT(*),COALESCE(SUM(opening_balance),0) FROM cis_cash_accounts;')" == "$accounts" ]] || { echo 'Contas mudaram.' >&2; exit 1; }
+# Prova local de ensaio para a MESMA versão do código de escrita.
+# Não é uma autorização financeira; apenas sinal de teste aprovado.
+proof_dir="$HOME/cis-private/cash-verification"
+mkdir -p "$proof_dir"
+chmod 700 "$proof_dir"
+proof="$proof_dir/real-posting-rehearsal.sha256"
+sha256sum backend/app/Http/Controllers/Api/CashPostingController.php | awk '{print $1}' > "$proof"
+chmod 600 "$proof"
 echo 'ENSAIO REAL APROVADO: contabilidade transaccional testada em MySQL restaurado e dados idênticos aos anteriores.'
+echo 'Prova local do código ensaiado guardada em pasta privada, sem dados bancários.'
