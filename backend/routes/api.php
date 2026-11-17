@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ContractOpeningController;
 use App\Http\Controllers\Api\ContractCollectionController;
 use App\Http\Controllers\Api\CollectionScenarioPreviewController;
 use App\Http\Controllers\Api\ParcelasQuoteController;
+use App\Http\Controllers\Api\GenericSimulatorController;
 use App\Http\Controllers\Api\ContractOperationalStatusController;
 use App\Http\Controllers\Api\CashController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
@@ -23,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::get('admin/connection-status', ConnectionStatusController::class);
     Route::get('admin/financial-references', [FinancialReferenceController::class,'index'])->middleware('throttle:30,1');
     Route::get('admin/interest-quote', [FinancialReferenceController::class,'quote'])->middleware('throttle:30,1');
+    Route::post('cis/simulador/calcular',[GenericSimulatorController::class,'preview'])->middleware('throttle:20,1');
     Route::post('auth/logout',[AuthController::class,'logout']);
     Route::get('cis/clients',[ClientController::class,'index']);
     Route::post('cis/clients',[ClientController::class,'store'])->middleware('throttle:20,1');
