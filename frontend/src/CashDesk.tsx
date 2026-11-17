@@ -5,7 +5,7 @@ const API=import.meta.env.VITE_API_URL||'/api';
 type CashAccount={
  id:number;code:string;name:string;type:'banco'|'numerario'|'carteira_movel';identifier:string|null;
  currency:string;status:'em_preparacao'|'pendente_validacao'|'activa'|'suspensa';cut_at:string|null;
- created_by:number;validated_by:number|null;validated_at:string|null;
+ created_by:number;validated_by:number|null;validated_at:string|null;can_prepare:boolean;can_validate:boolean;
  opening_balance:string|null;evidence_reference:string|null;saldo_disponivel:string|null
 };
 type CashMovement={id:number;account_id:number;type:string;amount:string;reference:string;
@@ -186,8 +186,8 @@ export default function CashDesk({token}:{token:string}){
     </div>
     {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>A validação exige outro administrador, após conferência independente do saldo e respectivo comprovativo. Não substitui reconciliação bancária.</span></div>}
     <div className="cis-cash-detail-actions">
-     {canSubmitOpening&&detailAccount.status==='em_preparacao'&&<button type="button" onClick={()=>{setSelected(String(detailAccount.id));setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});setAccountDetail(null);beginAction('opening');}}>Preparar saldo inicial <ArrowRight size={15}/></button>}
-     {canValidateOpening&&detailAccount.status==='pendente_validacao'&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm('Conferiu o comprovativo e o saldo de abertura? O responsável pelo cadastro não pode validar a própria conta.'))void submit({preventDefault:()=>{}} as FormEvent,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
+     {canSubmitOpening&&detailAccount.can_prepare&&<button type="button" onClick={()=>{setSelected(String(detailAccount.id));setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});setAccountDetail(null);beginAction('opening');}}>Preparar saldo inicial <ArrowRight size={15}/></button>}
+     {canValidateOpening&&detailAccount.can_validate&&<button type="button" disabled={busy} onClick={()=>{if(window.confirm('Conferiu o comprovativo e o saldo de abertura? O responsável pelo cadastro não pode validar a própria conta.'))void submit({preventDefault:()=>{}} as FormEvent,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
      <button type="button" onClick={()=>setAccountDetail(null)}>Fechar</button>
     </div>
