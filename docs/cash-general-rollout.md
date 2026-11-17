@@ -125,3 +125,54 @@ Caixa (padrão): gerir contas, saldos, entradas, saídas, transferências e comp
 Tesouraria (opcional): importar extractos externos, reconciliar movimentos, identificar diferenças, projectar liquidez e produzir relatórios pré-contabilísticos. Utiliza **as mesmas contas e o mesmo Extracto**, sem novos registos monetários duplicados.
 
 A política de desembolsos directos ou com aprovação depende do utilizador e das permissões institucionais, **não** da activação da Tesouraria.
+
+
+## Fase 2 — abertura e validação independente de saldos (17/11/2026)
+
+**Estado do código:** a Caixa padrão já possui cadastro real de contas e agora inclui preparação de saldo inicial e validação por **segundo administrador**, independentes de transacções monetárias. A implementação foi criada no GitHub, **mas não deve ser confundida com activação na base operacional**.
+
+### Fluxo com segregação de funções
+
+1. Um administrador cadastra a conta (`status=em_preparacao`), sem saldo e sem lançamento financeiro.
+2. **O mesmo responsável pelo cadastro** pode preencher a proposta de abertura (saldo em MT, data/hora de corte de Maputo e referência documental real). `status` muda para `pendente_validacao`, sem saldo disponível.
+3. **Outro administrador activo**, com ID de utilizador distinto do `created_by`, confere a evidência, o montante e a data de corte. A confirmação da aprovação actualiza `validated_by`, `validated_at`, `opening_extracto_nr=max(Extracto.Nr)` e `status=activa`. Estes campos constituem o trilho mínimo de quem aprovou, não um arquivo digital do documento.
+4. A conta activa expõe o saldo inicial e movimentos com `Extracto.account_id` e `Nr` maior do que o marcador, evitando atribuir movimentos históricos sem origem à conta. **Não existe escrita em Extracto nas operações de abertura.**
+5. A proposta/validação falha se já houver movimentos vinculados à conta, os dados estiverem incompletos, o estado for incompatível ou o próprio criador tentar aprovar.
+
+Cada fase usa uma credencial MySQL distinta com `SELECT` e `UPDATE` **somente nas colunas da tabela cis_cash_accounts** que a respectiva função necessita:
+- `cis_cash_open_submit`: `opening_balance`, `cut_at`, `evidence_reference`, `status`, `updated_at`.
+- `cis_cash_open_validate`: `opening_extracto_nr`, `validated_by`, `validated_at`, `status`, `updated_at`.
+
+Nenhum destes dois utilizadores MySQL pode inserir/actualizar/apagar movimentos de `Extracto`.
+
+### Execução controlada da fase de abertura (somente se houver segundo aprovador)
+
+```bash
+cd /opt/cis
+git pull origin main
+bash deploy/postflight-cash-direct-account.sh
+bash deploy/audit-cash-readiness.sh
+bash deploy/activate-cash-openings.sh
+bash deploy/verify-cash-openings.sh
+```
+
+O instalador exige a confirmação textual `PREPARAR-CAIXA`, faz um backup privado, cria duas credenciais restritas e actualiza exclusivamente a API privada. É **opcional** e não deve ser repetido após um erro parcial. As contas já cadastradas são preservadas. Não foi criada tabela de movimentos nem foi feita migração.
+
+**Critérios de aceitação manual antes de utilizar saldos reais:**
+- Testar duas contas de administrador distintas, A e B, numa conta real com comprovativo válido (sem valores de teste em produção).
+- A prepara uma abertura, mas não consegue aprová-la.
+- B consegue ver a proposta, conferir o comprovativo e aprovar; a conta passa a `activa`.
+- A e B não conseguem lançar entradas, saídas, cobranças, transferências ou desembolsos por estes endpoints.
+- As contagens e os valores do `Extracto` e `Contractos` anteriores à activação continuam inalterados.
+
+### Pendências materiais para Caixa Geral plenamente operacional
+
+**Não activar `CIS_CASH_WRITES_APPROVED`.** As funções `record()` e `transfer()` continuam a responder com HTTP 503, e as cobranças/desembolsos permanecem bloqueadas. Para autorizar movimentos reais ainda é necessário:
+
+1. **Idempotência persistente e verificável** para impedir duplicação quando a rede falha após o commit. A arquitectura aprovada tem somente uma tabela nova e uma coluna `Extracto.account_id`; ainda não existe no esquema um campo único para uma chave de operação. Não inventar persistência paralela ou acrescentar outra coluna sem decisão explícita.
+2. Escrita InnoDB atómica e testes de concorrência para saídas e transferências (2 linhas em Extracto), controlo de saldo por conta, rollback e ordem de locks.
+3. Matriz de permissões por utilizador, conta, tipo de operação e limite monetário; dupla aprovação para operações acima dos limiares aprovados.
+4. Regras definitivas de comprovativo, reconciliação de depósitos, estorno/reversões e limitação de movimento retroactivo.
+5. Integração de desembolsos e cobranças de contratos com `Contractos` + `Extracto.account_id` na mesma transacção, sem substituir a lógica legal/contratual das prestações.
+
+**A fase 2 não constitui conclusão dessas pendências.** A Tesouraria premium permanece opcional, mas estas garantias da Caixa padrão são obrigatórias antes de mover dinheiro.
