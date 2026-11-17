@@ -118,12 +118,19 @@ final class CashController extends Controller
             $columns[]='operation_key';
         }
         $rows=$query->limit(200)->get($columns)->map(function ($movement) {
+            $isReversal=isset($movement->operation_key)
+                && str_starts_with((string)$movement->operation_key,'cash:reverse:');
             $isTransfer=isset($movement->operation_key)
-                && preg_match('/^\\[TRANSFER (SAIDA|ENTRADA) /',$movement->description)===1;
-            $movement->type=$isTransfer
-                ?($movement->legacy_type==='Entradas'?'transferencia_entrada':'transferencia_saida')
-                :($movement->legacy_type==='Entradas'?'entrada':'saida');
-            $movement->category=$isTransfer?'Transferência interna':'Operação geral';
+                && (preg_match('/^\\[TRANSFER (SAIDA|ENTRADA) /',$movement->description)===1
+                    || preg_match('/^\\[ESTORNO TRANSFER ORIG:/',$movement->description)===1);
+            $entry=$movement->legacy_type==='Entradas';
+            $movement->type=$isReversal
+                ?($entry?'estorno_entrada':'estorno_saida')
+                :($isTransfer?($entry?'transferencia_entrada':'transferencia_saida')
+                    :($entry?'entrada':'saida'));
+            $movement->category=$isReversal
+                ?($isTransfer?'Estorno de transferência':'Estorno de movimento')
+                :($isTransfer?'Transferência interna':'Operação geral');
             if (!$isTransfer && preg_match('/^\\[CAIXA:([^]]+)\\]/u',
                 $movement->description,$match)) {
                 $movement->category=$match[1];
