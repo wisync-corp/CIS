@@ -55,6 +55,8 @@ jobs:
       - run: bash -n ../deploy/postflight-cash-direct-account.sh
       - run: bash -n ../deploy/inspect-cash-migration-mismatch.sh
       - run: php tests/cash_smoke.php
+      - run: php -l app/Http/Controllers/Api/CollectionScenarioPreviewController.php
+      - run: php tests/collection_scenarios_smoke.php
       - run: php artisan route:list --path=api
       - name: HTTP smoke test (Laravel local)
         run: |
