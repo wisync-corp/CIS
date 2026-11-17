@@ -57,6 +57,8 @@ jobs:
       - run: php tests/cash_smoke.php
       - run: php -l app/Http/Controllers/Api/CollectionScenarioPreviewController.php
       - run: php tests/collection_scenarios_smoke.php
+      - run: php -l app/Http/Controllers/Api/ParcelasQuoteController.php
+      - run: php tests/parcelas_quote_smoke.php
       - run: php artisan route:list --path=api
       - name: HTTP smoke test (Laravel local)
         run: |
