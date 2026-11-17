@@ -407,3 +407,14 @@ bash deploy/refresh-private-preview.sh
 `verify-cash-daily-closure-writer.sh` (somente leitura) confirma que `cis_cash_closures` tem apenas SELECT em `Extracto`, SELECT/INSERT na tabela de fechos e `UPDATE(updated_at)` nas contas (necessário ao lock), sem privilégios globais ou de base; e testa, dentro da API e numa transacção revertida, o mesmo `lockForUpdate` do POST e a recusa de UPDATE no `Extracto`.
 
 **Não activar ainda `CIS_CASH_DAILY_CLOSE_APPROVED`**. Primeiro validar no MySQL real as permissões e a consulta de fecho; só depois preparar activação específica com confirmação explícita. A Tesouraria não foi alterada por esta fase.
+
+### Activação da gravação de fechos
+
+Depois de `verify-cash-daily-closure-writer.sh` aprovado:
+
+```bash
+bash deploy/activate-cash-daily-closures.sh   # confirmação ACTIVAR-FECHO-CAIXA
+bash deploy/verify-cash-daily-closures.sh
+```
+
+O activador exige: flag existente e `false`, hash da migração igual ao ensaio, tabela InnoDB com UNIQUE conta/data, pelo menos uma conta activa com abertura validada, escritor restrito verificado e imagem da API com o controlador actual. Faz backup da base e do `.env`, liga apenas `CIS_CASH_DAILY_CLOSE_APPROVED`, confirma a flag no container e reverte automaticamente se o reinício falhar. Para desligar: `bash deploy/disable-cash-daily-closures.sh` (fechos já gravados permanecem).
