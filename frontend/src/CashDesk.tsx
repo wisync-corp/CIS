@@ -13,6 +13,7 @@ type CashMovement={id:number;account_id:number;type:string;amount:string;referen
 type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
 type ReversalPreview={consulta_apenas:boolean;already_reversed:boolean;can_submit:boolean;mode:'single'|'transfer';origin_nr:number;legs:{original_nr:number;account_id:number;account_code:string|null;original_type:string;reversal_type:string;amount:string}[];notice:string};
+type CashDaily={date:string;account_id:number|null;status:string;accounts:{account_id:number;code:string;name:string;opening:string;entries:string;exits:string;internal_in:string;internal_out:string;external_in:string;external_out:string;closing:string;movements_count:number}[];totals:{opening:string;entries:string;exits:string;closing:string;internal_in:string;internal_out:string};warnings:string[];notice:string};
 type CashReport={from:string;to:string;account_id:number|null;accounts_count:number;movements_count:number;entries:string;exits:string;net_external:string;internal_in:string;internal_out:string;internal_net:string;categories:Record<string,string>;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const formatMoney=(v:string|number|null)=>v===null||!Number.isFinite(Number(v))?'—':fmt.format(Number(v))+' MT';
@@ -34,8 +35,13 @@ export default function CashDesk({token}:{token:string}){
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [notice,setNotice]=useState('');
- const [section,setSection]=useState<'contas'|'movimentos'|'relatorio'>('contas');
+ const [section,setSection]=useState<'contas'|'movimentos'|'relatorio'|'conferencia'>('contas');
  const [report,setReport]=useState<CashReport|null>(null);
+ const [daily,setDaily]=useState<CashDaily|null>(null);
+ const [dailyBusy,setDailyBusy]=useState(false);
+ const [dailyError,setDailyError]=useState('');
+ const [dailyDate,setDailyDate]=useState(todayCut().slice(0,10));
+ const [dailyAccount,setDailyAccount]=useState('');
  const [reportBusy,setReportBusy]=useState(false);
  const [reportError,setReportError]=useState('');
  const [reportAccount,setReportAccount]=useState('');
@@ -80,6 +86,15 @@ export default function CashDesk({token}:{token:string}){
   finally{setLoading(false);}
  },[request]);
  useEffect(()=>{void reload();},[reload]);
+ const loadDaily=useCallback(async()=>{
+  setDailyBusy(true);setDailyError('');setDaily(null);
+  try{
+   const params=new URLSearchParams({date:dailyDate});
+   if(dailyAccount)params.set('account_id',dailyAccount);
+   setDaily(await request<CashDaily>('conferencia-diaria?'+params.toString()));
+  }catch(e){setDailyError(e instanceof Error?e.message:'Não foi possível conferir os saldos do dia.');}
+  finally{setDailyBusy(false);}
+ },[dailyDate,dailyAccount,request]);
  const loadReport=useCallback(async()=>{
   setReportBusy(true);setReportError('');setReport(null);
   try{
@@ -281,8 +296,9 @@ export default function CashDesk({token}:{token:string}){
     <button type="button" className={section==='contas'?'active':''} aria-current={section==='contas'?'page':undefined} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
     <button type="button" className={section==='movimentos'?'active':''} aria-current={section==='movimentos'?'page':undefined} onClick={()=>{setSection('movimentos');resetAction();}}><ArrowLeftRight size={17}/> Movimentos</button>
      <button type="button" className={section==='relatorio'?'active':''} aria-current={section==='relatorio'?'page':undefined} onClick={()=>{setSection('relatorio');resetAction();}}><BookOpen size={17}/> Fluxo de caixa</button>
+     <button type="button" className={section==='conferencia'?'active':''} aria-current={section==='conferencia'?'page':undefined} onClick={()=>{setSection('conferencia');resetAction();}}><ClipboardCheck size={17}/> Conferência diária</button>
    </nav>
-   <span className="cis-cash-section-context">{section==='contas'?'Gestão de contas':section==='movimentos'?'Últimos 200 movimentos':'Relatório por período'} <ChevronRight size={14}/></span>
+   <span className="cis-cash-section-context">{section==='contas'?'Gestão de contas':section==='movimentos'?'Últimos 200 movimentos':section==='relatorio'?'Relatório por período':'Conferência por dia'} <ChevronRight size={14}/></span>
   </div>
   {section==='contas'?<div className="cis-cash-panel">
    <div className="cis-cash-panel-head"><div><h3>Contas financeiras</h3><p>Consulte as disponibilidades e prepare novas contas com saldo documentado.</p></div>
@@ -399,7 +415,7 @@ export default function CashDesk({token}:{token:string}){
     </div>
    </div>}
     <div className="cis-cash-table-foot"><span>Consulta limitada aos últimos 200 movimentos confirmados da Caixa.</span><span>Movimentos não reconciliados com bancos.</span></div>
-  </div>:<div className="cis-cash-panel cis-cash-report">
+  </div>:section==='relatorio'?<div className="cis-cash-panel cis-cash-report">
    <div className="cis-cash-panel-head"><div><h3>Fluxo de caixa realizado</h3><p>Entradas e saídas efectivas do Extracto, separadas das transferências internas.</p></div></div>
    <form className="cis-cash-report-filters" onSubmit={e=>{e.preventDefault();void loadReport();}}>
     <label>De<input type="date" value={reportStart} max={reportEnd} onChange={e=>{setReportStart(e.target.value);setReport(null);}} required/></label>
@@ -419,6 +435,31 @@ export default function CashDesk({token}:{token:string}){
    {Object.keys(report.categories).length>0&&<div className="cis-cash-report-categories"><h4>Resultado por categoria</h4>{Object.entries(report.categories).map(([cat,value])=><div key={cat}><span>{cat}</span><strong>{formatMoney(value)}</strong></div>)}</div>}
    <div className="cis-cash-form-note"><Info size={17}/>{report.notice}</div></>}
    {!report&&!reportBusy&&!reportError&&<div className="cis-cash-empty"><BookOpen size={24}/><strong>Seleccione o período e consulte o fluxo de caixa</strong><p>Os valores são calculados no servidor com base no Extracto.</p></div>}
+  </div>:<div className="cis-cash-panel cis-cash-report">
+   <div className="cis-cash-panel-head"><div><h3>Conferência diária</h3><p>Confira o saldo contabilístico de cada conta sem misturar com o histórico não associado.</p></div></div>
+   <form className="cis-cash-report-filters" onSubmit={e=>{e.preventDefault();void loadDaily();}}>
+    <label>Data da conferência<input type="date" required max={todayCut().slice(0,10)} value={dailyDate} onChange={e=>{setDailyDate(e.target.value);setDaily(null);}}/></label>
+    <label>Conta financeira<select value={dailyAccount} onChange={e=>{setDailyAccount(e.target.value);setDaily(null);}}><option value="">Todas as contas</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
+    <button type="submit" disabled={dailyBusy||!dailyDate}>{dailyBusy?'A conferir…':'Conferir saldos'} <ArrowRight size={16}/></button>
+   </form>
+   {dailyError&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{dailyError}</div>}
+   {dailyBusy&&<div className="cis-cash-loading" role="status"><RefreshCw size={17}/> A conferir o Extracto…</div>}
+   {daily&&<><div className="cis-cash-report-grid">
+    <article><small>Saldo de abertura do dia</small><strong>{formatMoney(daily.totals.opening)}</strong></article>
+    <article><small>Entradas do dia</small><strong>{formatMoney(daily.totals.entries)}</strong></article>
+    <article><small>Saídas do dia</small><strong>{formatMoney(daily.totals.exits)}</strong></article>
+    <article><small>Saldo contabilístico final</small><strong>{formatMoney(daily.totals.closing)}</strong></article>
+   </div>
+   <div className="cis-cash-table-scroll"><table className="cis-cash-table">
+    <thead><tr><th>Conta</th><th>Abertura</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th><th>Movimentos</th></tr></thead>
+    <tbody>{daily.accounts.map(a=><tr key={a.account_id}>
+     <td><strong>{a.code}</strong><small className="cis-cash-table-sub">{a.name}</small></td>
+     <td>{formatMoney(a.opening)}</td><td>{formatMoney(a.entries)}</td><td>{formatMoney(a.exits)}</td><td><strong>{formatMoney(a.closing)}</strong></td><td>{a.movements_count}</td>
+    </tr>)}</tbody></table></div>
+   {daily.warnings.map((w,i)=><div key={i} className="cis-cash-message caution"><Info size={17}/>{w}</div>)}
+   <div className="cis-cash-form-note"><Info size={17}/>{daily.notice}</div>
+   <div className="cis-cash-form-note"><LockKeyhole size={17}/> Fecho formal, bloqueio de período e confirmação do saldo físico ou bancário não estão activos.</div></>}
+   {!daily&&!dailyBusy&&!dailyError&&<div className="cis-cash-empty"><ClipboardCheck size={24}/><strong>Seleccione a data para conferir os saldos</strong><p>Consulta contabilística sem gravação e sem fecho oficial.</p></div>}
   </div>}
 
    </>}
