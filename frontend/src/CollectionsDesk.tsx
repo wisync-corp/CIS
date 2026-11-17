@@ -65,6 +65,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [loading,setLoading]=useState(false);
  const [message,setMessage]=useState('');
  const [mode,setMode]=useState<Mode>('total');
+ const [paymentNature,setPaymentNature]=useState<'recebido'|'nao_recebido'|null>(null);
  const [ord,setOrd]=useState(initialOrder??'');
  const [penalty,setPenalty]=useState(false);
  const [paymentAmount,setPaymentAmount]=useState('');
@@ -132,9 +133,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const contractClosed=/finalizado|liquidado|cancelado|anulado/i.test(contractStatus);
  const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed&&
   !/^(?:completo|liquidado|finalizado)$/i.test(String(row?.['Situação de Pagamento']??'').trim()));
- const eligibleModes:Mode[]=selectedInstallment&&installmentEligible(selectedInstallment)?[
-  'total','parcial','renovar_juros','capitalizar','remanescente','actualizar_data',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])
- ]:[];
+ const eligibleModes:Mode[]=selectedInstallment&&installmentEligible(selectedInstallment)?(
+   paymentNature==='recebido'?['total','parcial',...(String(selectedInstallment['Situação de Pagamento']??'').toLowerCase().includes('parcial')?['remanescente' as Mode]:[])]:
+   paymentNature==='nao_recebido'?['renovar_juros','capitalizar',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])]:[]
+ ):[];
  const paidRows=rows.filter(r=>paid(r)||num(r['Valor Pago'])>0);
  const totals=useMemo(()=>{
   const sum=(key:string,filter:(r:Row)=>boolean=()=>true)=>rows.filter(filter).reduce((s,r)=>s+num(r[key]),0);
@@ -156,15 +158,18 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const partialInterest=partialValid?Math.min(partialNum,interests):null;
  const partialCapital=partialValid?Math.max(0,partialNum-interests):null;
  const modeLocked=mode!=='total';
+ const flowReceived=paymentNature==='recebido';
+ const flowNoReceipt=paymentNature==='nao_recebido';
+ const hasChoice=flowReceived||flowNoReceipt;
  const modeAllowed=eligibleModes.includes(mode);
  const activeOrder=ord&&rows.some(r=>String(r.Ordem)===ord&&installmentEligible(r));
- const canQuote=mode==='total'&&!!selectedInstallment&&isPending(selectedInstallment);
+ const canQuote=mode==='total'&&flowReceived&&!!selectedInstallment&&installmentEligible(selectedInstallment);
  const cannotExecute=true; // Cobranças reais sem Extracto.account_id são recusadas pelo backend.
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setOrd(value);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseOrd(value:string){setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  async function simulateScenario(e:FormEvent<HTMLFormElement>){
   e.preventDefault();if(!selected||scenarioBusy||mode==='total'||!modeAllowed||!activeOrder)return;
   const key=ord;
@@ -224,14 +229,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     {loading?<div className="cis-cash-loading">A carregar a ficha…</div>:profile&&<>
      {!embeddedContract&&<div className="cis-collections-client"><div><small>CONTRATO EM ANÁLISE</small><h3>{text(profile.contract['Nome do Cliente'])}</h3><span>Contrato {selected} · Cliente n.º {text(profile.contract['Nº de Cliente'])}</span></div>
       <span className="cis-collections-client-badge">{text(profile.contract['Estado do Contrato'])}</span></div>}
-     <div className="cis-collections-stats cis-collections-stats-refined" aria-label="Indicadores do contrato">
-      <article className="cis-collections-stat-main"><span>Valor pendente</span><strong>{fmt(totals.pending)}</strong><small>Prestações pendentes e atrasadas</small></article>
-      <article className="cis-collections-stat-main"><span>Valor recebido</span><strong>{fmt(totals.paid)}</strong><small>Valor Pago registado nas prestações</small></article>
-      <article className="cis-collections-stat-count"><span>Prestações</span><strong>{rows.length}</strong><small>Total do plano</small></article>
-      <article className="cis-collections-stat-alert"><span>Em atraso</span><strong>{totals.late}</strong><small>Prestações vencidas no estado original</small></article>
-      <article className="cis-collections-stat-next"><span>Próximo vencimento</span><strong>{date(totals.next?.['Data de Cobrança'])}</strong><small>{totals.next?fmt(totals.next['Valor a Pagar']):'Sem prestações futuras'}</small></article>
-      <article className="cis-collections-stat-secondary"><span>Juros e multas registados nas parcelas pagas</span><strong>{fmt(totals.added)}</strong><small>Componentes das prestações liquidadas, não conciliadas</small></article>
-      <article className="cis-collections-stat-secondary"><span>Total previsto e pago</span><strong>{fmt(totals.gross)}</strong><small>Pago + pendente; não é saldo contabilístico</small></article>
+     <div className="cis-collections-compact-meta" aria-label="Situação das cobranças">
+       <span><Wallet size={15}/> <strong>{fmt(totals.pending)}</strong> por receber</span>
+       <span><CheckCircle2 size={15}/> <strong>{fmt(totals.paid)}</strong> registados como pagos</span>
+       <span><Clock3 size={15}/> <strong>{totals.late}</strong> prestações marcadas em atraso</span>
      </div>
      {!!profile.contract_fields_divergent?.length&&<div className="cis-collections-risk"><AlertCircle size={17}/> Campos divergentes no contrato: {profile.contract_fields_divergent.join(', ')}. Não assumir valores únicos sem reconciliação.</div>}
      <div className="cis-collections-switch" role="tablist" aria-label="Pagamentos deste contrato">
