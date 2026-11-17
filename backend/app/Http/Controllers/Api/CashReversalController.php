@@ -127,6 +127,8 @@ final class CashReversalController extends Controller
                 ->where('Nr','>',$a->opening_extracto_nr)
                 ->get(['Valor','Tipo de Movimento']) as $row){
                 $c=$this->cents((string)$row->Valor);
+                abort_unless(in_array((string)$row->{'Tipo de Movimento'},['Entradas','Saídas'],true),409,
+                    'Movimento de natureza desconhecida no saldo da conta.');
                 $balance+=$row->{'Tipo de Movimento'}==='Entradas'?$c:-$c;
             }
             abort_unless($balance>=0,409,'Saldo actual inconsistente; estorno bloqueado.');
