@@ -53,6 +53,8 @@ function compareInstallments(a:Item,b:Item,column:InstallmentSort):number{
 }
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const integerMoney=new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0});
+const validAmount=(raw:unknown):raw is number|string=>raw!==null&&raw!==undefined&&raw!==''&&Number.isFinite(Number(raw));
+const isPaid=(row:Item)=>['pago','pago em atraso','liquidado','finalizado'].includes(String(row.Estado??'').trim().toLowerCase());
 function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  const raw=item[name];
  if(raw===null||raw===undefined||raw==='')return 'Não informado';
@@ -92,6 +94,16 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  },[numero,token]);
  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
  const contract=data?.contract;
+ // Indicadores de topo da ficha — leitura das prestações existentes.
+ const financialSnapshot=useMemo(()=>{
+  const rows=data?.installments??[];
+  const paidRows=rows.filter(isPaid);
+  const pendingRows=rows.filter(row=>!isPaid(row));
+  const due=[...pendingRows].filter(row=>/^\d{4}-\d{2}-\d{2}/.test(String(row['Data de Cobrança']??'')))
+   .sort((a,b)=>String(a['Data de Cobrança']).localeCompare(String(b['Data de Cobrança'])))[0]??null;
+  return {installments:rows.length,pending:pendingRows.length,nextDue:due,paidRows:paidRows.length};
+ },[data]);
+ const currency=(value:number)=>money.format(value)+' MT';
  const firstLoanAmount=contract?.['Quantia Creditada'];
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
