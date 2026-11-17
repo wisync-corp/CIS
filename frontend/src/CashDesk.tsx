@@ -5,11 +5,12 @@ const API=import.meta.env.VITE_API_URL||'/api';
 type CashAccount={
  id:number;code:string;name:string;type:'banco'|'numerario'|'carteira_movel';identifier:string|null;
  currency:string;status:'em_preparacao'|'pendente_validacao'|'activa'|'suspensa';cut_at:string|null;
+ created_by:number;validated_by:number|null;validated_at:string|null;
  opening_balance:string|null;evidence_reference:string|null;saldo_disponivel:string|null
 };
 type CashMovement={id:number;account_id:number;type:string;amount:string;reference:string;
  category:string;description:string;effective_at:string;evidence_reference:string|null};
-type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;notice:string};
+type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const formatMoney=(v:string|number|null)=>v===null||!Number.isFinite(Number(v))?'—':fmt.format(Number(v))+' MT';
 const typeName:Record<CashAccount['type'],string>={banco:'Banco',numerario:'Numerário',carteira_movel:'Carteira móvel'};
@@ -22,6 +23,8 @@ export default function CashDesk({token}:{token:string}){
  const [movements,setMovements]=useState<CashMovement[]>([]);
  const [enabled,setEnabled]=useState(false);
  const [canCreateAccounts,setCanCreateAccounts]=useState(false);
+ const [canSubmitOpening,setCanSubmitOpening]=useState(false);
+ const [canValidateOpening,setCanValidateOpening]=useState(false);
  const [busy,setBusy]=useState(false);
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
@@ -56,7 +59,7 @@ export default function CashDesk({token}:{token:string}){
  const reload=useCallback(async()=>{setLoading(true);setError('');
   try{
    const [a,m]=await Promise.all([request<CashResponse>('contas'),request<{movements:CashMovement[]}>('movimentos')]);
-   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));
+   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));setCanSubmitOpening(Boolean(a.can_submit_opening));setCanValidateOpening(Boolean(a.can_validate_opening));
   }catch(e){setError(e instanceof Error?e.message:'Erro ao consultar a Caixa.');}
   finally{setLoading(false);}
  },[request]);
@@ -88,7 +91,7 @@ export default function CashDesk({token}:{token:string}){
  function beginAction(value:'create'|'opening'|'record'|'transfer'){setAction(value);setError('');setNotice('');if(value==='record'||value==='transfer')setOperationKey(crypto.randomUUID());}
  async function submit(event:FormEvent,what:'create'|'opening'|'activate'|'record'|'transfer',id?:number){
   event.preventDefault();setError('');setNotice('');
-  if(what==='create'?!canCreateAccounts:!enabled){setError('Esta operação ainda não está autorizada neste ambiente.');return;}
+  if(what==='create'?!canCreateAccounts:what==='opening'?!canSubmitOpening:what==='activate'?!canValidateOpening:!enabled){setError('Esta operação ainda não está autorizada neste ambiente.');return;}
   if(what==='record' && !moneyInput(record.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer' && !moneyInput(transfer.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer'&&!window.confirm('Confirma que a saída da origem E a entrada no destino foram ambas efectivamente executadas e comprovadas? Se qualquer uma estiver pendente, não registe a transferência como concluída.'))return;
@@ -109,7 +112,7 @@ export default function CashDesk({token}:{token:string}){
    });
    setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para validação documental.':what==='activate'?'Conta activada com base na validação documental.':'Operação financeira registada.');
    if(what==='record'||what==='transfer')setOperationKey(crypto.randomUUID());
-   setAction('none');setNewAccount({code:'',name:'',type:'banco',identifier:''});await reload();
+   setAccountDetail(null);setAction('none');setNewAccount({code:'',name:'',type:'banco',identifier:''});await reload();
   }catch(e){setError(e instanceof Error?e.message:'Não foi possível efectuar a operação. Não repita sem verificar o histórico.');}
   finally{setBusy(false);}
  }
@@ -122,7 +125,7 @@ export default function CashDesk({token}:{token:string}){
   {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/><span>{error}</span><button type="button" onClick={()=>setError('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
   {notice&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Fechar confirmação"><X size={16}/></button></div>}
   {!enabled&&!loading&&<div className="cis-cash-message caution" role="status"><LockKeyhole size={18}/>
-   <span><strong>{canCreateAccounts?'Preparação de contas activa.':'Modo de consulta.'}</strong> {canCreateAccounts?'Pode cadastrar contas sem saldo. Abertura, validação, transferências e desembolsos permanecem bloqueados.':'Cadastros e movimentos financeiros continuam bloqueados até autorização no servidor.'}</span>
+   <span><strong>{canCreateAccounts?'Preparação de contas activa.':'Modo de consulta.'}</strong> {canCreateAccounts?(canSubmitOpening?'Pode cadastrar contas e preparar saldos. A validação exige outro administrador. Lançamentos e transferências continuam bloqueados.':'Pode cadastrar contas sem saldo. Abertura, validação, transferências e desembolsos permanecem bloqueados.'):'Cadastros e movimentos financeiros continuam bloqueados até autorização no servidor.'}</span>
   </div>}
   <div className="cis-cash-overview">
     <article className="cis-cash-metric featured"><span className="cis-cash-metric-icon"><Wallet size={19}/></span><div><small>Saldo disponível</small><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong><p>{active.length?'Contas activas com saldo confirmado':'Indisponível até validação dos saldos iniciais'}</p></div></article>
@@ -130,7 +133,7 @@ export default function CashDesk({token}:{token:string}){
     <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Layers size={19}/></span><div><small>Em preparação</small><strong>{loading||error?'—':preparingCount}</strong><p>Contas ainda sem saldo validado</p></div></article>
     <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><ClipboardCheck size={19}/></span><div><small>Por validar</small><strong>{loading||error?'—':pendingCount}</strong><p>Validação documental pendente</p></div></article>
   </div>
-  <div className="cis-cash-process" role="status"><div className={canCreateAccounts?'ready':''}><span>01</span><b>Cadastro de contas</b>{canCreateAccounts?<CheckCircle2 size={15}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div><span>02</span><b>Validação de saldos</b><LockKeyhole size={14}/></div><ChevronRight size={15}/><div><span>03</span><b>Movimentos financeiros</b><LockKeyhole size={14}/></div></div>
+  <div className="cis-cash-process" role="status"><div className={canCreateAccounts?'ready':''}><span>01</span><b>Cadastro de contas</b>{canCreateAccounts?<CheckCircle2 size={15}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div className={canSubmitOpening?'ready':''}><span>02</span><b>Validação de saldos</b>{canSubmitOpening?<CheckCircle2 size={14}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div><span>03</span><b>Movimentos financeiros</b><LockKeyhole size={14}/></div></div>
   <div className="cis-cash-sectionbar">
    <nav className="cis-cash-tabs" aria-label="Áreas do módulo Caixa">
     <button type="button" className={section==='contas'?'active':''} aria-current={section==='contas'?'page':undefined} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
@@ -178,19 +181,21 @@ export default function CashDesk({token}:{token:string}){
      <div><small>Moeda</small><strong>{detailAccount.currency}</strong></div>
      <div><small>Identificador</small><strong>{detailAccount.identifier?(showIdentifier?detailAccount.identifier:'•••• '+detailAccount.identifier.slice(-4)):'Não informado'}</strong>{detailAccount.identifier&&<button type="button" className="cis-cash-reveal" onClick={()=>setShowIdentifier(v=>!v)}>{showIdentifier?'Ocultar':'Mostrar'}</button>}</div>
      <div className="cis-cash-detail-wide"><small>Referência documental</small><strong>{detailAccount.evidence_reference||'Não apresentada'}</strong></div>
+      <div><small>Responsável pelo cadastro (ID)</small><strong>{detailAccount.created_by}</strong></div>
+      <div><small>Validação</small><strong>{detailAccount.validated_at?readableDate(detailAccount.validated_at):'Não validada'}</strong></div>
     </div>
-    {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>Validação manual: confirme o documento e a data de corte antes de activar esta conta. Esta acção não realiza reconciliação bancária independente.</span></div>}
+    {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>A validação exige outro administrador, após conferência independente do saldo e respectivo comprovativo. Não substitui reconciliação bancária.</span></div>}
     <div className="cis-cash-detail-actions">
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
      <button type="button" onClick={()=>setAccountDetail(null)}>Fechar</button>
     </div>
    </div></div>}
-   {action==='opening'&&selectedAccount&&<form className="cis-cash-form cis-cash-opening" onSubmit={e=>void submit(e,'opening')}>
+   {action==='opening'&&selectedAccount&&canSubmitOpening&&<form className="cis-cash-form cis-cash-opening" onSubmit={e=>void submit(e,'opening')}>
     <div className="cis-cash-form-title"><span className="cis-cash-step">SALDO INICIAL · 02 / 02</span><h4>Abertura · {selectedAccount.name}</h4><p>Introduza o saldo comprovado e a data de corte. A referência documental será registada, mas não verificada automaticamente.</p></div>
     <label>Saldo documentado (MT)<input type="text" inputMode="decimal" required value={opening.opening_balance} onChange={e=>setOpening(p=>({...p,opening_balance:e.target.value}))} placeholder="0.00"/></label>
     <label>Data e hora de corte (Maputo)<input type="datetime-local" required max={todayCut()} value={opening.cut_at} onChange={e=>setOpening(p=>({...p,cut_at:e.target.value}))}/></label>
-    <label className="cis-cash-wide">Referência do comprovativo / extracto<input required minLength={5} maxLength={255} value={opening.evidence_reference} onChange={e=>setOpening(p=>({...p,evidence_reference:e.target.value}))} placeholder="Extrato BCI de 16/11/2026 — referência ..."/></label>
-    <div className="cis-cash-form-note"><Info size={16}/> O saldo apenas ficará disponível quando a conta for validada. Não serão importados movimentos antigos.</div>
+    <label className="cis-cash-wide">Referência do comprovativo / extracto<input required minLength={6} maxLength={255} value={opening.evidence_reference} onChange={e=>setOpening(p=>({...p,evidence_reference:e.target.value}))} placeholder="Extrato BCI de 16/11/2026 — referência ..."/></label>
+    <div className="cis-cash-form-note"><Info size={16}/> A proposta não movimenta dinheiro. Exige validação por outro administrador e comprovativo real do saldo à data de corte.</div>
     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(opening.opening_balance)}>{busy?'A submeter…':'Submeter para validação'} <ArrowRight size={16}/></button></div>
    </form>}
   </div>:<div className="cis-cash-panel">
