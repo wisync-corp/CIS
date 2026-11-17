@@ -78,14 +78,20 @@ final class CashReportController extends Controller
             abort_unless(in_array($kind,['Entradas','Saídas'],true),409,
                 'Movimento com natureza financeira não reconhecida.');
             $isTransfer=isset($row->operation_key)
-                && preg_match('/^cash:[0-9a-f-]{36}:[12]$/i',(string)$row->operation_key)
-                && str_starts_with((string)$row->{'Descrição'},'[TRANSFER ');
+                && (
+                    (preg_match('/^cash:[0-9a-f-]{36}:[12]$/i',(string)$row->operation_key)
+                        && str_starts_with((string)$row->{'Descrição'},'[TRANSFER '))
+                    || (preg_match('/^cash:reverse:transfer:[0-9]+:[12]$/',(string)$row->operation_key)
+                        && str_starts_with((string)$row->{'Descrição'},'[ESTORNO TRANSFER '))
+                );
             if($isTransfer){
                 if($kind==='Entradas')$internalIn+=$value;else $internalOut+=$value;
             }elseif($kind==='Entradas')$entries+=$value;
             else $exits+=$value;
             $count++;
-            $name=$isTransfer?'Transferência interna':'Operação geral';
+            $name=$isTransfer?'Transferência interna'
+                :(str_starts_with((string)($row->operation_key??''),'cash:reverse:')
+                    ?'Estorno financeiro':'Operação geral');
             if(!$isTransfer && preg_match('/^\[CAIXA:([^]]+)\]/u',(string)$row->{'Descrição'},$m))$name=$m[1];
             $categoryCents[$name]=($categoryCents[$name]??0)+($kind==='Entradas'?$value:-$value);
         }
