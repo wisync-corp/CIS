@@ -79,6 +79,16 @@ sudo -n docker run --rm --network "$network" --entrypoint php \
 [[ "$(sql 'SELECT COUNT(*) FROM Contractos;')" == "$contracts" ]] || { echo 'Contratos mudaram.' >&2; exit 1; }
 [[ "$(sql 'SELECT COUNT(*),COALESCE(SUM(opening_balance),0) FROM cis_cash_accounts;')" == "$accounts" ]] || { echo 'Contas mudaram.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM migrations WHERE migration='2026_11_17_000060_create_cis_cash_daily_closures';")" == 1 ]] || { echo 'Migração não registada.' >&2; exit 1; }
+echo 'A testar gravação documental do fecho APENAS no MySQL isolado...'
+sudo -n docker run --rm --network "$network" --entrypoint php \
+ -e APP_ENV=production -e APP_DEBUG=false -e "APP_KEY=$app_key" \
+ -e DB_CONNECTION=mysql -e DB_HOST=cash-close-mysql -e DB_PORT=3306 \
+ -e DB_DATABASE=cis -e DB_USERNAME=root -e "DB_PASSWORD=$password" \
+ -e CASH_CLOSURES_DB_USERNAME=root -e "CASH_CLOSURES_DB_PASSWORD=$password" \
+ -e CIS_ISOLATED_REHEARSAL=true -e CIS_PRIVATE_PREVIEW=true \
+ -e CIS_CASH_DAILY_CLOSE_APPROVED=true -e CIS_RUN_MIGRATIONS=false \
+ "$image_name" tests/cash_daily_closure_mysql_rehearsal.php
+[[ "$(sql 'SELECT COUNT(*) FROM cis_cash_daily_closures;')" == 0 ]] || { echo "O ensaio deixou fechos temporários." >&2; exit 1; }
 proof_dir="$HOME/cis-private/cash-verification"
 mkdir -p "$proof_dir"
 chmod 700 "$proof_dir"
