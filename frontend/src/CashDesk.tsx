@@ -10,7 +10,7 @@ type CashAccount={
 };
 type CashMovement={id:number;account_id:number;type:string;amount:string;reference:string;
  category:string;description:string;effective_at:string;evidence_reference:string|null};
-type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;notice:string};
+type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const formatMoney=(v:string|number|null)=>v===null||!Number.isFinite(Number(v))?'—':fmt.format(Number(v))+' MT';
 const typeName:Record<CashAccount['type'],string>={banco:'Banco',numerario:'Numerário',carteira_movel:'Carteira móvel'};
@@ -25,6 +25,7 @@ export default function CashDesk({token}:{token:string}){
  const [canCreateAccounts,setCanCreateAccounts]=useState(false);
  const [canSubmitOpening,setCanSubmitOpening]=useState(false);
  const [canValidateOpening,setCanValidateOpening]=useState(false);
+ const [singleAdminOpening,setSingleAdminOpening]=useState(false);
  const [busy,setBusy]=useState(false);
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
@@ -59,7 +60,7 @@ export default function CashDesk({token}:{token:string}){
  const reload=useCallback(async()=>{setLoading(true);setError('');
   try{
    const [a,m]=await Promise.all([request<CashResponse>('contas'),request<{movements:CashMovement[]}>('movimentos')]);
-   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));setCanSubmitOpening(Boolean(a.can_submit_opening));setCanValidateOpening(Boolean(a.can_validate_opening));
+   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));setCanSubmitOpening(Boolean(a.can_submit_opening));setCanValidateOpening(Boolean(a.can_validate_opening));setSingleAdminOpening(Boolean(a.single_admin_opening));
   }catch(e){setError(e instanceof Error?e.message:'Erro ao consultar a Caixa.');}
   finally{setLoading(false);}
  },[request]);
@@ -96,7 +97,7 @@ export default function CashDesk({token}:{token:string}){
   if(what==='transfer' && !moneyInput(transfer.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer'&&!window.confirm('Confirma que a saída da origem E a entrada no destino foram ambas efectivamente executadas e comprovadas? Se qualquer uma estiver pendente, não registe a transferência como concluída.'))return;
   if(what==='record'&&!window.confirm('Confirma o registo deste movimento financeiro na Caixa? A operação não poderá ser apagada.'))return;
-  if(what==='activate'&&!window.confirm('Confirma que conferiu o saldo, a data de corte e a evidência documental desta conta?'))return;
+  if(what==='activate'&&!window.confirm('Confirma que conferiu o SALDO REAL, a data de corte e a evidência documental? No modo de administrador único não existe aprovação independente.'))return;
   setBusy(true);
   try{
    if(what==='create')await request('contas','POST',{...newAccount,code:newAccount.code.trim().toUpperCase(),name:newAccount.name.trim(),identifier:newAccount.identifier.trim()||null});
@@ -104,13 +105,13 @@ export default function CashDesk({token}:{token:string}){
     opening_balance:opening.opening_balance,cut_at:opening.cut_at.replace('T',' ')+':00',
     evidence_reference:opening.evidence_reference
    });
-   if(what==='activate')await request('contas/'+id+'/activar','POST',{confirmed_document:true});
+   if(what==='activate')await request('contas/'+id+'/activar','POST',{confirmed_document:true,confirmation_phrase:'CONFIRMO-SALDO-REAL'});
    if(what==='record')await request('movimentos','POST',{...record,account_id:Number(record.account_id),idempotency_key:operationKey});
    if(what==='transfer')await request('transferencias','POST',{
     ...transfer,source_account_id:Number(transfer.source_account_id),
     destination_account_id:Number(transfer.destination_account_id),confirmed_source_debit:true,confirmed_destination_credit:true,idempotency_key:operationKey
    });
-   setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para validação documental.':what==='activate'?'Conta activada com base na validação documental.':'Operação financeira registada.');
+   setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para conferência documental.':what==='activate'?'Conta activada após confirmação documental; não houve validação independente no modo de administrador único.':'Operação financeira registada.');
    if(what==='record'||what==='transfer')setOperationKey(crypto.randomUUID());
    setAccountDetail(null);setAction('none');setNewAccount({code:'',name:'',type:'banco',identifier:''});await reload();
   }catch(e){setError(e instanceof Error?e.message:'Não foi possível efectuar a operação. Não repita sem verificar o histórico.');}
@@ -125,7 +126,7 @@ export default function CashDesk({token}:{token:string}){
   {error&&<div className="cis-cash-message error" role="alert"><AlertCircle size={18}/><span>{error}</span><button type="button" onClick={()=>setError('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
   {notice&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Fechar confirmação"><X size={16}/></button></div>}
   {!enabled&&!loading&&<div className="cis-cash-message caution" role="status"><LockKeyhole size={18}/>
-   <span><strong>{canCreateAccounts?'Preparação de contas activa.':'Modo de consulta.'}</strong> {canCreateAccounts?(canSubmitOpening?'Pode cadastrar contas e preparar saldos. A validação exige outro administrador. Lançamentos e transferências continuam bloqueados.':'Pode cadastrar contas sem saldo. Abertura, validação, transferências e desembolsos permanecem bloqueados.'):'Cadastros e movimentos financeiros continuam bloqueados até autorização no servidor.'}</span>
+   <span><strong>{canCreateAccounts?'Preparação de contas activa.':'Modo de consulta.'}</strong> {canCreateAccounts?(canSubmitOpening?'Pode cadastrar contas e preparar saldos. A confirmação do saldo exige comprovativo real. Lançamentos e transferências continuam bloqueados.':'Pode cadastrar contas sem saldo. Abertura, validação, transferências e desembolsos permanecem bloqueados.'):'Cadastros e movimentos financeiros continuam bloqueados até autorização no servidor.'}</span>
   </div>}
   <div className="cis-cash-overview">
     <article className="cis-cash-metric featured"><span className="cis-cash-metric-icon"><Wallet size={19}/></span><div><small>Saldo disponível</small><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong><p>{active.length?'Contas activas com saldo confirmado':'Indisponível até validação dos saldos iniciais'}</p></div></article>
@@ -184,7 +185,7 @@ export default function CashDesk({token}:{token:string}){
       <div><small>Responsável pelo cadastro (ID)</small><strong>{detailAccount.created_by}</strong></div>
       <div><small>Validação</small><strong>{detailAccount.validated_at?readableDate(detailAccount.validated_at):'Não validada'}</strong></div>
     </div>
-    {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>A validação exige outro administrador, após conferência independente do saldo e respectivo comprovativo. Não substitui reconciliação bancária.</span></div>}
+    {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>{singleAdminOpening?'O administrador único pode confirmar a abertura após conferir o saldo real, data de corte e comprovativo. Não há verificação independente.':'A validação exige outro administrador e conferência independente do comprovativo.'} Não substitui reconciliação bancária.</span></div>}
     <div className="cis-cash-detail-actions">
      {canSubmitOpening&&detailAccount.can_prepare&&<button type="button" onClick={()=>{setSelected(String(detailAccount.id));setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});setAccountDetail(null);beginAction('opening');}}>Preparar saldo inicial <ArrowRight size={15}/></button>}
      {canValidateOpening&&detailAccount.can_validate&&<button type="button" disabled={busy} onClick={()=>{void submit(null,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
@@ -197,7 +198,7 @@ export default function CashDesk({token}:{token:string}){
     <label>Saldo documentado (MT)<input type="text" inputMode="decimal" required value={opening.opening_balance} onChange={e=>setOpening(p=>({...p,opening_balance:e.target.value}))} placeholder="0.00"/></label>
     <label>Data e hora de corte (Maputo)<input type="datetime-local" required max={todayCut()} value={opening.cut_at} onChange={e=>setOpening(p=>({...p,cut_at:e.target.value}))}/></label>
     <label className="cis-cash-wide">Referência do comprovativo / extracto<input required minLength={6} maxLength={255} value={opening.evidence_reference} onChange={e=>setOpening(p=>({...p,evidence_reference:e.target.value}))} placeholder="Extrato BCI de 16/11/2026 — referência ..."/></label>
-    <div className="cis-cash-form-note"><Info size={16}/> A proposta não movimenta dinheiro. Exige validação por outro administrador e comprovativo real do saldo à data de corte.</div>
+    <div className="cis-cash-form-note"><Info size={16}/> A proposta não movimenta dinheiro. Exige comprovativo real do saldo à data de corte e confirmação expressa antes da activação.</div>
     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(opening.opening_balance)}>{busy?'A submeter…':'Submeter para validação'} <ArrowRight size={16}/></button></div>
    </form>}
   </div>:<div className="cis-cash-panel">
