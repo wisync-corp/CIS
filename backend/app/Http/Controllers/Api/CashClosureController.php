@@ -24,7 +24,7 @@ final class CashClosureController extends Controller
         $u=$request->user();
         abort_unless($u && $u->active && $u->role==='administrador',403);
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503);
-        abort_unless(Schema::hasTable('cis_cash_daily_closures')
+        abort_unless(Schema::connection('mysql_cash_closures')->hasTable('cis_cash_daily_closures')
             && Schema::hasTable('cis_cash_accounts')
             && Schema::hasColumn('Extracto','account_id'),503,
             'Esquema de fechos ainda não instalado.');
@@ -117,7 +117,7 @@ final class CashClosureController extends Controller
             'account_id'=>['required','integer','min:1'],
         ]);
         $this->validDate($d['date']);
-        $db=DB::connection();
+        $db=$this->writer();
         $account=$db->table('cis_cash_accounts')->where('id',$d['account_id'])->first();
         abort_unless($account,404,'Conta inexistente.');
         $existing=$db->table('cis_cash_daily_closures')
