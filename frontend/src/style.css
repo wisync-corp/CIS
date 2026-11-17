@@ -741,3 +741,18 @@ html{font-size:16px}
 @media(max-width:1350px){.cis-collections-embedded .cis-collections-payment-grid{grid-template-columns:1fr}}
 @media(max-width:1000px){.cis-simulator-layout{grid-template-columns:1fr}.cis-collections-stats.cis-collections-stats-refined{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-collections-stats-refined article,.cis-collections-stats-refined article.cis-collections-stat-main,.cis-collections-stats-refined article.cis-collections-stat-secondary{grid-column:span 1}}
 @media(max-width:700px){.cis-simulator-hero{padding:22px;flex-direction:column}.cis-simulator-form,.cis-simulator-results{padding:18px}.cis-simulator-modes>div{grid-template-columns:1fr}.cis-simulator-modes button{min-height:72px;display:grid;grid-template-columns:auto 1fr;gap:7px;align-items:center}.cis-simulator-modes button>span{grid-row:span 2}.cis-simulator-fields{grid-template-columns:1fr}.cis-simulator-fields label.full{grid-column:1}.cis-collections-stats.cis-collections-stats-refined{grid-template-columns:1fr}.cis-collections-stats-refined article,.cis-collections-stats-refined article.cis-collections-stat-main,.cis-collections-stats-refined article.cis-collections-stat-secondary{grid-column:1/-1;min-height:100px}.cis-collections-mode-grid.cis-collections-mode-grid-refined{grid-template-columns:1fr}}
+
+/* Container-responsive: contract content is narrower than desktop viewport because of profile navigation. */
+.cis-collections-embedded{container-type:inline-size}
+@container (max-width:800px){
+ .cis-collections-stats.cis-collections-stats-refined{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .cis-collections-stats-refined article,.cis-collections-stats-refined article.cis-collections-stat-main,.cis-collections-stats-refined article.cis-collections-stat-secondary{grid-column:span 1}
+ .cis-collections-embedded .cis-collections-payment-grid{grid-template-columns:minmax(0,1fr)}
+}
+@container (max-width:510px){
+ .cis-collections-stats.cis-collections-stats-refined{grid-template-columns:1fr}
+ .cis-collections-stats-refined article,.cis-collections-stats-refined article.cis-collections-stat-main,.cis-collections-stats-refined article.cis-collections-stat-secondary{grid-column:1/-1}
+ .cis-collections-mode-grid.cis-collections-mode-grid-refined{grid-template-columns:1fr}
+ .cis-collections-embedded .cis-collections-panel{padding:15px}
+ .cis-collections-embedded .cis-collections-sectionhead{flex-direction:column}
+}
