@@ -1,22 +1,25 @@
 /* CIS: three selectable visual identities. Semantic tokens drive the same UI components. */
+/* CIS: três variações alinhadas à identidade visual v7 (roxo #170F2B · branco · lima #B5FA32).
+   Regras: lima puro só sobre fundo escuro (contraste 14,6:1); em fundo claro usam-se o roxo ou o
+   verde de texto #3B7311 (5,8:1). O verde intermédio #548C3E fica reservado ao símbolo. */
 :root,[data-theme="fintech"]{
- --cis-sidebar:#102A43;--cis-sidebar-hover:#20425A;--cis-sidebar-text:#EAF3F8;--cis-sidebar-muted:#B8CAD7;--cis-sidebar-indicator:#41C9C3;--cis-sidebar-line:#345369;
- --cis-primary:#087E8B;--cis-primary-hover:#066B77;--cis-tint:#E4F4F5;--cis-background:#F7F9FB;--cis-surface-subtle:#F5F9FA;
- --cis-text:#243746;--cis-heading:#213B4D;--cis-text-muted:#607987;--cis-border:#DFE7EB;--cis-input-border:#B6CFD6;
- --cis-hero-from:#102A43;--cis-hero-to:#176775;--cis-hero-soft:#D2EEF1;--cis-hero-accent:#94E3E1;--cis-success-bg:#E8F5EB;
+ --cis-sidebar:#170F2B;--cis-sidebar-hover:#2A2045;--cis-sidebar-text:#F4F2F9;--cis-sidebar-muted:#BDB6CF;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3052;
+ --cis-primary:#170F2B;--cis-primary-hover:#2E2250;--cis-tint:#F0EDF7;--cis-background:#F8F7FB;--cis-surface-subtle:#F6F4FA;
+ --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#6B6480;--cis-border:#E6E2EE;--cis-input-border:#C9C1DA;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EEF6E4;
  color-scheme:light;
 }
 [data-theme="banking"]{
- --cis-sidebar:#14263D;--cis-sidebar-hover:#263F60;--cis-sidebar-text:#EAF0FB;--cis-sidebar-muted:#B8C8E0;--cis-sidebar-indicator:#70A2FF;--cis-sidebar-line:#36516C;
- --cis-primary:#2563EB;--cis-primary-hover:#1D4ED8;--cis-tint:#EAF1FF;--cis-background:#F8FAFC;--cis-surface-subtle:#F7FAFE;
- --cis-text:#1E293B;--cis-heading:#14263D;--cis-text-muted:#64748B;--cis-border:#E2E8F0;--cis-input-border:#BFCEE4;
- --cis-hero-from:#14263D;--cis-hero-to:#285A9E;--cis-hero-soft:#E1EAFB;--cis-hero-accent:#A6C8FF;--cis-success-bg:#E8F5EB;
+ --cis-sidebar:#170F2B;--cis-sidebar-hover:#2A2045;--cis-sidebar-text:#F4F2F9;--cis-sidebar-muted:#BDB6CF;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3052;
+ --cis-primary:#3B7311;--cis-primary-hover:#2F5C0D;--cis-tint:#EEF6E4;--cis-background:#F8FAF5;--cis-surface-subtle:#F5F9F0;
+ --cis-text:#2A2438;--cis-heading:#170F2B;--cis-text-muted:#646B5E;--cis-border:#E3EADB;--cis-input-border:#C3D3B1;
+ --cis-hero-from:#170F2B;--cis-hero-to:#2D1F52;--cis-hero-soft:#DDD7EC;--cis-hero-accent:#B5FA32;--cis-success-bg:#EEF6E4;
 }
 [data-theme="premium"]{
- --cis-sidebar:#171E2B;--cis-sidebar-hover:#303B50;--cis-sidebar-text:#EFF3F9;--cis-sidebar-muted:#C0C8D6;--cis-sidebar-indicator:#8AB7FF;--cis-sidebar-line:#3C485A;
- --cis-primary:#3B82F6;--cis-primary-hover:#2563EB;--cis-tint:#EAF2FF;--cis-background:#F4F6F9;--cis-surface-subtle:#F8FAFD;
- --cis-text:#202938;--cis-heading:#171E2B;--cis-text-muted:#67768A;--cis-border:#E5E7EB;--cis-input-border:#BECDE0;
- --cis-hero-from:#171E2B;--cis-hero-to:#34425E;--cis-hero-soft:#DCE6F7;--cis-hero-accent:#A8C9FF;--cis-success-bg:#E8F5EB;
+ --cis-sidebar:#1E1E22;--cis-sidebar-hover:#2F2F36;--cis-sidebar-text:#F2F2F4;--cis-sidebar-muted:#B8B8C0;--cis-sidebar-indicator:#B5FA32;--cis-sidebar-line:#3A3A42;
+ --cis-primary:#170F2B;--cis-primary-hover:#2E2250;--cis-tint:#EFEFF3;--cis-background:#F5F5F7;--cis-surface-subtle:#F8F8FA;
+ --cis-text:#26262C;--cis-heading:#1E1E22;--cis-text-muted:#6B6B76;--cis-border:#E4E4E8;--cis-input-border:#C6C6CE;
+ --cis-hero-from:#1E1E22;--cis-hero-to:#3A3A44;--cis-hero-soft:#DCDCE2;--cis-hero-accent:#B5FA32;--cis-success-bg:#EEF6E4;
 }
 body{background:var(--cis-background);color:var(--cis-text)}
 button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}

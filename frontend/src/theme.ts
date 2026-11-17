@@ -1,7 +1,7 @@
 export const themeOptions = [
- {id:'banking',name:'Bancário',subtitle:'Azul-marinho · Azul corporativo',description:'Clássico, claro e institucional.',swatches:['#14263D','#2563EB','#F8FAFC']},
- {id:'fintech',name:'Fintech',subtitle:'Azul-petróleo · Turquesa',description:'Moderno, equilibrado e distinto.',swatches:['#102A43','#087E8B','#F7F9FB']},
- {id:'premium',name:'Premium',subtitle:'Grafite · Azul eléctrico',description:'Minimalista e orientado a dados.',swatches:['#171E2B','#3B82F6','#F4F6F9']},
+ {id:'fintech',name:'CIS Roxo',subtitle:'Roxo profundo · Lima',description:'A identidade principal da marca: roxo dominante e destaque lima.',swatches:['#170F2B','#B5FA32','#F8F7FB']},
+ {id:'banking',name:'CIS Verde',subtitle:'Roxo profundo · Verde',description:'Menu roxo com acções em verde da marca.',swatches:['#170F2B','#3B7311','#F8FAF5']},
+ {id:'premium',name:'CIS Grafite',subtitle:'Grafite · Lima',description:'Escala de cinzentos da marca, sóbria e orientada a dados.',swatches:['#1E1E22','#B5FA32','#F5F5F7']},
 ] as const;
 export type ThemeId=(typeof themeOptions)[number]['id'];
 const STORAGE_KEY='cis_ui_theme_v1';
