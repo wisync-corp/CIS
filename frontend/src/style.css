@@ -655,3 +655,26 @@ html{font-size:16px}
 @media(max-width:1200px){.cis-collections-payment-grid{grid-template-columns:1fr}.cis-collections-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:730px){.cis-collections-hero{flex-direction:column;padding:23px}.cis-collections-panel{padding:17px}.cis-collections-client{align-items:flex-start;flex-direction:column}.cis-collections-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-collections-mode-grid{grid-template-columns:1fr}.cis-collections-list-state{display:none}.cis-collections-payment-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:480px){.cis-collections-stats{grid-template-columns:1fr}.cis-collections-sectionhead{flex-direction:column}.cis-collections-hero h2{font-size:24px}.cis-collections-mode-grid{grid-template-columns:1fr}}
+
+/* Calculadora Parcelas.frm — componente de prévia com taxas explícitas */
+.cis-collections-parcelas{display:grid;gap:13px;border:1px solid var(--cis-input-border);border-radius:12px;background:var(--cis-surface,#fff);padding:17px;box-shadow:0 3px 16px #123b3210}
+.cis-collections-parcelas-heading{display:flex;align-items:center;gap:10px;color:var(--cis-primary)}
+.cis-collections-parcelas-heading>svg{flex:none}
+.cis-collections-parcelas-heading>div{display:grid;gap:4px}.cis-collections-parcelas-heading strong{font-size:13px}
+.cis-collections-parcelas-heading small{font-size:11px;color:var(--cis-text-muted)}
+.cis-collections-parcelas>p{font-size:12px;color:var(--cis-text-muted);line-height:1.55;margin:0}
+.cis-collections-parcelas>form{display:grid;gap:12px}
+.cis-collections-parcelas label{display:grid;gap:6px;font-size:12px;font-weight:800;color:var(--cis-heading)}
+.cis-collections-parcelas select,.cis-collections-parcelas input{width:100%;min-width:0;border:1px solid var(--cis-input-border);background:var(--cis-surface,#fff);border-radius:9px;padding:11px 12px;color:var(--cis-heading);font:inherit}
+.cis-collections-parcelas>form>small{font-size:11px;color:var(--cis-text-muted);line-height:1.5}
+.cis-collections-parcelas button{display:flex;justify-content:center;align-items:center;gap:8px;cursor:pointer;background:var(--cis-tint);color:var(--cis-primary);border:1px solid var(--cis-input-border);padding:11px 14px;border-radius:9px;font-size:12px;font-weight:800}
+.cis-collections-parcelas button:hover{border-color:var(--cis-primary)}
+.cis-collections-parcelas button:disabled{cursor:not-allowed;opacity:.5}
+.cis-collections-parcelas-result{display:grid;gap:11px;padding:15px;border:1px solid var(--cis-border);border-radius:10px;background:var(--cis-surface-subtle)}
+.cis-collections-parcelas-result>strong{font-size:12px;color:var(--cis-primary)}
+.cis-collections-parcelas-result dl{display:grid;gap:8px;margin:0}
+.cis-collections-parcelas-result dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12px}
+.cis-collections-parcelas-result dt{color:var(--cis-text-muted)}
+.cis-collections-parcelas-result dd{margin:0;text-align:right;font-weight:800;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.cis-collections-parcelas-result dl>.total{padding-top:10px;border-top:1px solid var(--cis-border);font-size:14px;color:var(--cis-heading)}
+.cis-collections-parcelas-result>p,.cis-collections-parcelas-result>small{margin:0;color:var(--cis-text-muted);font-size:11px;line-height:1.6}
