@@ -18,13 +18,16 @@ type Quote={
  parcela:number;dias_atraso:number;juros:number;multa:number;total:number;
  estado:string;data_pagamento:string;aviso:string
 };
-type Mode='total'|'parcial'|'renovar_juros'|'capitalizar'|'remanescente';
+type Mode='total'|'parcial'|'renovar_juros'|'capitalizar'|'remanescente'|'renovar_credito'|'actualizar_data'|'finalizar_contrato';
 const statuses:Record<Mode,{name:string;details:string;group:string}>={
  total:{name:'Pagamento integral',details:'Liquidação completa da prestação, com eventual multa por atraso.',group:'Com pagamento'},
  parcial:{name:'Pagamento parcial',details:'Registar montante inferior ao devido; juros antes da amortização.',group:'Com pagamento'},
  renovar_juros:{name:'Renovar juros',details:'Novo período de juros sobre o capital ainda devido, sem recebimento.',group:'Sem pagamento'},
  capitalizar:{name:'Capitalizar juros',details:'Incorporar juros no capital e apurar nova taxa pela tabela de faixas.',group:'Sem pagamento'},
- remanescente:{name:'Liquidar remanescente',details:'Liquidação final após parcial, sujeita a controlo dos atrasos.',group:'Regularização'}
+ remanescente:{name:'Liquidar remanescente',details:'Liquidação final após parcial, sujeita a controlo dos atrasos.',group:'Regularização'},
+ renovar_credito:{name:'Renovar crédito',details:'Nova operação de crédito após o termo da anterior; exige novo contrato e desembolso autorizado.',group:'Novo crédito'},
+ actualizar_data:{name:'Rever data de pagamento',details:'Verificar data efectiva, dias de atraso, estado e eventual recálculo de juros variáveis.',group:'Regularização'},
+ finalizar_contrato:{name:'Finalizar contrato',details:'Verificar se todas as prestações se encontram efectivamente liquidadas antes de encerrar.',group:'Encerramento'}
 };
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt=(value:unknown)=>value===null||value===undefined||String(value)===''||!Number.isFinite(Number(value))
@@ -44,7 +47,9 @@ const today=()=>{
 function modeIcon(mode:Mode){
  switch(mode){case'total':return <CheckCircle2 size={18}/>;case'parcial':return <Wallet size={18}/>;
  case'renovar_juros':return <RotateCcw size={18}/>;case'capitalizar':return <TrendingUp size={18}/>;
- case'remanescente':return <Coins size={18}/>;}
+ case'remanescente':return <Coins size={18}/>;
+ case'renovar_credito':return <FileText size={18}/>;case'actualizar_data':return <CalendarDays size={18}/>;
+ case'finalizar_contrato':return <ShieldCheck size={18}/>;}
 }
 export default function CollectionsDesk({token}:{token:string}){
  const [query,setQuery]=useState('');
@@ -60,6 +65,7 @@ export default function CollectionsDesk({token}:{token:string}){
  const [ord,setOrd]=useState('');
  const [penalty,setPenalty]=useState(false);
  const [paymentAmount,setPaymentAmount]=useState('');
+ const [reviewDate,setReviewDate]=useState(today());
  const [quote,setQuote]=useState<Quote|null>(null);
  const [quoting,setQuoting]=useState(false);
  const [accountId,setAccountId]=useState('');
@@ -138,7 +144,7 @@ export default function CollectionsDesk({token}:{token:string}){
 
  function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setPenalty(false);setQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){setMode(value);setQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseMode(value:Mode){setMode(value);setQuote(null);setPaymentAmount('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setOrd(value);setQuote(null);setPaymentAmount('');setMessage('');}
  async function simulate(e:FormEvent){
   e.preventDefault();if(!selected||!ord||!canQuote)return;
@@ -202,7 +208,7 @@ export default function CollectionsDesk({token}:{token:string}){
       <div className="cis-collections-panel">
        <div className="cis-collections-sectionhead"><div><h3>2. Tratamento do pagamento</h3><p>Escolha o cenário equivalente ao formulário Cobrança.</p></div></div>
        <div className="cis-collections-mode-grid">
-        {(['total','parcial','renovar_juros','capitalizar','remanescente'] as Mode[]).map(value=><button type="button" key={value} disabled={!ord} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
+        {(['total','parcial','renovar_juros','capitalizar','remanescente','renovar_credito','actualizar_data','finalizar_contrato'] as Mode[]).map(value=><button type="button" key={value} disabled={!ord} className={mode===value?'selected':''} onClick={()=>chooseMode(value)}>
          {modeIcon(value)}<span><strong>{statuses[value].name}</strong><small>{statuses[value].group}</small></span>{mode===value&&<CheckCircle2 size={16}/>}</button>)}
        </div>
        <p className="cis-collections-mode-hint">{statuses[mode].details}</p>
@@ -210,6 +216,7 @@ export default function CollectionsDesk({token}:{token:string}){
         <label>Data real de pagamento (Maputo)<input type="date" value={datePayment} readOnly/><small>Para simulação de liquidação integral, apenas a data de hoje é aceite.</small></label>
         <label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória para cobrança futura</span><select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select><small>{activeAccount?'Conta seleccionada (nenhuma gravação será feita).':'Contas sem saldo validado não podem receber cobranças.'}</small></label>
         {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
+        {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
        {mode==='total'&&<form onSubmit={e=>void simulate(e)}>
@@ -225,6 +232,9 @@ export default function CollectionsDesk({token}:{token:string}){
        {mode==='renovar_juros'&&<div className="cis-collections-planned"><Info size={17}/><span>Na rotina ActualizarFinanceiroCobranca, renovar juros preserva o capital e acrescenta mais um período de juros. Não é um pagamento nem deve criar entrada no Extracto.</span></div>}
        {mode==='capitalizar'&&<div className="cis-collections-planned"><Info size={17}/><span>Capitalização exige recalcular a taxa e o intervalo aplicável a partir das faixas da Table4/Definições. Nunca aplicar taxa presumida nem alterar capital sem validação.</span></div>}
        {mode==='remanescente'&&<div className="cis-collections-planned"><Info size={17}/><span>Liquidar o remanescente exige verificar prestações em atraso, montante realmente devido e evidência de recebimento. O botão VBA não é suficiente para autorizar a operação.</span></div>}
+       {mode==='renovar_credito'&&<div className="cis-collections-planned"><Info size={17}/><span>A renovação do empréstimo no VBA cria um NOVO contrato. Não é igual a renovar juros: exige nova avaliação, consentimento, conta de desembolso, identificação e aprovação independente.</span></div>}
+       {mode==='actualizar_data'&&<div className="cis-collections-planned"><CalendarDays size={17}/><span>Data seleccionada: {date(reviewDate)}. Vencimento da prestação: {date(selectedInstallment?.['Data de Cobrança'])}. O VBA permite rever datas passadas e recalcular juros variáveis; alterações retroactivas exigem trilho de auditoria e não são executadas aqui.</span></div>}
+       {mode==='finalizar_contrato'&&<div className="cis-collections-planned"><ShieldCheck size={17}/><span>{pending.length?'Existem '+pending.length+' prestação(ões) pendentes. Não é possível presumir liquidação integral ou encerrar o contrato.':'A lista não apresenta prestações pendentes. É necessário confirmar todos os pagamentos e o Extracto antes da finalização.'}</span></div>}
        {quote&&mode==='total'&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
         <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Multa</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>Total proposto</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{quote.estado}</dd></div></dl>
         <div className="cis-collections-planned"><LockKeyhole size={17}/><span>Esta prévia não significa cobrança concluída. O backend recusa pagamentos sem associação obrigatória a Extracto.account_id.</span></div></div>}
