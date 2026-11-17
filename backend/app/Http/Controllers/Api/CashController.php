@@ -266,6 +266,81 @@ final class CashController extends Controller
         ])->header('Cache-Control','no-store, private');
     }
 
+
+    /**
+     * Prévia do movimento, sem INSERT/UPDATE e sem reserva de saldo.
+     * Não é um compromisso de execução: confirmar futuramente exigirá
+     * nova verificação sob lock, idempotência persistida e autorização.
+     */
+    public function previewRecord(Request $request)
+    {
+        $this->access($request);
+        $d=$request->validate([
+            'account_id'=>['required','integer','min:1'],
+            'type'=>['required','in:entrada,saida'],
+            'amount'=>['required','string','regex:/^(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
+        ]);
+        $value=$this->cents($d['amount']);
+        abort_unless($value>0,422,'O montante deve ser superior a zero.');
+        $account=DB::table('cis_cash_accounts')->where('id',$d['account_id'])->first();
+        abort_unless($account && $account->status==='activa' && $account->currency==='MZN',409,
+            'Seleccione uma conta activa e em meticais.');
+        $before=$this->balance($account);
+        $after=$before+($d['type']==='entrada'?$value:-$value);
+        abort_unless($after>=0,409,'Saldo insuficiente na conta seleccionada.');
+        return response()->json([
+            'consulta_apenas'=>true,'movimento_registado'=>false,'saldo_reservado'=>false,
+            'type'=>$d['type'],'account_id'=>$account->id,
+            'account_code'=>$account->code,'amount'=>$this->decimal($value),
+            'saldo_actual'=>$this->decimal($before),
+            'saldo_estimado'=>$this->decimal($after),
+            'notice'=>'Prévia baseada nos movimentos actuais. Não executa entrada ou saída, não reserva saldo e não substitui comprovativo.',
+        ])->header('Cache-Control','no-store, private');
+    }
+
+    /**
+     * Prévia de transferência: a futura execução terá de produzir as duas
+     * linhas na MESMA transacção, com prevenção de duplicações.
+     */
+    public function previewTransfer(Request $request)
+    {
+        $this->access($request);
+        $d=$request->validate([
+            'source_account_id'=>['required','integer','min:1'],
+            'destination_account_id'=>['required','integer','min:1','different:source_account_id'],
+            'amount'=>['required','string','regex:/^(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
+        ]);
+        $value=$this->cents($d['amount']);
+        abort_unless($value>0,422,'O montante deve ser superior a zero.');
+        $accounts=DB::table('cis_cash_accounts')
+            ->whereIn('id',[$d['source_account_id'],$d['destination_account_id']])
+            ->get()->keyBy('id');
+        $source=$accounts->get($d['source_account_id']);
+        $destination=$accounts->get($d['destination_account_id']);
+        abort_unless($source && $destination
+            && $source->status==='activa' && $destination->status==='activa'
+            && $source->currency==='MZN' && $destination->currency==='MZN',409,
+            'Ambas as contas devem estar activas e em meticais.');
+        $sourceBefore=$this->balance($source);
+        $destinationBefore=$this->balance($destination);
+        abort_unless($sourceBefore >= $value,409,'Saldo insuficiente na conta de origem.');
+        return response()->json([
+            'consulta_apenas'=>true,'movimento_registado'=>false,'saldo_reservado'=>false,
+            'amount'=>$this->decimal($value),
+            'source'=>[
+                'account_id'=>$source->id,'code'=>$source->code,
+                'saldo_actual'=>$this->decimal($sourceBefore),
+                'saldo_estimado'=>$this->decimal($sourceBefore-$value),
+            ],
+            'destination'=>[
+                'account_id'=>$destination->id,'code'=>$destination->code,
+                'saldo_actual'=>$this->decimal($destinationBefore),
+                'saldo_estimado'=>$this->decimal($destinationBefore+$value),
+            ],
+            'notice'=>'Prévia sem transferência. São necessários comprovativos de origem e destino, idempotência e lançamento atómico para execução.',
+        ])->header('Cache-Control','no-store, private');
+    }
+
     // NÃO efectuar escrituras financeiras pelo antigo fluxo independente:
     // o modelo directo exige inserir a linha em Extracto com account_id
     // validado, sob lock de conta, na MESMA transacção da operação principal.
