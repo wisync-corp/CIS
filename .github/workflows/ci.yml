@@ -79,6 +79,8 @@ jobs:
       - run: php tests/cash_real_posting_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReportController.php
       - run: php tests/cash_report_smoke.php
+      - run: php -l app/Http/Controllers/Api/CashDailyController.php
+      - run: php tests/cash_daily_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReversalController.php
       - run: php tests/cash_reversal_smoke.php
       - run: php -l tests/cash_reversal_mysql_rehearsal.php
@@ -86,6 +88,7 @@ jobs:
       - run: bash -n ../deploy/activate-cash-reversals.sh
       - run: bash -n ../deploy/disable-cash-reversals.sh
       - run: bash -n ../deploy/verify-cash-reversals.sh
+      - run: bash -n ../deploy/audit-cash-real-movements.sh
       - run: php -l database/migrations/2026_11_17_000050_add_operation_key_to_extracto.php
       - run: php -l app/Http/Controllers/Api/CollectionScenarioPreviewController.php
       - run: php tests/collection_scenarios_smoke.php
