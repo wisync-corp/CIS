@@ -127,8 +127,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const selectedInstallment=rows.find(r=>String(r.Ordem)===ord);
  const pending=rows.filter(isPending);
  const currentTerm=text(profile?.contract['Prazo/Duração']);
- const periodText=[currentTerm,text(profile?.contract['Intervalo']),text(profile?.contract['Período da Tabela'])].join(' | ');
- const isFifteenDayTerm=/\b15\s*dias?\b/i.test(periodText)||/^2\s*semanas$/i.test(currentTerm)||/\b15\b/.test(text(profile?.contract['Período da Tabela']));
+ const isFifteenDayTerm=/^(?:15\s*dias?|2\s*semanas)$/i.test(currentTerm.trim());
  const contractStatus=text(profile?.contract['Estado do Contrato']);
  const contractClosed=/finalizado|liquidado|cancelado|anulado/i.test(contractStatus);
  const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed);
