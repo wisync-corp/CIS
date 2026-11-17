@@ -87,6 +87,7 @@ jobs:
       - run: bash -n ../deploy/verify-cash-daily-closure-writer.sh
       - run: bash -n ../deploy/activate-cash-daily-closures.sh
       - run: bash -n ../deploy/disable-cash-daily-closures.sh
+      - run: bash -n ../deploy/open-cash-account-window.sh
       - run: php -l app/Http/Controllers/Api/CashPostingController.php
       - run: php tests/cash_real_posting_smoke.php
       - run: php -l app/Http/Controllers/Api/CashReportController.php

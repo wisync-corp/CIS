@@ -418,3 +418,13 @@ bash deploy/verify-cash-daily-closures.sh
 ```
 
 O activador exige: flag existente e `false`, hash da migração igual ao ensaio, tabela InnoDB com UNIQUE conta/data, pelo menos uma conta activa com abertura validada, escritor restrito verificado e imagem da API com o controlador actual. Faz backup da base e do `.env`, liga apenas `CIS_CASH_DAILY_CLOSE_APPROVED`, confirma a flag no container e reverte automaticamente se o reinício falhar. Para desligar: `bash deploy/disable-cash-daily-closures.sh` (fechos já gravados permanecem).
+
+### Janela de abertura de saldo com movimentações activas
+
+Com `CIS_CASH_WRITES_APPROVED=true`, o servidor recusa propostas e validações de saldo inicial (o marcador `opening_extracto_nr` não pode ser capturado com movimentos em paralelo). Para abrir contas novas:
+
+```bash
+bash deploy/open-cash-account-window.sh   # confirmação ABRIR-JANELA-SALDO
+```
+
+O script faz backup da base e do `.env`, suspende apenas `CIS_CASH_WRITES_APPROVED`, espera que o administrador submeta e confirme a abertura na interface, e repõe a flag ao premir ENTER — ou automaticamente em erro, Ctrl+C ou fim de sessão SSH. Compara o Extracto antes/depois e lista o estado final das contas.
