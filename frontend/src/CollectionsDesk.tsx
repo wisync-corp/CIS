@@ -15,6 +15,14 @@ type ProfileResponse={
  contract_fields_divergent?:string[];columns_missing_in_database?:string[];
 };
 type ScenarioQuote={resultado:string;aviso:string;consulta_apenas:boolean;[key:string]:unknown};
+type ParcelasQuote={
+ consulta_apenas:boolean;modo:'multa'|'reparcelamento';prazo:string;periodo_referencia:number;
+ dias_propostos:number;base:string;valor_recebido:string|null;valor_a_pagar_original:string;
+ juros_originais:string;taxa_faixa:string;limite_inferior:string;limite_superior:string;
+ juros_ou_multa_calculados:string;total_calculado:string;calculo:string;arredondamento:string;
+ taxa_multa_contrato?:string|null;multa_pela_taxa_contratual?:string|null;metodos_divergentes?:boolean;
+ aviso:string;
+};
 type Quote={
  parcela:number;dias_atraso:number;juros:number;multa:number;total:number;
  estado:string;data_pagamento:string;aviso:string
@@ -72,6 +80,9 @@ export default function CollectionsDesk({token}:{token:string}){
  const [scenarioBusy,setScenarioBusy]=useState(false);
  const [scenarioQuote,setScenarioQuote]=useState<ScenarioQuote|null>(null);
  const [capitalPeriod,setCapitalPeriod]=useState('');
+ const [parcelaPrazo,setParcelaPrazo]=useState('');
+ const [parcelaBusy,setParcelaBusy]=useState(false);
+ const [parcelaQuote,setParcelaQuote]=useState<ParcelasQuote|null>(null);
  const [accountId,setAccountId]=useState('');
  const [channel,setChannel]=useState('');
  const [evidenceRef,setEvidenceRef]=useState('');
@@ -108,7 +119,7 @@ export default function CollectionsDesk({token}:{token:string}){
    const data=await r.json().catch(()=>({})) as ProfileResponse&{message?:string};
    if(!r.ok)throw new Error(data.message||'Não foi possível obter as prestações.');
    return data;
-  }).then(data=>{if(!ctrl.signal.aborted){setProfile(data);setOrd('');setQuote(null);setPaymentAmount('');}})
+  }).then(data=>{if(!ctrl.signal.aborted){setProfile(data);setOrd('');setQuote(null);setParcelaQuote(null);setParcelaPrazo('');setPaymentAmount('');}})
    .catch(e=>{if(!ctrl.signal.aborted){setProfile(null);setMessage(e instanceof Error?e.message:'Erro na ficha.');}})
    .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
   return()=>ctrl.abort();
@@ -148,10 +159,28 @@ export default function CollectionsDesk({token}:{token:string}){
  const canQuote=mode==='total'&&!!selectedInstallment&&isPending(selectedInstallment);
  const cannotExecute=true; // Cobranças reais sem Extracto.account_id são recusadas pelo backend.
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setProfile(null);setMode('total');setView('operacao');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);setParcelaQuote(null);setParcelaPrazo('');window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setOrd(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseMode(value:Mode){setMode(value);setQuote(null);setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setParcelaQuote(null);setParcelaPrazo('');setReviewDate(today());setMessage('');}
+ function chooseOrd(value:string){setOrd(value);setQuote(null);setScenarioQuote(null);setParcelaQuote(null);setPaymentAmount('');setMessage('');}
+ async function simulateParcelas(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!selected||!ord||!parcelaPrazo||parcelaBusy)return;
+  if(mode!=='parcial'&&!(mode==='total'&&penalty))return;
+  setParcelaQuote(null);setParcelaBusy(true);setMessage('');
+  try{
+   const payload={modo:mode==='parcial'?'reparcelamento':'multa',prazo:parcelaPrazo,
+    ...(mode==='parcial'?{valor_recebido:paymentAmount.trim()}: {})};
+   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(ord)+'/simular-parcelas',{
+    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+   });
+   const data=await response.json().catch(()=>({})) as ParcelasQuote&{message?:string;errors?:Record<string,string[]>};
+   if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular com as regras de Parcelas.');
+   setParcelaQuote(data);
+  }catch(err){setMessage(err instanceof Error?err.message:'Falha na simulação de parcelas.');}
+  finally{setParcelaBusy(false);}
+ }
  async function simulateScenario(e:FormEvent<HTMLFormElement>){
   e.preventDefault();if(!selected||scenarioBusy||mode==='total')return;
   const key=ord||String(rows[0]?.Ordem??'');
@@ -244,11 +273,47 @@ export default function CollectionsDesk({token}:{token:string}){
         <label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>
         <label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória para cobrança futura</span><select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select><small>{activeAccount?'Conta seleccionada (nenhuma gravação será feita).':'Contas sem saldo validado não podem receber cobranças.'}</small></label>
         <label>Referência do comprovativo / operação <small>Preparação, não será guardada</small><input type="text" maxLength={120} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>O comprovativo deverá ser validado antes do registo definitivo.</small></label>
-        {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
+        {mode==='total'&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);setParcelaQuote(null);setParcelaPrazo('');}}/> Cobrar multa por atraso quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
-        {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
+        {mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);setParcelaQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
+       {selectedInstallment&&(mode==='parcial'||mode==='total'&&penalty)&&
+        <div className="cis-collections-parcelas">
+         <div className="cis-collections-parcelas-heading"><Calculator size={18}/><div><strong>Calculadora de Parcelas</strong><small>Regras verificadas no ficheiro Parcelas.frm</small></div></div>
+         <p>{mode==='parcial'?'Recalcular uma prestação indicativa sobre o valor restante após pagamento parcial.':'Comparar o cálculo de multa por faixa do formulário original com a taxa de multa prevista no contrato.'}</p>
+         <form onSubmit={e=>void simulateParcelas(e)}>
+          <label>Prazo da calculadora <span className="cis-collections-required">Escolha explícita</span>
+           <select value={parcelaPrazo} onChange={e=>{setParcelaPrazo(e.target.value);setParcelaQuote(null);}}>
+            <option value="">Seleccionar prazo</option>
+            <option value="1 Semana">1 Semana</option>
+            <option value="2 Semanas">2 Semanas</option>
+            <option value="3 Semanas">3 Semanas</option>
+            <option value="Mês">Mês</option>
+           </select>
+          </label>
+          <small>No VBA, o prazo inicial é «2 Semanas» e fica oculto no modo multa. Aqui é explicitado para evitar aplicação silenciosa de taxas.</small>
+          <button type="submit" disabled={!parcelaPrazo||parcelaBusy||(mode==='parcial'&&!partialValid)}>
+           {parcelaBusy?'A calcular…':mode==='parcial'?'Simular nova parcela':'Comparar cálculo de multa'} <ArrowRight size={16}/>
+          </button>
+         </form>
+         {parcelaQuote&&<div className="cis-collections-parcelas-result" role="status">
+          <strong>Resultado indicativo · Sem gravação</strong>
+          <dl>
+           <div><dt>Base calculada</dt><dd>{fmt(parcelaQuote.base)}</dd></div>
+           <div><dt>Taxa da faixa</dt><dd>{parcelaQuote.taxa_faixa}%</dd></div>
+           <div><dt>Faixa de valor</dt><dd>{parcelaQuote.limite_inferior} – {parcelaQuote.limite_superior} MT</dd></div>
+           <div><dt>Período de referência</dt><dd>{parcelaQuote.periodo_referencia} dias</dd></div>
+           <div><dt>Prazo seleccionado</dt><dd>{parcelaQuote.dias_propostos} dias</dd></div>
+           <div><dt>{mode==='parcial'?'Juros adicionais':'Multa pela faixa'}</dt><dd>{fmt(parcelaQuote.juros_ou_multa_calculados)}</dd></div>
+           <div className="total"><dt>{mode==='parcial'?'Nova prestação indicativa':'Multa calculada pelo Parcelas.frm'}</dt><dd>{fmt(parcelaQuote.total_calculado)}</dd></div>
+           {mode==='total'&&<><div><dt>Taxa de multa contratual</dt><dd>{parcelaQuote.taxa_multa_contrato===null?'Não informada':parcelaQuote.taxa_multa_contrato+'%'}</dd></div><div><dt>Multa pela taxa contratual</dt><dd>{fmt(parcelaQuote.multa_pela_taxa_contratual)}</dd></div></>}
+          </dl>
+          {parcelaQuote.metodos_divergentes&&<div className="cis-collections-risk"><AlertCircle size={17}/> As taxas do formulário Parcelas e do contrato divergem. Não deve ser cobrada qualquer multa sem escolher e homologar a política.</div>}
+          <p>{parcelaQuote.aviso}</p>
+          <small>{parcelaQuote.arredondamento}</small>
+         </div>}
+        </div>}
        {mode==='total'&&<form onSubmit={e=>void simulate(e)}>
         <button type="submit" className="cis-collections-primary" disabled={!canQuote||quoting}>{quoting?'A calcular…':'Simular pagamento integral'} <Calculator size={16}/></button>
        </form>}
