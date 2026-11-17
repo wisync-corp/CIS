@@ -832,3 +832,57 @@ html{font-size:16px}
 .cis-cash-posting-page>.cis-cash-form{background:var(--cis-surface,#fff);padding:25px}
 .cis-cash-posting-page>.cis-cash-estimate{width:100%;margin:0}
 @media(max-width:670px){.cis-cash-posting-header{padding:18px}.cis-cash-posting-page>.cis-cash-form{padding:17px}}
+
+
+/* Caixa Geral — densidade visual ajustada a monitores grandes.
+   Expande apenas o módulo Caixa, preservando as outras páginas. */
+@media(min-width:1150px){
+  .cis-main:has(> .cis-cash){max-width:none;width:100%;margin:0;padding:24px clamp(20px,2.2vw,42px) 38px}
+}
+.cis-cash{width:100%;font-size:14px;gap:20px}
+.cis-cash-intro{min-height:178px;padding:30px 34px}
+.cis-cash-intro h2{font-size:clamp(30px,2.5vw,39px)}
+.cis-cash-intro p{font-size:14px}
+.cis-cash-intro>button{font-size:13px;min-height:44px}
+.cis-cash-overview{gap:16px}
+.cis-cash-metric{min-height:136px;padding:23px 24px;gap:17px}
+.cis-cash-metric-icon{width:45px;height:45px}
+.cis-cash-metric small{font-size:12px}
+.cis-cash-metric strong{font-size:clamp(24px,2.25vw,34px)}
+.cis-cash-metric p{font-size:12px}
+.cis-cash-process{padding:15px 18px;min-height:54px;gap:17px}
+.cis-cash-process>div{font-size:12px;gap:10px}
+.cis-cash-process>div>span{width:28px;height:28px}
+.cis-cash-sectionbar{min-height:52px}
+.cis-cash-tabs button{font-size:13px}
+.cis-cash-panel{padding:28px;gap:22px}
+.cis-cash-panel-head h3{font-size:21px}
+.cis-cash-panel-head p{font-size:13px}
+.cis-cash-panel-head button{min-height:43px;font-size:13px}
+.cis-cash-filters{gap:12px}
+.cis-cash-search,.cis-cash-select-filter{min-height:44px}
+.cis-cash-search input,.cis-cash-select-filter select{font-size:13px}
+.cis-cash-table{min-width:810px}
+.cis-cash-table th{font-size:12px;padding:16px}
+.cis-cash-table td{padding:19px 16px;font-size:13px}
+.cis-cash-table td>strong,.cis-cash-movement-kind strong{font-size:13px}
+.cis-cash-table-sub,.cis-cash-movement-kind small{font-size:12px}
+.cis-cash-movement-icon{width:38px;height:38px}
+.cis-cash-verified{font-size:11px;padding:8px 11px}
+.cis-cash-table-foot{font-size:12px;gap:15px}
+.cis-cash-footnote{font-size:12px;line-height:1.65}
+.cis-cash-posting-page{max-width:1100px}
+@media(max-width:1149px){
+  .cis-cash{gap:17px}
+  .cis-cash-metric{min-height:116px}
+}
+@media(max-width:750px){
+  .cis-cash-intro{min-height:auto;padding:21px}
+  .cis-cash-intro h2{font-size:29px}
+  .cis-cash-overview{gap:11px}
+  .cis-cash-metric{min-height:110px;padding:17px}
+  .cis-cash-panel{padding:17px}
+  .cis-cash-panel-head h3{font-size:18px}
+  .cis-cash-table td{padding:14px}
+  .cis-cash-posting-page{max-width:100%}
+}
