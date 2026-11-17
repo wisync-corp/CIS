@@ -107,17 +107,34 @@ final class CashController extends Controller
         $d = $request->validate(['account_id'=>['nullable','integer','min:1']]);
         $query=DB::table('Extracto')->whereNotNull('account_id')->orderByDesc('Nr');
         if (isset($d['account_id'])) $query->where('account_id',$d['account_id']);
-        $rows=$query->limit(200)->get([
+        $columns=[
             'Nr as id','Nr as extracto_nr','account_id',
             'Tipo de Movimento as legacy_type','Valor as amount',
             'Descrição as description','Data da Operação as effective_at',
             'Contracto as contract_number','Parcela as installment',
             'usuario as operator'
-        ])->map(function ($movement) {
-            $movement->type=$movement->legacy_type==='Entradas'?'entrada':'saida';
-            $movement->category=$movement->description;
+        ];
+        if (Schema::hasColumn('Extracto','operation_key')) {
+            $columns[]='operation_key';
+        }
+        $rows=$query->limit(200)->get($columns)->map(function ($movement) {
+            $isTransfer=isset($movement->operation_key)
+                && preg_match('/^\\[TRANSFER (SAIDA|ENTRADA) /',$movement->description)===1;
+            $movement->type=$isTransfer
+                ?($movement->legacy_type==='Entradas'?'transferencia_entrada':'transferencia_saida')
+                :($movement->legacy_type==='Entradas'?'entrada':'saida');
+            $movement->category=$isTransfer?'Transferência interna':'Operação geral';
+            if (!$isTransfer && preg_match('/^\\[CAIXA:([^]]+)\\]/u',
+                $movement->description,$match)) {
+                $movement->category=$match[1];
+            }
             $movement->reference='EXT-'.(string)$movement->extracto_nr;
-            $movement->evidence_reference=null; // o Extracto não tem este campo.
+            $movement->evidence_reference=null;
+            if (isset($movement->operation_key)
+                && preg_match('/ \\| REF:(.{6,70})$/u',
+                    $movement->description,$match)) {
+                $movement->evidence_reference=$match[1];
+            }
             return $movement;
         });
         return response()->json([
