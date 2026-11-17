@@ -24,13 +24,13 @@ if [[ "$grants" == *'ALL PRIVILEGES'* ]] || echo "$grants" | grep -Eq 'GRANT (UP
 fi
 # Validar através de information_schema: grants de UPDATE no Extracto devem
 # continuar zero, inclusive privilégios a colunas.
-[[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE=\"'cis_cash_ledger'@'%'\" AND TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND PRIVILEGE_TYPE IN ('UPDATE','DELETE','ALTER','DROP');")" == 0 ]] || {
+[[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE=CONCAT(CHAR(39),'cis_cash_ledger',CHAR(39),'@',CHAR(39),'%',CHAR(39)) AND TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND PRIVILEGE_TYPE IN ('UPDATE','DELETE','ALTER','DROP');")" == 0 ]] || {
  echo 'BLOQUEADO: privilégios de alteração/remoção detectados em Extracto.' >&2; exit 1
 }
-[[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE=\"'cis_cash_ledger'@'%'\" AND TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND PRIVILEGE_TYPE='UPDATE';")" == 0 ]] || {
+[[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE=CONCAT(CHAR(39),'cis_cash_ledger',CHAR(39),'@',CHAR(39),'%',CHAR(39)) AND TABLE_SCHEMA='cis' AND TABLE_NAME='Extracto' AND PRIVILEGE_TYPE='UPDATE';")" == 0 ]] || {
  echo 'BLOQUEADO: UPDATE por coluna em Extracto.' >&2; exit 1
 }
-[[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE=\"'cis_cash_ledger'@'%'\" AND TABLE_SCHEMA='cis' AND TABLE_NAME='cis_cash_accounts' AND PRIVILEGE_TYPE='UPDATE' AND COLUMN_NAME<>'updated_at';")" == 0 ]] || {
+[[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE=CONCAT(CHAR(39),'cis_cash_ledger',CHAR(39),'@',CHAR(39),'%',CHAR(39)) AND TABLE_SCHEMA='cis' AND TABLE_NAME='cis_cash_accounts' AND PRIVILEGE_TYPE='UPDATE' AND COLUMN_NAME<>'updated_at';")" == 0 ]] || {
  echo 'BLOQUEADO: escritor permite alteração de campos de saldo/estado de conta.' >&2; exit 1
 }
 echo 'Permissões de escrituração restritas; sem UPDATE/DELETE do Extracto.'
