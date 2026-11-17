@@ -12,6 +12,7 @@ type CashMovement={id:number;account_id:number;type:string;amount:string;referen
  category:string;description:string;effective_at:string;evidence_reference:string|null;operation_key?:string|null;operator?:string|null};
 type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
+type CashReport={from:string;to:string;account_id:number|null;accounts_count:number;movements_count:number;entries:string;exits:string;net_external:string;internal_in:string;internal_out:string;internal_net:string;categories:Record<string,string>;notice:string};
 const fmt=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const formatMoney=(v:string|number|null)=>v===null||!Number.isFinite(Number(v))?'—':fmt.format(Number(v))+' MT';
 const typeName:Record<CashAccount['type'],string>={banco:'Banco',numerario:'Numerário',carteira_movel:'Carteira móvel'};
@@ -32,7 +33,13 @@ export default function CashDesk({token}:{token:string}){
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
  const [notice,setNotice]=useState('');
- const [section,setSection]=useState<'contas'|'movimentos'>('contas');
+ const [section,setSection]=useState<'contas'|'movimentos'|'relatorio'>('contas');
+ const [report,setReport]=useState<CashReport|null>(null);
+ const [reportBusy,setReportBusy]=useState(false);
+ const [reportError,setReportError]=useState('');
+ const [reportAccount,setReportAccount]=useState('');
+ const [reportEnd,setReportEnd]=useState(todayCut().slice(0,10));
+ const [reportStart,setReportStart]=useState(todayCut().slice(0,7)+'-01');
  const [accountQuery,setAccountQuery]=useState('');
  const [accountStatus,setAccountStatus]=useState<'todas'|CashAccount['status']>('todas');
  const [movementQuery,setMovementQuery]=useState('');
@@ -68,6 +75,16 @@ export default function CashDesk({token}:{token:string}){
   finally{setLoading(false);}
  },[request]);
  useEffect(()=>{void reload();},[reload]);
+ const loadReport=useCallback(async()=>{
+  setReportBusy(true);setReportError('');setReport(null);
+  try{
+   const params=new URLSearchParams({from:reportStart,to:reportEnd});
+   if(reportAccount)params.set('account_id',reportAccount);
+   const data=await request<CashReport>('relatorio?'+params.toString());
+   setReport(data);
+  }catch(e){setReportError(e instanceof Error?e.message:'Não foi possível consultar o relatório.');}
+  finally{setReportBusy(false);}
+ },[request,reportStart,reportEnd,reportAccount]);
  const active=useMemo(()=>accounts.filter(a=>a.status==='activa'),[accounts]);
  const selectedAccount=accounts.find(a=>String(a.id)===selected);
  const detailAccount=accounts.find(a=>a.id===accountDetail);
@@ -215,8 +232,9 @@ export default function CashDesk({token}:{token:string}){
    <nav className="cis-cash-tabs" aria-label="Áreas do módulo Caixa">
     <button type="button" className={section==='contas'?'active':''} aria-current={section==='contas'?'page':undefined} onClick={()=>{setSection('contas');resetAction();}}><Landmark size={17}/> Contas e saldos</button>
     <button type="button" className={section==='movimentos'?'active':''} aria-current={section==='movimentos'?'page':undefined} onClick={()=>{setSection('movimentos');resetAction();}}><ArrowLeftRight size={17}/> Movimentos</button>
+     <button type="button" className={section==='relatorio'?'active':''} aria-current={section==='relatorio'?'page':undefined} onClick={()=>{setSection('relatorio');resetAction();}}><BookOpen size={17}/> Fluxo de caixa</button>
    </nav>
-   <span className="cis-cash-section-context">{section==='contas'?'Gestão de contas':'Últimos 200 movimentos'} <ChevronRight size={14}/></span>
+   <span className="cis-cash-section-context">{section==='contas'?'Gestão de contas':section==='movimentos'?'Últimos 200 movimentos':'Relatório por período'} <ChevronRight size={14}/></span>
   </div>
   {section==='contas'?<div className="cis-cash-panel">
    <div className="cis-cash-panel-head"><div><h3>Contas financeiras</h3><p>Consulte as disponibilidades e prepare novas contas com saldo documentado.</p></div>
@@ -277,7 +295,7 @@ export default function CashDesk({token}:{token:string}){
     <div className="cis-cash-form-note"><Info size={16}/> A proposta não movimenta dinheiro. Exige comprovativo real do saldo à data de corte e confirmação expressa antes da activação.</div>
     <div className="cis-cash-form-actions"><button type="button" onClick={resetAction}>Cancelar</button><button type="submit" disabled={busy||!/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(opening.opening_balance)}>{busy?'A submeter…':'Submeter para validação'} <ArrowRight size={16}/></button></div>
    </form>}
-  </div>:<div className="cis-cash-panel">
+  </div>:section==='movimentos'?<div className="cis-cash-panel">
    <div className="cis-cash-panel-head"><div><h3>Livro de movimentos</h3><p>Entradas, saídas e transferências confirmadas; não inclui movimentos do Extracto antigo.</p></div>
    <div className="cis-cash-toolbar">
     <button type="button" onClick={()=>beginAction('record')}><Plus size={16}/> Simular entrada/saída</button>
@@ -328,6 +346,26 @@ export default function CashDesk({token}:{token:string}){
     </div>
    </div>}
     <div className="cis-cash-table-foot"><span>Consulta limitada aos últimos 200 movimentos confirmados da Caixa.</span><span>Movimentos não reconciliados com bancos.</span></div>
+  </div>:<div className="cis-cash-panel cis-cash-report">
+   <div className="cis-cash-panel-head"><div><h3>Fluxo de caixa realizado</h3><p>Entradas e saídas efectivas do Extracto, separadas das transferências internas.</p></div></div>
+   <form className="cis-cash-report-filters" onSubmit={e=>{e.preventDefault();void loadReport();}}>
+    <label>De<input type="date" value={reportStart} max={reportEnd} onChange={e=>{setReportStart(e.target.value);setReport(null);}} required/></label>
+    <label>Até<input type="date" value={reportEnd} min={reportStart} max={todayCut().slice(0,10)} onChange={e=>{setReportEnd(e.target.value);setReport(null);}} required/></label>
+    <label>Conta<select value={reportAccount} onChange={e=>{setReportAccount(e.target.value);setReport(null);}}><option value="">Todas as contas</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
+    <button type="submit" disabled={reportBusy||!reportStart||!reportEnd}>{reportBusy?'A consultar…':'Gerar relatório'} <ArrowRight size={16}/></button>
+   </form>
+   {reportError&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{reportError}</div>}
+   {reportBusy&&<div className="cis-cash-loading" role="status"><RefreshCw size={17}/> A consultar o Extracto…</div>}
+   {report&&<><div className="cis-cash-report-grid">
+    <article><small>Entradas externas</small><strong>{formatMoney(report.entries)}</strong></article>
+    <article><small>Saídas externas</small><strong>{formatMoney(report.exits)}</strong></article>
+    <article><small>Resultado líquido externo</small><strong>{formatMoney(report.net_external)}</strong></article>
+    <article><small>Transferências internas</small><strong>{formatMoney(report.internal_out)} / {formatMoney(report.internal_in)}</strong><small>Saídas / entradas internas</small></article>
+   </div>
+   <div className="cis-cash-report-details"><strong>{report.movements_count} movimento(s) no período</strong><span>{report.from} a {report.to} · {report.accounts_count} conta(s)</span></div>
+   {Object.keys(report.categories).length>0&&<div className="cis-cash-report-categories"><h4>Resultado por categoria</h4>{Object.entries(report.categories).map(([cat,value])=><div key={cat}><span>{cat}</span><strong>{formatMoney(value)}</strong></div>)}</div>}
+   <div className="cis-cash-form-note"><Info size={17}/>{report.notice}</div></>}
+   {!report&&!reportBusy&&!reportError&&<div className="cis-cash-empty"><BookOpen size={24}/><strong>Seleccione o período e consulte o fluxo de caixa</strong><p>Os valores são calculados no servidor com base no Extracto.</p></div>}
   </div>}
 
    </>}
