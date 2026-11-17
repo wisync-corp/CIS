@@ -32,4 +32,9 @@ foreach(["mysql_cash_opening_submit","mysql_cash_opening_validate"] as $name) {
 if(filter_var(env("CIS_CASH_WRITES_APPROVED",false),FILTER_VALIDATE_BOOLEAN))exit(3);
 echo "OK: ligacoes de abertura e validacao respondem, sem lancamentos financeiros.\n";
 '
-echo 'ABERTURA DE SALDOS: VALIDADA (apenas workflow; nao comprova extractos externos).'
+if grep -qx 'CIS_CASH_SINGLE_ADMIN_APPROVED=true' deploy/.env; then
+ echo 'ABERTURA CONFIGURADA: ADMINISTRADOR UNICO. SEM APROVACAO INDEPENDENTE.'
+else
+ echo 'ABERTURA DE SALDOS: VALIDADA (workflow com dois responsaveis).'
+fi
+echo 'Nao comprova extractos externos nem activa movimentos financeiros.'
