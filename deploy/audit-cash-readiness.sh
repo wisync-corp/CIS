@@ -25,15 +25,23 @@ echo 'Esquema: APROVADO (uma tabela de contas + Extracto.account_id)'
 echo "Contas por estado (apenas contagens):"
 sql 'SELECT status,COUNT(*) FROM cis_cash_accounts GROUP BY status ORDER BY status;'
 echo "Contas activas sem marcador de abertura:"
-sql "SELECT COUNT(*) FROM cis_cash_accounts WHERE status='activa' AND (opening_balance IS NULL OR cut_at IS NULL OR opening_extracto_nr IS NULL OR validated_by IS NULL OR validated_at IS NULL);"
+invalid="$(sql "SELECT COUNT(*) FROM cis_cash_accounts WHERE status='activa' AND (opening_balance IS NULL OR cut_at IS NULL OR opening_extracto_nr IS NULL OR validated_by IS NULL OR validated_at IS NULL);")"
+echo "$invalid"
 echo "Contas activas com aprovador igual ao cadastrador:"
-sql "SELECT COUNT(*) FROM cis_cash_accounts WHERE status='activa' AND created_by=validated_by;"
+same_user="$(sql "SELECT COUNT(*) FROM cis_cash_accounts WHERE status='activa' AND created_by=validated_by;")"
+echo "$same_user"
 echo "Movimentos Extracto historicos nao associados:"
 sql "SELECT COUNT(*) FROM Extracto WHERE account_id IS NULL;"
 echo "Movimentos Extracto associados:"
 sql "SELECT COUNT(*) FROM Extracto WHERE account_id IS NOT NULL;"
 echo "Movimentos com account_id sem conta correspondente:"
-sql 'SELECT COUNT(*) FROM Extracto e LEFT JOIN cis_cash_accounts a ON e.account_id=a.id WHERE e.account_id IS NOT NULL AND a.id IS NULL;'
+orphan="$(sql 'SELECT COUNT(*) FROM Extracto e LEFT JOIN cis_cash_accounts a ON e.account_id=a.id WHERE e.account_id IS NOT NULL AND a.id IS NULL;')"
+echo "$orphan"
+if [[ "$invalid" != 0 || "$same_user" != 0 || "$orphan" != 0 ]]; then
+ echo 'DIAGNOSTICO REPROVADO: existem inconsistencias financeiras; NAO activar movimentos.' >&2
+ exit 1
+fi
+echo 'INTEGRIDADE E SEGREGACAO BASICA: APROVADAS.'
 echo 'Flags do modulo (nao exibem palavras-passe):'
 for k in CIS_CASH_ACCOUNT_SETUP_APPROVED CIS_CASH_OPENING_SETUP_APPROVED CIS_CASH_OPENING_VALIDATE_APPROVED CIS_CASH_WRITES_APPROVED CIS_COLLECTION_WRITES_APPROVED; do flag "$k"; done
 echo 'AVISO: este diagnostico nao prova saldo bancario ou reconciliação externa.'
