@@ -118,12 +118,11 @@ final class ContractCollectionController extends Controller
     }
 
     /** Data efectiva do recebimento: hoje (todos) ou passada (só administrador), nunca futura. */
-    private function paymentDate(object $row,string $date): void
+    private function paymentDate(object $row,string $date,?object $u): void
     {
         $today=now('Africa/Maputo')->toDateString();
         abort_if($date>$today,422,'A data de pagamento não pode ser futura.');
         // Só o administrador pode registar um recebimento com data diferente de hoje.
-        $u=request()->user();
         abort_if($date!==$today && !($u && $u->role==='administrador'),403,
             'Apenas o administrador pode alterar a data de pagamento; os restantes utilizadores registam com a data de hoje.');
         // Pagamento antecipado (antes do início, p. ex. após renovação) é permitido.
@@ -174,7 +173,7 @@ final class ContractCollectionController extends Controller
         $row=$db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$ordem)->first();
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
-        $this->paymentDate($row,$data['data_pagamento']);
+        $this->paymentDate($row,$data['data_pagamento'],$request->user());
         $q=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
@@ -222,7 +221,7 @@ final class ContractCollectionController extends Controller
             abort_unless($rows->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
             $row=$rows[0];
             $this->eligibility($db,$row);
-            $this->paymentDate($row,$data['data_pagamento']);
+            $this->paymentDate($row,$data['data_pagamento'],$user);
             $this->cashDateOpen($account,$data['data_pagamento']);
             $calc=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
             $c=$calc['_cents'];
@@ -376,7 +375,7 @@ final class ContractCollectionController extends Controller
         $row=$db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$ordem)->first();
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
-        $this->paymentDate($row,$data['data_pagamento']);
+        $this->paymentDate($row,$data['data_pagamento'],$request->user());
         $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
@@ -423,7 +422,7 @@ final class ContractCollectionController extends Controller
             $row=$all->firstWhere('Ordem',$ordem);
             abort_unless($row && $all->where('Ordem',$ordem)->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
             $this->eligibility($db,$row);
-            $this->paymentDate($row,$data['data_pagamento']);
+            $this->paymentDate($row,$data['data_pagamento'],$user);
             $this->cashDateOpen($account,$data['data_pagamento']);
             $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
             $c=$plan['_cents'];$np=$plan['nova_prestacao'];
