@@ -296,6 +296,7 @@ if (!$main->getSchemaBuilder()->hasTable('cis_cash_daily_closures')) {
     $main->statement('CREATE TABLE cis_cash_daily_closures(id BIGINT AUTO_INCREMENT PRIMARY KEY,account_id BIGINT UNSIGNED,closing_date DATE)');
 }
 $main->table('cis_cash_daily_closures')->insert(['account_id'=>$banco,'closing_date'=>now($tz)->subDays(1)->toDateString()]);
+echo '    debug: fechos='.json_encode($main->table('cis_cash_daily_closures')->get()).' banco='.$banco.' data='.$bp([])['data_pagamento'].' max='.var_export($main->table('cis_cash_daily_closures')->where('account_id',$banco)->where('closing_date','>=',$bp([])['data_pagamento'])->max('closing_date'),true).' db='.$main->getDatabaseName().'/'.DB::connection('mysql_contract_writer')->getDatabaseName()."\n";
 try { $col->collect(req('/x',$bp(['conta_id'=>$banco]),$user),'C-0120',$bd); $why='aceite'; }
 catch (\Throwable $e) { $why=get_class($e).': '.$e->getMessage(); }
 ok(str_contains($why,'fecho diário'),'dia com fecho de Caixa recusado ('.$why.')');
