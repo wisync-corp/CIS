@@ -65,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('contractos',[ContractListController::class,'index'])->middleware('throttle:30,1');
         Route::get('contractos/estados',[ContractListController::class,'states'])->middleware('throttle:30,1');
         Route::get('contractos/resumo',[ContractListController::class,'summary'])->middleware('throttle:30,1');
+        Route::get('visao-geral',\App\Http\Controllers\Api\OverviewController::class)->middleware('throttle:30,1');
         Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');
         Route::get('contractos/saldo',[ContractOpeningReviewController::class,'cashBalance'])->middleware('throttle:10,1');
         Route::get('contractos/estado-operacional',ContractOperationalStatusController::class)->middleware('throttle:10,1');
