@@ -223,6 +223,18 @@ $db->table('Contractos')->where('Ordem',$dupe)->update(['Data de Cobrança'=>now
 $ov=data((new \App\Http\Controllers\Api\OverviewController())());
 ok($ov['carteira']['prestacoes_vencidas']===1 && $ov['carteira']['valor_vencido']==='1150.50' && $ov['carteira']['contratos_em_atraso']===1,'prestação com vencimento passado conta como vencida (1150,50)');
 
+echo "== Lista de contratos: capital, prestação a pagar e situação\n";
+$list=new \App\Http\Controllers\Api\ContractListController();
+$sum=data($list->summary());
+$bySit=collect($sum['por_situacao'])->pluck('total','situacao');
+ok($bySit['Finalizado']===2 && $bySit['Pagamento Atrasado']===1 && $bySit['Pendente']===2,'separadores: 2 finalizados, 1 atrasado, 2 pendentes');
+$late=collect($list->index(Request::create('/x','GET',['situacao'=>'Pagamento Atrasado']))->items());
+ok($late->count()===1 && $late[0]->numero==='C-0102','filtro «Pagamento atrasado» devolve só C-0102');
+ok((string)$late[0]->prestacao_a_pagar==='1150.50' && $late[0]->proximo_vencimento===now($tz)->subDays(3)->toDateString()
+    && (string)$late[0]->capital==='1000.00','C-0102: capital 1000,00, prestação 1150,50 e vencimento correcto');
+$fin=collect($list->index(Request::create('/x','GET',['situacao'=>'Finalizado']))->items());
+ok($fin->count()===2 && $fin->every(fn($r)=>$r->prestacao_a_pagar===null),'finalizados sem prestação a pagar');
+
 echo "== Leitura do histórico pela API\n";
 $hh=data($col->history(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(fn()=>$user)),'C-0100'));
 ok($hh['instalado']===true && count($hh['data'])===1 && $hh['data'][0]['antes']['Estado']==='Pendente','endpoint devolve antes/depois');
