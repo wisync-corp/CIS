@@ -117,14 +117,12 @@ final class ContractCollectionController extends Controller
         ];
     }
 
-    /** Data efectiva do recebimento: hoje ou passada, nunca antes do início da prestação. */
+    /** Data efectiva do recebimento: hoje ou passada, nunca futura. */
     private function paymentDate(object $row,string $date): void
     {
         $today=now('Africa/Maputo')->toDateString();
         abort_if($date>$today,422,'A data de pagamento não pode ser futura.');
-        $start=self::date($row->{'Data de Inicio'},'Data de início')->toDateString();
-        abort_if($date<$start,422,'A data de pagamento não pode ser anterior ao início da prestação ('
-            .CarbonImmutable::parse($start)->format('d/m/Y').').');
+        // Pagamento antecipado (antes do início, p. ex. após renovação) é permitido.
     }
 
     /** A data tem de estar dentro do período aberto da conta: após a abertura e sem fecho diário nesse dia ou depois. */
