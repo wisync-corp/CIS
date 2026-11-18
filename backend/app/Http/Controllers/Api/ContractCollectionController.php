@@ -117,11 +117,15 @@ final class ContractCollectionController extends Controller
         ];
     }
 
-    /** Data efectiva do recebimento: hoje ou passada, nunca futura. */
+    /** Data efectiva do recebimento: hoje (todos) ou passada (só administrador), nunca futura. */
     private function paymentDate(object $row,string $date): void
     {
         $today=now('Africa/Maputo')->toDateString();
         abort_if($date>$today,422,'A data de pagamento não pode ser futura.');
+        // Só o administrador pode registar um recebimento com data diferente de hoje.
+        $u=request()->user();
+        abort_if($date!==$today && !($u && $u->role==='administrador'),403,
+            'Apenas o administrador pode alterar a data de pagamento; os restantes utilizadores registam com a data de hoje.');
         // Pagamento antecipado (antes do início, p. ex. após renovação) é permitido.
     }
 

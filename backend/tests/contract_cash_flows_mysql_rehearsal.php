@@ -286,17 +286,18 @@ ok($err(fn()=>$col->previewRenewal($rq(['data_inicio'=>$today]),'C-0111',$two))=
 
 echo "== Data de pagamento escolhida (hoje ou passada)\n";
 $bd=$row(['Nr do Contracto'=>'C-0120','Nº'=>120]);
-$bp=fn($o)=>['data_pagamento'=>now($tz)->subDays(2)->toDateString(),'cobrar_multa'=>false,'valor_recebido'=>'1150.50',
-    'conta_id'=>$numerario,'referencia'=>'RECIBO-120','idempotency_key'=>'b2b2b2b2-0120-4000-8000-000000000001','confirmacao_recebimento'=>true]+$o;
+$bp=fn($o)=>$o+['data_pagamento'=>now($tz)->subDays(2)->toDateString(),'cobrar_multa'=>false,'valor_recebido'=>'1150.50',
+    'conta_id'=>$numerario,'referencia'=>'RECIBO-120','idempotency_key'=>'b2b2b2b2-0120-4000-8000-000000000001','confirmacao_recebimento'=>true];
 ok($err(fn()=>$col->preview(req('/x',['data_pagamento'=>now($tz)->addDay()->toDateString(),'cobrar_multa'=>false],$user),'C-0120',$bd))===422,'data futura recusada');
 ok($err(fn()=>$col->collect(req('/x',$bp([]),$user),'C-0120',$bd))===422,'data anterior à abertura da conta recusada');
+$gestor=clone $user;$gestor->role='gestor';
+ok($err(fn()=>$col->collect(req('/x',$bp([]),$gestor),'C-0120',$bd))===403,'gestor não pode alterar a data de pagamento');
 $db->table('cis_cash_accounts')->whereIn('id',[$numerario,$banco])->update(['cut_at'=>now($tz)->subDays(15)]);
 $main=\Illuminate\Support\Facades\DB::connection();
 if (!$main->getSchemaBuilder()->hasTable('cis_cash_daily_closures')) {
     $main->statement('CREATE TABLE cis_cash_daily_closures(id BIGINT AUTO_INCREMENT PRIMARY KEY,account_id BIGINT UNSIGNED,closing_date DATE)');
 }
 $main->table('cis_cash_daily_closures')->insert(['account_id'=>$banco,'closing_date'=>now($tz)->subDays(1)->toDateString()]);
-echo '    debug: fechos='.json_encode($main->table('cis_cash_daily_closures')->get()).' banco='.$banco.' data='.$bp([])['data_pagamento'].' max='.var_export($main->table('cis_cash_daily_closures')->where('account_id',$banco)->where('closing_date','>=',$bp([])['data_pagamento'])->max('closing_date'),true).' db='.$main->getDatabaseName().'/'.DB::connection('mysql_contract_writer')->getDatabaseName()."\n";
 try { $col->collect(req('/x',$bp(['conta_id'=>$banco]),$user),'C-0120',$bd); $why='aceite'; }
 catch (\Throwable $e) { $why=get_class($e).': '.$e->getMessage(); }
 ok(str_contains($why,'fecho diário'),'dia com fecho de Caixa recusado ('.$why.')');
