@@ -156,8 +156,8 @@ ok($r2['repetido']===true && $snap()===$s,'mesma chave: nada duplicado');
 
 echo "== Valor errado / conta inexistente / referência em falta\n";
 $s=$snap();
-ok(status(fn()=>$col->collect(req('/x',['valor_recebido'=>'2599.00','idempotency_key'=>'22222222-2222-4222-8222-222222222222']+$pay,$user),'C-0101',$late))===422,'valor diferente do devido → 422');
-ok(status(fn()=>$col->collect(req('/x',['conta_id'=>999,'idempotency_key'=>'33333333-3333-4333-8333-333333333333']+$pay,$user),'C-0101',$late))===404,'conta inexistente → 404');
+ok(status(fn()=>$col->collect(req('/x',['valor_recebido'=>'2599.00','idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000001']+$pay,$user),'C-0101',$late))===422,'valor diferente do devido → 422');
+ok(status(fn()=>$col->collect(req('/x',['conta_id'=>999,'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000002']+$pay,$user),'C-0101',$late))===404,'conta inexistente → 404');
 ok(status(fn()=>$col->collect(req('/x',array_diff_key($pay,['referencia'=>1]),$user),'C-0101',$late))===422,'sem referência → 422');
 ok($snap()===$s,'nenhuma alteração nas tentativas recusadas');
 
@@ -166,7 +166,7 @@ $q=data($col->preview(req('/x',['data_pagamento'=>$today,'cobrar_multa'=>true],$
 // capital 2000 × 1% × 40 dias = 800; base 2800; multa 10% de 800 = 80; total 2880
 ok($q['total_texto']==='2880.00' && $q['dias_atraso']===5 && $q['estado']==='Pago em Atraso','variável: 2000×1%×40d=800 + multa 80 = 2880.00');
 $r=data($col->collect(req('/x',['cobrar_multa'=>true,'valor_recebido'=>'2880.00','conta_id'=>$banco,
-    'idempotency_key'=>'44444444-4444-4444-8444-444444444444']+$pay,$user),'C-0101',$late));
+    'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000003']+$pay,$user),'C-0101',$late));
 ok($r['registado'] && $r['saldo_conta_actual']==='22880.00','entrada na conta BIM-001 escolhida');
 
 echo "== Prestação com entrada já existente no Extracto\n";
@@ -256,7 +256,7 @@ $p1=data($col->previewRenewal($rq(['cobrar_multa'=>true]),'C-0110',$ren));
 ok($p1['total_texto']==='165.55' && $p1['multa']===15.05,'multa opcional sobre os juros (165,55)');
 ok($err(fn()=>$col->previewRenewal($rq(['data_inicio'=>now($tz)->subDays(40)->toDateString()]),'C-0110',$ren))===422,'início anterior ao actual recusado');
 $balBefore=\App\Services\CashAccountLedger::balance($db,$db->table('cis_cash_accounts')->find($numerario));
-$rk='22222222-2222-4222-8222-222222222222';
+$rk='a1a1a1a1-0110-4000-8000-000000000001';
 $rp=['data_pagamento'=>$today,'cobrar_multa'=>true,'data_inicio'=>$oldDue,'valor_recebido'=>'165.55','conta_id'=>$numerario,
     'referencia'=>'REN-001','idempotency_key'=>$rk,'confirmacao_recebimento'=>true];
 ok($err(fn()=>$col->renew(req('/x',['valor_recebido'=>'150.50']+$rp,$user),'C-0110',$ren))===422,'valor diferente do calculado recusado');
@@ -274,10 +274,10 @@ $r1b=data($col->renew(req('/x',$rp,$user),'C-0110',$ren));
 ok($r1b['repetido']===true && $db->table('Contractos')->where('Nr do Contracto','C-0110')->count()===2,'repetição com a mesma chave não duplica');
 // Sem limite: renovar outra vez a nova prestação.
 $r2=data($col->renew(req('/x',['data_inicio'=>$expDue,'cobrar_multa'=>false,'valor_recebido'=>'150.50',
-    'idempotency_key'=>'33333333-3333-4333-8333-333333333333']+$rp,$user),'C-0110',$r1['nova_ordem']));
+    'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000002']+$rp,$user),'C-0110',$r1['nova_ordem']));
 ok($r2['nova_prestacao']['parcela']===3 && $db->table('Contractos')->where('Nr do Contracto','C-0110')->where('Estado','Renovado')->count()===2,'segunda renovação (sem limite) cria P3');
 $fin3=data($col->collect(req('/x',['data_pagamento'=>$today,'cobrar_multa'=>false,'valor_recebido'=>'1150.50','conta_id'=>$numerario,
-    'referencia'=>'RECIBO-110','idempotency_key'=>'44444444-4444-4444-8444-444444444444','confirmacao_recebimento'=>true],$user),'C-0110',$r2['nova_ordem']));
+    'referencia'=>'RECIBO-110','idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000003','confirmacao_recebimento'=>true],$user),'C-0110',$r2['nova_ordem']));
 ok($fin3['contrato_finalizado']===true,'pagamento integral da última prestação finaliza o contrato renovado');
 $two=$row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2]);
 $row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2,'Nº da Parcela'=>2]);
