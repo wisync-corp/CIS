@@ -189,7 +189,7 @@ final class CollectionScenarioPreviewController extends Controller
         }
         if ($operation==='finalizar_contrato') {
             $notPaid=$db->table('Contractos')->where('Nr do Contracto',$numero)
-                ->whereNotIn('Estado',['Pago','Pago em Atraso'])->count();
+                ->whereNotIn('Estado',['Pago','Pago em Atraso','Renovado'])->count();
             return response()->json($base+[
                 'resultado'=>'analise_pre_condicoes','prestacoes_nao_liquidadas'=>$notPaid,
                 'elegivel_para_analise'=>$notPaid===0,

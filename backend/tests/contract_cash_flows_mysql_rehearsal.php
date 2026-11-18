@@ -240,6 +240,49 @@ echo "== Leitura do histórico pela API\n";
 $hh=data($col->history(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(fn()=>$user)),'C-0100'));
 ok($hh['instalado']===true && count($hh['data'])===1 && $hh['data'][0]['antes']['Estado']==='Pendente','endpoint devolve antes/depois');
 
+
+echo "== Renovação do empréstimo (mesmo contrato, juros pagos)\n";
+$err=function(callable $f){ try { $f(); return null; } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { return $e->getStatusCode(); }
+    catch (\Illuminate\Validation\ValidationException $e) { return 422; } };
+$oldDue=now($tz)->subDays(5)->toDateString();
+$ren=$row(['Nr do Contracto'=>'C-0110','Nº'=>110,'Data de Inicio'=>now($tz)->subDays(35)->toDateString(),
+    'Data de Cobrança'=>$oldDue,'Data Final'=>$oldDue,'Estado'=>'Pagamento Atrasado']);
+$rq=fn($o)=>req('/x',$o+['data_pagamento'=>$today,'cobrar_multa'=>false,'data_inicio'=>$oldDue],$user);
+$p0=data($col->previewRenewal($rq([]),'C-0110',$ren));
+$expDue=\Carbon\CarbonImmutable::parse($oldDue)->addMonthsNoOverflow(1)->toDateString();
+ok($p0['total_texto']==='150.50' && $p0['nova_prestacao']['data_vencimento']===$expDue && $p0['nova_prestacao']['prazo']==='1 Mês'
+    && $p0['nova_prestacao']['parcela']===2 && $p0['nova_prestacao']['valor_a_pagar']==='1150.50','prévia: só juros 150,50; vencimento = início + 1 mês');
+$p1=data($col->previewRenewal($rq(['cobrar_multa'=>true]),'C-0110',$ren));
+ok($p1['total_texto']==='165.55' && $p1['multa']===15.05,'multa opcional sobre os juros (165,55)');
+ok($err(fn()=>$col->previewRenewal($rq(['data_inicio'=>now($tz)->subDays(40)->toDateString()]),'C-0110',$ren))===422,'início anterior ao actual recusado');
+$balBefore=\App\Services\CashAccountLedger::balance($db,$db->table('cis_cash_accounts')->find($numerario));
+$rk='a1a1a1a1-0110-4000-8000-000000000001';
+$rp=['data_pagamento'=>$today,'cobrar_multa'=>true,'data_inicio'=>$oldDue,'valor_recebido'=>'165.55','conta_id'=>$numerario,
+    'referencia'=>'REN-001','idempotency_key'=>$rk,'confirmacao_recebimento'=>true];
+ok($err(fn()=>$col->renew(req('/x',['valor_recebido'=>'150.50']+$rp,$user),'C-0110',$ren))===422,'valor diferente do calculado recusado');
+$r1=data($col->renew(req('/x',$rp,$user),'C-0110',$ren));
+$old=$db->table('Contractos')->where('Ordem',$ren)->first();
+$new=$db->table('Contractos')->where('Ordem',$r1['nova_ordem'])->first();
+ok($old->Estado==='Renovado' && abs((float)$old->{'Valor Pago'}-165.55)<0.001 && $old->{'Data de Pagamento'}===$today,'prestação antiga: Renovado, pagos 165,55');
+ok($new->{'Nr do Contracto'}==='C-0110' && (int)$new->{'Nº da Parcela'}===2 && $new->Estado==='Pendente'
+    && $new->{'Data de Inicio'}===$oldDue && $new->{'Data de Cobrança'}===$expDue && abs((float)$new->{'Valor a Pagar'}-1150.5)<0.001
+    && (int)$new->Capital===1000 && (float)$new->{'Valor Pago'}===0.0,'nova prestação no mesmo contrato com o mesmo capital e juros');
+ok(\App\Services\CashAccountLedger::balance($db,$db->table('cis_cash_accounts')->find($numerario))===$balBefore+16555,'juros entram na conta Numerário');
+$hr=$db->table('cis_contractos_historico')->where('contract_number','C-0110')->pluck('operation')->sort()->values()->all();
+ok($hr===['renovacao_nova_prestacao','renovar_juros'],'histórico regista a renovação e a nova prestação');
+$r1b=data($col->renew(req('/x',$rp,$user),'C-0110',$ren));
+ok($r1b['repetido']===true && $db->table('Contractos')->where('Nr do Contracto','C-0110')->count()===2,'repetição com a mesma chave não duplica');
+// Sem limite: renovar outra vez a nova prestação.
+$r2=data($col->renew(req('/x',['data_inicio'=>$expDue,'cobrar_multa'=>false,'valor_recebido'=>'150.50',
+    'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000002']+$rp,$user),'C-0110',$r1['nova_ordem']));
+ok($r2['nova_prestacao']['parcela']===3 && $db->table('Contractos')->where('Nr do Contracto','C-0110')->where('Estado','Renovado')->count()===2,'segunda renovação (sem limite) cria P3');
+$fin3=data($col->collect(req('/x',['data_pagamento'=>$today,'cobrar_multa'=>false,'valor_recebido'=>'1150.50','conta_id'=>$numerario,
+    'referencia'=>'RECIBO-110','idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000003','confirmacao_recebimento'=>true],$user),'C-0110',$r2['nova_ordem']));
+ok($fin3['contrato_finalizado']===true,'pagamento integral da última prestação finaliza o contrato renovado');
+$two=$row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2]);
+$row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2,'Nº da Parcela'=>2]);
+ok($err(fn()=>$col->previewRenewal($rq(['data_inicio'=>$today]),'C-0111',$two))===409,'recusa renovar com mais de uma prestação em aberto');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
