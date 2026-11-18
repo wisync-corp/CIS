@@ -207,6 +207,18 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
  const [openingBusy,setOpeningBusy]=useState(false);
  const [openedContract,setOpenedContract]=useState<{numero:string;prestacoes:number;desembolso:string|number}|null>(null);
  const [openingError,setOpeningError]=useState('');
+ const [cashAccounts,setCashAccounts]=useState<{id:number;code:string;name:string;status:string;saldo_disponivel?:string|null}[]>([]);
+ const [sourceAccount,setSourceAccount]=useState('');
+ const [disbursementRef,setDisbursementRef]=useState('');
+ const [openingKey,setOpeningKey]=useState('');
+ useEffect(()=>{
+  const ctrl=new AbortController();
+  fetch(API+'/cis/caixa/contas',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
+   .then(r=>r.ok?r.json():null).then(d=>{if(!ctrl.signal.aborted)setCashAccounts((d?.accounts??[]).filter((a:{status:string})=>a.status==='activa'));}).catch(()=>{});
+  return()=>ctrl.abort();
+ },[token]);
+ const chosenAccount=cashAccounts.find(a=>String(a.id)===sourceAccount);
+ const accountCovers=!!chosenAccount&&Number(chosenAccount.saldo_disponivel??0)>=Number(values.quantia||0);
  const [openingRetryAt,setOpeningRetryAt]=useState(0);
  const [openingClock,setOpeningClock]=useState(Date.now());
  useEffect(()=>{
@@ -265,7 +277,10 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   if(!review?.dados_verificados||!review.autorizado_para_gravar||!strategyCompatible||!confirmedDisbursement||!selectedBorrower||openingBusy||openedContract)return;
   if(Date.now()<openingRetryAt){setOpeningError('Limite temporário de tentativas. Consulte primeiro a carteira para confirmar se o contrato já existe.');return;}
   if(!strategySelected.trim()){setOpeningError('Seleccione uma fórmula de cálculo antes de criar e desembolsar o crédito.');return;}
-  if(!window.confirm('Confirma que o montante foi efectivamente disponibilizado ao mutuário? O CIS vai criar um contrato, gravar as prestações e lançar uma Saída no Extracto.'))return;
+  if(!chosenAccount||disbursementRef.trim().length<4){setOpeningError('Seleccione a conta de saída e indique a referência do comprovativo.');return;}
+  if(!window.confirm('Confirma que '+values.quantia+' MT saíram da conta '+chosenAccount.code+' para o mutuário? O CIS vai criar o contrato, gravar as prestações e lançar a Saída nessa conta.'))return;
+  const key=openingKey||(typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():String(Date.now()));
+  setOpeningKey(key);
   setOpeningBusy(true);setOpeningError('');
   try{
    const res=await fetch(API+'/cis/contractos/abrir',{
@@ -277,7 +292,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
-     data_inicio:values.data_inicio,confirmacao_desembolso:true
+     data_inicio:values.data_inicio,confirmacao_desembolso:true,
+     conta_id:Number(sourceAccount),referencia:disbursementRef.trim(),idempotency_key:key
     })
    });
    if(res.status===429){
@@ -401,7 +417,12 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
     <strong>Confirmação de abertura real</strong>
     {review.autorizado_para_gravar?<><label className="cis-contract-confirm"><input type="checkbox" checked={confirmedDisbursement} onChange={e=>setConfirmedDisbursement(e.target.checked)}/>
      <span>Confirmo que o montante indicado foi efectivamente disponibilizado ao mutuário e autorizo o lançamento da saída no Extracto.</span></label>
-     <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||openingBusy||openingCooldownSeconds>0} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':openingCooldownSeconds>0?'Aguarde '+openingCooldownSeconds+' s (limite de segurança)':'Criar contrato e registar desembolso'}</button>
+     <div className="cis-contract-cash-source">
+      <label>Conta de saída do desembolso <select value={sourceAccount} onChange={e=>{setSourceAccount(e.target.value);setOpeningKey('');}}><option value="">Seleccionar conta activa</option>{cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+Number(a.saldo_disponivel).toLocaleString('pt-MZ',{minimumFractionDigits:2})+' MT':''}</option>)}</select>
+       <small>{!chosenAccount?'O dinheiro sai do saldo desta conta da Caixa.':accountCovers?'Saldo suficiente para o desembolso.':'Saldo insuficiente nesta conta para o montante pedido.'}</small></label>
+      <label>Referência do comprovativo <input type="text" maxLength={60} value={disbursementRef} onChange={e=>setDisbursementRef(e.target.value)} placeholder="Recibo, transferência ou M-Pesa"/><small>Fica gravada no Extracto e no histórico.</small></label>
+     </div>
+     <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||!chosenAccount||!accountCovers||disbursementRef.trim().length<4||openingBusy||openingCooldownSeconds>0} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':openingCooldownSeconds>0?'Aguarde '+openingCooldownSeconds+' s (limite de segurança)':'Criar contrato e registar desembolso'}</button>
     </>:<p>A funcionalidade de escrita ainda não está activada no servidor. O administrador deve executar a activação privada após o backup e reconciliação da caixa.</p>}
    </div>}
    <div className="cis-edit-actions"><button type="reset" disabled={openingBusy||!!openedContract}><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy||openingBusy||!!openedContract}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>

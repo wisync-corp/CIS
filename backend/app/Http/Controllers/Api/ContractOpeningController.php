@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Services\LegacyContractPricing;
 use App\Services\LegacyContractInsert;
 use App\Services\ContractCalculationStrategy;
+use App\Services\CashAccountLedger;
+use App\Services\ContractHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,11 +23,9 @@ final class ContractOpeningController extends Controller
      */
     public function store(Request $request)
     {
-        // BLOQUEIO DE INTEGRIDADE: o caminho legado desembolsa usando o saldo
-        // agregado do Extracto sem associar a saída a uma conta específica.
-        // Não permitir novos desembolsos até concluir ligação atómica com
-        // cis_cash_accounts / cis_cash_movements e permissões híbridas.
-        abort(503, 'Abertura com desembolso temporariamente suspensa: seleccione uma conta reconciliada na nova integração da Caixa (em implementação).');
+        // O desembolso sai OBRIGATORIAMENTE de uma conta activa da Caixa:
+        // saldo da conta (não o agregado do Extracto), account_id, chave idempotente
+        // e histórico imutável de cada prestação criada, na mesma transacção.
         $user = $request->user();
         abort_unless($user && $user->active && $user->role === 'administrador', 403);
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CLIENTES_PREVIEW_APPROVED',
@@ -33,6 +33,7 @@ final class ContractOpeningController extends Controller
             abort_unless(filter_var(env($flag,false), FILTER_VALIDATE_BOOLEAN), 503,
                 'Abertura real ainda não activada neste ambiente privado.');
         }
+        CashAccountLedger::requireReady();
 
         $d = $request->validate([
             'cliente_id'=>['required','integer','min:1'],
@@ -49,7 +50,12 @@ final class ContractOpeningController extends Controller
             'disponibilidade'=>['required','in:Transferência/Depósito Bancário,Transferência Móvel,Numerário'],
             'data_inicio'=>['required','date_format:Y-m-d'],
             'confirmacao_desembolso'=>['required','accepted'],
+            'conta_id'=>['required','integer','min:1'],
+            'referencia'=>['required','string','min:4','max:60'],
+            'idempotency_key'=>['required','uuid'],
         ]);
+        $key='contract:open:'.strtolower($d['idempotency_key']);
+        $ref=trim(preg_replace('/\s+/',' ',$d['referencia']));
         if (!in_array($d['estrategia_calculo'],ContractCalculationStrategy::OPTIONS,true)
             || !ContractCalculationStrategy::compatible($d['tipo_juro'],$d['estrategia_calculo'])) {
             throw ValidationException::withMessages(['estrategia_calculo'=>
@@ -119,7 +125,18 @@ final class ContractOpeningController extends Controller
         abort_unless($lock && (int)$lock->acquired === 1, 409,
             'Outra abertura está a decorrer. Aguarde e consulte a carteira antes de repetir.');
         try {
-            $result = $db->transaction(function () use ($db,$d,$user) {
+            $result = $db->transaction(function () use ($db,$d,$user,$key,$ref) {
+                // Ordem de lock: conta -> registos (igual à cobrança).
+                [$account,$accountBalance]=CashAccountLedger::lockActive($db,(int)$d['conta_id']);
+                $previous=$db->table('Extracto')->where('operation_key',$key)->first();
+                if ($previous) {
+                    abort_unless((int)$previous->account_id===(int)$account->id,409,
+                        'A chave da operação já foi usada noutra conta.');
+                    return ['numero'=>(string)$previous->Contracto,'repetido'=>true,
+                        'desembolso'=>CashAccountLedger::amount(CashAccountLedger::cents((string)$previous->Valor)),
+                        'conta'=>$account->code,'estado'=>'Em Progresso',
+                        'notice'=>'Desembolso já registado anteriormente; nada foi duplicado.'];
+                }
                 // Só escrever quando o esquema legado preserva as colunas
                 // com os tipos conhecidos e PK autoincremental; sem migrações.
                 $schema = DB::connection('mysql_contract_writer')->select(
@@ -188,19 +205,10 @@ final class ContractOpeningController extends Controller
                 $plan=LegacyContractPricing::plan((float)$d['montante'],$rate,
                     $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio'],
                     $d['estrategia_calculo'],$d['prazo'],(int)$d['periodo_dias']);
-                $cashRows=$db->table('Extracto')
-                    ->select(['Tipo de Movimento','Valor'])->get();
-                $saldo=0.0;
-                foreach ($cashRows as $movement) {
-                    $amount=(float)$movement->Valor;
-                    abort_unless(is_finite($amount) && $amount>=0,409,
-                        'Extracto contém valor inválido; desembolso suspenso.');
-                    $saldo += $movement->{'Tipo de Movimento'}==='Entradas'?$amount:-$amount;
-                }
-                // VBA CalculateBalance: RoundDown(..., 0) antes da validação.
-                $saldoDisponivel= floor($saldo);
-                abort_if($saldoDisponivel<(float)$d['montante'],422,
-                    'Saldo empresarial insuficiente para o desembolso solicitado.');
+                // Saldo da CONTA escolhida (VBA usava o agregado do Extracto).
+                abort_if($accountBalance<(int)$d['montante']*100,422,
+                    'Saldo insuficiente na conta '.$account->code.' ('
+                    .CashAccountLedger::amount($accountBalance).' MT) para este desembolso.');
 
                 // Evitar repetição por duplo clique/reenvio para a mesma
                 // combinação. Revisão manual caso haja outro crédito legítimo igual.
@@ -253,22 +261,35 @@ final class ContractOpeningController extends Controller
                     [$insertSql, $insertBindings] = LegacyContractInsert::statement($contractAttributes);
                     $db->insert($insertSql, $insertBindings);
                 }
-                $db->table('Extracto')->insert([
+                $nr=$db->table('Extracto')->insertGetId([
                     'Contracto'=>$number,'Cliente'=>$buyer->{'Nome Completo'},
                     'Parcela'=>0,'Data da Operação'=>$d['data_inicio'],
-                    'Valor'=>$d['montante'],'Tipo de Movimento'=>'Saídas',
-                    'Descrição'=>'Desembolso de Empréstimo','usuario'=>$actor,
-                ]);
+                    'Valor'=>CashAccountLedger::amount((int)$d['montante']*100),'Tipo de Movimento'=>'Saídas',
+                    'Descrição'=>mb_substr('[CAIXA:DESEMBOLSO] Desembolso de Empréstimo '.$number.' | REF:'.$ref,0,255),
+                    'usuario'=>$actor,'account_id'=>(int)$account->id,'operation_key'=>$key,
+                ],'Nr');
+                $created=$db->table('Contractos')->where('Nr do Contracto',$number)->orderBy('Ordem')->get();
                 abort_unless(
-                    $db->table('Contractos')->where('Nr do Contracto',$number)->count()
-                        ===count($plan['prestacoes'])
+                    $created->count()===count($plan['prestacoes'])
                     && $db->table('Extracto')->where('Contracto',$number)
-                        ->where('Descrição','Desembolso de Empréstimo')->count()===1,
+                        ->where('operation_key',$key)->count()===1,
                     409,'Falha na verificação transaccional; alterações revertidas.'
                 );
+                foreach ($created as $row) {
+                    ContractHistory::record($db,[
+                        'contract_number'=>$number,'installment_ordem'=>(int)$row->Ordem,
+                        'installment_number'=>(int)$row->{'Nº da Parcela'},'operation'=>'desembolso',
+                        'before'=>null,'after'=>$row,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
+                        'amount'=>CashAccountLedger::amount((int)$d['montante']*100),
+                        'evidence_reference'=>$ref,'reason'=>'Abertura de contrato com desembolso.',
+                        'operation_key'=>$key,'performed_by'=>(int)$user->id,
+                    ]);
+                }
                 return ['numero'=>$number,'prestacoes'=>count($plan['prestacoes']),
                     'desembolso'=>$d['montante'],'data_inicio'=>$d['data_inicio'],
-                    'estado'=>'Em Progresso'];
+                    'estado'=>'Em Progresso','repetido'=>false,'extracto_nr'=>(int)$nr,
+                    'conta'=>$account->code,
+                    'saldo_conta_actual'=>CashAccountLedger::amount($accountBalance-(int)$d['montante']*100)];
             }, 1);
         } finally {
             $db->select('SELECT RELEASE_LOCK(?)', ['cis_open_new_contract']);

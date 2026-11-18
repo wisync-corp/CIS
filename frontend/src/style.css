@@ -989,3 +989,18 @@ html{font-size:16px}
 .cis-top-logo{display:none;width:120px;height:auto}
 .cis-loading::before{content:"";display:block;width:44px;height:53px;margin:0 auto 14px;border-radius:9px;background:url('./assets/brand/cis-carregamento.svg') center/contain no-repeat}
 @media(max-width:750px){.cis-top-logo{display:block}.cis-breadcrumb>span:first-of-type{display:none}}
+/* Histórico imutável das prestações */
+.cis-collections-history-head{margin-top:22px}
+.cis-collections-history{display:grid;gap:8px}
+.cis-collections-history details{border:1px solid var(--cis-border);border-radius:12px;background:#fff;padding:10px 14px}
+.cis-collections-history summary{display:grid;grid-template-columns:1.4fr .8fr .9fr 1fr;gap:10px;cursor:pointer;font-size:13px;color:var(--cis-text);align-items:center}
+.cis-collections-history summary strong{color:var(--cis-heading)}
+.cis-collections-history table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:12.5px}
+.cis-collections-history th,.cis-collections-history td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--cis-border)}
+.cis-collections-history tr.changed td{background:var(--cis-accent-tint);color:var(--cis-heading);font-weight:650}
+.cis-collections-history small{color:var(--cis-text-muted)}
+.cis-contract-cash-source{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0}
+.cis-contract-cash-source label{display:grid;gap:6px;font-weight:650;color:var(--cis-heading);font-size:13px}
+.cis-contract-cash-source select,.cis-contract-cash-source input{min-height:42px;border:1px solid var(--cis-input-border);border-radius:10px;padding:0 12px;font:inherit;background:#fff}
+.cis-contract-cash-source small{font-weight:500;color:var(--cis-text-muted)}
+@media(max-width:750px){.cis-contract-cash-source{grid-template-columns:1fr}}
