@@ -45,3 +45,22 @@ bash deploy/disable-contract-cash-flows.sh   # interruptor
 
 ## Ensaio
 `backend/tests/contract_cash_flows_mysql_rehearsal.php` corre no CI (job `contract-cash-mysql`, MySQL 8.0 descartável): 24 verificações — contrato histórico fixo e variável com multa, conta escolhida, idempotência, valor errado, conta inexistente, entrada duplicada, rollback se o histórico falhar, imutabilidade, desembolso com saldo insuficiente/suficiente e repetição.
+
+## Renovação do empréstimo (mesmo contrato)
+
+Fluxo: «Houve pagamento» → «Renovar empréstimo». Só está disponível quando a prestação é a única em aberto do contrato.
+
+- O cliente paga **só os juros**. A **multa** é opcional e incide sobre os juros, quando houver atraso.
+- O operador escolhe a **data de início** do novo período. O **vencimento é automático**: início + o mesmo prazo.
+  - Contratos de uma parcela: o prazo vem de «Prazo/Duração» (1/2/3 Semanas, 1/2/3 Meses, N Dias).
+  - Contratos com várias parcelas: o prazo é o intervalo entre esta prestação e a anterior.
+- A prestação actual passa a `Estado='Renovado'`, com `Valor Pago` igual a juros + multa e a data de pagamento de hoje.
+- É criada uma nova prestação **no mesmo contrato** com:
+  - `Nº da Parcela` = máximo + 1;
+  - o mesmo capital e as mesmas condições;
+  - juros fixos iguais; juros variáveis estimados e recalculados no pagamento;
+  - `Estado='Pendente'`.
+- O Extracto recebe uma Entrada `[CAIXA:COBRANCA] Juros de renovação …` na conta escolhida (chave `contract:renew:<uuid>`).
+- O histórico imutável regista `renovar_juros` (antes/depois) e `renovacao_nova_prestacao`.
+- Não há limite de renovações.
+- `Renovado` conta como prestação liquidada para finalizar o contrato e nos juros recebidos da Visão geral.

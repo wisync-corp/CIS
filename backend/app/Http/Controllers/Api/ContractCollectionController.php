@@ -26,7 +26,9 @@ use Illuminate\Validation\ValidationException;
  *    (v_total = v_pagar + v_multa + v_juros); o CIS cobra Valor a Pagar + multa;
  *  - a entrada fica OBRIGATORIAMENTE numa conta activa da Caixa (account_id),
  *    com chave idempotente e fotografia antes/depois em cis_contractos_historico;
- *  - pagamentos parciais, renovação e capitalização continuam só em simulação.
+ *  - RENOVAÇÃO (mesmo contrato): juros (+multa opcional) pagos, prestação 'Renovado' e nova
+ *    prestação com o mesmo capital; início escolhido, vencimento = início + mesmo prazo.
+ *  - pagamentos parciais e capitalização continuam só em simulação.
  */
 final class ContractCollectionController extends Controller
 {
@@ -235,7 +237,7 @@ final class ContractCollectionController extends Controller
                 'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
             $unpaid=$db->table('Contractos')->where('Nr do Contracto',$numero)
-                ->whereNotIn('Estado',['Pago','Pago em Atraso'])->count();
+                ->whereNotIn('Estado',['Pago','Pago em Atraso','Renovado'])->count();
             if ($unpaid===0) {
                 $db->table('Contractos')->where('Nr do Contracto',$numero)
                     ->update(['Estado do Contrato'=>'Finalizado']);
@@ -246,6 +248,232 @@ final class ContractCollectionController extends Controller
                 'saldo_conta_actual'=>CashAccountLedger::amount($before+$c['total']),
                 'contrato_finalizado'=>$unpaid===0,
                 'notice'=>'Pagamento registado na conta '.$account->code.' com histórico antes/depois.'];
+        },3);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            abort(503,'A base de dados recusou a operação (MySQL '.($e->errorInfo[1]??'?').'). Nada foi gravado. '
+                .'Verifique as permissões com: bash deploy/verify-contract-cash-flows.sh');
+        }
+        return response()->json($result,empty($result['repetido'])?201:200)
+            ->header('Cache-Control','no-store, private');
+    }
+
+    /** Prazo de uma prestação: «Prazo/Duração» (uma parcela) ou intervalo para a prestação anterior. */
+    private function renewalTerm($db,object $row): array
+    {
+        $parcels=(int)($row->{'Nº de Prestações'}??1);
+        $prazo=trim((string)($row->{'Prazo/Duração'}??''));
+        if ($parcels<=1 && preg_match('/^(\d{1,3})\s*(semana|semanas|m[eê]s|meses|dia|dias)$/iu',$prazo,$m)) {
+            $n=(int)$m[1];$u=mb_strtolower($m[2]);
+            if (str_starts_with($u,'semana')) return ['days',$n*7,$prazo];
+            if (str_starts_with($u,'dia')) return ['days',$n,$prazo];
+            return ['months',$n,$prazo];
+        }
+        $due=self::date($row->{'Data de Cobrança'},'Data de cobrança');
+        $prevDue=$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})
+            ->where('Data de Cobrança','<',$due->toDateString())->max('Data de Cobrança');
+        $from=$prevDue?self::date($prevDue,'Data de cobrança anterior'):self::date($row->{'Data de Inicio'},'Data de início');
+        $days=(int)$from->diffInDays($due,false);
+        abort_unless($days>=1 && $days<=366,409,'Não foi possível determinar o prazo da prestação para renovar.');
+        return ['days',$days,$days.' dia(s)'];
+    }
+
+    /** Cálculo da renovação: juros (+ multa opcional) agora, nova prestação com o mesmo capital. */
+    private function renewalPlan($db,object $row,string $date,bool $multa,string $start): array
+    {
+        abort_unless(in_array($row->Estado,['Pendente','Pagamento Atrasado'],true),409,'A prestação já não está pendente.');
+        $open=$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})
+            ->whereIn('Estado',['Pendente','Pagamento Atrasado'])->count();
+        abort_unless($open===1,409,'Só é possível renovar quando esta é a única prestação em aberto do contrato.');
+        $q=$this->quote($row,$date,$multa);
+        $c=$q['_cents'];
+        abort_unless($c['juros']>0,409,'Prestação sem juros a cobrar; renovação não aplicável.');
+        $principalC=$c['total']-$c['multa']-$c['juros'];
+        abort_unless($principalC>0,409,'Prestação sem capital em dívida; use o pagamento integral.');
+        $today=CarbonImmutable::createFromFormat('!Y-m-d',$date);
+        $oldStart=self::date($row->{'Data de Inicio'},'Data de início');
+        $oldDue=self::date($row->{'Data de Cobrança'},'Data de cobrança');
+        $startD=CarbonImmutable::createFromFormat('!Y-m-d',$start);
+        abort_unless($startD->greaterThan($oldStart),422,'A data de início da renovação tem de ser posterior ao início actual ('.$oldStart->format('d/m/Y').').');
+        abort_unless($startD->lessThanOrEqualTo($today->addDays(60)),422,'A data de início da renovação não pode passar de 60 dias a partir de hoje.');
+        [$unit,$n,$label]=$this->renewalTerm($db,$row);
+        $newDue=$unit==='months'?$startD->addMonthsNoOverflow($n):$startD->addDays($n);
+        abort_unless($newDue->greaterThan($today),422,'O novo vencimento ('.$newDue->format('d/m/Y').') já passou; escolha uma data de início mais recente.');
+        $variable=in_array((string)$row->{'Tipo de Juro'},['Variável','Variavel'],true);
+        if ($variable) {
+            $termDays=(int)$startD->diffInDays($newDue);
+            $newInterestC=self::isCisContract($row)
+                ? LegacyContractPricing::upwards($principalC/100*(float)$row->{'% de Juro'}/100*$termDays)*100
+                : (int)round($principalC*(float)$row->{'% de Juro'}/100*$termDays);
+        } else {
+            $newInterestC=self::isCisContract($row)?(int)$row->{'Valor de Juros'}*100:CashAccountLedger::legacyCents($row->{'Valor de Juros'});
+        }
+        $avisos=[];
+        if (!$startD->equalTo($oldDue)) {
+            $avisos[]='A data de início escolhida difere do vencimento anterior ('.$oldDue->format('d/m/Y').').';
+        }
+        if ($variable) $avisos[]='Juro variável: o valor da nova prestação é estimado e será recalculado no pagamento.';
+        $paidC=$c['juros']+$c['multa'];
+        $max=(int)$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})->max('Nº da Parcela');
+        return [
+            'parcela'=>$q['parcela'],'origem'=>$q['origem'],'dias_atraso'=>$q['dias_atraso'],
+            'juros'=>(float)CashAccountLedger::amount($c['juros']),'multa'=>(float)CashAccountLedger::amount($c['multa']),
+            'total'=>(float)CashAccountLedger::amount($paidC),'total_texto'=>CashAccountLedger::amount($paidC),
+            'data_pagamento'=>$date,
+            'nova_prestacao'=>[
+                'parcela'=>$max+1,'data_inicio'=>$startD->toDateString(),'data_vencimento'=>$newDue->toDateString(),
+                'prazo'=>$label,'capital'=>CashAccountLedger::amount($principalC),
+                'juros'=>CashAccountLedger::amount($newInterestC),
+                'valor_a_pagar'=>CashAccountLedger::amount($principalC+$newInterestC),
+                'juros_estimado'=>$variable,
+            ],
+            'aviso'=>implode(' ',$avisos),
+            '_cents'=>['juros'=>$c['juros'],'multa'=>$c['multa'],'total'=>$paidC,
+                'principal'=>$principalC,'novo_juros'=>$newInterestC],
+        ];
+    }
+
+    public function previewRenewal(Request $request, string $numero, int $ordem)
+    {
+        $this->admin($request);
+        $data=$request->validate([
+            'data_pagamento'=>['required','date_format:Y-m-d'],
+            'cobrar_multa'=>['required','boolean'],
+            'data_inicio'=>['required','date_format:Y-m-d'],
+        ]);
+        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
+            'A data de pagamento real tem de ser hoje em Moçambique.');
+        $db=DB::connection('mysql_legacy');
+        $row=$db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$ordem)->first();
+        abort_unless($row,404,'Prestação não encontrada.');
+        $this->eligibility($db,$row);
+        $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
+        unset($q['_cents']);
+        $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
+            && CashAccountLedger::flag('CIS_CASH_WRITES_APPROVED')
+            && CashAccountLedger::flag(CashAccountLedger::FLAG);
+        return response()->json($q)->header('Cache-Control','no-store, private');
+    }
+
+    public function renew(Request $request, string $numero, int $ordem)
+    {
+        $this->admin($request);
+        abort_unless(CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED'),503,
+            'A cobrança real ainda não foi activada no servidor.');
+        CashAccountLedger::requireReady();
+        $data=$request->validate([
+            'data_pagamento'=>['required','date_format:Y-m-d'],
+            'cobrar_multa'=>['required','boolean'],
+            'data_inicio'=>['required','date_format:Y-m-d'],
+            'valor_recebido'=>['required','string'],
+            'conta_id'=>['required','integer','min:1'],
+            'referencia'=>['required','string','min:4','max:60'],
+            'idempotency_key'=>['required','uuid'],
+            'confirmacao_recebimento'=>['required','accepted'],
+        ]);
+        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
+            'A renovação deve ser registada com a data de hoje.');
+        $received=CashAccountLedger::cents($data['valor_recebido'],'valor_recebido');
+        $key='contract:renew:'.strtolower($data['idempotency_key']);
+        $user=$request->user();
+        $ref=trim(preg_replace('/\s+/',' ',$data['referencia']));
+        $db=DB::connection('mysql_contract_writer');
+        try {
+        $result=$db->transaction(function () use ($db,$data,$numero,$ordem,$user,$received,$key,$ref) {
+            [$account,$before]=CashAccountLedger::lockActive($db,(int)$data['conta_id']);
+            $existing=$db->table('Extracto')->where('operation_key',$key)->first();
+            if ($existing) {
+                abort_unless((string)$existing->Contracto===$numero
+                    && (int)$existing->account_id===(int)$account->id,409,
+                    'A chave da operação já foi usada para outra operação.');
+                return ['registado'=>true,'repetido'=>true,'extracto_nr'=>(int)$existing->Nr,
+                    'valor'=>CashAccountLedger::amount(CashAccountLedger::cents((string)$existing->Valor)),
+                    'notice'=>'Renovação já registada anteriormente; nada foi duplicado.'];
+            }
+            $all=$db->table('Contractos')->where('Nr do Contracto',$numero)->lockForUpdate()->get();
+            $row=$all->firstWhere('Ordem',$ordem);
+            abort_unless($row && $all->where('Ordem',$ordem)->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
+            $this->eligibility($db,$row);
+            $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
+            $c=$plan['_cents'];$np=$plan['nova_prestacao'];
+            if ($c['total']!==$received) {
+                throw ValidationException::withMessages(['valor_recebido'=>
+                    'O valor recebido não corresponde aos juros calculados no servidor ('.$plan['total_texto'].' MT).']);
+            }
+            $updated=$db->table('Contractos')->where('Ordem',$ordem)->where('Nr do Contracto',$numero)
+                ->whereIn('Estado',['Pendente','Pagamento Atrasado'])
+                ->update([
+                    'Valor de Juros'=>CashAccountLedger::amount($c['juros']),
+                    'Valor de Multa'=>CashAccountLedger::amount($c['multa']),
+                    'Valor Pago'=>CashAccountLedger::amount($c['total']),
+                    'Data de Pagamento'=>$plan['data_pagamento'],
+                    'Estado'=>'Renovado',
+                    'Dias'=>$plan['dias_atraso'],
+                    'Situação de Pagamento'=>'Juros pagos - renovado',
+                ]);
+            abort_unless($updated===1,409,'A prestação foi alterada por outra operação.');
+            // Nova prestação no MESMO contrato: copia condições, muda só datas, número e valores.
+            $new=(array)$row;
+            unset($new['Ordem']);
+            $capitalInt=(int)round($c['principal']/100);
+            $new=array_merge($new,[
+                'Nº da Parcela'=>$np['parcela'],
+                'Nº de Prestações'=>(int)($row->{'Nº de Prestações'}??1)+1,
+                'Data de Inicio'=>$np['data_inicio'],
+                'Data de Cobrança'=>$np['data_vencimento'],
+                'Data Final'=>$np['data_vencimento'],
+                'Capital'=>$capitalInt,
+                'Amortização'=>$capitalInt,
+                'Valor de Juros'=>CashAccountLedger::amount($c['novo_juros']),
+                'Valor a Pagar'=>CashAccountLedger::amount($c['principal']+$c['novo_juros']),
+                'Valor Pago'=>0,'Valor de Multa'=>0,
+                'Data de Pagamento'=>null,
+                'Estado'=>'Pendente',
+                'Estado do Contrato'=>'Em Progresso',
+                'Situação de Pagamento'=>'Em Progresso',
+                'Dias'=>0,
+                'usuario'=>mb_substr((string)$user->name,0,255),
+            ]);
+            [$sql,$bindings]=\App\Services\LegacyContractInsert::statement($new);
+            $db->insert($sql,$bindings);
+            $newOrdem=(int)$db->getPdo()->lastInsertId();
+            $nr=$db->table('Extracto')->insertGetId([
+                'Contracto'=>$numero,
+                'Cliente'=>mb_substr((string)$row->{'Nome do Cliente'},0,255),
+                'Parcela'=>(string)$plan['parcela'],
+                'Data da Operação'=>$plan['data_pagamento'],
+                'Valor'=>CashAccountLedger::amount($c['total']),
+                'Tipo de Movimento'=>'Entradas',
+                'Descrição'=>mb_substr('[CAIXA:COBRANCA] Juros de renovação '.$numero.' P'.$plan['parcela'].' | REF:'.$ref,0,255),
+                'usuario'=>mb_substr((string)$user->name,0,255),
+                'account_id'=>(int)$account->id,
+                'operation_key'=>$key,
+            ],'Nr');
+            $after=$db->table('Contractos')->where('Ordem',$ordem)->first();
+            $newRow=$db->table('Contractos')->where('Ordem',$newOrdem)->first();
+            abort_unless($newRow && (string)$newRow->{'Nr do Contracto'}===$numero,409,'Falha ao criar a nova prestação.');
+            ContractHistory::record($db,[
+                'contract_number'=>$numero,'installment_ordem'=>$ordem,
+                'installment_number'=>$plan['parcela'],'operation'=>'renovar_juros',
+                'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
+                'amount'=>CashAccountLedger::amount($c['total']),'evidence_reference'=>$ref,
+                'reason'=>'Renovação: juros pagos'.($c['multa']>0?' com multa':'').'; novo período de '.$np['prazo'].'.',
+                'operation_key'=>$key,'performed_by'=>(int)$user->id,
+            ]);
+            ContractHistory::record($db,[
+                'contract_number'=>$numero,'installment_ordem'=>$newOrdem,
+                'installment_number'=>$np['parcela'],'operation'=>'renovacao_nova_prestacao',
+                'before'=>null,'after'=>$newRow,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
+                'amount'=>CashAccountLedger::amount($c['principal']+$c['novo_juros']),'evidence_reference'=>$ref,
+                'reason'=>'Nova prestação criada pela renovação da P'.$plan['parcela'].'.',
+                'operation_key'=>$key,'performed_by'=>(int)$user->id,
+            ]);
+            unset($plan['_cents']);
+            return $plan+['registado'=>true,'repetido'=>false,'extracto_nr'=>(int)$nr,'nova_ordem'=>$newOrdem,
+                'conta'=>$account->code,'saldo_conta_anterior'=>CashAccountLedger::amount($before),
+                'saldo_conta_actual'=>CashAccountLedger::amount($before+$c['total']),
+                'notice'=>'Renovação registada: juros na conta '.$account->code.'; nova prestação P'.$np['parcela']
+                    .' vence a '.CarbonImmutable::parse($np['data_vencimento'])->format('d/m/Y').'.'];
         },3);
         } catch (\Illuminate\Database\QueryException $e) {
             report($e);

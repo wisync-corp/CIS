@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * Carteira (Contractos, por prestação):
  *  - por receber  = Estado 'Pendente' ou 'Pagamento Atrasado';
- *  - recebidas    = Estado 'Pago' ou 'Pago em Atraso';
+ *  - recebidas    = Estado 'Pago', 'Pago em Atraso' ou 'Renovado' (juros de renovação);
  *  - capital por prestação = Valor a Pagar − Valor de Juros (as linhas criadas pela
  *    renovação no VBA não preenchem Capital/Amortização; esta regra serve VBA e CIS);
  *  - capital recuperado = Valor Pago − Juros − Multa (nunca negativo).
@@ -29,7 +29,7 @@ final class OverviewController extends Controller
         $legacy=DB::connection('mysql_legacy');
 
         $pending="`Estado` IN ('Pendente','Pagamento Atrasado')";
-        $paid="`Estado` IN ('Pago','Pago em Atraso')";
+        $paid="`Estado` IN ('Pago','Pago em Atraso','Renovado')";
         $principal="GREATEST(0, COALESCE(`Valor a Pagar`,0) - COALESCE(`Valor de Juros`,0))";
         $recovered="GREATEST(0, COALESCE(`Valor Pago`,0) - COALESCE(`Valor de Juros`,0) - COALESCE(`Valor de Multa`,0))";
         $p=$legacy->table('Contractos')->selectRaw("
