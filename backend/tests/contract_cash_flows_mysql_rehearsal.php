@@ -81,7 +81,7 @@ $acc=fn($code,$bal)=>$db->table('cis_cash_accounts')->insertGetId(['code'=>$code
     'created_at'=>now(),'updated_at'=>now()]);
 $numerario=$acc('DINHEIRO','100.00');
 $banco=$acc('BIM-001','20000.00');
-$row=function(array $o) use ($db){ $attrs=$o+[
+$row=function(array $o) use ($db,$tz){ $attrs=$o+[
     'Nr do Contracto'=>'C-0100','Nº'=>100,'Nome do Cliente'=>'Cliente Histórico','Nº de Cliente'=>7,'Quantia Creditada'=>1000,
     'M. Pagamento'=>'Uma Parcela','Prazo/Duração'=>'1 Mês','% de Juro'=>15,'Tipo de Juro'=>'Fixo','% de Multa'=>10,
     'Forma de Pagamento'=>'Numerário','Disponibilidade'=>'Numerário','Data de Inicio'=>now($tz)->subDays(20)->toDateString(),
