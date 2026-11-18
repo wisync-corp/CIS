@@ -94,8 +94,14 @@ final class CashController extends Controller
                 && filter_var(env('CIS_CASH_LEDGER_POSTING_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
                 && Schema::hasColumn('Extracto','operation_key'), // Nunca activar só com a coluna.
             'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            // Mesma regra de openingSetupAllowed(): com movimentações activas a abertura é recusada.
+            'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
+                && !filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
+                && !filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
+            'opening_blocked_reason' => filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
+                ? 'Com as movimentações activas, o saldo inicial só pode ser preparado numa janela de abertura. Na VPS: bash deploy/open-cash-account-window.sh'
+                : null,
             'single_admin_opening' => $this->singleAdminOpening(),
             'notice' => 'Fonte única de movimentos: Extracto; contas identificadas por account_id. A escrita real depende de autorização operacional adicional.'
         ])->header('Cache-Control', 'no-store, private');

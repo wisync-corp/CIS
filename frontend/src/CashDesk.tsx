@@ -10,7 +10,7 @@ type CashAccount={
 };
 type CashMovement={id:number;account_id:number;type:string;amount:string;reference:string;
  category:string;description:string;effective_at:string;evidence_reference:string|null;operation_key?:string|null;operator?:string|null};
-type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;notice:string};
+type CashResponse={accounts:CashAccount[];can_write:boolean;can_create_accounts:boolean;can_submit_opening:boolean;can_validate_opening:boolean;single_admin_opening:boolean;opening_blocked_reason?:string|null;notice:string};
 type CashEstimate={consulta_apenas:boolean;movimento_registado:boolean;amount:string;saldo_actual?:string;saldo_estimado?:string;source?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};destination?:{account_id:number;code:string;saldo_actual:string;saldo_estimado:string};notice:string};
 type ReversalPreview={consulta_apenas:boolean;already_reversed:boolean;can_submit:boolean;mode:'single'|'transfer';origin_nr:number;legs:{original_nr:number;account_id:number;account_code:string|null;original_type:string;reversal_type:string;amount:string}[];notice:string};
 type CashClosePreview={date:string;account_id:number;code:string;name:string;account_type:'banco'|'numerario'|'carteira_movel';snapshot:{opening_amount:string;entries_amount:string;exits_amount:string;expected_balance:string;movement_count:number;ledger_max_nr:number};existing:null|{id:number;expected_balance:string;observed_balance:string;difference_amount:string;closed_by:number;closed_at:string;verification_method:string;evidence_reference:string;difference_reason:string|null};can_confirm:boolean;notice:string};
@@ -35,6 +35,8 @@ export default function CashDesk({token}:{token:string}){
  const [busy,setBusy]=useState(false);
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
+ const [loadFailed,setLoadFailed]=useState(false);
+ const [openingBlocked,setOpeningBlocked]=useState<string|null>(null);
  const [notice,setNotice]=useState('');
  const [section,setSection]=useState<'contas'|'movimentos'|'relatorio'|'conferencia'>('contas');
  const [report,setReport]=useState<CashReport|null>(null);
@@ -88,8 +90,8 @@ export default function CashDesk({token}:{token:string}){
  const reload=useCallback(async()=>{setLoading(true);setError('');
   try{
    const [a,m]=await Promise.all([request<CashResponse>('contas'),request<{movements:CashMovement[]}>('movimentos')]);
-   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));setCanSubmitOpening(Boolean(a.can_submit_opening));setCanValidateOpening(Boolean(a.can_validate_opening));setSingleAdminOpening(Boolean(a.single_admin_opening));
-  }catch(e){setError(e instanceof Error?e.message:'Erro ao consultar a Caixa.');}
+   setAccounts(a.accounts);setMovements(m.movements);setEnabled(a.can_write);setCanCreateAccounts(Boolean(a.can_create_accounts));setCanSubmitOpening(Boolean(a.can_submit_opening));setCanValidateOpening(Boolean(a.can_validate_opening));setSingleAdminOpening(Boolean(a.single_admin_opening));setOpeningBlocked(a.opening_blocked_reason??null);setLoadFailed(false);
+  }catch(e){setLoadFailed(true);setError(e instanceof Error?e.message:'Erro ao consultar a Caixa.');}
   finally{setLoading(false);}
  },[request]);
  useEffect(()=>{void reload();},[reload]);
@@ -349,10 +351,10 @@ export default function CashDesk({token}:{token:string}){
 
    </div>:<>
   <div className="cis-cash-overview">
-    <article className="cis-cash-metric featured"><span className="cis-cash-metric-icon"><Wallet size={19}/></span><div><small>Saldo disponível</small><strong>{loading||error||!hasAvailableBalance?'—':formatMoney(total)}</strong><p>{active.length?'Contas activas com saldo confirmado':'Indisponível até validação dos saldos iniciais'}</p></div></article>
-    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Landmark size={19}/></span><div><small>Contas cadastradas</small><strong>{loading||error?'—':accounts.length}</strong><p>Bancos, numerário e carteiras móveis</p></div></article>
-    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Layers size={19}/></span><div><small>Em preparação</small><strong>{loading||error?'—':preparingCount}</strong><p>Contas ainda sem saldo validado</p></div></article>
-    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><ClipboardCheck size={19}/></span><div><small>Por validar</small><strong>{loading||error?'—':pendingCount}</strong><p>Validação documental pendente</p></div></article>
+    <article className="cis-cash-metric featured"><span className="cis-cash-metric-icon"><Wallet size={19}/></span><div><small>Saldo disponível</small><strong>{loading||loadFailed||!hasAvailableBalance?'—':formatMoney(total)}</strong><p>{active.length?'Contas activas com saldo confirmado':'Indisponível até validação dos saldos iniciais'}</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Landmark size={19}/></span><div><small>Contas cadastradas</small><strong>{loading||loadFailed?'—':accounts.length}</strong><p>Bancos, numerário e carteiras móveis</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><Layers size={19}/></span><div><small>Em preparação</small><strong>{loading||loadFailed?'—':preparingCount}</strong><p>Contas ainda sem saldo validado</p></div></article>
+    <article className="cis-cash-metric"><span className="cis-cash-metric-icon"><ClipboardCheck size={19}/></span><div><small>Por validar</small><strong>{loading||loadFailed?'—':pendingCount}</strong><p>Validação documental pendente</p></div></article>
   </div>
   <div className="cis-cash-process" role="status"><div className={canCreateAccounts?'ready':''}><span>01</span><b>Cadastro de contas</b>{canCreateAccounts?<CheckCircle2 size={15}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div className={canSubmitOpening?'ready':''}><span>02</span><b>Validação de saldos</b>{canSubmitOpening?<CheckCircle2 size={14}/>:<LockKeyhole size={14}/>}</div><ChevronRight size={15}/><div><span>03</span><b>Movimentos financeiros</b><LockKeyhole size={14}/></div></div>
   <div className="cis-cash-sectionbar">
@@ -409,6 +411,7 @@ export default function CashDesk({token}:{token:string}){
     </div>
     {detailAccount.status==='pendente_validacao'&&<div className="cis-cash-detail-review"><Info size={17}/><span>{singleAdminOpening?'O administrador único pode confirmar a abertura após conferir o saldo real, data de corte e comprovativo. Não há verificação independente.':'A validação exige outro administrador e conferência independente do comprovativo.'} Não substitui reconciliação bancária.</span></div>}
     <div className="cis-cash-detail-actions">
+     {!canSubmitOpening&&openingBlocked&&(detailAccount.status==='em_preparacao'||detailAccount.status==='pendente_validacao')&&<div className="cis-cash-detail-review"><Info size={17}/><span>{openingBlocked}</span></div>}
      {canSubmitOpening&&detailAccount.can_prepare&&<button type="button" onClick={()=>{setSelected(String(detailAccount.id));setOpening({opening_balance:'',cut_at:todayCut(),evidence_reference:''});setAccountDetail(null);beginAction('opening');}}>Preparar saldo inicial <ArrowRight size={15}/></button>}
      {canValidateOpening&&detailAccount.can_validate&&<button type="button" disabled={busy} onClick={()=>{void submit(null,'activate',detailAccount.id);}}>Validar saldo <CheckCircle2 size={15}/></button>}
      {detailAccount.status==='activa'&&<button type="button" onClick={()=>showMovementsFor(detailAccount.id)}><ArrowLeftRight size={16}/> Consultar movimentos</button>}
