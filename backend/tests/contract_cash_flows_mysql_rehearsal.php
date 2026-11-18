@@ -31,6 +31,7 @@ function status(callable $fn):int{ try{$fn();return 200;}catch(HttpExceptionInte
 function req(string $uri,array $payload,User $u):Request{$r=Request::create($uri,'POST',$payload);$r->setUserResolver(static fn()=>$u);return $r;}
 function data($response):array{return $response->getData(true);}
 
+try {
 // ---------- Esquema legado (colunas verificadas pelo próprio controlador) ----------
 $db=DB::connection();
 foreach (['cis_contractos_historico','Contractos','Extracto','Clientes','cis_tabela_juros','cis_cash_accounts','users'] as $t) {
@@ -80,7 +81,7 @@ $acc=fn($code,$bal)=>$db->table('cis_cash_accounts')->insertGetId(['code'=>$code
     'created_at'=>now(),'updated_at'=>now()]);
 $numerario=$acc('DINHEIRO','100.00');
 $banco=$acc('BIM-001','20000.00');
-$row=fn(array $o)=>$db->table('Contractos')->insertGetId($o+[
+$row=function(array $o) use ($db){ $attrs=$o+[
     'Nr do Contracto'=>'C-0100','Nº'=>100,'Nome do Cliente'=>'Cliente Histórico','Nº de Cliente'=>7,'Quantia Creditada'=>1000,
     'M. Pagamento'=>'Uma Parcela','Prazo/Duração'=>'1 Mês','% de Juro'=>15,'Tipo de Juro'=>'Fixo','% de Multa'=>10,
     'Forma de Pagamento'=>'Numerário','Disponibilidade'=>'Numerário','Data de Inicio'=>now($tz)->subDays(20)->toDateString(),
@@ -88,7 +89,12 @@ $row=fn(array $o)=>$db->table('Contractos')->insertGetId($o+[
     'Capital'=>1000,'Amortização'=>1000,'Valor a Pagar'=>1150.5,'Data de Pagamento'=>null,'Valor de Juros'=>150.5,
     'Valor de Multa'=>0,'Valor Pago'=>1150.5,'Estado'=>'Pendente','Codigo Cliente'=>'007','Estado do Contrato'=>'Em Progresso',
     'Nº da Parcela'=>1,'Nº de Prestações'=>1,'Estratégia de Cálculo'=>null,'Column1'=>'Mensal','Dias'=>0,'Intervalo'=>'',
-    'Situação de Pagamento'=>'Em Progresso','usuario'=>'vba']);
+    'Situação de Pagamento'=>'Em Progresso','usuario'=>'vba'];
+    // `M. Pagamento` tem ponto: o Query Builder separa-o; usar o mesmo SQL do controlador.
+    [$sql,$bind]=\App\Services\LegacyContractInsert::statement($attrs);
+    $db->insert($sql,$bind);
+    return (int)$db->getPdo()->lastInsertId();
+};
 $hist=$row([]);                                     // histórico, fixo, em dia
 $late=$row(['Nr do Contracto'=>'C-0101','Nº'=>101,'Tipo de Juro'=>'Variável','Capital'=>2000,'Quantia Creditada'=>2000,
     '% de Juro'=>1,'Data de Inicio'=>now($tz)->subDays(40)->toDateString(),'Data de Cobrança'=>now($tz)->subDays(5)->toDateString(),
@@ -184,5 +190,9 @@ echo "== Leitura do histórico pela API\n";
 $hh=data($col->history(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(fn()=>$user)),'C-0100'));
 ok($hh['instalado']===true && count($hh['data'])===1 && $hh['data'][0]['antes']['Estado']==='Pendente','endpoint devolve antes/depois');
 
+} catch (\Throwable $e) {
+    fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
+    exit(2);
+}
 echo "\nResultado: $pass OK, $fail falha(s)\n";
 exit($fail===0?0:1);
