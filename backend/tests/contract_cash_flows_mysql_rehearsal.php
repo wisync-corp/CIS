@@ -283,6 +283,26 @@ $two=$row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2]);
 $row(['Nr do Contracto'=>'C-0111','Nº'=>111,'Nº de Prestações'=>2,'Nº da Parcela'=>2]);
 ok($err(fn()=>$col->previewRenewal($rq(['data_inicio'=>$today]),'C-0111',$two))===409,'recusa renovar com mais de uma prestação em aberto');
 
+
+echo "== Data de pagamento escolhida (hoje ou passada)\n";
+$bd=$row(['Nr do Contracto'=>'C-0120','Nº'=>120]);
+$bp=fn($o)=>['data_pagamento'=>now($tz)->subDays(2)->toDateString(),'cobrar_multa'=>false,'valor_recebido'=>'1150.50',
+    'conta_id'=>$numerario,'referencia'=>'RECIBO-120','idempotency_key'=>'b2b2b2b2-0120-4000-8000-000000000001','confirmacao_recebimento'=>true]+$o;
+ok($err(fn()=>$col->preview(req('/x',['data_pagamento'=>now($tz)->addDay()->toDateString(),'cobrar_multa'=>false],$user),'C-0120',$bd))===422,'data futura recusada');
+ok($err(fn()=>$col->collect(req('/x',$bp([]),$user),'C-0120',$bd))===422,'data anterior à abertura da conta recusada');
+$db->table('cis_cash_accounts')->whereIn('id',[$numerario,$banco])->update(['cut_at'=>now($tz)->subDays(15)]);
+$main=\Illuminate\Support\Facades\DB::connection();
+if (!$main->getSchemaBuilder()->hasTable('cis_cash_daily_closures')) {
+    $main->statement('CREATE TABLE cis_cash_daily_closures(id BIGINT AUTO_INCREMENT PRIMARY KEY,account_id BIGINT UNSIGNED,closing_date DATE)');
+}
+$main->table('cis_cash_daily_closures')->insert(['account_id'=>$banco,'closing_date'=>now($tz)->subDays(1)->toDateString()]);
+ok($err(fn()=>$col->collect(req('/x',$bp(['conta_id'=>$banco]),$user),'C-0120',$bd))===422,'dia com fecho de Caixa recusado');
+$r=data($col->collect(req('/x',$bp([]),$user),'C-0120',$bd));
+$pr=$db->table('Contractos')->where('Ordem',$bd)->first();
+$ex=$db->table('Extracto')->where('Nr',$r['extracto_nr'])->first();
+ok($pr->{'Data de Pagamento'}===now($tz)->subDays(2)->toDateString() && substr((string)$ex->{'Data da Operação'},0,10)===now($tz)->subDays(2)->toDateString()
+    && $pr->Estado==='Pago','pagamento com data passada gravado nessa data (contrato e Extracto)');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

@@ -78,6 +78,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [paymentAmount,setPaymentAmount]=useState('');
  const [reviewDate,setReviewDate]=useState(today());
  const [renewStart,setRenewStart]=useState('');
+ const [payDate,setPayDate]=useState(today());
  const [quote,setQuote]=useState<Quote|null>(null);
  const [quoting,setQuoting]=useState(false);
  const [scenarioBusy,setScenarioBusy]=useState(false);
@@ -174,7 +175,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    next:[...pending].filter(r=>text(r['Data de Cobrança']).slice(0,10)>=today()).sort((a,b)=>text(a['Data de Cobrança']).localeCompare(text(b['Data de Cobrança'])))[0]
   };
  },[rows,paidRows]);
- const datePayment=today();
+ const datePayment=payDate;
+ const payDateOk=/^\d{4}-\d{2}-\d{2}$/.test(payDate)&&payDate<=today();
  const expected=num(selectedInstallment?.['Valor a Pagar']);
  const interests=num(selectedInstallment?.['Valor de Juros']);
  const partialNum=Number(paymentAmount);
@@ -190,14 +192,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const hasChoice=flowReceived||flowNoReceipt;
  const modeAllowed=eligibleModes.includes(mode);
  const activeOrder=ord&&rows.some(r=>String(r.Ordem)===ord&&installmentEligible(r));
- const canQuote=live&&flowReceived&&(!renewing||/^\d{4}-\d{2}-\d{2}$/.test(renewStart))&&!!selectedInstallment&&installmentEligible(selectedInstallment);
+ const canQuote=live&&flowReceived&&payDateOk&&(!renewing||/^\d{4}-\d{2}-\d{2}$/.test(renewStart))&&!!selectedInstallment&&installmentEligible(selectedInstallment);
  const refOk=evidenceRef.trim().length>=4;
  const canExecute=live&&flowReceived&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
 
  function selectContract(numero:string){setSelected(numero);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  async function simulateScenario(e:FormEvent<HTMLFormElement>){
   e.preventDefault();if(!selected||scenarioBusy||live||!modeAllowed||!activeOrder)return;
   const key=ord;
@@ -349,7 +351,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        }
        {hasChoice&&<>
        <div className="cis-collections-fields">
-        {flowReceived&&<label>Data real de pagamento (Maputo)<input type="date" value={datePayment} readOnly/><small>Para simulação de liquidação integral, apenas a data de hoje é aceite.</small></label>}
+        {flowReceived&&<label>Data real de pagamento (Maputo)<input type="date" value={payDate} max={today()} min={text(selectedInstallment?.['Data de Inicio']).slice(0,10)||undefined} onChange={e=>{setPayDate(e.target.value);setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);}}/><small>{payDate===today()?'Hoje. Pode escolher uma data passada se o dinheiro foi recebido antes.':'Data passada: juros, atraso e multa são calculados até esta data. Não é aceite em dias com fecho de Caixa.'}</small></label>}
         {flowReceived&&<label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>}
         {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória</span><select value={accountId} onChange={e=>{setAccountId(e.target.value);setConfirmReceipt(false);}}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+fmt(a.saldo_disponivel):''}</option>)}</select><small>{activeAccount?'O valor recebido entra no saldo desta conta.':'Escolha a conta onde o dinheiro foi efectivamente recebido.'}</small></label>}
         {flowReceived&&<label>Referência do comprovativo / operação <span className="cis-collections-required">Obrigatória</span><input type="text" maxLength={60} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>Fica gravada no Extracto e no histórico da prestação.</small></label>}
