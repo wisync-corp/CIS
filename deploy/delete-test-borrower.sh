@@ -88,7 +88,8 @@ read -r -p "Confirma? Digite APAGAR-MUTUARIO-$ID: " answer
 
 bash deploy/backup-before-auth.sh
 out="$dir/cliente-$ID-$(date +%Y%m%d%H%M%S)"; mkdir -p "$out"
-dump(){ timeout 120 "${DB[@]}" exec -T -e W="$2" mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --single-transaction --skip-lock-tables --column-statistics=0 --where="$W" "$MYSQL_DATABASE" '"$1"; }
+# stdin de /dev/null: sem isto, `docker compose exec` fica preso à espera do teclado.
+dump(){ timeout -k 5 90 "${DB[@]}" exec -T -e W="$2" mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --single-transaction --skip-lock-tables --column-statistics=0 --where="$W" "$MYSQL_DATABASE" '"$1" </dev/null; }
 # Antes de escrever: mostrar sessões que possam bloquear (transacções abertas há >10 s).
 blockers="$(sql "SELECT CONCAT('  sessão ',p.ID,' | ',p.USER,' | ',p.TIME,' s | ',COALESCE(p.STATE,''),' | ',LEFT(COALESCE(p.INFO,''),70)) FROM information_schema.PROCESSLIST p JOIN information_schema.INNODB_TRX t ON t.trx_mysql_thread_id=p.ID WHERE p.ID<>CONNECTION_ID() AND TIMESTAMPDIFF(SECOND,t.trx_started,NOW())>10;")"
 if [[ -n "$blockers" ]]; then

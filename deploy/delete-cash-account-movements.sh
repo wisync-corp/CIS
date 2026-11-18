@@ -60,7 +60,7 @@ read -r -p "Confirma eliminar $N movimento(s)? Digite APAGAR-MOVIMENTOS-$CODE: "
 bash deploy/backup-before-auth.sh
 mkdir -p "$dir"
 copy="$dir/$CODE-$(date +%Y%m%d%H%M%S).sql"
-timeout 60 "${DB[@]}" exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --where='account_id=$ACC' \"\$MYSQL_DATABASE\" Extracto" > "$copy"
+timeout -k 5 60 "${DB[@]}" exec -T mysql sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --where='account_id=$ACC' \"\$MYSQL_DATABASE\" Extracto" </dev/null > "$copy"
 chmod 600 "$copy"
 [[ "$(grep -c 'INSERT INTO' "$copy" || true)" -ge 1 ]] || { echo 'BLOQUEADO: cópia das linhas falhou; nada apagado.' >&2; exit 1; }
 sql "CREATE TEMPORARY TABLE chk(ok TINYINT NOT NULL, CHECK (ok=1));
