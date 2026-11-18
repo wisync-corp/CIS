@@ -88,6 +88,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [paying,setPaying]=useState(false);
  const [payKey,setPayKey]=useState('');
  const [paymentDone,setPaymentDone]=useState<PaymentResult|null>(null);
+ const [payError,setPayError]=useState('');
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
  const [view,setView]=useState<'resumo'|'tratamento'|'historico'>(initialOrder?'tratamento':'resumo');
  const [refresh,setRefresh]=useState(0);
@@ -211,7 +212,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  async function pay(){
   if(!selected||!ord||!quote||!canExecute)return;
-  const key=payKey||newKey();setPayKey(key);setPaying(true);setMessage('');
+  const key=payKey||newKey();setPayKey(key);setPaying(true);setMessage('');setPayError('');
   try{
    const r=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+ord+'/cobrar',{
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
@@ -221,7 +222,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    const data=await r.json().catch(()=>({})) as PaymentResult&{message?:string;errors?:Record<string,string[]>};
    if(!r.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'O pagamento não foi registado.');
    setPaymentDone(data);setQuote(null);setConfirmReceipt(false);setPayKey('');setRefresh(v=>v+1);
-  }catch(err){setMessage(err instanceof Error?err.message:'Falha ao registar o pagamento.');}
+  }catch(err){setPayError(err instanceof Error?err.message:'Falha ao registar o pagamento.');}
   finally{setPaying(false);}
  }
 
@@ -368,7 +369,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {!quote.registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real ainda não activado neste servidor. A prévia está correcta, mas o pagamento não pode ser gravado.</span></div>}</div>}
        </>}
        {flowReceived&&mode==='total'&&quote&&<label className="cis-collections-check"><input type="checkbox" checked={confirmReceipt} onChange={e=>setConfirmReceipt(e.target.checked)}/> Confirmo que recebi {fmt(quote.total)} na conta {activeAccount?activeAccount.code:'seleccionada'}</label>}
-       {flowReceived&&mode==='total'&&<div className="cis-collections-disabled"><button type="button" className="cis-collections-primary" disabled={!canExecute} onClick={()=>void pay()}>{paying?'A registar…':<><CheckCircle2 size={16}/> Confirmar e registar pagamento</>}</button><small>{!quote?'Simule primeiro o pagamento integral.':!quote.registo_activo?'Registo real desligado no servidor: execute deploy/activate-contract-cash-flows.sh na VPS.':!activeAccount?'Seleccione a conta receptora.':!refOk?'Indique a referência do comprovativo.':!confirmReceipt?'Confirme o recebimento efectivo.':'O pagamento é gravado uma única vez: prestação, entrada no Extracto e histórico antes/depois.'}</small></div>}
+       {flowReceived&&mode==='total'&&<div className="cis-collections-action"><button type="button" className="cis-collections-primary" disabled={!canExecute} onClick={()=>void pay()}>{paying?'A registar…':<><CheckCircle2 size={16}/> Confirmar e registar pagamento</>}</button><small>{!quote?'Simule primeiro o pagamento integral.':!quote.registo_activo?'Registo real desligado no servidor: execute deploy/activate-contract-cash-flows.sh na VPS.':!activeAccount?'Seleccione a conta receptora.':!refOk?'Indique a referência do comprovativo.':!confirmReceipt?'Confirme o recebimento efectivo.':'O pagamento é gravado uma única vez: prestação, entrada no Extracto e histórico antes/depois.'}</small></div>}
+       {payError&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{payError}</div>}
        {paymentDone&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={17}/>{paymentDone.notice}{paymentDone.saldo_conta_actual?' Saldo actual: '+fmt(paymentDone.saldo_conta_actual)+'.':''}{paymentDone.contrato_finalizado?' Contrato finalizado.':''}</div>}
       </div>
      </div>}</div>:
