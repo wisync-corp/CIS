@@ -85,7 +85,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
    .then((result:Paged)=>setData(result)).catch(e=>{if(e.name!=='AbortError'){setData(null);setError(e.message);}})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return ()=>controller.abort();
- },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,contractSort,sortDirection]);
+ },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,situationFilter,contractSort,sortDirection]);
  if(endpoint==='clientes'&&selected!==null)return <ClientProfile id={selected} token={token} onBack={()=>{setSelected(null);setRefresh(v=>v+1);}}/>;
  if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft token={token} onBack={()=>setContractDraftOpen(false)} onContractCreated={numero=>{setNewlyCreatedContract(numero);setContractDraftOpen(false);setSelectedContract(numero);setRefresh(v=>v+1);window.scrollTo({top:0,behavior:'smooth'});}}/>;
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} justCreated={newlyCreatedContract===selectedContract} onBack={()=>{setSelectedContract(null);setNewlyCreatedContract(null);setRefresh(v=>v+1);}}/>;
