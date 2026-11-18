@@ -88,8 +88,16 @@ read -r -p "Confirma? Digite APAGAR-MUTUARIO-$ID: " answer
 
 bash deploy/backup-before-auth.sh
 out="$dir/cliente-$ID-$(date +%Y%m%d%H%M%S)"; mkdir -p "$out"
-dump(){ timeout 120 "${DB[@]}" exec -T -e W="$2" mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --where="$W" "$MYSQL_DATABASE" '"$1"; }
+dump(){ timeout 120 "${DB[@]}" exec -T -e W="$2" mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --default-character-set=utf8mb4 --no-create-info --skip-triggers --complete-insert --skip-add-locks --single-transaction --skip-lock-tables --column-statistics=0 --where="$W" "$MYSQL_DATABASE" '"$1"; }
+# Antes de escrever: mostrar sessões que possam bloquear (transacções abertas há >10 s).
+blockers="$(sql "SELECT CONCAT('  sessão ',p.ID,' | ',p.USER,' | ',p.TIME,' s | ',COALESCE(p.STATE,''),' | ',LEFT(COALESCE(p.INFO,''),70)) FROM information_schema.PROCESSLIST p JOIN information_schema.INNODB_TRX t ON t.trx_mysql_thread_id=p.ID WHERE p.ID<>CONNECTION_ID() AND TIMESTAMPDIFF(SECOND,t.trx_started,NOW())>10;")"
+if [[ -n "$blockers" ]]; then
+  echo 'ATENÇÃO: há transacções abertas na base que podem bloquear a eliminação:' >&2; echo "$blockers" >&2
+  echo 'Se forem de execuções antigas deste script, termine-as antes (ver instruções). Nada foi alterado.' >&2; exit 1
+fi
+echo 'A guardar cópia das prestações…'
 dump Contractos "\`Nº de Cliente\`=$ID" > "$out/contractos.sql"
+echo 'A guardar cópia dos movimentos…'
 [[ "$NE" == 0 ]] || dump Extracto "Contracto IN ($IN)" > "$out/extracto.sql"
 grep -q 'INSERT INTO' "$out/contractos.sql" || { echo 'BLOQUEADO: cópia das prestações falhou; nada apagado.' >&2; exit 1; }
 chmod 600 "$out"/*.sql
@@ -108,7 +116,9 @@ if [[ "$HIST" == 1 ]]; then
  FROM Contractos WHERE \`Nº de Cliente\`=$ID;
 INSERT INTO chk SELECT (ROW_COUNT()=$NC);"
 fi
-if ! sql "CREATE TEMPORARY TABLE chk(ok TINYINT NOT NULL, CHECK (ok=1));
+echo 'A eliminar numa única transacção (máx. 20 s de espera por bloqueios)…'
+if ! sql "SET SESSION lock_wait_timeout=20; SET SESSION innodb_lock_wait_timeout=20;
+CREATE TEMPORARY TABLE chk(ok TINYINT NOT NULL, CHECK (ok=1));
 START TRANSACTION;
 INSERT INTO chk SELECT (COUNT(*)=$NC AND COALESCE(SUM(Ordem),0)=$SUMC) FROM Contractos WHERE \`Nº de Cliente\`=$ID;
 INSERT INTO chk SELECT (COUNT(*)=$NE AND COALESCE(SUM(Nr),0)=$SUME) FROM Extracto WHERE Contracto IN ($IN);
@@ -118,7 +128,7 @@ INSERT INTO chk SELECT (ROW_COUNT()=$NE);
 DELETE FROM Contractos WHERE \`Nº de Cliente\`=$ID;
 INSERT INTO chk SELECT (ROW_COUNT()=$NC);
 COMMIT;" >/dev/null; then
-  echo 'FALHOU: transacção revertida (houve alteração entretanto?). Nada foi apagado.' >&2; exit 1
+  echo 'FALHOU: transacção revertida (bloqueio de outra sessão ou alteração entretanto). Nada foi apagado.' >&2; exit 1
 fi
 [[ "$(sql "SELECT COUNT(*) FROM Contractos WHERE \`Nº de Cliente\`=$ID;")" == 0 ]] || { echo 'ATENÇÃO: ainda há prestações do cliente.' >&2; exit 1; }
 echo "ELIMINADO: $NC prestação(ões) e $NE movimento(s) do mutuário ID $ID."
