@@ -15,10 +15,21 @@ final class ContractListController extends Controller
         'cliente_id' => 'cliente_id',
         'linhas_prestacoes' => 'linhas_prestacoes',
         'estado' => 'estado',
+        'capital' => 'capital',
+        'prestacao_a_pagar' => 'prestacao_a_pagar',
+        'situacao' => 'situacao',
     ];
+    // Situação de pagamento do contrato (a partir das PRESTAÇÕES, não do Estado do Contrato):
+    //  Pagamento Atrasado — há prestação por pagar marcada como atrasada ou com vencimento passado;
+    //  Pendente           — há prestações por pagar, todas dentro do prazo;
+    //  Finalizado         — não há prestações por pagar.
+    public const SITUATIONS = ['Pendente','Pagamento Atrasado','Finalizado'];
 
     private function groupedContracts()
     {
+        $today = now('Africa/Maputo')->toDateString();
+        $open = "`Estado` IN ('Pendente','Pagamento Atrasado')";
+        $late = "($open AND (`Estado`='Pagamento Atrasado' OR `Data de Cobrança` < ?))";
         // A agregação só afirma um estado quando TODAS as prestações do
         // contrato partilham o mesmo Estado do Contrato, incluindo nulos.
         // Valores divergentes são mostrados e não classificados arbitrariamente.
@@ -32,6 +43,16 @@ final class ContractListController extends Controller
                   THEN 'Estados divergentes'
                 ELSE COALESCE(MAX(NULLIF(TRIM(`Estado do Contrato`), '')), 'Sem estado')
                 END AS estado")
+            // Capital do contrato = quantia creditada (montante emprestado).
+            ->selectRaw('CAST(ROUND(MAX(`Quantia Creditada`),2) AS DECIMAL(18,2)) AS capital')
+            // Prestação que deve ser paga = a próxima por pagar (vencimento mais antigo).
+            ->selectRaw("CAST(SUBSTRING_INDEX(GROUP_CONCAT(CASE WHEN $open THEN ROUND(`Valor a Pagar`,2) END
+                ORDER BY `Data de Cobrança`,`Nº da Parcela` SEPARATOR '|'),'|',1) AS DECIMAL(18,2)) AS prestacao_a_pagar")
+            ->selectRaw("SUBSTRING_INDEX(GROUP_CONCAT(CASE WHEN $open THEN DATE_FORMAT(`Data de Cobrança`,'%Y-%m-%d') END
+                ORDER BY `Data de Cobrança`,`Nº da Parcela` SEPARATOR '|'),'|',1) AS proximo_vencimento")
+            ->selectRaw("CASE WHEN SUM(CASE WHEN $late THEN 1 ELSE 0 END)>0 THEN 'Pagamento Atrasado'
+                WHEN SUM(CASE WHEN $open THEN 1 ELSE 0 END)>0 THEN 'Pendente'
+                ELSE 'Finalizado' END AS situacao",[$today])
             ->groupBy('Nr do Contracto');
     }
 
@@ -46,6 +67,10 @@ final class ContractListController extends Controller
             ->groupBy('estado')
             ->orderBy('estado')
             ->get();
+        $situations = DB::connection('mysql_legacy')->query()
+            ->fromSub($this->groupedContracts(), 'contratos')
+            ->select('situacao')->selectRaw('COUNT(*) AS total')
+            ->groupBy('situacao')->pluck('total','situacao');
 
         $byState = $rows->map(fn ($row) => [
             'estado' => $row->estado,
@@ -55,6 +80,9 @@ final class ContractListController extends Controller
         return response()->json([
             'total' => (int) $byState->sum('total'),
             'por_estado' => $byState,
+            'por_situacao' => collect(self::SITUATIONS)->map(fn ($s) => [
+                'situacao' => $s, 'total' => (int) ($situations[$s] ?? 0),
+            ])->values(),
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -74,7 +102,8 @@ final class ContractListController extends Controller
         $filters = $request->validate([
             'q' => ['sometimes', 'string', 'max:155'],
             'estado' => ['sometimes', 'string', 'max:155'],
-            'sort' => ['sometimes', 'string', 'in:numero,cliente,cliente_id,linhas_prestacoes,estado'],
+            'situacao' => ['sometimes', 'string', 'in:Pendente,Pagamento Atrasado,Finalizado'],
+            'sort' => ['sometimes', 'string', 'in:numero,cliente,cliente_id,linhas_prestacoes,estado,capital,prestacao_a_pagar,situacao'],
             'direction' => ['sometimes', 'string', 'in:asc,desc'],
         ]);
 
@@ -101,6 +130,9 @@ final class ContractListController extends Controller
             ->fromSub($builder, 'contratos');
         if ($state !== '') {
             $results->where('estado', $state);
+        }
+        if (($filters['situacao'] ?? '') !== '') {
+            $results->where('situacao', $filters['situacao']);
         }
 
         return $results->orderBy($sort, $direction)
