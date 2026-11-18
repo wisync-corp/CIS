@@ -64,3 +64,15 @@ Fluxo: «Houve pagamento» → «Renovar empréstimo». Só está disponível qu
 - O histórico imutável regista `renovar_juros` (antes/depois) e `renovacao_nova_prestacao`.
 - Não há limite de renovações.
 - `Renovado` conta como prestação liquidada para finalizar o contrato e nos juros recebidos da Visão geral.
+
+## Data de pagamento
+
+- Por defeito, a data de pagamento é hoje (Maputo).
+- **Só o administrador** pode escolher uma data passada. Gestor, agente e cobrador registam sempre com a data de hoje; o servidor recusa outra data com 403.
+- Regras para uma data diferente de hoje:
+  - nunca é futura;
+  - nunca é anterior à abertura da conta na Caixa (`cut_at`);
+  - nunca cai num dia em que essa conta já tenha fecho diário (nem antes desse fecho).
+- Juros variáveis, dias de atraso, estado (Pago/Pago em Atraso) e multa são calculados até à data escolhida.
+- A data fica registada em `Data de Pagamento` e no Extracto (`Data da Operação`).
+- Pagamento antecipado de uma prestação, por exemplo depois de uma renovação, é permitido.

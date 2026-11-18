@@ -117,6 +117,34 @@ final class ContractCollectionController extends Controller
         ];
     }
 
+    /** Data efectiva do recebimento: hoje (todos) ou passada (só administrador), nunca futura. */
+    private function paymentDate(object $row,string $date,?object $u): void
+    {
+        $today=now('Africa/Maputo')->toDateString();
+        abort_if($date>$today,422,'A data de pagamento não pode ser futura.');
+        // Só o administrador pode registar um recebimento com data diferente de hoje.
+        abort_if($date!==$today && !($u && $u->role==='administrador'),403,
+            'Apenas o administrador pode alterar a data de pagamento; os restantes utilizadores registam com a data de hoje.');
+        // Pagamento antecipado (antes do início, p. ex. após renovação) é permitido.
+    }
+
+    /** A data tem de estar dentro do período aberto da conta: após a abertura e sem fecho diário nesse dia ou depois. */
+    private function cashDateOpen(object $account,string $date): void
+    {
+        $cut=substr((string)($account->cut_at??''),0,10);
+        abort_if($cut!=='' && $date<$cut,422,'A data de pagamento é anterior à abertura da conta '.$account->code
+            .' na Caixa ('.CarbonImmutable::parse($cut)->format('d/m/Y').').');
+        try {
+            $closed=DB::connection()->table('cis_cash_daily_closures')->where('account_id',(int)$account->id)
+                ->where('closing_date','>=',$date)->max('closing_date');
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int)($e->errorInfo[1]??0)===1146) return; // fechos diários ainda não instalados
+            throw $e;
+        }
+        abort_if($closed!==null,422,'A conta '.$account->code.' já tem fecho diário em '
+            .CarbonImmutable::parse($closed)->format('d/m/Y').'; não é possível lançar pagamentos com data até esse dia.');
+    }
+
     private function eligibility($db,object $row): void
     {
         abort_unless(in_array($row->Estado,['Pendente','Pagamento Atrasado'],true),409,
@@ -140,12 +168,12 @@ final class ContractCollectionController extends Controller
             'data_pagamento'=>['required','date_format:Y-m-d'],
             'cobrar_multa'=>['required','boolean'],
         ]);
-        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
-            'A data de pagamento real tem de ser hoje em Moçambique.');
+
         $db=DB::connection('mysql_legacy');
         $row=$db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$ordem)->first();
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
+        $this->paymentDate($row,$data['data_pagamento'],$request->user());
         $q=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
@@ -169,8 +197,7 @@ final class ContractCollectionController extends Controller
             'idempotency_key'=>['required','uuid'],
             'confirmacao_recebimento'=>['required','accepted'],
         ]);
-        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
-            'A cobrança efectiva deve ser registada com a data de hoje.');
+
         $received=CashAccountLedger::cents($data['valor_recebido'],'valor_recebido');
         $key='contract:collect:'.strtolower($data['idempotency_key']);
         $user=$request->user();
@@ -194,6 +221,8 @@ final class ContractCollectionController extends Controller
             abort_unless($rows->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
             $row=$rows[0];
             $this->eligibility($db,$row);
+            $this->paymentDate($row,$data['data_pagamento'],$user);
+            $this->cashDateOpen($account,$data['data_pagamento']);
             $calc=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
             $c=$calc['_cents'];
             if ($c['total']!==$received) {
@@ -298,7 +327,7 @@ final class ContractCollectionController extends Controller
         abort_unless($startD->lessThanOrEqualTo($today->addDays(60)),422,'A data de início da renovação não pode passar de 60 dias a partir de hoje.');
         [$unit,$n,$label]=$this->renewalTerm($db,$row);
         $newDue=$unit==='months'?$startD->addMonthsNoOverflow($n):$startD->addDays($n);
-        abort_unless($newDue->greaterThan($today),422,'O novo vencimento ('.$newDue->format('d/m/Y').') já passou; escolha uma data de início mais recente.');
+        abort_unless($newDue->greaterThan($today),422,'O novo vencimento ('.$newDue->format('d/m/Y').') não é posterior à data de pagamento; escolha uma data de início mais recente.');
         $variable=in_array((string)$row->{'Tipo de Juro'},['Variável','Variavel'],true);
         if ($variable) {
             $termDays=(int)$startD->diffInDays($newDue);
@@ -341,12 +370,12 @@ final class ContractCollectionController extends Controller
             'cobrar_multa'=>['required','boolean'],
             'data_inicio'=>['required','date_format:Y-m-d'],
         ]);
-        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
-            'A data de pagamento real tem de ser hoje em Moçambique.');
+
         $db=DB::connection('mysql_legacy');
         $row=$db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$ordem)->first();
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
+        $this->paymentDate($row,$data['data_pagamento'],$request->user());
         $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
@@ -371,8 +400,7 @@ final class ContractCollectionController extends Controller
             'idempotency_key'=>['required','uuid'],
             'confirmacao_recebimento'=>['required','accepted'],
         ]);
-        abort_if($data['data_pagamento']!==now('Africa/Maputo')->toDateString(),422,
-            'A renovação deve ser registada com a data de hoje.');
+
         $received=CashAccountLedger::cents($data['valor_recebido'],'valor_recebido');
         $key='contract:renew:'.strtolower($data['idempotency_key']);
         $user=$request->user();
@@ -394,6 +422,8 @@ final class ContractCollectionController extends Controller
             $row=$all->firstWhere('Ordem',$ordem);
             abort_unless($row && $all->where('Ordem',$ordem)->count()===1,409,'Prestação não encontrada ou identificador duplicado.');
             $this->eligibility($db,$row);
+            $this->paymentDate($row,$data['data_pagamento'],$user);
+            $this->cashDateOpen($account,$data['data_pagamento']);
             $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
             $c=$plan['_cents'];$np=$plan['nova_prestacao'];
             if ($c['total']!==$received) {
