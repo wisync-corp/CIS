@@ -15,14 +15,20 @@ DB=(sudo -n docker compose --env-file deploy/.env -f deploy/mysql-only.yaml)
 APP=(sudo -n docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml)
 sql(){ printf '%s\n' "$1" | timeout 60 "${DB[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 --batch --skip-column-names "$MYSQL_DATABASE"'; }
 setflag(){ python3 -c 'import pathlib,os,sys,tempfile; k,v=sys.argv[1],sys.argv[2]; p=pathlib.Path("deploy/.env"); x=[l for l in p.read_text().splitlines() if not l.startswith(k+"=")]; x.append(k+"="+v); fd,n=tempfile.mkstemp(prefix=".contract-cash-",dir=str(p.parent)); os.fchmod(fd,0o600); f=os.fdopen(fd,"w"); f.write("\n".join(x)+"\n"); f.flush(); os.fsync(f.fileno()); f.close(); os.replace(n,p)' "$1" "$2"; }
-need(){ grep -qx "$1=true" deploy/.env || { echo "BLOQUEADO: $1 tem de estar activo ($2)." >&2; exit 1; }; }
+# Verifica a flag NA API EM EXECUÇÃO (algumas vêm do deploy/.env, outras fixas no compose).
+need(){ local v; v="$("${APP[@]}" exec -T api-preview printenv "$1" 2>/dev/null | tr -d '\r' || true)"
+  [[ "$v" == true ]] || { echo "BLOQUEADO: $1 tem de estar activo na API ($2); valor actual: ${v:-ausente}." >&2; exit 1; }; }
+"${APP[@]}" exec -T api-preview true 2>/dev/null || { echo 'BLOQUEADO: a API (api-preview) não está em execução. Execute bash deploy/refresh-private-preview.sh' >&2; exit 1; }
 echo '=== CAPTA | ACTIVAR PAGAMENTOS E DESEMBOLSOS LIGADOS À CAIXA ==='
 need CIS_PRIVATE_PREVIEW 'ambiente privado'
 need CIS_CONTRACTS_READ_APPROVED 'consulta de contratos'
 need CIS_CLIENTES_PREVIEW_APPROVED 'consulta de clientes'
 need CIS_CASH_WRITES_APPROVED 'escrita da Caixa'
-grep -qx 'CONTRACT_WRITER_DB_USERNAME=cis_contract_writer' deploy/.env || {
-  echo 'BLOQUEADO: escritor de contratos não configurado (deploy/activate-financial-workflows.sh).' >&2; exit 1; }
+writer="$("${APP[@]}" exec -T api-preview printenv CONTRACT_WRITER_DB_USERNAME 2>/dev/null | tr -d '\r' || true)"
+[[ "$writer" == cis_contract_writer ]] || {
+  echo "BLOQUEADO: a API usa o escritor '${writer:-ausente}' (esperado cis_contract_writer)." >&2; exit 1; }
+[[ -n "$("${APP[@]}" exec -T api-preview printenv CONTRACT_WRITER_DB_PASSWORD 2>/dev/null | tr -d '\r' || true)" ]] || {
+  echo 'BLOQUEADO: palavra-passe do escritor de contratos ausente (deploy/activate-financial-workflows.sh).' >&2; exit 1; }
 [[ "$(sql 'SELECT DATABASE();')" == cis ]] || exit 1
 [[ "$(sql "SELECT COUNT(*) FROM mysql.user WHERE User='cis_contract_writer';")" == 1 ]] || {
   echo 'BLOQUEADO: utilizador cis_contract_writer inexistente.' >&2; exit 1; }
