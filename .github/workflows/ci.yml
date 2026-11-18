@@ -172,6 +172,13 @@ jobs:
       - run: bash -n ../deploy/activate-contract-cash-flows.sh
       - run: bash -n ../deploy/disable-contract-cash-flows.sh
       - run: bash -n ../deploy/verify-contract-cash-flows.sh
+      - name: Every approval flag used by the API reaches the container
+        run: |
+          missing=0
+          for f in $(grep -rhoE "CIS_[A-Z_]+_APPROVED" app routes | sort -u); do
+            grep -q "^ *$f:" ../deploy/compose.preview.yaml || { echo "Flag $f não passa para o container (deploy/compose.preview.yaml)"; missing=1; }
+          done
+          exit $missing
   cash-repair:
     runs-on: ubuntu-latest
     defaults:
