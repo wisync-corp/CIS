@@ -44,7 +44,7 @@ final class ContractListController extends Controller
                 ELSE COALESCE(MAX(NULLIF(TRIM(`Estado do Contrato`), '')), 'Sem estado')
                 END AS estado")
             // Capital do contrato = quantia creditada (montante emprestado).
-            ->selectRaw('ROUND(MAX(`Quantia Creditada`),2) AS capital')
+            ->selectRaw('CAST(ROUND(MAX(`Quantia Creditada`),2) AS DECIMAL(18,2)) AS capital')
             // Prestação que deve ser paga = a próxima por pagar (vencimento mais antigo).
             ->selectRaw("CAST(SUBSTRING_INDEX(GROUP_CONCAT(CASE WHEN $open THEN ROUND(`Valor a Pagar`,2) END
                 ORDER BY `Data de Cobrança`,`Nº da Parcela` SEPARATOR '|'),'|',1) AS DECIMAL(18,2)) AS prestacao_a_pagar")
