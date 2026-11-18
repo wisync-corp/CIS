@@ -174,6 +174,7 @@ final class ContractCollectionController extends Controller
         $user=$request->user();
         $ref=trim(preg_replace('/\s+/',' ',$data['referencia']));
         $db=DB::connection('mysql_contract_writer');
+        try {
         $result=$db->transaction(function () use ($db,$data,$numero,$ordem,$user,$received,$key,$ref) {
             // Ordem de lock: conta -> prestação (igual em desembolso; evita deadlocks).
             [$account,$before]=CashAccountLedger::lockActive($db,(int)$data['conta_id']);
@@ -246,6 +247,11 @@ final class ContractCollectionController extends Controller
                 'contrato_finalizado'=>$unpaid===0,
                 'notice'=>'Pagamento registado na conta '.$account->code.' com histórico antes/depois.'];
         },3);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            abort(503,'A base de dados recusou a operação (MySQL '.($e->errorInfo[1]??'?').'). Nada foi gravado. '
+                .'Verifique as permissões com: bash deploy/verify-contract-cash-flows.sh');
+        }
         return response()->json($result,empty($result['repetido'])?201:200)
             ->header('Cache-Control','no-store, private');
     }

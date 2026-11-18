@@ -291,6 +291,10 @@ final class ContractOpeningController extends Controller
                     'conta'=>$account->code,
                     'saldo_conta_actual'=>CashAccountLedger::amount($accountBalance-(int)$d['montante']*100)];
             }, 1);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            abort(503,'A base de dados recusou o desembolso (MySQL '.($e->errorInfo[1]??'?').'). Nada foi gravado. '
+                .'Verifique as permissões com: bash deploy/verify-contract-cash-flows.sh');
         } finally {
             $db->select('SELECT RELEASE_LOCK(?)', ['cis_open_new_contract']);
         }

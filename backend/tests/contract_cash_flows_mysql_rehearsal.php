@@ -69,6 +69,29 @@ CREATE TRIGGER cis_contr_hist_no_delete BEFORE DELETE ON cis_contractos_historic
  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Historico de prestacoes e imutavel: DELETE recusado';
 SQL);
 
+// ---------- Escritor RESTRITO com as MESMAS permissões da VPS (nunca root) ----------
+$db->unprepared(<<<'SQL'
+DROP USER IF EXISTS 'cis_contract_writer'@'%';
+CREATE USER 'cis_contract_writer'@'%' IDENTIFIED BY 'ci-writer-pw';
+GRANT SELECT ON `cis_ci`.`Clientes` TO 'cis_contract_writer'@'%';
+GRANT SELECT ON `cis_ci`.`cis_tabela_juros` TO 'cis_contract_writer'@'%';
+GRANT SELECT, INSERT ON `cis_ci`.`Extracto` TO 'cis_contract_writer'@'%';
+GRANT SELECT, INSERT ON `cis_ci`.`Contractos` TO 'cis_contract_writer'@'%';
+GRANT UPDATE (`Valor de Juros`,`Valor de Multa`,`Valor a Pagar`,`Valor Pago`,
+ `Data de Pagamento`,`Estado`,`Dias`,`Situação de Pagamento`,
+ `Estado do Contrato`) ON `cis_ci`.`Contractos` TO 'cis_contract_writer'@'%';
+GRANT SELECT ON `cis_ci`.`cis_cash_accounts` TO 'cis_contract_writer'@'%';
+GRANT UPDATE (`updated_at`) ON `cis_ci`.`cis_cash_accounts` TO 'cis_contract_writer'@'%';
+GRANT SELECT, INSERT ON `cis_ci`.`cis_contractos_historico` TO 'cis_contract_writer'@'%';
+SQL);
+config(['database.connections.mysql_contract_writer.username'=>'cis_contract_writer',
+    'database.connections.mysql_contract_writer.password'=>'ci-writer-pw']);
+DB::purge('mysql_contract_writer');
+if (DB::connection('mysql_contract_writer')->selectOne('SELECT CURRENT_USER() AS u')->u!=='cis_contract_writer@%') {
+    throw new RuntimeException('O ensaio tem de usar o escritor restrito, não root.');
+}
+echo "Escritor restrito activo: cis_contract_writer@% (permissões da VPS)\n";
+
 // ---------- Dados ----------
 $tz='Africa/Maputo';
 $today=now($tz)->toDateString();
