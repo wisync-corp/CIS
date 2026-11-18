@@ -131,10 +131,13 @@ final class ContractCollectionController extends Controller
         $cut=substr((string)($account->cut_at??''),0,10);
         abort_if($cut!=='' && $date<$cut,422,'A data de pagamento é anterior à abertura da conta '.$account->code
             .' na Caixa ('.CarbonImmutable::parse($cut)->format('d/m/Y').').');
-        $main=DB::connection();
-        if (!$main->getSchemaBuilder()->hasTable('cis_cash_daily_closures')) return;
-        $closed=$main->table('cis_cash_daily_closures')->where('account_id',$account->id)
-            ->where('closing_date','>=',$date)->max('closing_date');
+        try {
+            $closed=DB::connection()->table('cis_cash_daily_closures')->where('account_id',(int)$account->id)
+                ->where('closing_date','>=',$date)->max('closing_date');
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int)($e->errorInfo[1]??0)===1146) return; // fechos diários ainda não instalados
+            throw $e;
+        }
         abort_if($closed!==null,422,'A conta '.$account->code.' já tem fecho diário em '
             .CarbonImmutable::parse($closed)->format('d/m/Y').'; não é possível lançar pagamentos com data até esse dia.');
     }
