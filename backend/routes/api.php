@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('contractos/{numero}/prestacoes/{ordem}/simular-parcelas',[ParcelasQuoteController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/cobrar',[ContractCollectionController::class,'collect'])->whereNumber('ordem')->middleware('throttle:3,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
+        Route::get('contractos/{numero}/historico-alteracoes',[ContractCollectionController::class,'history'])->middleware('throttle:30,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){
         Route::get('extracto',[CisConsultaController::class,'extracto']);
