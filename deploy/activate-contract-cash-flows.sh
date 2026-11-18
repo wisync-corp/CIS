@@ -53,6 +53,8 @@ echo "Contas que poderão receber pagamentos e financiar desembolsos: $active"
 echo 'Permissões que serão dadas ao escritor de contratos (mínimas):'
 echo '  - cis_cash_accounts: SELECT e UPDATE(updated_at) — apenas para bloquear a conta durante a operação;'
 echo '  - cis_contractos_historico: SELECT e INSERT — nunca UPDATE nem DELETE.'
+echo '  - Contractos: UPDATE só nas 9 colunas do pagamento (juros, multa, valor a pagar/pago, data de pagamento,'
+echo '    estado, dias, situação, estado do contrato) — nunca capital, vencimento, cliente ou montante.'
 echo 'Regras: liquidação TOTAL apenas; data de hoje; conta e referência obrigatórias; cada pedido gravado uma só vez.'
 read -r -p 'Confirma activar? Digite ACTIVAR-PAGAMENTOS-DESEMBOLSOS: ' answer
 [[ "$answer" == ACTIVAR-PAGAMENTOS-DESEMBOLSOS ]] || { echo 'Cancelado. Nada foi alterado.'; exit 0; }
@@ -61,7 +63,12 @@ mkdir -p "$HOME/cis-private/cash-verification"
 cp -p deploy/.env "$HOME/cis-private/cash-verification/deploy-env-before-contract-cash.backup"
 sql "GRANT SELECT ON \`cis\`.\`cis_cash_accounts\` TO 'cis_contract_writer'@'%';
 GRANT UPDATE (\`updated_at\`) ON \`cis\`.\`cis_cash_accounts\` TO 'cis_contract_writer'@'%';
-GRANT SELECT, INSERT ON \`cis\`.\`cis_contractos_historico\` TO 'cis_contract_writer'@'%';"
+GRANT SELECT, INSERT ON \`cis\`.\`cis_contractos_historico\` TO 'cis_contract_writer'@'%';
+GRANT SELECT, INSERT ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';
+GRANT SELECT, INSERT ON \`cis\`.\`Extracto\` TO 'cis_contract_writer'@'%';
+GRANT UPDATE (\`Valor de Juros\`,\`Valor de Multa\`,\`Valor a Pagar\`,\`Valor Pago\`,
+ \`Data de Pagamento\`,\`Estado\`,\`Dias\`,\`Situação de Pagamento\`,
+ \`Estado do Contrato\`) ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';"
 grants="$(sql "SHOW GRANTS FOR 'cis_contract_writer'@'%';")"
 [[ "$grants" != *'ALL PRIVILEGES'* ]] || { echo 'BLOQUEADO: ALL PRIVILEGES no escritor.' >&2; exit 1; }
 grantee="CONCAT(CHAR(39),'cis_contract_writer',CHAR(39),'@',CHAR(39),'%',CHAR(39))"
