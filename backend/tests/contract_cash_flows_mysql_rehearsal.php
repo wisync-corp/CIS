@@ -156,8 +156,8 @@ ok($r2['repetido']===true && $snap()===$s,'mesma chave: nada duplicado');
 
 echo "== Valor errado / conta inexistente / referência em falta\n";
 $s=$snap();
-ok(status(fn()=>$col->collect(req('/x',['valor_recebido'=>'2599.00','idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000001']+$pay,$user),'C-0101',$late))===422,'valor diferente do devido → 422');
-ok(status(fn()=>$col->collect(req('/x',['conta_id'=>999,'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000002']+$pay,$user),'C-0101',$late))===404,'conta inexistente → 404');
+ok(status(fn()=>$col->collect(req('/x',['valor_recebido'=>'2599.00','idempotency_key'=>'22222222-2222-4222-8222-222222222222']+$pay,$user),'C-0101',$late))===422,'valor diferente do devido → 422');
+ok(status(fn()=>$col->collect(req('/x',['conta_id'=>999,'idempotency_key'=>'33333333-3333-4333-8333-333333333333']+$pay,$user),'C-0101',$late))===404,'conta inexistente → 404');
 ok(status(fn()=>$col->collect(req('/x',array_diff_key($pay,['referencia'=>1]),$user),'C-0101',$late))===422,'sem referência → 422');
 ok($snap()===$s,'nenhuma alteração nas tentativas recusadas');
 
@@ -166,7 +166,7 @@ $q=data($col->preview(req('/x',['data_pagamento'=>$today,'cobrar_multa'=>true],$
 // capital 2000 × 1% × 40 dias = 800; base 2800; multa 10% de 800 = 80; total 2880
 ok($q['total_texto']==='2880.00' && $q['dias_atraso']===5 && $q['estado']==='Pago em Atraso','variável: 2000×1%×40d=800 + multa 80 = 2880.00');
 $r=data($col->collect(req('/x',['cobrar_multa'=>true,'valor_recebido'=>'2880.00','conta_id'=>$banco,
-    'idempotency_key'=>'a1a1a1a1-0110-4000-8000-000000000003']+$pay,$user),'C-0101',$late));
+    'idempotency_key'=>'44444444-4444-4444-8444-444444444444']+$pay,$user),'C-0101',$late));
 ok($r['registado'] && $r['saldo_conta_actual']==='22880.00','entrada na conta BIM-001 escolhida');
 
 echo "== Prestação com entrada já existente no Extracto\n";
