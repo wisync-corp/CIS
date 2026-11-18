@@ -172,6 +172,7 @@ jobs:
       - run: bash -n ../deploy/activate-contract-cash-flows.sh
       - run: bash -n ../deploy/disable-contract-cash-flows.sh
       - run: bash -n ../deploy/verify-contract-cash-flows.sh
+      - run: bash -n ../deploy/delete-test-borrower.sh
       - name: Every approval flag used by the API reaches the container
         run: |
           missing=0
