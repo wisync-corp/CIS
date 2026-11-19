@@ -1554,3 +1554,18 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-glossary-table th{text-align:left;background:#f9fafb;font-size:calc(12px * var(--cis-fs));color:#475467;font-weight:800;padding:9px 12px;border-bottom:1px solid #eaecf0}
 .cis-glossary-table td{padding:9px 12px;border-bottom:1px solid #f2f4f7;vertical-align:top;color:var(--cis-heading)}
 .cis-glossary-table td:first-child{white-space:nowrap}
+
+/* Numeração dos contratos */
+.cis-num{display:flex;flex-direction:column;gap:12px;margin-top:4px;transition:opacity .15s}
+.cis-num.loading{opacity:.6}
+.cis-num-example{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;padding:14px 16px;border:1px solid #e9d7fe;background:#faf8ff;border-radius:12px}
+.cis-num-example span{font-size:calc(11px * var(--cis-fs));font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--cis-primary)}
+.cis-num-example b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:calc(20px * var(--cis-fs));color:var(--cis-heading)}
+.cis-num-example small{color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
+.cis-co-alert.ok{background:#ecfdf3;color:#067647;border:1px solid #abefc6}
+.cis-num-table td.num,.cis-num-table th.num{text-align:right}
+.cis-num code,.cis-num-sample code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:calc(12.5px * var(--cis-fs));background:#f2f4f7;padding:1px 6px;border-radius:6px}
+.cis-num-sample summary{cursor:pointer;font-weight:800;color:var(--cis-primary);font-size:calc(13px * var(--cis-fs));margin-bottom:8px}
+.cis-num-cmd{display:flex;align-items:center;gap:8px;background:#101828;color:#e4e7ec;border-radius:10px;padding:10px 12px;overflow-x:auto}
+.cis-num-cmd code{background:transparent;color:#e4e7ec;white-space:nowrap}
+.cis-num-note{margin:0;color:var(--cis-text-muted);font-size:calc(12.5px * var(--cis-fs))}

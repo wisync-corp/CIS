@@ -66,6 +66,7 @@ final class ExtractoController extends Controller
         abort_if(!empty($f['inicio']) && !empty($f['fim']) && $f['fim']<$f['inicio'],422,
             'A data final tem de ser igual ou posterior à data inicial.');
         foreach (['cliente','contrato'] as $k) $f[$k]=trim((string)($f[$k]??''));
+        if ($f['contrato']!=='') $f['contrato']=\App\Services\ContractNumbering::resolveIfMissing($f['contrato']);
         return $f;
     }
 
@@ -425,7 +426,7 @@ final class ExtractoController extends Controller
     private function informacaoImpl(Request $request)
     {
         $d=$request->validate(['contrato'=>['required','string','max:155']]);
-        $numero=trim($d['contrato']);
+        $numero=\App\Services\ContractNumbering::resolveIfMissing(trim($d['contrato']));
         $db=DB::connection('mysql_legacy');
         $today=$this->today();
         $rows=$this->clientRows($db,['cliente'=>'','contrato'=>$numero]);

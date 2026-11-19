@@ -46,6 +46,10 @@ final class CompanySettings
         'max_creditos_activos'    => ['scoring','inteiro',[1,20],'1'],
         'max_creditos_atraso'     => ['scoring','inteiro',[0,20],'0'],
         'taxa_esforco_max'        => ['scoring','percentagem',null,'30'],
+        // Numeração dos contratos (PREFIXO-ANO-SEQUÊNCIA)
+        'contrato_prefixo'        => ['numeracao','prefixo',null,'CAPTA'],
+        'contrato_digitos'        => ['numeracao','inteiro',[3,6],'4'],
+        'numeracao_anual_activa'  => ['numeracao','sistema',null,'0'],
         // Incentivos
         'incentivo_cliente_novo'  => ['incentivos','valor',null,'0'],
         'incentivo_renovacao'     => ['incentivos','valor',null,'0'],

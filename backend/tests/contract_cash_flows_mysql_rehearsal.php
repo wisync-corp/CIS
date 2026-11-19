@@ -651,6 +651,54 @@ ok(!collect($act)->contains('descricao','Renda escritório') && collect($act)->c
     && $db->table('cis_parametrizacao_log')->where('tabela','tipos_movimento')->count()===2,'tipos: desactivado sai da Caixa; alterações registadas');
 $db->table('cis_tabela_juros')->delete();foreach ($priceBefore as $r) $db->table('cis_tabela_juros')->insert($r);
 
+
+echo "== Numeração anual dos contratos (PREFIXO-ANO-SEQUÊNCIA)\n";
+$db->statement('DROP TABLE IF EXISTS cis_contract_numbers');
+(require __DIR__.'/../database/migrations/2026_11_19_000140_create_cis_contract_numbers.php')->up();
+\App\Support\CompanySettings::forget();
+ok(!\App\Services\ContractNumbering::active() && \App\Services\ContractNumbering::prefix()==='CAPTA' && \App\Services\ContractNumbering::format(2026,7)==='CAPTA-2026-0007','numeração: por defeito CAPTA-ANO-0000, ainda inactiva');
+$nBefore=$db->table('Contractos')->distinct()->count('Nr do Contracto');$rowsBefore=$db->table('Contractos')->count();$extBefore=$db->table('Extracto')->count();
+$plan=\App\Services\ContractNumbering::plan($db);
+$byYear=collect($plan['linhas'])->groupBy('ano');
+ok(count($plan['linhas'])+count($plan['sem_data'])===$nBefore && $byYear->every(fn($g)=>$g->pluck('sequencia')->values()->all()===range(1,$g->count()))
+    && collect($plan['linhas'])->every(fn($l)=>str_starts_with($l['novo'],'CAPTA-'.$l['ano'].'-') && substr($l['data'],0,4)==(string)$l['ano']),'plano: sequência recomeça em 1 em cada ano (ano do desembolso)');
+$sorted=collect($plan['linhas'])->sortBy(fn($l)=>$l['data'].sprintf('%09d',$l['ordem']))->pluck('novo')->values()->all();
+ok($sorted===collect($plan['linhas'])->pluck('novo')->all(),'plano: ordenado pela data de desembolso e ordem de registo');
+// Alvos: o contrato aberto no ensaio ($n) tem histórico e uma saída com o número na descrição.
+$histN=$db->table('cis_contractos_historico')->where('contract_number',$n)->count();
+$extN=$db->table('Extracto')->where('Contracto',$n)->orWhere('Descrição','like','%'.$n.' |%')->count();
+$db->table('cis_message_log')->insert(['contract_number'=>$n,'phone'=>'258840000000','channel'=>'whatsapp','body'=>'x','sent_by'=>1,'created_at'=>now()]);
+$newN=collect($plan['linhas'])->firstWhere('atual',$n)['novo'];
+$st=\App\Services\ContractNumbering::apply($db,$plan,'ensaio');
+ok($db->table('Contractos')->count()===$rowsBefore && $db->table('Extracto')->count()===$extBefore
+    && $db->table('Contractos')->where('Nr do Contracto','like','C-%')->count()===$db->table('Contractos')->whereIn('Nr do Contracto',$plan['sem_data'])->count(),'renumeração: mesmas linhas; só ficam C-… os contratos sem data');
+ok($db->table('Contractos')->where('Nr do Contracto',$newN)->exists() && !$db->table('Contractos')->where('Nr do Contracto',$n)->exists()
+    && $db->table('Extracto')->where('Descrição','like','%Desembolso de Empréstimo '.$newN.' |%')->exists() && $extN>0
+    && $db->table('cis_message_log')->where('contract_number',$newN)->exists(),'renumeração: Contractos, Extracto (coluna e descrição) e mensagens actualizados');
+ok($histN>0 && in_array($n,\App\Services\ContractNumbering::aliases($newN),true)
+    && $db->table('cis_contractos_historico')->whereIn('contract_number',\App\Services\ContractNumbering::aliases($newN))->count()===$histN
+    && \App\Services\ContractNumbering::resolve($n)===$newN,'histórico imutável lido pelo número antigo; número antigo leva ao novo');
+$prof=data((new \App\Http\Controllers\Api\ContractProfileController())->show(Request::create('/x','GET'),$n));
+ok(count($prof['installments']??[])>0,'ficha do contrato abre pelo número antigo');
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'numeracao_anual_activa'],['valor'=>'1','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
+$y=(int)substr($today,0,4);$maxY=(int)$db->table('cis_contract_numbers')->where('ano',$y)->max('sequencia');
+$ob=['cliente_id'=>7,'montante'=>101,'tipo_juro'=>'Fixo','estrategia_calculo'=>ContractCalculationStrategy::FIXED_AMORTIZATION,
+    'periodo_dias'=>30,'prazo'=>'1 Mês','taxa_informada'=>15,'taxa_multa'=>10,'prazo_meses'=>1,'modalidade'=>'Uma Parcela',
+    'forma_pagamento'=>'Numerário','disponibilidade'=>'Numerário','data_inicio'=>$today,'confirmacao_desembolso'=>true,'referencia'=>'SAIDA-RN1'];
+$on=data($open->store(req('/x',$ob+['conta_id'=>$banco,'idempotency_key'=>'99999999-9999-4999-8999-999999999999'],$user)));
+ok(($on['numero']??'')===\App\Services\ContractNumbering::format($y,$maxY+1),'novo contrato recebe o próximo número do ano ('.($on['numero']??'?').')');
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'contrato_prefixo'],['valor'=>'CPT','updated_at'=>now(),'created_at'=>now()]);
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'contrato_digitos'],['valor'=>'5','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
+$plan2=\App\Services\ContractNumbering::plan($db);\App\Services\ContractNumbering::apply($db,$plan2,'ensaio');
+$newN2=collect($plan2['linhas'])->firstWhere('atual',$newN)['novo'];
+ok(str_starts_with($newN2,'CPT-') && strlen(explode('-',$newN2)[2])===5 && $db->table('Contractos')->where('Nr do Contracto','like','CAPTA-%')->count()===0
+    && \App\Services\ContractNumbering::resolve($n)===$newN2 && in_array($n,\App\Services\ContractNumbering::aliases($newN2),true),'mudar o prefixo e renumerar de novo: todos os números antigos levam ao actual');
+$cs=new \App\Http\Controllers\Api\CompanySettingsController();
+ok($err(fn()=>$cs->update(tap(Request::create('/x','PUT',['valores'=>['contrato_prefixo'=>'CA PTA']]),fn($r)=>$r->setUserResolver(static fn()=>$user))))===422
+    && $err(fn()=>$cs->update(tap(Request::create('/x','PUT',['valores'=>['numeracao_anual_activa'=>'0']]),fn($r)=>$r->setUserResolver(static fn()=>$user))))===422,'prefixo validado; activação gerida só pelo sistema');
+$pv=data((new \App\Http\Controllers\Api\ContractNumberingController())->show(tap(Request::create('/x','GET',['prefixo'=>'emp','digitos'=>'6']),fn($r)=>$r->setUserResolver(static fn()=>$user))));
+ok($pv['activa'] && $pv['exemplo']==='EMP-'.$y.'-000001' && array_sum(array_column($pv['resumo'],'contratos'))===$pv['total'],'pré-visualização nas Definições com outro prefixo');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

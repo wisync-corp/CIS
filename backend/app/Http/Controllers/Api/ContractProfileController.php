@@ -43,6 +43,12 @@ final class ContractProfileController extends Controller
         // repetidas nem recalcular saldo a partir de campos não reconciliados.
         $query = $conn->table('Contractos')->where('Nr do Contracto', $numero);
         $total = (clone $query)->count();
+        if ($total === 0 && ($resolved = \App\Services\ContractNumbering::resolve($numero)) !== $numero) {
+            // Número antigo (antes da numeração anual): abrir o contrato pelo número actual.
+            $numero = $resolved;
+            $query = $conn->table('Contractos')->where('Nr do Contracto', $numero);
+            $total = (clone $query)->count();
+        }
         abort_if($total === 0, 404, 'Contrato não encontrado.');
         abort_if($total > 500, 409, 'Contrato excede o limite de consulta segura.');
         // O Query Builder interpreta pontos dentro dos nomes das colunas como

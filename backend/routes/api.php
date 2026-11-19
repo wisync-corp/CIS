@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('parametrizacao/precos',[\App\Http\Controllers\Api\ParametrizacaoController::class,'guardarPrecos'])->middleware('throttle:20,1');
         Route::post('parametrizacao/tipos-movimento',[\App\Http\Controllers\Api\ParametrizacaoController::class,'criarMovimento'])->middleware('throttle:20,1');
         Route::put('parametrizacao/tipos-movimento/{id}',[\App\Http\Controllers\Api\ParametrizacaoController::class,'actualizarMovimento'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::get('contratos/numeracao',[\App\Http\Controllers\Api\ContractNumberingController::class,'show'])->middleware('throttle:30,1');
         Route::get('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'show'])->middleware('throttle:60,1');
         Route::put('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'update'])->middleware('throttle:20,1');
         Route::get('relatorios',[\App\Http\Controllers\Api\ReportController::class,'index'])->middleware('throttle:60,1');

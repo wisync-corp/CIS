@@ -118,6 +118,8 @@ final class ContractListController extends Controller
             $builder->where(function ($query) use ($like, $q) {
                 $query->where('Nr do Contracto', 'like', $like)
                     ->orWhere('Nome do Cliente', 'like', $like);
+                $renamed = self::renamedLike($like);
+                if ($renamed) $query->orWhereIn('Nr do Contracto', $renamed);
                 if (ctype_digit($q) && strlen($q) < 11) {
                     $query->orWhere('Nº de Cliente', (int) $q);
                 }
@@ -138,5 +140,14 @@ final class ContractListController extends Controller
         return $results->orderBy($sort, $direction)
             ->orderBy('numero', 'asc')
             ->paginate(20)->withQueryString();
+    }
+
+    /** Contratos cujo número antigo (antes da numeração anual) corresponde à pesquisa. */
+    private static function renamedLike(string $like): array
+    {
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('cis_contract_numbers')) return [];
+            return \Illuminate\Support\Facades\DB::table('cis_contract_numbers')->where('numero_original', 'like', $like)->limit(50)->pluck('numero')->unique()->values()->all();
+        } catch (\Throwable) { return []; }
     }
 }

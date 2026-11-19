@@ -53,7 +53,9 @@ final class ContractOpeningReviewController extends Controller
         abort_if($max!==null && (!is_numeric($max) || (float)$max<0
             || (float)$max>999999998),409,'Sequência de contratos inválida ou esgotada.');
         $sequence=(int)($max??0)+1;
-        $numero='C-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT);
+        $numero=\App\Services\ContractNumbering::active()
+            ? \App\Services\ContractNumbering::next($db,preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)$request->query('data_inicio'))?(string)$request->query('data_inicio'):now('Africa/Maputo')->toDateString())
+            : 'C-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT);
         abort_if($db->table('Contractos')->where('Nr do Contracto',$numero)->exists(),
             409,'O número sugerido já está em uso; é necessária reconciliação.');
         return response()->json([
