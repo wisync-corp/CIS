@@ -1,3 +1,6 @@
+import CompanyBrand from './CompanyBrand';
+import {useCompanyProfile} from './company';
+import {createPortal} from 'react-dom';
 import {useEffect,useMemo,useState} from 'react';
 import {coluna,estadoPrestacao} from './glossario';
 import {
@@ -106,6 +109,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [clock,setClock]=useState(Date.now());
  useEffect(()=>{if(payWaitUntil<=Date.now())return;const id=window.setInterval(()=>setClock(Date.now()),1000);return()=>window.clearInterval(id);},[payWaitUntil]);
  const payWait=Math.max(0,Math.ceil((payWaitUntil-clock)/1000));
+ const company=useCompanyProfile(token);
+ const [receipt,setReceipt]=useState<{event:HistoryEvent;contract:string}|null>(null);
+ const [receiptBusy,setReceiptBusy]=useState(false);
+ const [receiptError,setReceiptError]=useState('');
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
  const [view,setView]=useState<'resumo'|'tratamento'|'historico'>(initialOrder?'tratamento':'resumo');
  const [refresh,setRefresh]=useState(0);
@@ -209,6 +216,39 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function canPrintReceipt(event:HistoryEvent){
+  return ['cobranca_total','renovar_juros','pagamento_parcial'].includes(event.operacao)
+   && Number(event.extracto_nr)>0&&Number(event.valor)>0&&Boolean(event.depois?.['Data de Pagamento']);
+ }
+
+ async function openReceipt(nr:number){
+  if(!selected||receiptBusy)return;
+  setReceiptBusy(true);setReceiptError('');
+  try{
+   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/historico-alteracoes',{
+    headers:{Authorization:'Bearer '+token,Accept:'application/json'}
+   });
+   const data=await response.json() as {data?:HistoryEvent[]};
+   const event=response.ok&&data.data?.find(item=>Number(item.extracto_nr)===nr&&canPrintReceipt(item));
+   if(!event)throw new Error('O recebimento não está disponível no histórico do contrato.');
+   setReceipt({event,contract:selected});
+  }catch(error){setReceiptError(error instanceof Error?error.message:'Não foi possível consultar o recibo.');}
+  finally{setReceiptBusy(false);}
+ }
+
+ function printReceipt(){
+  if(!receipt)return;
+  const previous=document.title;
+  document.title='REC-'+receipt.event.extracto_nr;
+  document.body.classList.add('cis-printing-evidence');
+  const done=()=>{
+   document.title=previous;
+   document.body.classList.remove('cis-printing-evidence');
+  };
+  window.addEventListener('afterprint',done,{once:true});
+  try{window.print();}finally{done();window.removeEventListener('afterprint',done);}
+ }
+
  async function pay(){
   if(!selected||!ord||!quote||!canExecute)return;
   const key=payKey||newKey();setPayKey(key);setPaying(true);setMessage('');setPayError('');
@@ -422,6 +462,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {flowReceived&&live&&quote&&<label className="cis-collections-check"><input type="checkbox" checked={confirmReceipt} onChange={e=>setConfirmReceipt(e.target.checked)}/> Confirmo que recebi {fmt(quote.total)} na conta {activeAccount?activeAccount.code:'seleccionada'}</label>}
        {flowReceived&&live&&<div className="cis-collections-action"><button type="button" className="cis-collections-primary" disabled={!canExecute} onClick={()=>void pay()}>{paying?'A registar…':payWait>0?'Aguarde '+payWait+' s (limite de segurança)':<><CheckCircle2 size={16}/> {renewing?'Confirmar juros e renovar':'Confirmar e registar pagamento'}</>}</button><small>{!quote?'O cálculo aparece quando os dados da operação estiverem completos.':!quote.registo_activo?'Registo real desligado no servidor: execute deploy/activate-contract-cash-flows.sh na VPS.':!activeAccount?'Seleccione a conta receptora.':!refOk?'Indique a referência do comprovativo.':!confirmReceipt?'Confirme o recebimento efectivo.':'O pagamento é gravado uma única vez: prestação, entrada no Extracto e histórico antes/depois.'}</small></div>}
        {payError&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{payError}</div>}
+       {receiptError&&<p role="alert">{receiptError}</p>}
+       {paymentDone&&paymentDone.extracto_nr>0&&<button type="button" disabled={receiptBusy} onClick={()=>void openReceipt(paymentDone.extracto_nr)}>
+        <ReceiptText size={16}/> {receiptBusy?'A preparar recibo…':'Recibo numerado'}
+       </button>}
        {paymentDone&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={17}/>{paymentDone.notice}{paymentDone.saldo_conta_actual?' Saldo actual: '+fmt(paymentDone.saldo_conta_actual)+'.':''}{paymentDone.contrato_finalizado?' Contrato finalizado.':''}</div>}
       </div>
      </div>}</div>:
@@ -436,11 +480,31 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       {events===null?<div className="cis-cash-loading" role="status">A carregar o histórico…</div>:!events.length?<p className="cis-collections-mode-hint">Ainda não há alterações registadas pelo CIS neste contrato.</p>:
        <div className="cis-collections-history">{events.map(ev=><details key={ev.id}><summary><strong>{historyLabels[ev.operacao]??ev.operacao}</strong><span>Prestação {ev.parcela??'—'}</span><span>{fmt(ev.valor)}</span><span>{text(ev.em).replace('T',' ').slice(0,16)}</span></summary>
         <table><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>{historyFields.filter(f=>ev.antes?.[f]!==undefined||ev.depois?.[f]!==undefined).map(f=><tr key={f} className={String(ev.antes?.[f]??'')!==String(ev.depois?.[f]??'')?'changed':''}><td>{coluna(f)}</td><td>{text(ev.antes?.[f])}</td><td>{text(ev.depois?.[f])}</td></tr>)}</tbody></table>
+        {canPrintReceipt(ev)&&selected&&<button type="button" onClick={()=>setReceipt({event:ev,contract:selected})}><ReceiptText size={16}/> Recibo numerado</button>}
         <small>{ev.extracto_nr?'Extracto Nr '+ev.extracto_nr+' · ':''}{ev.referencia?'REF '+ev.referencia+' · ':''}{text(ev.motivo)}</small></details>)}</div>}
       <div className="cis-collections-scope"><ShieldCheck size={16}/> Leitura apenas: não altera Contractos, Extracto nem o estado de pagamento.</div>
      </div>}
     </>}
    </div>}
+  {receipt&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Recibo de pagamento">
+   <div className="cis-evidence-bar"><b>Recibo de pagamento</b>
+    <button type="button" className="primary" onClick={printReceipt}>Imprimir / Guardar PDF</button>
+    <button type="button" onClick={()=>setReceipt(null)}>Fechar</button>
+   </div>
+   <article className="cis-evidence">
+    <header><CompanyBrand company={company}/><div><h1>Recibo de pagamento</h1><p>N.º REC-{receipt.event.extracto_nr}</p></div></header>
+    <section className="cis-evidence-client"><h2>Dados do recebimento</h2><dl>
+     <div><dt>Mutuário</dt><dd>{text(receipt.event.depois?.['Nome do Cliente'])}</dd></div>
+     <div><dt>Contrato</dt><dd>{receipt.contract}</dd></div>
+     <div><dt>Prestação</dt><dd>{receipt.event.parcela??'—'}</dd></div>
+     <div><dt>Data do pagamento</dt><dd>{date(receipt.event.depois?.['Data de Pagamento'])}</dd></div>
+     <div><dt>Operação</dt><dd>{historyLabels[receipt.event.operacao]}</dd></div>
+     <div><dt>Valor recebido</dt><dd>{fmt(receipt.event.valor)}</dd></div>
+     {receipt.event.referencia&&<div><dt>Referência</dt><dd>{receipt.event.referencia}</dd></div>}
+    </dl></section>
+    <footer>Comprovativo do recebimento original identificado no Extracto pelo movimento {receipt.event.extracto_nr}.</footer>
+   </article>
+  </div>,document.body)}
   <div className="cis-collections-footer"><ShieldCheck size={16}/> Fonte única dos lançamentos: Extracto. A Tesouraria opcional terá reconciliação bancária, sem duplicar os movimentos da Caixa.</div>
  </section>;
 }
