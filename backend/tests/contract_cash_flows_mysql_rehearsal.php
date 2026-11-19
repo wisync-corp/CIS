@@ -210,7 +210,7 @@ $o2=data($open->store(req('/x',$base+['conta_id'=>$banco,'idempotency_key'=>$k],
 ok(($o2['repetido']??false)===true && $o2['numero']===$n && $snap()===$s,'repetição do desembolso: devolve o mesmo contrato, nada duplicado');
 
 echo "== Indicadores da Visão geral (SQL real)\n";
-$ov=data((new \App\Http\Controllers\Api\OverviewController())());
+$ov=data((new \App\Http\Controllers\Api\OverviewController())(Request::create('/x','GET')));
 // Pagas: C-0100 (1150,50; juros 150,50) e C-0101 (2880; juros 800; multa 80).
 ok($ov['recebimentos']['juros']==='950.50' && $ov['recebimentos']['multas']==='80.00','juros 950,50 e multas 80,00 recebidos');
 ok($ov['recebimentos']['total_recebido']==='4030.50' && $ov['recebimentos']['capital_recuperado']==='3000.00','recebido 4030,50 = capital 3000 + juros + multa');
