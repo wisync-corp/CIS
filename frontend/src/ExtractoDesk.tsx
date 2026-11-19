@@ -81,6 +81,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const [contaId,setContaId]=useState('');const [accounts,setAccounts]=useState<Account[]>([]);
  const [page,setPage]=useState(1);
  const [selection,setSelection]=useState(defaults);
+ const [columnsOpen,setColumnsOpen]=useState(false);
  const [directions,setDirections]=useState<Record<Mode,'asc'|'desc'>>({geral:'desc',clientes:'asc'});
  const direction=directions[mode];
  const visible=fields[mode].filter(column=>selection[mode].includes(column.key));
@@ -138,7 +139,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  function pickClient(nome:string){setCliente(nome);setClienteInput(nome);setSuggestions([]);setPage(1);}
  function clearPeriod(){setPeriod(null);setEstado('todos');setPage(1);onClearPreset?.();}
  function clearAll(){setPeriod(null);onClearPreset?.();setInicio('');setFim('');setCliente('');setClienteInput('');setContrato('');setTipo('todos');setEstado('todos');setContaId('');setPage(1);}
- function switchMode(m:Mode){setMode(m);setPage(1);setError('');}
+ function switchMode(m:Mode){setColumnsOpen(false);setMode(m);setPage(1);setError('');}
 
  async function exportCsv(){
   setExporting(true);setError('');
@@ -229,9 +230,16 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
       </button>)}
      </div>
     </div>
-    <details className="cis-extracto-column-control" key={mode}>
-     <summary><SlidersHorizontal size={16}/> Colunas <span>{visible.length} de {fields[mode].length}</span><ChevronDown size={15}/></summary>
-     <div className="cis-extracto-column-panel">
+    <button type="button" className="cis-extracto-column-trigger" aria-expanded={columnsOpen}
+     aria-controls="cis-extracto-column-panel" onClick={()=>setColumnsOpen(open=>!open)}>
+     <SlidersHorizontal size={16}/> Colunas <span>{visible.length} de {fields[mode].length}</span><ChevronDown size={15}/>
+    </button>
+    <div className="cis-extracto-actions cis-extracto-export">
+    <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
+    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao mutuário':'Escolha um mutuário para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
+    </div>
+   </div>
+   {columnsOpen&&<div id="cis-extracto-column-panel" className="cis-extracto-column-panel">
       <div className="cis-extracto-column-head"><strong>Colunas do extracto</strong>
        <button type="button" onClick={()=>setSelection(old=>({...old,[mode]:defaults[mode]}))}>Repor predefinições</button>
       </div>
@@ -242,13 +250,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
         onChange={event=>{const checked=event.target.checked;setSelection(old=>({...old,[mode]:checked?[...old[mode],column.key]:old[mode].filter(key=>key!==column.key)}));}}/>
        <span>{column.label}</span>
       </label>)}</div>
-     </div>
-    </details>
-    <div className="cis-extracto-actions cis-extracto-export">
-    <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
-    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao mutuário':'Escolha um mutuário para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
-    </div>
-   </div>
+     </div>}
    {!canEvidence&&mode==='clientes'&&<p className="cis-extracto-export-hint">Seleccione um mutuário ou contrato para gerar o PDF.</p>}
 
    {infoBusy&&<div className="cis-loading" role="status">A abrir a informação do contrato {infoBusy}…</div>}
