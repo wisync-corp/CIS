@@ -346,6 +346,17 @@ echo "== Extracto (geral, clientes, evidência)\n";
 $ex=new \App\Http\Controllers\Api\ExtractoController();
 $greq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
 $eg=data($ex->geral($greq(['por_pagina'=>200])));
+$ascending=data($ex->geral($greq(['direccao'=>'asc','por_pagina'=>10])));
+$allAscending=data($ex->geral($greq(['direccao'=>'asc','por_pagina'=>200])));
+ok(count($eg['linhas'])>1
+    && array_reverse(array_column($eg['linhas'],'nr'))===array_column($allAscending['linhas'],'nr')
+    && $ascending['linhas']===array_slice($allAscending['linhas'],0,10),
+    'ordem cronológica crescente e decrescente aplicada antes da paginação');
+$clientAsc=data($ex->clientes($greq(['direccao'=>'asc','por_pagina'=>200])));
+$clientDesc=data($ex->clientes($greq(['direccao'=>'desc','por_pagina'=>200])));
+ok(array_reverse(array_column($clientAsc['linhas'],'vencimento'))===array_column($clientDesc['linhas'],'vencimento'),
+    'extracto do mutuário ordenado pelo vencimento');
+
 $expE=round((float)$db->table('Extracto')->where('Tipo de Movimento','Entradas')->sum('Valor'),2);
 $expS=round((float)$db->table('Extracto')->where('Tipo de Movimento','<>','Entradas')->sum('Valor'),2);
 ok($eg['total_linhas']===$db->table('Extracto')->count() && abs((float)$eg['totais']['entradas']-$expE)<0.01
