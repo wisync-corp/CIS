@@ -60,6 +60,7 @@ final class ExtractoController extends Controller
             'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
             'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
             'base'=>['nullable','in:cobranca,pagamento,desembolso'],
+            'ordenar'=>['nullable','in:codigo,data,descricao,conta,tipo,valor,contrato,cliente,parcela,usuario,inicio,vencimento,dias,forma_pagamento,capital,juros,multa,valor_previsto,valor_recebido,data_pagamento,estado'],
             'direccao'=>['nullable','in:asc,desc'],
             'page'=>['nullable','integer','min:1'],
             'por_pagina'=>['nullable','integer','min:10','max:200'],
@@ -102,7 +103,7 @@ final class ExtractoController extends Controller
 
         $per=(int)($f['por_pagina']??50);
         $page=max(1,(int)($f['page']??1));
-        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->forPage($page,$per),false,$f['direccao']??'desc');
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->forPage($page,$per),false,$f['direccao']??'desc',$f['ordenar']??'data');
         return response()->json([
             'linhas'=>$rows,
             'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>$t['n'],
@@ -135,7 +136,7 @@ final class ExtractoController extends Controller
         return ['n'=>(int)$t->n,'totais'=>['entradas'=>self::money($e),'saidas'=>self::money($s),'disponivel'=>self::money($e-$s)]];
     }
 
-    private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false,string $direction='desc')
+    private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false,string $direction='desc',string $sort='data')
     {
         $q=clone $q;
         // Só colunas que existem no Extracto desta base (o legado varia entre instalações).
@@ -144,7 +145,30 @@ final class ExtractoController extends Controller
         foreach (['Nr','Contracto','Cliente','Parcela','Tipo de Movimento','Descrição','Data da Operação','Valor','usuario','account_id'] as $c) {
             if (isset($have[$c])) $cols[]='e.'.$c;
         }
-        $q->orderBy('e.Data da Operação',$direction)->orderBy('e.Nr',$direction);
+        $sortColumns = [
+            'codigo'=>'Nr', 'data'=>'Data da Operação', 'descricao'=>'Descrição',
+            'tipo'=>'Tipo de Movimento', 'valor'=>'Valor', 'contrato'=>'Contracto',
+            'cliente'=>'Cliente', 'parcela'=>'Parcela', 'usuario'=>'usuario',
+        ];
+        if ($sort === 'conta' && $hasAccount) {
+            try {
+                $accounts = DB::table('cis_cash_accounts')->pluck('code', 'id');
+                if ($accounts->isNotEmpty()) {
+                    $cases = str_repeat(' WHEN ? THEN ?', $accounts->count());
+                    $bindings = [];
+                    foreach ($accounts as $id => $code) {
+                        $bindings[] = (int) $id;
+                        $bindings[] = $code;
+                    }
+                    $q->orderByRaw('CASE e.account_id'.$cases.' ELSE NULL END '.$direction, $bindings);
+                }
+            } catch (\Throwable $error) {
+                report($error);
+            }
+        } elseif (isset($sortColumns[$sort], $have[$sortColumns[$sort]]) && (!$public || $sort !== 'usuario')) {
+            $q->orderBy('e.'.$sortColumns[$sort], $direction);
+        }
+        $q->orderBy('e.Data da Operação', $direction)->orderBy('e.Nr', $direction);
         $limit($q);
         $rows=$q->get($cols);
         // Códigos das contas pela ligação principal: o utilizador de leitura do legado
@@ -184,7 +208,7 @@ final class ExtractoController extends Controller
         $t=$this->geralTotals($q);
         abort_if($t['n']===0,404,'Sem movimentos para os filtros escolhidos.');
         abort_if($t['n']>5000,422,'Demasiados movimentos ('.$t['n'].') para um único documento; reduza o período (máximo 5000).');
-        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->limit(5000),true,$f['direccao']??'desc');
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->limit(5000),true,$f['direccao']??'desc',$f['ordenar']??'data');
         $conta=null;
         if (($f['conta_id']??null) && $hasAccount) {
             $a=DB::table('cis_cash_accounts')->where('id',(int)$f['conta_id'])->first(['code','name']);
@@ -300,6 +324,23 @@ final class ExtractoController extends Controller
         return [$out,$tot];
     }
 
+    private function sortClientExtract(array $rows, array $filters): array
+    {
+        $field = $filters['ordenar'] ?? 'vencimento';
+        $numeric = ['codigo', 'parcela', 'dias', 'capital', 'juros', 'multa', 'valor', 'valor_previsto', 'valor_recebido'];
+        $direction = ($filters['direccao'] ?? 'asc') === 'desc' ? -1 : 1;
+        usort($rows, static function (array $a, array $b) use ($field, $numeric, $direction): int {
+            $x = $field === 'codigo' ? $a['ordem'] : ($a[$field] ?? null);
+            $y = $field === 'codigo' ? $b['ordem'] : ($b[$field] ?? null);
+            if ($x === null || $x === '') return ($y === null || $y === '') ? 0 : 1;
+            if ($y === null || $y === '') return -1;
+            $comparison = in_array($field, $numeric, true) && is_numeric($x) && is_numeric($y)
+                ? (float) $x <=> (float) $y : strnatcasecmp((string) $x, (string) $y);
+            return $comparison * $direction;
+        });
+        return $rows;
+    }
+
     /** GET /cis/extractos/clientes */
     public function clientes(Request $request)
     {
@@ -314,7 +355,7 @@ final class ExtractoController extends Controller
         $per=(int)($f['por_pagina']??50);
         $page=max(1,(int)($f['page']??1));
         return response()->json([
-            'linhas'=>array_slice($all,($page-1)*$per,$per),
+            'linhas'=>array_slice($this->sortClientExtract($all,$f),($page-1)*$per,$per),
             'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>count($all),
             'totais'=>$tot,
         ])->header('Cache-Control','no-store, private');
@@ -357,6 +398,7 @@ final class ExtractoController extends Controller
         $today=$this->today();
         // Evidência completa: todas as prestações (sem filtro de estado) no intervalo escolhido.
         [$rows,$tot]=$this->summarise($this->clientRows($db,$f),$today,'todos');
+        $rows=$this->sortClientExtract($rows,$f);
         abort_if(!$rows,404,'Sem prestações para este mutuário/contrato no período escolhido.');
 
         $names=array_values(array_unique(array_map(fn($r)=>$r['cliente'],$rows)));

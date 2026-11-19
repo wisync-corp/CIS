@@ -356,6 +356,14 @@ $clientAsc=data($ex->clientes($greq(['direccao'=>'asc','por_pagina'=>200])));
 $clientDesc=data($ex->clientes($greq(['direccao'=>'desc','por_pagina'=>200])));
 ok(array_reverse(array_column($clientAsc['linhas'],'vencimento'))===array_column($clientDesc['linhas'],'vencimento'),
     'extracto do mutuário ordenado pelo vencimento');
+$amounts = static fn(array $result):array => array_map('floatval',array_column($result['linhas'],'valor'));
+$cashAmounts=$amounts(data($ex->geral($greq(['ordenar'=>'valor','direccao'=>'asc','por_pagina'=>200]))));
+$clientAmounts=$amounts(data($ex->clientes($greq(['ordenar'=>'valor','direccao'=>'desc','por_pagina'=>200]))));
+$expectedCash=$cashAmounts;sort($expectedCash,SORT_NUMERIC);
+$expectedClient=$clientAmounts;rsort($expectedClient,SORT_NUMERIC);
+ok(count($cashAmounts)>1 && $cashAmounts===$expectedCash,'extracto geral ordena montantes numericamente');
+ok(count($clientAmounts)>1 && $clientAmounts===$expectedClient,'extracto do mutuário ordena montantes numericamente');
+
 
 $expE=round((float)$db->table('Extracto')->where('Tipo de Movimento','Entradas')->sum('Valor'),2);
 $expS=round((float)$db->table('Extracto')->where('Tipo de Movimento','<>','Entradas')->sum('Valor'),2);

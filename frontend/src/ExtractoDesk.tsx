@@ -2,7 +2,7 @@ import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,ArrowUp,ArrowDown,SlidersHorizontal,ChevronDown} from 'lucide-react';
+import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,ArrowUp,ArrowDown,SlidersHorizontal,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter from './MessageCenter';
 import {situacaoContrato} from './glossario';
@@ -83,7 +83,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const [selection,setSelection]=useState(defaults);
  const [columnsOpen,setColumnsOpen]=useState(false);
  const [directions,setDirections]=useState<Record<Mode,'asc'|'desc'>>({geral:'desc',clientes:'asc'});
+ const [sortFields,setSortFields]=useState<Record<Mode,string>>({geral:'data',clientes:'vencimento'});
+ const sortField=sortFields[mode];
  const direction=directions[mode];
+ function sortColumn(key:string){
+  setSortFields(old=>({...old,[mode]:key}));
+  setDirections(old=>({...old,[mode]:sortField===key&&old[mode]==='asc'?'desc':'asc'}));
+  setPage(1);
+ }
  const visible=fields[mode].filter(column=>selection[mode].includes(column.key));
  function pdfFields(m:Mode){
   const list=fields[m].filter(column=>!column.internal&&selection[m].includes(column.key));
@@ -98,7 +105,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
- const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction});
+ const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction,ordenar:sortField});
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
   if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
@@ -124,7 +131,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    .finally(()=>{if(!c.signal.aborted)setLoading(false);});
   return()=>c.abort();
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period,direction]);
+ },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period,direction,sortField]);
 
  useEffect(()=>{setContrato('');setContratos([]);if(!cliente)return;const c=new AbortController();
   getJson<{contratos:string[]}>('/cis/extractos/contratos?'+new URLSearchParams({cliente}),c.signal).then(j=>setContratos(j.contratos)).catch(()=>{});
@@ -162,14 +169,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  }
  async function infoEvidence(numero:string){
   setEvidenceBusy(true);setInfoError('');
-  try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero,direccao:directions.clientes})));}
+  try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero,direccao:directions.clientes,ordenar:sortFields.clientes})));}
   catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
   if(mode==='geral'){try{setGeralDoc(await getJson<GeralEvidence>('/cis/extractos/geral-evidencia?'+params()));}
    catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto geral.');}finally{setEvidenceBusy(false);}return;}
-  try{const p=new URLSearchParams({direccao:direction});if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
+  try{const p=new URLSearchParams({direccao:direction,ordenar:sortField});if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
    setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+p));}
   catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
@@ -221,8 +228,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    </div>}
 
    <div className="cis-extracto-toolbar">
-    <div className="cis-extracto-order" role="group" aria-label={mode==='geral'?'Ordem por data do movimento':'Ordem por vencimento'}>
-     <span>{mode==='geral'?'Data do movimento':'Vencimento'}</span>
+    <div className="cis-extracto-order" role="group" aria-label="Direcção da ordenação">
+     <span>{fields[mode].find(column=>column.key===sortField)?.label}</span>
      <div className="cis-extracto-order-options">
       {(['asc','desc'] as const).map(value=><button key={value} type="button" aria-pressed={direction===value}
        onClick={()=>{setDirections(old=>({...old,[mode]:value}));setPage(1);}}>
@@ -259,7 +266,9 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
    {!loading&&!error&&data&&(data.total_linhas===0?<div className="cis-extracto-empty">Sem registos para os filtros escolhidos.</div>:<>
     <div className="cis-table-scroll"><table>
-     <thead><tr>{visible.map(column=><th key={column.key} className={column.format==='money'?'num':undefined}>{column.label}</th>)}</tr></thead>
+     <thead><tr>{visible.map(column=><th key={column.key} aria-sort={sortField===column.key?(direction==='asc'?'ascending':'descending'):undefined} className={column.format==='money'?'num':undefined}><button className="cis-contract-sort" type="button" onClick={()=>sortColumn(column.key)}>
+      {column.label}{sortField===column.key?(direction==='asc'?<ChevronUp size={15}/>:<ChevronDown size={15}/>):<ArrowDownUp size={14}/>}
+     </button></th>)}</tr></thead>
      <tbody>{data.linhas.map(row=>{
       const canOpen=Boolean(row.contrato);
       return <tr key={'nr' in row?row.nr:row.ordem} className={canOpen?'cis-extracto-row':''}
