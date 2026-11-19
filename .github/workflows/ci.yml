@@ -51,6 +51,7 @@ jobs:
       - run: bash -n ../deploy/preflight-cash-direct-account.sh
       - run: bash -n ../deploy/rehearse-cash-migration.sh
       - run: bash -n ../deploy/install-cash-direct-account.sh
+      - run: bash -n ../deploy/install-message-center.sh
       - run: bash -n ../deploy/activate-cash-account-registration.sh
       - run: bash -n ../deploy/verify-cash-account-registration.sh
       - run: bash -n ../deploy/activate-cash-openings.sh

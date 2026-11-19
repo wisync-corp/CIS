@@ -121,3 +121,32 @@ Cada cartão da Visão geral abre o Extracto (Clientes) já filtrado, com o mesm
 
 Os números do cartão e do Extracto coincidem; o ensaio MySQL verifica-o.
 Vencida = em aberto com vencimento antes de hoje, a mesma regra nos dois ecrãs.
+
+### Informação do contrato (formulário VBA «Informação»)
+
+Um clique numa linha do Extracto (Geral com contrato, ou Clientes) abre o painel «Informação». Mostra:
+- o cliente: código com 3 dígitos, nome e contacto;
+- o contrato: data de início, data final, quantia creditada e forma de pagamento;
+- a situação: Pendente, Pagamento atrasado ou Finalizado;
+- as prestações: total, pagas, em aberto e vencidas, o valor em dívida e pago, e o próximo vencimento ou os dias de atraso.
+
+Acções:
+- **Mensagem ao cliente** (substitui o frmMessageCenter): texto pronto conforme a situação, editável. Pode ser copiado ou aberto no WhatsApp ou SMS do dispositivo, para o operador confirmar e enviar. O CIS não envia mensagens sozinho.
+- **Extracto do cliente (PDF)** do contrato.
+
+## Centro de mensagens (menu «Mensagens», frmMessageCenter do VBA)
+
+- **Instalação na VPS (uma vez):** `bash deploy/install-message-center.sh`. Cria `cis_message_templates` (com 4 modelos iniciais) e `cis_message_log`.
+- **Modelos:** Novo / Editar / Guardar / Cancelar / Eliminar. Campos `{…}` com os nomes do VBA:
+  - do contrato: `{Nome Completo}`, `{Nr do Contracto}`, `{Data de Cobrança}`, `{Valor a Pagar}`, `{Dias}`, `{-1*Dias}`, `{% de Juro}`, `{Quantia Creditada}`, `{Data de Inicio}`, `{Contacto}`, `{Nº de Cliente}`;
+  - novos: `{Primeiro Nome}`, `{Valor em Dívida}`, `{Prestações Vencidas}`, `{Dias de Atraso}`, `{Data Final}`.
+  - Há também uma paleta de emojis.
+- **Envio:** o CIS prepara a mensagem e abre-a no WhatsApp (ou SMS) do dispositivo do operador, que confirma o envio. Não há envio automático, nem pyautogui, nem credenciais no código. Cada abertura fica em `cis_message_log` (contrato, número, canal, texto, operador, data).
+- **Prestação de referência:** a vencida mais antiga; senão, a próxima em aberto; senão, a última.
+- **Mandar para todos:** fila de envio com «Abrir próxima», seguindo as regras do `capta_whatsapp_bot.py`:
+  - Todos: um por cliente, com o contrato mais recente;
+  - Activos: um por cliente, com o contrato em aberto mais recente;
+  - Inactivos: clientes sem contratos em aberto;
+  - Pendentes e Atrasados: por contrato, pela data de vencimento.
+- **Imagem:** o WhatsApp não aceita anexos por ligação; anexa-se na conversa depois de a abrir.
+- **A partir do Extracto:** painel Informação → «Mensagem ao cliente» abre o centro de mensagens para esse contrato.

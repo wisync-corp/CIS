@@ -376,6 +376,14 @@ ok(count($ev['prestacoes'])===3 && $ev['contratos'][0]['contrato']==='C-0110' &&
     && strlen($ev['codigo_verificacao'])===16 && count($ev['movimentos'])===$db->table('Extracto')->where('Contracto','C-0110')->count(),'evidência: contrato renovado e liquidado com prestações e movimentos');
 ok(collect($ev['movimentos'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'evidência sem marcas internas nem referências');
 ok($err(fn()=>$ex->evidencia($greq([])))===422,'evidência exige cliente ou contrato');
+$inf=data($ex->informacao($greq(['contrato'=>'C-0110'])));
+$cid=(int)$db->table('Contractos')->where('Nr do Contracto','C-0110')->value('Nº de Cliente');
+ok($inf['contrato']==='C-0110' && $inf['situacao']==='Finalizado' && $inf['prestacoes']['total']===3 && $inf['prestacoes']['pagas']===3
+    && $inf['em_divida']==='0.00' && $inf['cliente']['codigo']===str_pad((string)$cid,3,'0',STR_PAD_LEFT)
+    && $inf['quantia_creditada']===number_format((float)$db->table('Contractos')->where('Nr do Contracto','C-0110')->max('Quantia Creditada'),2,'.',''),'informação: contrato renovado finalizado, código do cliente com 3 dígitos');
+$late=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Cobrança','<',$tod)->value('Nr do Contracto');
+if ($late) { $il=data($ex->informacao($greq(['contrato'=>$late]))); ok($il['situacao']==='Pagamento atrasado' && $il['prestacoes']['vencidas']>0 && $il['dias_atraso']>0,'informação: contrato com atraso'); }
+ok($err(fn()=>$ex->informacao($greq(['contrato'=>'NAO-EXISTE'])))===404,'informação: contrato inexistente');
 // Cartões da Visão geral → Extracto: os números têm de coincidir.
 foreach ([['todos','todos'],[(string)now($tz)->month,(string)now($tz)->year]] as [$m,$y]) {
     $o=data($ov(Request::create('/x','GET',['mes'=>$m,'ano'=>$y])));
@@ -408,6 +416,40 @@ try {
         && count($rv['prestacoes'])===3 && $rd['total_linhas']>0,'extracto funciona com leitor restrito (sem acesso a cis_cash_*)');
 } catch (\Throwable $e) { ok(false,'extracto com leitor restrito: '.$e->getMessage()); }
 finally { config(['database.connections.mysql_legacy'=>$legacyCfg]); DB::purge('mysql_legacy'); }
+
+
+echo "== Centro de mensagens\n";
+$db->statement('DROP TABLE IF EXISTS cis_message_log');$db->statement('DROP TABLE IF EXISTS cis_message_templates');
+(require __DIR__.'/../database/migrations/2026_11_19_000080_create_cis_message_center.php')->up();
+$mc=new \App\Http\Controllers\Api\MessageCenterController();
+$jreq=fn(string $m,array $q,$u=null)=>tap(Request::create('/x',$m,$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+$mods=data($mc->modelos($jreq('GET',[])));
+ok(count($mods['modelos'])===4 && in_array('{-1*Dias}',$mods['campos'],true),'modelos iniciais e campos (inclui {-1*Dias})');
+$new=data($mc->criarModelo($jreq('POST',['name'=>'Teste CI','body'=>'Olá {Primeiro Nome}, contrato {Nr do Contracto}: {Valor em Dívida} MT, {-1*Dias} dias. {Campo Inexistente}'])));
+ok($err(fn()=>$mc->criarModelo($jreq('POST',['name'=>'Teste CI','body'=>'x x x'])))===422,'nome de modelo duplicado recusado');
+data($mc->actualizarModelo($jreq('PUT',['name'=>'Teste CI','body'=>'Olá {Primeiro Nome}, contrato {Nr do Contracto}: {Valor em Dívida} MT, {-1*Dias} dias. {Campo Inexistente}']),$new['id']));
+$pv=data($mc->preview($jreq('GET',['contrato'=>'C-0110','modelo_id'=>$new['id']])));
+ok(str_contains($pv['mensagem'],'contrato C-0110: 0,00 MT') && str_contains($pv['mensagem'],'{Campo Inexistente}') && !str_contains($pv['mensagem'],'{Primeiro Nome}')
+    && $pv['situacao']==='finalizado','pré-visualização substitui os campos (desconhecidos ficam intactos)');
+$late=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Cobrança','<',$tod)->distinct()->pluck('Nr do Contracto');
+$openC=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->distinct()->pluck('Nr do Contracto');
+$qa=data($mc->destinatarios($jreq('GET',['grupo'=>'atrasados','modelo_id'=>$new['id']])));
+$qp=data($mc->destinatarios($jreq('GET',['grupo'=>'pendentes','modelo_id'=>$new['id']])));
+ok($qa['total']===$late->count() && collect($qa['destinatarios'])->pluck('contrato')->sort()->values()->all()===$late->sort()->values()->all()
+    && $qp['total']===$openC->count()-$late->count(),'fila: atrasados e pendentes por contrato');
+$qt=data($mc->destinatarios($jreq('GET',['grupo'=>'todos','texto'=>'Olá {Nome Completo}'])));
+$qi=data($mc->destinatarios($jreq('GET',['grupo'=>'inactivos','texto'=>'x {Nr do Contracto}'])));
+$qv=data($mc->destinatarios($jreq('GET',['grupo'=>'activos','texto'=>'x {Nr do Contracto}'])));
+$clientsN=$db->table('Contractos')->distinct()->count('Nº de Cliente');
+ok($qt['total']===$clientsN && $qv['total']+$qi['total']===$clientsN && collect($qi['destinatarios'])->every(fn($d)=>$d['situacao']==='finalizado'),'fila: todos/activos/inactivos um por cliente');
+ok(\App\Http\Controllers\Api\MessageCenterController::phone('84 123 4567')==='258841234567' && \App\Http\Controllers\Api\MessageCenterController::phone('+258 86 555 1212')==='258865551212'
+    && \App\Http\Controllers\Api\MessageCenterController::phone('')===null,'número normalizado para WhatsApp (258)');
+data($mc->registo($jreq('POST',['contrato'=>'C-0110','telefone'=>'841234567','canal'=>'whatsapp','modelo_id'=>$new['id'],'mensagem'=>$pv['mensagem']])));
+$hi=data($mc->historico($jreq('GET',['contrato'=>'C-0110'])));
+ok(count($hi['mensagens'])===1 && $hi['mensagens'][0]['phone']==='258841234567' && $hi['mensagens'][0]['channel']==='whatsapp','mensagem aberta fica registada');
+ok($err(fn()=>$mc->modelos($jreq('GET',[],$gestor)))===403 && $err(fn()=>$mc->destinatarios($jreq('GET',['grupo'=>'todos','texto'=>'x'],$gestor)))===403,'centro de mensagens reservado ao administrador');
+data($mc->eliminarModelo($jreq('DELETE',[]),$new['id']));
+ok(count(data($mc->modelos($jreq('GET',[])))['modelos'])===4,'modelo eliminado');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

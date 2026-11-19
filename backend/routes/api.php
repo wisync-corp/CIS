@@ -70,6 +70,15 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('extractos/clientes',[\App\Http\Controllers\Api\ExtractoController::class,'clientes'])->middleware('throttle:60,1');
         Route::get('extractos/contratos',[\App\Http\Controllers\Api\ExtractoController::class,'contratos'])->middleware('throttle:60,1');
         Route::get('extractos/geral-evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'geralEvidencia'])->middleware('throttle:20,1');
+        Route::get('extractos/informacao',[\App\Http\Controllers\Api\ExtractoController::class,'informacao'])->middleware('throttle:60,1');
+        Route::get('mensagens/modelos',[\App\Http\Controllers\Api\MessageCenterController::class,'modelos'])->middleware('throttle:60,1');
+        Route::post('mensagens/modelos',[\App\Http\Controllers\Api\MessageCenterController::class,'criarModelo'])->middleware('throttle:20,1');
+        Route::put('mensagens/modelos/{id}',[\App\Http\Controllers\Api\MessageCenterController::class,'actualizarModelo'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::delete('mensagens/modelos/{id}',[\App\Http\Controllers\Api\MessageCenterController::class,'eliminarModelo'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::get('mensagens/preview',[\App\Http\Controllers\Api\MessageCenterController::class,'preview'])->middleware('throttle:120,1');
+        Route::get('mensagens/destinatarios',[\App\Http\Controllers\Api\MessageCenterController::class,'destinatarios'])->middleware('throttle:20,1');
+        Route::post('mensagens/registo',[\App\Http\Controllers\Api\MessageCenterController::class,'registo'])->middleware('throttle:240,1');
+        Route::get('mensagens/historico',[\App\Http\Controllers\Api\MessageCenterController::class,'historico'])->middleware('throttle:60,1');
         Route::get('extractos/evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'evidencia'])->middleware('throttle:20,1');
         Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');
         Route::get('contractos/saldo',[ContractOpeningReviewController::class,'cashBalance'])->middleware('throttle:10,1');
