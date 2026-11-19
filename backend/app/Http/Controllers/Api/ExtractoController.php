@@ -56,6 +56,10 @@ final class ExtractoController extends Controller
             'conta_id'=>['nullable','integer','min:1'],
             'tipo'=>['nullable','in:todos,entradas,saidas'],
             'estado'=>['nullable','in:todos,aberta,vencida,paga'],
+            // Período da Visão geral (mês/ano, «todos» = sem restrição) e data de referência.
+            'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
+            'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
+            'base'=>['nullable','in:cobranca,pagamento,desembolso'],
             'page'=>['nullable','integer','min:1'],
             'por_pagina'=>['nullable','integer','min:10','max:200'],
         ]);
@@ -204,7 +208,9 @@ final class ExtractoController extends Controller
         if (in_array($r->Estado,self::PAID,true)) return 'paga';
         if (in_array($r->Estado,self::OPEN,true)) {
             $due=substr((string)$r->{'Data de Cobrança'},0,10);
-            return ($r->Estado==='Pagamento Atrasado' || ($due!=='' && $due<$today))?'vencida':'aberta';
+            // Mesma regra da Visão geral: vencida = vencimento antes de hoje.
+            if ($due==='') return $r->Estado==='Pagamento Atrasado'?'vencida':'aberta';
+            return $due<$today?'vencida':'aberta';
         }
         return 'outra';
     }
@@ -229,8 +235,24 @@ final class ExtractoController extends Controller
     private function clientRows($db,array $f)
     {
         $q=$db->table('Contractos');
-        if ($f['inicio']??null) $q->where('Data de Cobrança','>=',$f['inicio']);
-        if ($f['fim']??null) $q->where('Data de Cobrança','<=',$f['fim']);
+        $base=$f['base']??'cobranca';
+        $mes=$f['mes']??'todos';$ano=$f['ano']??'todos';
+        if ($base==='desembolso') {
+            // Contratos cuja PRIMEIRA Data de Inicio (desembolso) cai no período; todas as suas prestações.
+            $sub=$db->table('Contractos')->select('Nr do Contracto')->groupBy('Nr do Contracto')
+                ->havingRaw('MIN(`Data de Inicio`) <= ?',[$this->today()]);
+            if ($f['inicio']??null) $sub->havingRaw('MIN(`Data de Inicio`) >= ?',[$f['inicio']]);
+            if ($f['fim']??null) $sub->havingRaw('MIN(`Data de Inicio`) <= ?',[$f['fim']]);
+            if ($ano!=='todos') $sub->havingRaw('YEAR(MIN(`Data de Inicio`)) = ?',[(int)$ano]);
+            if ($mes!=='todos') $sub->havingRaw('MONTH(MIN(`Data de Inicio`)) = ?',[(int)$mes]);
+            $q->whereIn('Nr do Contracto',$sub);
+        } else {
+            $col=$base==='pagamento'?'Data de Pagamento':'Data de Cobrança';
+            if ($f['inicio']??null) $q->where($col,'>=',$f['inicio']);
+            if ($f['fim']??null) $q->where($col,'<=',$f['fim']);
+            if ($ano!=='todos') $q->whereRaw('YEAR(`'.$col.'`) = ?',[(int)$ano]);
+            if ($mes!=='todos') $q->whereRaw('MONTH(`'.$col.'`) = ?',[(int)$mes]);
+        }
         if ($f['cliente']!=='') $q->where('Nome do Cliente',$f['cliente']);
         if ($f['contrato']!=='') $q->where('Nr do Contracto',$f['contrato']);
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).

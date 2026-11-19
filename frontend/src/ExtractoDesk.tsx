@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Search,Download,Printer,FileText,X,AlertCircle,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
 import logoPrincipal from './assets/brand/cis-principal-claro.svg';
+import type {ExtractoPreset} from './Overview';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Mode='geral'|'clientes';
@@ -27,14 +28,15 @@ const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—'
 const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d&&m&&y?`${d}/${m}/${y}`:v;};
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
-export default function ExtractoDesk({token,role}:{token:string;role:string}){
+export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void}){
  const isAdmin=role==='administrador';
- const [mode,setMode]=useState<Mode>(isAdmin?'geral':'clientes');
+ const [mode,setMode]=useState<Mode>(preset?'clientes':isAdmin?'geral':'clientes');
+ const [period,setPeriod]=useState<ExtractoPreset|null>(preset??null);
  const [inicio,setInicio]=useState('');const [fim,setFim]=useState('');
  const [cliente,setCliente]=useState('');const [clienteInput,setClienteInput]=useState('');
  const [suggestions,setSuggestions]=useState<{nome:string;id:number|null;contratos:number}[]>([]);
  const [contratos,setContratos]=useState<string[]>([]);const [contrato,setContrato]=useState('');
- const [tipo,setTipo]=useState('todos');const [estado,setEstado]=useState('todos');
+ const [tipo,setTipo]=useState('todos');const [estado,setEstado]=useState<string>(preset?.estado??'todos');
  const [contaId,setContaId]=useState('');const [accounts,setAccounts]=useState<Account[]>([]);
  const [page,setPage]=useState(1);
  const [geral,setGeral]=useState<GeralResp|null>(null);const [clientes,setClientes]=useState<ClientesResp|null>(null);
@@ -46,7 +48,7 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
 
  const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams();
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
-  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else if(estado!=='todos')p.set('estado',estado);
+  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
  const datesOk=!(inicio&&fim&&fim<inicio);
 
@@ -70,7 +72,7 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
    .finally(()=>{if(!c.signal.aborted)setLoading(false);});
   return()=>c.abort();
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token]);
+ },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period]);
 
  useEffect(()=>{setContrato('');setContratos([]);if(!cliente)return;const c=new AbortController();
   getJson<{contratos:string[]}>('/cis/extractos/contratos?'+new URLSearchParams({cliente}),c.signal).then(j=>setContratos(j.contratos)).catch(()=>{});
@@ -83,7 +85,8 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
   suggestTimer.current=window.setTimeout(()=>{getJson<{clientes:{nome:string;id:number|null;contratos:number}[]}>('/cis/extractos/contratos?'+new URLSearchParams({termo:v.trim()}))
    .then(j=>setSuggestions(j.clientes)).catch(()=>setSuggestions([]));},300);}
  function pickClient(nome:string){setCliente(nome);setClienteInput(nome);setSuggestions([]);setPage(1);}
- function clearAll(){setInicio('');setFim('');setCliente('');setClienteInput('');setContrato('');setTipo('todos');setEstado('todos');setContaId('');setPage(1);}
+ function clearPeriod(){setPeriod(null);setEstado('todos');setPage(1);onClearPreset?.();}
+ function clearAll(){setPeriod(null);onClearPreset?.();setInicio('');setFim('');setCliente('');setClienteInput('');setContrato('');setTipo('todos');setEstado('todos');setContaId('');setPage(1);}
  function switchMode(m:Mode){setMode(m);setPage(1);setError('');}
 
  async function exportCsv(){
@@ -130,8 +133,9 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
      <button type="button" role="tab" aria-selected={mode==='clientes'} className={mode==='clientes'?'selected':''} onClick={()=>switchMode('clientes')}>Clientes</button>
     </div></div>
 
+   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
-    <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':'Cobrança de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
+    <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Cobrança de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
     <div className="cis-extracto-client"><label><span><Search size={14}/> Cliente</span><input value={clienteInput} onChange={e=>typeClient(e.target.value)} placeholder="Todos" autoComplete="off" aria-autocomplete="list"/></label>
      {suggestions.length>0&&<ul role="listbox">{suggestions.map(s=><li key={s.nome}><button type="button" onClick={()=>pickClient(s.nome)}><b>{s.nome}</b><small>{s.id?`ID ${s.id} · `:''}{s.contratos} contrato(s)</small></button></li>)}</ul>}</div>

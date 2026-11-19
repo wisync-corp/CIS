@@ -107,3 +107,17 @@ Equivale ao formulário VBA «Extracto de Movimentos».
 - Inclui um código de verificação (SHA-256 do conteúdo).
 - As descrições aparecem sem marcas internas ([CAIXA:…], REF:).
 - Gera-se com «Imprimir / Guardar PDF» → «Guardar como PDF».
+
+### Cartões da Visão geral → Extracto
+
+Cada cartão da Visão geral abre o Extracto (Clientes) já filtrado, com o mesmo mês e ano:
+
+| Cartão | Estado | Data de referência |
+|---|---|---|
+| Carteira desembolsada | todos | desembolso: contratos cuja 1.ª Data de Inicio cai no período |
+| Juros / Multas recebidos | pagas | Data de Pagamento |
+| Prestações vencidas | vencidas | Data de Cobrança |
+| Prestações pendentes | abertas | Data de Cobrança |
+
+Os números do cartão e do Extracto coincidem; o ensaio MySQL verifica-o.
+Vencida = em aberto com vencimento antes de hoje, a mesma regra nos dois ecrãs.

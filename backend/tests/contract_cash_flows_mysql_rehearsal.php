@@ -360,7 +360,7 @@ ok($err(fn()=>$ex->geral($greq(['inicio'=>'2026-02-01','fim'=>'2026-01-01'])))==
 $ec=data($ex->clientes($greq(['por_pagina'=>200])));
 $tod=now($tz)->toDateString();
 $openV=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->get()
-    ->filter(fn($r)=>$r->Estado==='Pagamento Atrasado'||$r->{'Data de Cobrança'}<$tod);
+    ->filter(fn($r)=>$r->{'Data de Cobrança'}<$tod);
 ok($ec['total_linhas']===$db->table('Contractos')->count() && $ec['totais']['n_vencido']===$openV->count()
     && abs((float)$ec['totais']['vencido']-$openV->sum(fn($r)=>(float)$r->{'Valor a Pagar'}+(float)$r->{'Valor de Multa'}))<0.01,'clientes: vencidas pela data e valor em dívida');
 $paidSum=(float)$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])->sum('Valor Pago');
@@ -376,6 +376,18 @@ ok(count($ev['prestacoes'])===3 && $ev['contratos'][0]['contrato']==='C-0110' &&
     && strlen($ev['codigo_verificacao'])===16 && count($ev['movimentos'])===$db->table('Extracto')->where('Contracto','C-0110')->count(),'evidência: contrato renovado e liquidado com prestações e movimentos');
 ok(collect($ev['movimentos'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'evidência sem marcas internas nem referências');
 ok($err(fn()=>$ex->evidencia($greq([])))===422,'evidência exige cliente ou contrato');
+// Cartões da Visão geral → Extracto: os números têm de coincidir.
+foreach ([['todos','todos'],[(string)now($tz)->month,(string)now($tz)->year]] as [$m,$y]) {
+    $o=data($ov(Request::create('/x','GET',['mes'=>$m,'ano'=>$y])));
+    $xv=data($ex->clientes($greq(['mes'=>$m,'ano'=>$y,'base'=>'cobranca','estado'=>'vencida'])));
+    $xp=data($ex->clientes($greq(['mes'=>$m,'ano'=>$y,'base'=>'cobranca','estado'=>'aberta'])));
+    $xj=data($ex->clientes($greq(['mes'=>$m,'ano'=>$y,'base'=>'pagamento','estado'=>'paga'])));
+    $xd=data($ex->clientes($greq(['mes'=>$m,'ano'=>$y,'base'=>'desembolso','por_pagina'=>200])));
+    ok($xv['total_linhas']===$o['carteira']['vencidas_periodo'] && $xv['totais']['vencido']===$o['carteira']['valor_vencido_periodo']
+        && $xp['total_linhas']===$o['carteira']['pendentes_periodo'] && $xp['totais']['aberto']===$o['carteira']['valor_pendente_periodo'],"cartões vencidas/pendentes = extracto ($m/$y)");
+    ok(abs((float)$xj['totais']['juros_pago']-((float)$o['recebimentos']['juros_mes']+(float)$o['recebimentos']['multas_mes']))<0.01,"cartões juros+multas = extracto pagas ($m/$y)");
+    ok(collect($xd['linhas'])->pluck('contrato')->unique()->count()===$o['carteira']['contratos_desembolsados_periodo'],"cartão carteira desembolsada = contratos do extracto ($m/$y)");
+}
 $gd=data($ex->geralEvidencia($greq(['conta_id'=>$numerario])));
 ok($gd['total_linhas']===$egn['total_linhas'] && count($gd['linhas'])===$gd['total_linhas'] && $gd['totais']===data($ex->geral($greq(['conta_id'=>$numerario])))['totais']
     && str_starts_with((string)$gd['filtros']['conta'],'DINHEIRO') && strlen($gd['codigo_verificacao'])===16,'extracto geral (PDF): todas as linhas e totais da conta');
