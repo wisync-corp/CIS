@@ -159,8 +159,12 @@ Código em `extension/cis-whatsapp/`. O pacote para instalar é `frontend/public
 1. Descompactar o ficheiro.
 2. Abrir `chrome://extensions` e ligar o «Modo de programador».
 3. «Carregar expandida» e escolher a pasta.
-4. Nas opções da extensão, escrever o endereço do CIS e «Autorizar».
-5. Recarregar o CIS.
+4. Ligar o CIS, de uma de duas formas (v1.1):
+   - com o CIS aberto, clicar no ícone da extensão: o endereço aparece preenchido. Carregar em «Ligar este endereço»;
+   - ou, no menu de extensões do navegador, escolher «Permitir neste site».
+5. Voltar ao CIS e carregar em «Verificar novamente», ou recarregar a página.
+
+A ponte activa-se em qualquer endereço específico autorizado, nunca em «todos os sites», e só actua em páginas com `<meta name="cis-app">`.
 
 **Fluxo**: Mensagens → «Enviar pelo WhatsApp Web» (um cliente) ou «Enviar a fila pelo WhatsApp Web».
 1. A extensão usa o separador do WhatsApp Web, se já estiver aberto, ou abre-o:

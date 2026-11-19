@@ -17,13 +17,14 @@
  <h1><img src="icons/icon48.png" alt="">CIS WhatsApp</h1>
  <p>Liga o CIS ao seu WhatsApp Web para enviar as mensagens preparadas no Centro de mensagens.</p>
  <label for="origin">Endereço do CIS</label>
- <input id="origin" placeholder="https://cis.exemplo.co.mz" autocomplete="url">
+ <input id="origin" placeholder="http://localhost:8080" autocomplete="url">
  <small>O endereço que usa no navegador para abrir o CIS (sem caminho).</small><br>
- <button id="save" type="button">Autorizar este endereço</button>
+ <button id="save" type="button">Ligar este endereço</button>
+ <p id="linked"></p>
  <p id="msg" role="status"></p>
  <ol>
-  <li>Autorize o endereço do CIS (o navegador pede confirmação).</li>
-  <li>Recarregue a página do CIS (Ctrl+F5).</li>
+  <li>Com o CIS aberto, clique no ícone da extensão: o endereço aparece preenchido.</li>
+  <li>Carregue em «Ligar este endereço» e confirme (ou use «Permitir neste site» no menu de extensões).</li>
   <li>No Centro de mensagens aparece «Extensão CIS WhatsApp ligada».</li>
  </ol>
  <small>A extensão só actua no WhatsApp Web e no endereço do CIS autorizado. O envio usa a sessão do WhatsApp Web deste navegador.</small>

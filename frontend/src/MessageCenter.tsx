@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff} from 'lucide-react';
-import {onWa,waState,waSend,waStop,jobStatus,getShowPref,setShowPref} from './waBridge';
+import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref} from './waBridge';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Template={id:number;name:string;body:string;updated_at:string|null};
@@ -35,7 +35,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const ta=useRef<HTMLTextAreaElement>(null);
  const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
  const wa=waState();const [show,setShow]=useState(getShowPref());
- const [lastJob,setLastJob]=useState<string|null>(null);
+ const [lastJob,setLastJob]=useState<string|null>(null);const [checking,setChecking]=useState(false);
  const sendMode=!!contrato;
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
 
@@ -147,7 +147,10 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    {wa.available?<><span><b>Extensão CIS WhatsApp ligada</b>{wa.version?` · v${wa.version}`:''}{wa.running?` · a enviar (${wa.pendentes} na fila)`:''}{wa.aguardaLogin?' · à espera do login no WhatsApp Web':''}</span>
     <label className="cis-msg-toggle"><input type="checkbox" checked={show} onChange={e=>{setShow(e.target.checked);setShowPref(e.target.checked);}}/>{show?<Eye size={14}/>:<EyeOff size={14}/>} Mostrar o WhatsApp Web durante o envio</label>
     {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar envio</button>}</>
-   :<span>Para enviar automaticamente pelo WhatsApp Web, instale a extensão <b>CIS WhatsApp</b> no Chrome/Edge: <a href="/cis-whatsapp-extension.zip" download>descarregar</a> · descompacte · <code>chrome://extensions</code> → Modo de programador → «Carregar expandida» → nas opções da extensão autorize o endereço do CIS → recarregue esta página. Sem a extensão, as mensagens abrem no WhatsApp para confirmar o envio.</span>}
+   :<><span><b>Extensão CIS WhatsApp não detectada</b> — as mensagens abrem no WhatsApp Web para enviar à mão.<br/>
+     <b>Já instalada?</b> Com esta página aberta, clique no ícone <b>CIS WhatsApp</b> na barra do navegador e carregue em <b>«Ligar este endereço»</b> (o endereço aparece preenchido). Volte aqui e carregue em «Verificar novamente».<br/>
+     <b>Ainda não instalada?</b> <a href="/cis-whatsapp-extension.zip" download>Descarregar</a> → extrair → <code>chrome://extensions</code> (ou <code>edge://extensions</code>) → Modo de programador → «Carregar expandida» → escolher a pasta.</span>
+    <button type="button" className="check" onClick={()=>{setChecking(true);waCheck();setTimeout(()=>setChecking(false),1500);}} disabled={checking}>{checking?<><Loader2 size={13} className="spin"/> A verificar…</>:'Verificar novamente'}</button></>}
   </div>
 
   <label className="cis-msg-editor">{editing?'Texto do modelo':'Texto do modelo (clique em Editar para alterar)'}
