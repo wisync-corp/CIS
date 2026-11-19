@@ -4,7 +4,7 @@ import {Landmark,ArrowUpRight,ArrowDownRight,CalendarDays,Users,FileText,Wallet,
 const API=import.meta.env.VITE_API_URL||'/api';
 type Data={
  actualizado_em:string;mes:string;nota:string;periodo?:{mes:string;ano:string;anos:number[]};
- carteira:{capital_em_carteira:string;valor_a_receber:string;prestacoes_por_receber:number;contratos_activos:number;prestacoes_vencidas:number;valor_vencido:string;contratos_em_atraso:number};
+ carteira:{desembolsado_periodo:string;contratos_desembolsados_periodo:number;prestacoes_desembolsadas_periodo:string;capital_em_carteira:string;valor_a_receber:string;prestacoes_por_receber:number;contratos_activos:number;prestacoes_vencidas:number;valor_vencido:string;contratos_em_atraso:number};
  recebimentos:{juros:string;juros_mes:string;multas:string;multas_mes:string;capital_recuperado:string;capital_recuperado_mes:string;total_recebido:string;recebido_mes:string};
  caixa:{disponivel:boolean;saldo_total:string|null;contas:{code:string;name:string;saldo:string|null}[];entradas_mes:string|null;saidas_mes:string|null;desembolsos_mes:string|null};
 };
@@ -35,17 +35,17 @@ export default function Overview({token,onNavigate}:{token:string;onNavigate:(pa
  const per=periodLabel(mes,ano);
  const years=Array.from(new Set([...(data?.periodo?.anos??[]),Number(nowMaputo().y)])).sort((a,b)=>b-a);
  const stats=[
-  {name:'Capital em carteira',icon:Landmark,value:mt(c?.capital_em_carteira),hint:c?`${c.contratos_activos} contratos activos · ${mt(c.valor_a_receber)} a receber`:'Prestações por receber'},
+  {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s) em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período'},
   {name:'Juros efectivamente recebidos',icon:ArrowUpRight,value:mt(r?.juros_mes),hint:r?`Em ${per} · total geral ${mt(r.juros)}`:'Separados da amortização'},
   {name:'Multas recebidas',icon:ArrowDownRight,value:mt(r?.multas_mes),hint:r?`Em ${per} · total geral ${mt(r.multas)}`:'Por atraso no pagamento'},
   {name:'Prestações vencidas',icon:CalendarDays,value:c?String(c.prestacoes_vencidas):'—',hint:c?`${mt(c.valor_vencido)} em atraso · ${c.contratos_em_atraso} contrato(s)`:'Vencimento anterior a hoje',alert:!!c&&c.prestacoes_vencidas>0}
  ];
  const ledger:[string,string,string|undefined][]=[
-  ['Capital','Em carteira (por receber)',c?.capital_em_carteira],
+  ['Capital','Desembolsado no período',c?.desembolsado_periodo],
   ['Amortização','Capital recuperado no período',r?.capital_recuperado_mes],
   ['Juros','Receita financeira recebida no período',r?.juros_mes],
   ['Multa','Encargos por atraso recebidos no período',r?.multas_mes],
-  ['Prestação','Total por receber',c?.valor_a_receber]
+  ['Prestação','Prestações dos contratos desembolsados no período',c?.prestacoes_desembolsadas_periodo]
  ];
  return <>
   <div className="cis-overview-period" role="group" aria-label="Período dos indicadores">
@@ -53,7 +53,7 @@ export default function Overview({token,onNavigate}:{token:string;onNavigate:(pa
    <label>Mês<select value={mes} onChange={e=>setMes(e.target.value)}><option value="todos">Todos</option>{MONTHS.map((n,i)=><option key={n} value={String(i+1)}>{n}</option>)}</select></label>
    <label>Ano<select value={ano} onChange={e=>setAno(e.target.value)}><option value="todos">Todos</option>{years.map(y=><option key={y} value={String(y)}>{y}</option>)}</select></label>
    {(mes!==nowMaputo().m||ano!==nowMaputo().y)&&<button type="button" onClick={()=>{const n=nowMaputo();setMes(n.m);setAno(n.y);}}>Mês actual</button>}
-   <small>Carteira, vencidas e saldos mostram sempre a situação de hoje.</small>
+   <small>Vencidas, saldos e valores por receber mostram sempre a situação de hoje.</small>
   </div>
   <section className="cis-banner cis-overview-banner"><Wallet size={21}/><div>
    {error?<><b>Indicadores indisponíveis</b><p><AlertCircle size={13}/> {error}</p></>:

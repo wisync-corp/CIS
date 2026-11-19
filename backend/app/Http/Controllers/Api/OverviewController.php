@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Indicadores da VISÃO GERAL — só leitura, calculados no servidor.
  *
- * Carteira (Contractos, por prestação):
+ * Carteira desembolsada (filtrada pelo período): soma da Quantia Creditada dos contratos
+ * cuja primeira Data de Inicio cai no período; um valor por contrato. As prestações desse
+ * período somam o Valor a Pagar das linhas desses contratos (excepto 'Renovado').
+ * Carteira em curso (Contractos, por prestação, situação de hoje):
  *  - por receber  = Estado 'Pendente' ou 'Pagamento Atrasado';
  *  - recebidas    = Estado 'Pago', 'Pago em Atraso' ou 'Renovado' (juros de renovação);
  *  - capital por prestação = Valor a Pagar − Valor de Juros (as linhas criadas pela
@@ -68,6 +71,15 @@ final class OverviewController extends Controller
             COUNT(DISTINCT CASE WHEN $pending AND `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_em_atraso
         ",array_merge([$today,$today],$pb,$pb,$pb,$pb,[$today]))->first();
 
+        // Carteira desembolsada no período: um valor por contrato (Quantia Creditada),
+        // data do desembolso = primeira Data de Inicio do contrato (renovações não contam).
+        $per=$legacy->query()->fromSub(
+            $legacy->table('Contractos')->selectRaw("`Nr do Contracto` AS nr, MIN(`Data de Inicio`) AS d, MAX(`Quantia Creditada`) AS q, SUM(CASE WHEN `Estado`<>'Renovado' THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END) AS pr")
+                ->groupBy('Nr do Contracto'),'t');
+        [$dp,$db]=$period('d');
+        $disb=$per->whereRaw($dp,$db)->where('d','<=',$today)
+            ->selectRaw('COUNT(*) AS n, ROUND(SUM(COALESCE(q,0)),2) AS total, ROUND(SUM(COALESCE(pr,0)),2) AS prest')->first();
+
         // Caixa: saldos das contas activas (mesma regra da página Caixa).
         $cash=['disponivel'=>false,'saldo_total'=>null,'contas'=>[],'entradas_mes'=>null,'saidas_mes'=>null,'desembolsos_mes'=>null];
         if (Schema::hasTable('cis_cash_accounts') && Schema::hasColumn('Extracto','account_id')) {
@@ -100,6 +112,9 @@ final class OverviewController extends Controller
             'mes'=>now($tz)->format('Y-m'),
             'periodo'=>['mes'=>$mes,'ano'=>$ano,'anos'=>$this->years($legacy)],
             'carteira'=>[
+                'desembolsado_periodo'=>$this->money($disb->total??0),
+                'contratos_desembolsados_periodo'=>(int)($disb->n??0),
+                'prestacoes_desembolsadas_periodo'=>$this->money($disb->prest??0),
                 'capital_em_carteira'=>$this->money($p->capital_carteira),
                 'valor_a_receber'=>$this->money($p->a_receber),
                 'prestacoes_por_receber'=>(int)$p->prestacoes_por_receber,

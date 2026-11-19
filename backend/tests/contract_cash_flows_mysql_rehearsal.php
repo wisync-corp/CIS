@@ -321,6 +321,17 @@ ok(abs((float)$def['recebimentos']['recebido_mes']-$expM)<0.01,'recebido no mês
 $py=$get(['mes'=>'todos','ano'=>(string)now($tz)->year]);
 ok((float)$py['recebimentos']['recebido_mes']>=(float)$def['recebimentos']['recebido_mes'],'ano inteiro inclui o mês');
 ok($err(fn()=>$ov(Request::create('/x','GET',['mes'=>'13'])))===422,'mês inválido recusado');
+$expD=0.0;$expP=0.0;$n=0;
+foreach ($db->table('Contractos')->get()->groupBy('Nr do Contracto') as $rows) {
+    $d=$rows->min('Data de Inicio');
+    if (substr((string)$d,0,7)!==now($tz)->format('Y-m') || $d>now($tz)->toDateString()) continue;
+    $n++;$expD+=(float)$rows->max('Quantia Creditada');
+    $expP+=(float)$rows->where('Estado','!=','Renovado')->sum('Valor a Pagar');
+}
+ok($def['carteira']['contratos_desembolsados_periodo']===$n && abs((float)$def['carteira']['desembolsado_periodo']-$expD)<0.01
+    && abs((float)$def['carteira']['prestacoes_desembolsadas_periodo']-$expP)<0.01,'carteira desembolsada e prestações do mês conferem ('.$n.' contratos)');
+$t0=$get(['mes'=>'todos','ano'=>'todos']);
+ok((float)$t0['carteira']['desembolsado_periodo']>=(float)$def['carteira']['desembolsado_periodo'],'Todos/Todos inclui a carteira do mês');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
