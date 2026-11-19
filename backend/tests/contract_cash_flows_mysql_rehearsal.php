@@ -332,6 +332,14 @@ ok($def['carteira']['contratos_desembolsados_periodo']===$n && abs((float)$def['
     && abs((float)$def['carteira']['prestacoes_desembolsadas_periodo']-$expP)<0.01,'carteira desembolsada e prestações do mês conferem ('.$n.' contratos)');
 $t0=$get(['mes'=>'todos','ano'=>'todos']);
 ok((float)$t0['carteira']['desembolsado_periodo']>=(float)$def['carteira']['desembolsado_periodo'],'Todos/Todos inclui a carteira do mês');
+$open=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->get();
+$tod=now($tz)->toDateString();
+ok($t0['carteira']['vencidas_periodo']===$open->filter(fn($r)=>$r->{'Data de Cobrança'}<$tod)->count()
+    && $t0['carteira']['pendentes_periodo']===$open->filter(fn($r)=>$r->{'Data de Cobrança'}>=$tod)->count()
+    && $t0['carteira']['vencidas_periodo']+$t0['carteira']['pendentes_periodo']===$open->count(),'Todos/Todos: vencidas + pendentes = todas em aberto');
+$inM=$open->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,7)===now($tz)->format('Y-m'));
+ok($def['carteira']['vencidas_periodo']+$def['carteira']['pendentes_periodo']===$inM->count()
+    && abs((float)$def['carteira']['valor_pendente_periodo']+(float)$def['carteira']['valor_vencido_periodo']-(float)$inM->sum('Valor a Pagar'))<0.01,'mês actual: vencidas e pendentes pela data de vencimento');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

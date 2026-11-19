@@ -25,7 +25,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * Período (query ?mes=1..12|todos&ano=AAAA|todos; por defeito mês e ano actuais):
  * aplica-se aos recebimentos (Data de Pagamento) e aos movimentos da Caixa
- * (Data da Operação). Carteira, vencidas e saldos são sempre a fotografia de hoje.
+ * (Data da Operação), à carteira desembolsada (1.ª Data de Inicio) e às prestações em
+ * aberto por Data de Cobrança: vencidas (< hoje) e pendentes (>= hoje). Saldos = hoje.
  */
 final class OverviewController extends Controller
 {
@@ -70,6 +71,17 @@ final class OverviewController extends Controller
             COUNT(DISTINCT CASE WHEN $pending THEN `Nr do Contracto` END) AS contratos_activos,
             COUNT(DISTINCT CASE WHEN $pending AND `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_em_atraso
         ",array_merge([$today,$today],$pb,$pb,$pb,$pb,[$today]))->first();
+
+        // Prestações em aberto com VENCIMENTO no período: vencidas (< hoje) e pendentes (>= hoje).
+        [$dc,$dcb]=$period('Data de Cobrança');
+        $due=$legacy->table('Contractos')->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
+            SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS v_n,
+            ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS v_valor,
+            COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS v_contratos,
+            SUM(CASE WHEN `Data de Cobrança` >= ? THEN 1 ELSE 0 END) AS p_n,
+            ROUND(SUM(CASE WHEN `Data de Cobrança` >= ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS p_valor,
+            COUNT(DISTINCT CASE WHEN `Data de Cobrança` >= ? THEN `Nr do Contracto` END) AS p_contratos
+        ",[$today,$today,$today,$today,$today,$today])->first();
 
         // Carteira desembolsada no período: um valor por contrato (Quantia Creditada),
         // data do desembolso = primeira Data de Inicio do contrato (renovações não contam).
@@ -122,6 +134,12 @@ final class OverviewController extends Controller
                 'prestacoes_vencidas'=>(int)$p->vencidas,
                 'valor_vencido'=>$this->money($p->vencidas_valor),
                 'contratos_em_atraso'=>(int)$p->contratos_em_atraso,
+                'vencidas_periodo'=>(int)($due->v_n??0),
+                'valor_vencido_periodo'=>$this->money($due->v_valor??0),
+                'contratos_vencidos_periodo'=>(int)($due->v_contratos??0),
+                'pendentes_periodo'=>(int)($due->p_n??0),
+                'valor_pendente_periodo'=>$this->money($due->p_valor??0),
+                'contratos_pendentes_periodo'=>(int)($due->p_contratos??0),
             ],
             'recebimentos'=>[
                 'juros'=>$this->money($p->juros),'juros_mes'=>$this->money($p->juros_mes),
