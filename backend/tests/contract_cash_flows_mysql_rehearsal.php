@@ -740,6 +740,28 @@ if ($legacy) { $lr=data($rcc->index(tap(Request::create('/x','GET'),fn($r)=>$r->
     ok(collect($lr['recibos'])->contains(fn($r)=>$r['numero']==='REC-P'.$legacy->Ordem && $r['origem']==='prestacao'),'recibo de pagamento antigo (sem movimento no Extracto): REC-P'.$legacy->Ordem); }
 ok($err(fn()=>$rcc->index(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(static fn()=>$gestor)),(string)$paidC->first()))===403,'recibos: só o administrador');
 
+
+echo "== Numeração anual dos recibos (REC-ANO-SEQUÊNCIA)\n";
+$db->statement('DROP TABLE IF EXISTS cis_receipts');
+(require __DIR__.'/../database/migrations/2026_11_19_000150_create_cis_receipts.php')->up();
+$db->table('cis_company_settings')->where('chave','recibos_numerados')->delete();\App\Support\CompanySettings::forget();
+$areq=fn()=>tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(static fn()=>$user));
+$c1=(string)$paidC->map(fn($c)=>\App\Services\ContractNumbering::resolve($c))->first();
+$r1=data($rcc->index($areq(),$c1));
+$cand=collect(\App\Services\ReceiptNumbering::candidates($db))->filter(fn($i)=>$i['data']!==null);
+$all=$db->table('cis_receipts')->orderBy('ano')->orderBy('sequencia')->get();
+ok($all->count()===$cand->count() && \App\Support\CompanySettings::get('recibos_numerados')==='1','recibos: na primeira consulta todo o histórico é numerado ('.$all->count().')');
+ok($all->groupBy('ano')->every(fn($g)=>$g->pluck('sequencia')->values()->all()===range(1,$g->count()))
+    && $all->groupBy('ano')->every(fn($g)=>$g->pluck('data')->map(fn($d)=>substr((string)$d,0,10))->values()->all()===$g->pluck('data')->map(fn($d)=>substr((string)$d,0,10))->sort()->values()->all())
+    && $all->every(fn($r)=>$r->numero===\App\Services\ReceiptNumbering::format((int)$r->ano,(int)$r->sequencia) && str_starts_with($r->numero,'REC-'.$r->ano.'-')),'recibos: sequência recomeça em 1 em cada ano, por ordem da data do pagamento');
+ok(collect($r1['recibos'])->every(fn($r)=>preg_match('/^REC-\d{4}-\d{5}$/',$r['numero'])),'recibos do contrato com número anual (ex.: '.(collect($r1['recibos'])->first()['numero']??'?').')');
+$r1b=data($rcc->index($areq(),$c1));
+ok(collect($r1b['recibos'])->pluck('numero')->all()===collect($r1['recibos'])->pluck('numero')->all(),'recibos: número fixo depois de atribuído');
+$yR=(int)substr($today,0,4);$maxR=(int)$db->table('cis_receipts')->where('ano',$yR)->max('sequencia');
+$db->table('Extracto')->insert(['Contracto'=>$c1,'Parcela'=>'1','Data da Operação'=>$today,'Tipo de Movimento'=>'Entradas','Descrição'=>'[CAIXA:COBRANCA] Pagamento ensaio '.$c1,'Valor'=>10]);
+$r2=data($rcc->index($areq(),$c1));
+ok(collect($r2['recibos'])->contains('numero',\App\Services\ReceiptNumbering::format($yR,$maxR+1)),'novo recebimento recebe o próximo número do ano');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

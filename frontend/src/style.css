@@ -1599,3 +1599,4 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-notice-dialog::backdrop { background: rgb(10 16 26 / 62%); }
 .cis-notice-dialog .cis-table-scroll { margin-block: 0.75rem; }
 .cis-notice-dialog td:last-child { white-space: nowrap; }
+.cis-num-example span.r{margin-left:18px}

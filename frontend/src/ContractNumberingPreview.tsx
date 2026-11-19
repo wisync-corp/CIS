@@ -7,7 +7,7 @@ type Data={activa:boolean;instalado:boolean;exemplo:string;prefixo_gravado:strin
 const dt=(s:string)=>s?s.split('-').reverse().join('/'):'—';
 
 /** Pré-visualização da numeração anual com o prefixo e os dígitos escritos no formulário. */
-export default function ContractNumberingPreview({token,prefixo,digitos,dirty}:{token:string;prefixo:string;digitos:string;dirty:boolean}){
+export default function ContractNumberingPreview({token,prefixo,digitos,dirty,recibo}:{token:string;prefixo:string;digitos:string;dirty:boolean;recibo?:string}){
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
  useEffect(()=>{const p=(prefixo||'').toUpperCase().trim();if(!/^[A-Z0-9]{1,10}$/.test(p)||!/^[3-6]$/.test(digitos)){setError('Prefixo: 1 a 10 letras ou números, sem espaços.');return;}
   const c=new AbortController();const t=setTimeout(()=>{setLoading(true);setError('');
@@ -18,7 +18,7 @@ export default function ContractNumberingPreview({token,prefixo,digitos,dirty}:{
  if(error)return <div className="cis-co-alert bad"><AlertTriangle size={16}/><span>{error}</span></div>;
  if(!data)return <div className="cis-co-loading"><Loader2 size={16} className="cis-spin"/> A preparar a pré-visualização…</div>;
  return <div className={'cis-num'+(loading?' loading':'')}>
-  <div className="cis-num-example"><span>Exemplo</span><b>{data.exemplo}</b><small>Prefixo · ano do desembolso · sequência que recomeça em 1 em cada ano</small></div>
+  <div className="cis-num-example"><span>Exemplo</span><b>{data.exemplo}</b><small>Prefixo · ano do desembolso · sequência que recomeça em 1 em cada ano</small>{recibo&&<><span className="r">Recibo</span><b>{`${recibo}-${data.exemplo.split('-')[1]}-${'1'.padStart(Number(digitos)||4,'0')}`}</b><small>pela data do pagamento</small></>}</div>
   {data.activa?<div className="cis-co-alert ok"><CheckCircle2 size={16}/><span>Numeração anual <b>activa</b>. Os novos contratos recebem o próximo número do ano do desembolso.{dirty||data.prefixo_gravado!==(prefixo||'').toUpperCase()||String(data.digitos_gravados)!==digitos?' Se mudar o prefixo ou os dígitos, só os novos contratos usam o formato novo até voltar a renumerar.':''}</span></div>
    :<div className="cis-co-alert warn"><AlertTriangle size={16}/><span>Ainda não aplicada. Guarde o prefixo e, na VPS, execute a renumeração de <b>todos os {data.total} contratos</b> (faz cópia de segurança antes e pede confirmação). Até lá, os novos contratos continuam com C-0000.</span></div>}
   <table className="cis-glossary-table cis-num-table"><thead><tr><th>Ano</th><th className="num">Contratos</th><th>Primeiro</th><th>Último</th></tr></thead>

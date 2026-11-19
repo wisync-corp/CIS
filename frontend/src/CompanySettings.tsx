@@ -52,10 +52,11 @@ const SECTIONS:Section[]=[
    {k:'max_creditos_activos',label:'Máximo de créditos activos',type:'number'},
    {k:'max_creditos_atraso',label:'Máximo de créditos em atraso',type:'number'},
    {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Valor da prestação ÷ rendimento mensal do mutuário.'}]}]},
- {id:'numeracao',kicker:'Contratos',title:'Numeração dos contratos',icon:Hash,desc:'Código dos contratos por ano: a contagem recomeça em 1 no início de cada ano (ano do desembolso).',used:['Novo contrato','Contratos e prestações','Extractos','Relatórios'],groups:[
+ {id:'numeracao',kicker:'Contratos',title:'Numeração dos contratos',icon:Hash,desc:'Código dos contratos e dos recibos por ano: a contagem recomeça em 1 no início de cada ano (contratos pelo desembolso, recibos pelo pagamento).',used:['Novo contrato','Contratos e prestações','Recibos','Extractos','Relatórios'],groups:[
   {title:'Formato',icon:Hash,fields:[
    {k:'contrato_prefixo',label:'Prefixo',type:'text',req:true,placeholder:'CAPTA',help:'Letras ou números, sem espaços (ex.: CAPTA, EMP).'},
-   {k:'contrato_digitos',label:'Dígitos da sequência',type:'select',options:[['3','3 (001)'],['4','4 (0001)'],['5','5 (00001)'],['6','6 (000001)']]}]}]},
+   {k:'contrato_digitos',label:'Dígitos da sequência',type:'select',options:[['3','3 (001)'],['4','4 (0001)'],['5','5 (00001)'],['6','6 (000001)']]},
+   {k:'recibo_prefixo',label:'Prefixo dos recibos',type:'text',req:true,placeholder:'REC',help:'Recibos numerados por ano da data do pagamento (ex.: REC-2026-0001).'}]}]},
  {id:'incentivos',kicker:'Equipa',title:'Incentivos',icon:Award,desc:'Valores para o mapa de incentivos dos gestores de crédito.',used:['Relatórios › Desempenho por gestor de crédito'],groups:[
   {title:'Por operação',icon:Award,fields:[
    {k:'incentivo_cliente_novo',label:'Por mutuário novo',type:'number',unit:'MZN',step:'0.01'},
@@ -119,7 +120,7 @@ export default function CompanySettings({token,section}:{token:string;section:Co
    :f.type==='select'?<select value={v} onChange={ev=>set(f.k,ev.target.value)}>{f.options!.map(([o,l])=><option key={o} value={o}>{l}</option>)}</select>
    :<span className="cis-co-input"><input type={f.type} value={v} step={f.step} min={f.type==='number'?0:undefined} placeholder={f.placeholder}
       max={f.type==='date'?new Date().toISOString().slice(0,10):undefined} inputMode={f.k==='nuit'?'numeric':undefined} maxLength={f.k==='nuit'?9:undefined}
-      onChange={ev=>set(f.k,f.k==='contrato_prefixo'?ev.target.value.toUpperCase().replace(/\s/g,''):ev.target.value)}/>{f.unit&&<em>{f.unit}</em>}</span>}
+      onChange={ev=>set(f.k,(f.k==='contrato_prefixo'||f.k==='recibo_prefixo')?ev.target.value.toUpperCase().replace(/\s/g,''):ev.target.value)}/>{f.unit&&<em>{f.unit}</em>}</span>}
    {e?<small className="e">{e}</small>:f.help&&<small>{f.help}</small>}
   </label>;};
 
@@ -139,7 +140,7 @@ export default function CompanySettings({token,section}:{token:string;section:Co
       {form.logotipo&&<button type="button" className="danger" onClick={()=>set('logotipo','')}><Trash2 size={14}/> Remover</button>}</div></div>
     <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{pickLogo(e.target.files?.[0]);e.target.value='';}}/></div>}
    {s.groups.map(g=><fieldset key={g.title} className="cis-co-group"><legend><g.icon size={14}/>{g.title}</legend><div className="cis-co-grid">{g.fields.map(renderField)}</div></fieldset>)}
-   {s.id==='numeracao'&&<ContractNumberingPreview token={token} prefixo={form.contrato_prefixo??''} digitos={form.contrato_digitos??'4'} dirty={['contrato_prefixo','contrato_digitos'].some(k=>dirty.includes(k))}/>}
+   {s.id==='numeracao'&&<ContractNumberingPreview token={token} prefixo={form.contrato_prefixo??''} digitos={form.contrato_digitos??'4'} dirty={['contrato_prefixo','contrato_digitos'].some(k=>dirty.includes(k))} recibo={(form.recibo_prefixo||'REC').toUpperCase()}/>}
   </section>)}
 
   <div className={'cis-co-savebar'+(dirty.length?' dirty':'')} role="region" aria-label="Guardar configurações">
