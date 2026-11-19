@@ -453,6 +453,13 @@ data($mc->registo($jreq('POST',['contrato'=>'C-0110','telefone'=>'258800000000',
 $hw=data($mc->historico($jreq('GET',['contrato'=>'C-0110'])))['mensagens'];
 ok(count($hw)===3 && $hw[0]['status']==='falhada' && $hw[0]['detail']==='Número inválido ou sem WhatsApp.' && $hw[1]['status']==='enviada' && $hw[1]['channel']==='whatsapp_web','envio pelo WhatsApp Web regista enviada/falhada com motivo');
 ok($err(fn()=>$mc->registo($jreq('POST',['canal'=>'whatsapp_web','estado'=>'talvez','mensagem'=>'x'])))===422,'estado de envio inválido recusado');
+$rg=data($mc->registos($jreq('GET',['contrato'=>'C-0110'])));
+ok($rg['total_linhas']===3 && $rg['totais']===['enviadas'=>1,'falhadas'=>1,'abertas'=>1] && $rg['linhas'][0]['estado']==='falhada'
+    && $rg['linhas'][0]['motivo']==='Número inválido ou sem WhatsApp.' && $rg['linhas'][0]['cliente']===$db->table('Contractos')->where('Nr do Contracto','C-0110')->value('Nome do Cliente')
+    && $rg['estado_disponivel']===true,'registo de mensagens: lista, totais e nome do cliente');
+$rf=data($mc->registos($jreq('GET',['estado'=>'enviada','canal'=>'whatsapp_web','inicio'=>now($tz)->toDateString()])));
+ok($rf['total_linhas']===1 && $rf['linhas'][0]['canal']==='whatsapp_web','registo de mensagens: filtros estado/canal/data');
+ok($err(fn()=>$mc->registos($jreq('GET',[],$gestor)))===403,'registo de mensagens reservado ao administrador');
 ok($err(fn()=>$mc->modelos($jreq('GET',[],$gestor)))===403 && $err(fn()=>$mc->destinatarios($jreq('GET',['grupo'=>'todos','texto'=>'x'],$gestor)))===403,'centro de mensagens reservado ao administrador');
 data($mc->eliminarModelo($jreq('DELETE',[]),$new['id']));
 ok(count(data($mc->modelos($jreq('GET',[])))['modelos'])===4,'modelo eliminado');

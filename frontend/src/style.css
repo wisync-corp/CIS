@@ -1185,3 +1185,19 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-toast.info svg:first-child{color:var(--cis-primary)}
 .cis-toast button{border:0;background:transparent;cursor:pointer;color:#667085;padding:2px}
 @keyframes cis-toast-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.cis-msg-image{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px}
+.cis-msg-image img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--cis-border)}
+.cis-msg-image span{display:flex;flex-direction:column;gap:2px;font-size:13px;min-width:200px;flex:1}
+.cis-msg-image button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:800;border:1px solid var(--cis-border);background:#fff;color:var(--cis-primary);border-radius:9px;padding:8px 12px;cursor:pointer}
+.cis-msg-log{border-top:1px solid var(--cis-border);margin-top:18px;padding-top:4px}
+.cis-msg-log h3 button{margin-left:auto;border:1px solid var(--cis-border);background:#fff;border-radius:7px;padding:4px 7px;cursor:pointer;color:var(--cis-primary)}
+.cis-msg-log-filters{display:flex;flex-wrap:wrap;gap:10px 14px;margin-bottom:10px}
+.cis-msg-log-filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--cis-text-muted)}
+.cis-msg-log-filters input,.cis-msg-log-filters select{min-width:150px!important}
+.cis-msg-log-tot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:13px;font-weight:800;margin-bottom:10px}
+.cis-msg-log-tot span{display:inline-flex;align-items:center;gap:5px}.cis-msg-log-tot .ok{color:#0f7a3d}.cis-msg-log-tot .fail{color:#b42318}
+.cis-msg-state{display:inline-block;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:#eef2f6;color:#344054}
+.cis-msg-state.enviada{background:#e8f6ee;color:#0f7a3d}.cis-msg-state.falhada{background:#fdecec;color:#b42318}.cis-msg-state.aberta{background:#fff4e5;color:#9a5b00}
+.cis-msg-log small.motivo{display:block;margin-top:3px;font-size:11px;color:var(--cis-text-muted);max-width:260px}
+.cis-msg-log-body td{white-space:pre-wrap;font-size:12px;color:var(--cis-text-muted);background:#f9fafb}
+.cis-msg-log-empty{font-size:13px;color:var(--cis-text-muted)}

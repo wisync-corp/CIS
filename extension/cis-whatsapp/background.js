@@ -128,10 +128,13 @@ chrome.runtime.onConnect.addListener(port => {
         minGap: Math.max(3, Math.min(120, Number(msg.minGap) || 8)),
         maxGap: Math.max(5, Math.min(180, Number(msg.maxGap) || 18)),
       };
+      // Imagem opcional (uma para todas as mensagens deste envio): data URL até ~5 MB.
+      const img = msg.image && /^data:image\/(jpeg|png|webp);base64,/.test(String(msg.image.dataUrl || '')) && String(msg.image.dataUrl).length < 7_500_000
+        ? {name: String(msg.image.name || 'imagem').slice(0, 120), type: String(msg.image.type || ''), dataUrl: String(msg.image.dataUrl)} : null;
       for (const j of msg.jobs) {
         const phone = String(j.phone || '').replace(/\D/g, '');
         if (!phone || !j.text) { broadcast({type: 'result', id: j.id, ok: false, detail: 'Sem número ou sem texto.', meta: j.meta || null}); continue; }
-        queue.push({id: String(j.id), phone, text: String(j.text).slice(0, 4000), meta: j.meta || null});
+        queue.push({id: String(j.id), phone, text: String(j.text).slice(0, 4000), meta: j.meta || null, image: img});
       }
       broadcast(status());
       processQueue();

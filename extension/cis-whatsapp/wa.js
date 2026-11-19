@@ -12,6 +12,9 @@
     send: ['button[aria-label="Enviar"]', 'button[aria-label="Send"]', 'span[data-icon="send"]', 'span[data-icon="wds-ic-send-filled"]', '[data-testid="send"]'],
     dialog: ['div[role="dialog"]', '[data-animate-modal-popup="true"]'],
     outgoing: ['div.message-out', '[data-testid="msg-container"] .message-out'],
+    // Ecrã de pré-visualização de imagem (abre depois de colar a imagem na conversa).
+    caption: ['div[contenteditable="true"][aria-label*="legenda" i]', 'div[contenteditable="true"][aria-label*="caption" i]', 'div[contenteditable="true"][aria-placeholder*="legenda" i]', 'div[contenteditable="true"][aria-placeholder*="caption" i]'],
+    outImage: ['img[src^="blob:"]', 'img[src^="data:"]', '[data-testid="image-thumb"]', 'div[role="button"][aria-label*="imagem" i]', 'div[role="button"][aria-label*="image" i]'],
   };
   const INVALID = /(inv[aá]lid|invalid|n[aã]o est[aá] no whatsapp|not on whatsapp|isn.t on whatsapp)/i;
   const q = (list, root = document) => { for (const s of list) { const el = root.querySelector(s); if (el) return el; } return null; };
@@ -56,6 +59,8 @@
       return {status: 'error', detail: 'Número inválido ou sem WhatsApp.'};
     }
 
+    if (job.image) return sendImage(job, res.compose);
+
     // 3) Enviar.
     const existing = new Set(qa(SEL.outgoing));
     const btn = await waitFor(() => { const b = q(SEL.send); return b ? (b.closest('button') || b) : null; }, 10000);
@@ -86,6 +91,69 @@
       return true;
     }, 30000);
     return delivered ? {status: 'sent'} : {status: 'sent', detail: 'Enviada; a aguardar rede (relógio no WhatsApp).'};
+  }
+
+
+  function dataUrlToFile(img) {
+    const [head, b64] = String(img.dataUrl).split(',');
+    const type = (head.match(/data:([^;]+)/) || [])[1] || img.type || 'image/jpeg';
+    const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], img.name || 'imagem.jpg', {type});
+  }
+
+  // Caixa de legenda = editor que aparece depois de colar e que não é a caixa de escrita da conversa.
+  const captionBox = compose => {
+    const byLabel = q(SEL.caption);
+    if (byLabel && byLabel !== compose) return byLabel;
+    const all = [...document.querySelectorAll('div[contenteditable="true"]')].filter(el => el !== compose && !el.closest('footer') && el.offsetParent !== null);
+    return all.length ? all[all.length - 1] : null;
+  };
+  // Botão Enviar do ecrã de pré-visualização: o mais próximo da caixa de legenda.
+  const previewSend = cap => {
+    for (let el = cap; el && el !== document.body; el = el.parentElement) {
+      const b = q(SEL.send, el);
+      if (b && !b.closest('footer')) return b.closest('button') || b;
+    }
+    return null;
+  };
+
+  async function sendImage(job, compose) {
+    const file = dataUrlToFile(job.image);
+    const before = new Set(qa(SEL.outgoing));
+    // Colar a imagem na conversa (como Ctrl+V); se não abrir, larga-a sobre a conversa.
+    compose.focus();
+    const dt = new DataTransfer(); dt.items.add(file);
+    compose.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}));
+    let cap = await waitFor(() => captionBox(compose), 8000);
+    if (!cap) {
+      const target = document.querySelector('#main') || compose;
+      const dt2 = new DataTransfer(); dt2.items.add(file);
+      for (const t of ['dragenter', 'dragover', 'drop']) target.dispatchEvent(new DragEvent(t, {dataTransfer: dt2, bubbles: true, cancelable: true}));
+      cap = await waitFor(() => captionBox(compose), 8000);
+    }
+    if (!cap) return {status: 'error', detail: 'O WhatsApp Web não abriu a pré-visualização da imagem.'};
+
+    // Legenda = texto da mensagem (se o WhatsApp não a trouxe da caixa de escrita).
+    if (plain(cap.textContent) !== plain(job.text)) {
+      cap.focus();
+      document.execCommand('selectAll', false);
+      document.execCommand('insertText', false, job.text);
+      if (!plain(cap.textContent)) { cap.textContent = job.text; cap.dispatchEvent(new InputEvent('input', {bubbles: true})); }
+    }
+    const btn = await waitFor(() => previewSend(cap), 8000);
+    if (!btn) return {status: 'error', detail: 'Botão Enviar da imagem não encontrado.'};
+    btn.click();
+
+    // Aceite quando a pré-visualização fecha; confirmado quando aparece uma mensagem nova com imagem.
+    const closed = await waitFor(() => (!cap.isConnected || cap.offsetParent === null) ? true : null, 20000);
+    if (!closed) return {status: 'error', detail: 'A pré-visualização da imagem não fechou: a imagem não saiu.'};
+    const mine = await waitFor(() => qa(SEL.outgoing).slice(-4).reverse().find(el => !before.has(el) && q(SEL.outImage, el)) || null, 20000);
+    if (!mine) return {status: 'sent', detail: 'Imagem enviada (confirmação visual não encontrada).'};
+    const delivered = await waitFor(() => (mine.isConnected && mine.querySelector('span[data-icon="msg-time"]')) ? null : true, 60000);
+    // Limpa o texto que tenha ficado na caixa de escrita da conversa (o /send?text= preenche-a).
+    const c = q(SEL.compose); if (c && plain(c.textContent) === plain(job.text)) { c.focus(); document.execCommand('selectAll', false); document.execCommand('delete', false); }
+    return delivered ? {status: 'sent', detail: 'Com imagem.'} : {status: 'sent', detail: 'Com imagem; a aguardar rede.'};
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
