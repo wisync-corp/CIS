@@ -232,3 +232,15 @@ As definições estão todas em `backend/app/Http/Controllers/Api/ReportControll
 4. **Qualidade dos dados de identificação** (art. 138).
    - Clientes com contratos e BI, NUIT, contacto ou morada em falta, ou com documento caducado.
    - O NUIB ainda não existe no cadastro.
+
+### Relatórios de gestão (grupo «Gestão»)
+
+1. **Agenda de cobranças** (período futuro; por omissão, os próximos 30 dias): previsão por semana, prestações a vencer dia a dia com o contacto, e vencidas por cobrar.
+2. **Antiguidade dos atrasos** (a uma data): faixas de 1–7, 8–30, 31–60, 61–90 e mais de 90 dias, mais a lista por contrato com contacto, último pagamento e operador.
+3. **Desempenho por operador** (período): por utilizador que registou o contrato (`usuario` da primeira prestação). Mostra desembolsado, recebido, juros e multas, contratos e clientes activos, carteira e % da carteira com mais de 30 dias.
+4. **Evolução mensal** (ano): por mês, desembolsos, recebido, juros, multas, carteira no fim do mês, % da carteira com mais de 30 dias e Caixa.
+5. **Caixa por conta** (período): por conta e por tipo de movimento (cobranças, desembolsos, transferências internas, outros). O tipo é deduzido da descrição.
+6. **Clientes para novo crédito**: clientes sem contratos em aberto, classificados assim:
+   - Excelente: nenhuma prestação paga em atraso;
+   - Bom: até 20% das prestações pagas em atraso;
+   - Atenção: mais de 20%.

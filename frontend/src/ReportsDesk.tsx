@@ -1,15 +1,16 @@
 import {useEffect,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {BarChart3,FileText,Download,Printer,X,AlertCircle,ShieldCheck,Scale,Landmark,UserCheck,Loader2} from 'lucide-react';
+import {BarChart3,FileText,Download,Printer,X,AlertCircle,ShieldCheck,Scale,Landmark,UserCheck,Loader2,CalendarClock,Hourglass,Users,TrendingUp,Wallet,Repeat} from 'lucide-react';
 import logoPrincipal from './assets/brand/cis-principal-claro.svg';
 
 const API=import.meta.env.VITE_API_URL||'/api';
-type Def={id:string;titulo:string;periodo:'intervalo'|'data'|'ano'|'nenhum';descricao:string;base_legal:string};
+type Def={id:string;grupo?:string;titulo:string;periodo:'intervalo'|'futuro'|'data'|'ano'|'nenhum';descricao:string;base_legal:string};
 type Section={titulo:string;colunas:string[];linhas:string[][]};
 type Report=Def&{nota:string;resumo:[string,string][];seccoes:Section[];emitido_em:string;emitido_por:string|null;codigo_verificacao:string;
  intervalo?:{inicio:string;fim:string};data_referencia?:string;ano?:number};
 
-const ICON:Record<string,typeof BarChart3>={actividade:BarChart3,crc:Landmark,branqueamento:Scale,identificacao:UserCheck};
+const ICON:Record<string,typeof BarChart3>={actividade:BarChart3,crc:Landmark,branqueamento:Scale,identificacao:UserCheck,agenda:CalendarClock,atrasos:Hourglass,operadores:Users,evolucao:TrendingUp,caixa:Wallet,novocredito:Repeat};
+const plusDays=(d:string,n:number)=>{const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Africa/Maputo'}).format(new Date());
 const dt=(v?:string|null)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d?`${d}/${m}/${y}`:v;};
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -28,9 +29,10 @@ function startOf(kind:'mes'|'trimestre'|'ano'|'mes_anterior'){const t=today();co
 
 export default function ReportsDesk({token}:{token:string}){
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
- const [defs,setDefs]=useState<Def[]>([]);const [sel,setSel]=useState('actividade');
+ const [defs,setDefs]=useState<Def[]>([]);const [sel,setSel]=useState('agenda');
  const [inicio,setInicio]=useState(startOf('mes')[0]);const [fim,setFim]=useState(today());
- const [data,setData]=useState(today());const [ano,setAno]=useState(String(new Date().getFullYear()));
+ const [data,setData]=useState(today());
+ const [aIni,setAIni]=useState(today());const [aFim,setAFim]=useState(plusDays(today(),30));const [ano,setAno]=useState(String(new Date().getFullYear()));
  const [rep,setRep]=useState<Report|null>(null);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
  const [printing,setPrinting]=useState(false);
  const def=defs.find(d=>d.id===sel);
@@ -42,7 +44,7 @@ export default function ReportsDesk({token}:{token:string}){
 
  async function generate(){
   if(!def)return;setBusy(true);setError('');setRep(null);
-  const p=new URLSearchParams();if(def.periodo==='intervalo'){p.set('inicio',inicio);p.set('fim',fim);}if(def.periodo==='data')p.set('data',data);if(def.periodo==='ano')p.set('ano',ano);
+  const p=new URLSearchParams();if(def.periodo==='intervalo'){p.set('inicio',inicio);p.set('fim',fim);}if(def.periodo==='futuro'){p.set('inicio',aIni);p.set('fim',aFim);}if(def.periodo==='data')p.set('data',data);if(def.periodo==='ano')p.set('ano',ano);
   try{const r=await fetch(API+'/cis/relatorios/'+def.id+'?'+p,{headers});const j=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error((j as {message?:string}).message||'Não foi possível gerar o relatório.');setRep(j as Report);}
   catch(e){setError(e instanceof Error?e.message:'Erro.');}finally{setBusy(false);}
@@ -80,18 +82,24 @@ export default function ReportsDesk({token}:{token:string}){
 
  return <div className="cis-reports">
   <aside className="cis-report-list" aria-label="Relatórios">
-   <h3>Relatórios</h3>
-   <ul>{defs.map(d=>{const Ic=ICON[d.id]??FileText;return <li key={d.id}><button type="button" className={d.id===sel?'selected':''} onClick={()=>setSel(d.id)}><Ic size={18}/><span><b>{d.titulo}</b><small>{d.descricao}</small></span></button></li>;})}</ul>
-   <p className="cis-report-hint">Os modelos seguem a regulamentação do Banco de Moçambique pesquisada em Novembro de 2026 e podem ser ajustados quando forem confirmados os modelos oficiais.</p>
+   {['Gestão','Regulatórios'].map(g=>{const list=defs.filter(d=>(d.grupo??'Regulatórios')===g);return list.length?<div key={g} className="cis-report-group">
+    <h3>{g==='Gestão'?'Gestão':'Regulatórios (Banco de Moçambique)'}</h3>
+    <ul>{list.map(d=>{const Ic=ICON[d.id]??FileText;return <li key={d.id}><button type="button" className={d.id===sel?'selected':''} onClick={()=>setSel(d.id)}><Ic size={18}/><span><b>{d.titulo}</b><small>{d.descricao}</small></span></button></li>;})}</ul>
+   </div>:null;})}
+   <p className="cis-report-hint">Os relatórios regulatórios seguem a regulamentação do Banco de Moçambique pesquisada em Novembro de 2026 e podem ser ajustados quando forem confirmados os modelos oficiais.</p>
   </aside>
   <section className="cis-panel cis-report-main">
    {def&&<><div className="cis-panel-head"><div><h2>{def.titulo}</h2><p>{def.descricao}</p></div></div>
-    <p className="cis-report-base"><Scale size={14}/> {def.base_legal}</p>
+    <p className="cis-report-base">{def.grupo==='Gestão'?<BarChart3 size={14}/>:<Scale size={14}/>} {def.base_legal}</p>
     <div className="cis-report-filters">
      {def.periodo==='intervalo'&&<>
       <div className="cis-report-presets">{([['mes','Este mês'],['mes_anterior','Mês anterior'],['trimestre','Este trimestre'],['ano','Este ano']] as const).map(([k,l])=><button type="button" key={k} onClick={()=>{const [a,b]=startOf(k);setInicio(a);setFim(b);}}>{l}</button>)}</div>
       <label>De<input type="date" value={inicio} max={fim} onChange={e=>setInicio(e.target.value)}/></label>
       <label>Até<input type="date" value={fim} min={inicio} max={today()} onChange={e=>setFim(e.target.value)}/></label></>}
+     {def.periodo==='futuro'&&<>
+      <div className="cis-report-presets">{([[0,7,'Próximos 7 dias'],[0,30,'Próximos 30 dias'],[0,0,'Hoje'],[1,1,'Amanhã']] as const).map(([a,b,l])=><button type="button" key={l} onClick={()=>{setAIni(plusDays(today(),a));setAFim(plusDays(today(),b));}}>{l}</button>)}</div>
+      <label>De<input type="date" value={aIni} max={aFim} onChange={e=>setAIni(e.target.value)}/></label>
+      <label>Até<input type="date" value={aFim} min={aIni} onChange={e=>setAFim(e.target.value)}/></label></>}
      {def.periodo==='data'&&<label>Situação à data de<input type="date" value={data} max={today()} onChange={e=>setData(e.target.value)}/></label>}
      {def.periodo==='ano'&&<label>Ano<select value={ano} onChange={e=>setAno(e.target.value)}>{Array.from({length:6},(_,i)=>String(new Date().getFullYear()-i)).map(y=><option key={y}>{y}</option>)}</select></label>}
      <button type="button" className="primary" onClick={()=>void generate()} disabled={busy}>{busy?<><Loader2 size={15} className="spin"/> A gerar…</>:<><FileText size={15}/> Gerar relatório</>}</button>

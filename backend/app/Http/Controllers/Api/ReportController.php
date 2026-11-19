@@ -31,18 +31,37 @@ final class ReportController extends Controller
     public static function catalog(): array
     {
         return [
-            ['id'=>'actividade','titulo'=>'Relatório periódico de actividade','periodo'=>'intervalo',
+            ['id'=>'actividade','grupo'=>'Regulatórios','titulo'=>'Relatório periódico de actividade','periodo'=>'intervalo',
              'descricao'=>'Desembolsos, carteira, carteira em risco, recebimentos, renovações, clientes e Caixa.',
              'base_legal'=>'Decreto n.º 50/2024 (arts. 165 e 167 d)): monitorização e comunicações obrigatórias definidas pelo Banco de Moçambique.'],
-            ['id'=>'crc','titulo'=>'Central de Registo de Crédito','periodo'=>'data',
+            ['id'=>'crc','grupo'=>'Regulatórios','titulo'=>'Central de Registo de Crédito','periodo'=>'data',
              'descricao'=>'Uma linha por contrato com saldo ou movimento: identificação do cliente, montantes, saldo, atraso e situação.',
              'base_legal'=>'Aviso n.º 12/GBM/2024 (Regulamento da Central de Registo de Crédito): reporte em 24 horas após cada operação; modelo por Circular.'],
-            ['id'=>'branqueamento','titulo'=>'Prevenção do branqueamento de capitais (anual)','periodo'=>'ano',
+            ['id'=>'branqueamento','grupo'=>'Regulatórios','titulo'=>'Prevenção do branqueamento de capitais (anual)','periodo'=>'ano',
              'descricao'=>'Clientes acima do regime simplificado, maiores movimentos por cliente e clientes sem identificação completa.',
              'base_legal'=>'Aviso n.º 10/GBM/2024, Capítulo XIII (arts. 134–141) e art. 116 (dados anuais até 31 de Janeiro).'],
-            ['id'=>'identificacao','titulo'=>'Qualidade dos dados de identificação','periodo'=>'nenhum',
+            ['id'=>'identificacao','grupo'=>'Regulatórios','titulo'=>'Qualidade dos dados de identificação','periodo'=>'nenhum',
              'descricao'=>'Clientes com contratos e dados de identificação em falta (BI, NUIT, contacto, morada).',
              'base_legal'=>'Aviso n.º 10/GBM/2024, art. 138 (identificação simplificada: nome, tipo e número do documento, NUIB).'],
+            // ---- Gestão (uso interno) ----
+            ['id'=>'agenda','grupo'=>'Gestão','titulo'=>'Agenda de cobranças','periodo'=>'futuro',
+             'descricao'=>'Prestações a vencer no período, dia a dia, com contacto do cliente; e vencidas por cobrar.',
+             'base_legal'=>'Relatório de gestão interna (planeamento das cobranças).'],
+            ['id'=>'atrasos','grupo'=>'Gestão','titulo'=>'Antiguidade dos atrasos','periodo'=>'data',
+             'descricao'=>'Dívida vencida por faixas de dias e lista por contrato, com contacto e último pagamento.',
+             'base_legal'=>'Relatório de gestão interna (acompanhamento do risco de crédito).'],
+            ['id'=>'operadores','grupo'=>'Gestão','titulo'=>'Desempenho por operador','periodo'=>'intervalo',
+             'descricao'=>'Por utilizador que criou os contratos: desembolsos, recebido, carteira e atraso.',
+             'base_legal'=>'Relatório de gestão interna (desempenho da equipa).'],
+            ['id'=>'evolucao','grupo'=>'Gestão','titulo'=>'Evolução mensal','periodo'=>'ano',
+             'descricao'=>'Mês a mês: desembolsos, recebimentos, juros, carteira, carteira em risco e Caixa.',
+             'base_legal'=>'Relatório de gestão interna (tendências e resultados).'],
+            ['id'=>'caixa','grupo'=>'Gestão','titulo'=>'Caixa por conta','periodo'=>'intervalo',
+             'descricao'=>'Entradas e saídas de cada conta no período, separadas por tipo de movimento.',
+             'base_legal'=>'Relatório de gestão interna (tesouraria).'],
+            ['id'=>'novocredito','grupo'=>'Gestão','titulo'=>'Clientes para novo crédito','periodo'=>'nenhum',
+             'descricao'=>'Clientes que liquidaram todos os contratos, com histórico de pontualidade.',
+             'base_legal'=>'Relatório de gestão interna (renovação e fidelização).'],
         ];
     }
 
@@ -71,12 +90,20 @@ final class ReportController extends Controller
             'inicio'=>['nullable','date_format:Y-m-d'],'fim'=>['nullable','date_format:Y-m-d'],
             'data'=>['nullable','date_format:Y-m-d'],'ano'=>['nullable','integer','min:2000','max:2100'],
         ]);
+        $ini=$p['inicio']??CarbonImmutable::parse($today)->startOfMonth()->toDateString();
+        $fim=min($p['fim']??$today,$today);
         try {
             $out=match ($id) {
                 'actividade'=>$this->actividade($p['inicio']??CarbonImmutable::parse($today)->startOfMonth()->toDateString(),min($p['fim']??$today,$today)),
                 'crc'=>$this->crc(min($p['data']??$today,$today)),
                 'branqueamento'=>$this->branqueamento((int)($p['ano']??now('Africa/Maputo')->year)),
                 'identificacao'=>$this->identificacao(),
+                'agenda'=>$this->agenda($p['inicio']??$today,$p['fim']??CarbonImmutable::parse($today)->addDays(30)->toDateString()),
+                'atrasos'=>$this->atrasos(min($p['data']??$today,$today)),
+                'operadores'=>$this->operadores($ini,$fim),
+                'evolucao'=>$this->evolucao((int)($p['ano']??now('Africa/Maputo')->year)),
+                'caixa'=>$this->caixa($ini,$fim),
+                'novocredito'=>$this->novocredito(),
             };
         } catch (\Illuminate\Database\QueryException $e) {
             report($e);
@@ -92,7 +119,7 @@ final class ReportController extends Controller
     private function rows()
     {
         $cols=['Ordem','Nr do Contracto','Nome do Cliente','Nº de Cliente','Quantia Creditada','% de Juro','Prazo/Duração','Nº de Prestações',
-            'Data de Inicio','Data de Cobrança','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','Data de Pagamento','Estado'];
+            'Data de Inicio','Data de Cobrança','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','Data de Pagamento','Estado','M. Pagamento','usuario'];
         return DB::connection('mysql_legacy')->table('Contractos')
             ->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))->orderBy('Ordem')->get();
     }
@@ -313,6 +340,190 @@ final class ReportController extends Controller
             'nota'=>'Identificação mínima (Aviso 10/GBM/2024, art. 138): nome completo, tipo e número do documento e NUIB. O NUIB ainda não existe no cadastro do CIS. Clientes com contratos activos aparecem primeiro.',
             'resumo'=>[['Clientes com contratos',(string)$total],['Com dados em falta',(string)count($lines)],['Sem BI',(string)$cnt['BI']],['Sem NUIT',(string)$cnt['NUIT']],['Sem contacto',(string)$cnt['Contacto']]],
             'seccoes'=>[['titulo'=>'Clientes com dados de identificação em falta','colunas'=>['Cliente','N.º cliente','Contrato activo','Contratos','Em falta','Observação'],'linhas'=>$lines]],
+        ];
+    }
+    // ================================================================== GESTÃO
+
+    private static function owed(object $r): float { return (float)$r->{'Valor a Pagar'}+(float)($r->{'Valor de Multa'}??0); }
+    private static function contact(?object $cli): string { return self::v($cli,'Contacto'); }
+
+    /** Agenda de cobranças: prestações em aberto com vencimento no período (pode ser futuro). */
+    private function agenda(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        abort_if(CarbonImmutable::parse($ini)->diffInDays(CarbonImmutable::parse($fim))>366,422,'Escolha um período até um ano.');
+        $today=now('Africa/Maputo')->toDateString();
+        $rows=$this->rows();$cl=$this->clients();
+        $open=$rows->filter(fn($r)=>in_array($r->Estado,self::OPEN,true));
+        $line=fn($r)=>[self::d($r->{'Data de Cobrança'}),(string)$r->{'Nome do Cliente'},self::contact($cl[(int)$r->{'Nº de Cliente'}]??null),(string)$r->{'Nr do Contracto'},
+            (string)($r->{'M. Pagamento'}??''),self::m(self::owed($r))];
+        $due=$open->filter(fn($r)=>($d=self::d($r->{'Data de Cobrança'}))>=$ini && $d<=$fim)->sortBy(fn($r)=>self::d($r->{'Data de Cobrança'}).$r->{'Nome do Cliente'});
+        $late=$open->filter(fn($r)=>($d=self::d($r->{'Data de Cobrança'}))!=='' && $d<$today && $d<$ini)->sortBy(fn($r)=>self::d($r->{'Data de Cobrança'}));
+        $weeks=$due->groupBy(fn($r)=>CarbonImmutable::parse(self::d($r->{'Data de Cobrança'}))->startOfWeek()->toDateString())
+            ->map(fn($g,$w)=>['Semana de '.CarbonImmutable::parse($w)->format('d/m'),(string)$g->count(),self::m($g->sum(fn($r)=>self::owed($r)))])->values()->all();
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Valor = Valor a Pagar + multa já lançada. As vencidas por cobrar são as prestações em aberto com vencimento antes do início do período.',
+            'resumo'=>[['Prestações a vencer',(string)$due->count()],['Valor a cobrar',self::m($due->sum(fn($r)=>self::owed($r))).' MT'],
+                ['Clientes',(string)$due->pluck('Nº de Cliente')->unique()->count()],['Vencidas por cobrar',(string)$late->count()],['Valor vencido',self::m($late->sum(fn($r)=>self::owed($r))).' MT']],
+            'seccoes'=>[
+                ['titulo'=>'1. Previsão por semana','colunas'=>['Semana','Prestações','Valor (MT)'],'linhas'=>$weeks],
+                ['titulo'=>'2. Prestações a vencer','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$due->map($line)->values()->all()],
+                ['titulo'=>'3. Vencidas por cobrar (antes do período)','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$late->map($line)->values()->all()],
+            ],
+        ];
+    }
+
+    /** Antiguidade dos atrasos à data D. */
+    private function atrasos(string $d): array
+    {
+        $rows=$this->rows();$cl=$this->clients();
+        $bands=[['1 – 7 dias',1,7],['8 – 30 dias',8,30],['31 – 60 dias',31,60],['61 – 90 dias',61,90],['Mais de 90 dias',91,PHP_INT_MAX]];
+        $lines=[];$agg=array_fill(0,5,['p'=>0,'c'=>0,'v'=>0.0]);$total=0.0;
+        foreach ($rows->groupBy('Nr do Contracto') as $n=>$c) {
+            $over=$c->filter(fn($r)=>self::outstandingAt($r,$d) && ($x=self::d($r->{'Data de Cobrança'}))!=='' && $x<$d);
+            if ($over->isEmpty()) continue;
+            $days=(int)CarbonImmutable::parse(self::d($over->min('Data de Cobrança')))->diffInDays(CarbonImmutable::parse($d));
+            $bi=0;foreach ($bands as $i=>$b) if ($days>=$b[1] && $days<=$b[2]) $bi=$i;
+            $val=$over->sum(fn($r)=>self::owed($r));$total+=$val;
+            $agg[$bi]['p']+=$over->count();$agg[$bi]['c']++;$agg[$bi]['v']+=$val;
+            $last=$c->filter(fn($r)=>in_array($r->Estado,self::PAID,true) && self::d($r->{'Data de Pagamento'})<=$d)->max('Data de Pagamento');
+            $first=$c->first();
+            $lines[]=[(string)$first->{'Nome do Cliente'},self::contact($cl[(int)$first->{'Nº de Cliente'}]??null),(string)$n,(string)$over->count(),(string)$days,self::m($val),$bands[$bi][0],$last?self::d($last):'',(string)($first->usuario??'')];
+        }
+        usort($lines,fn($a,$b)=>(int)$b[4]<=>(int)$a[4]);
+        $tab=[];foreach ($bands as $i=>$b) $tab[]=[$b[0],(string)$agg[$i]['p'],(string)$agg[$i]['c'],self::m($agg[$i]['v']),self::pct($agg[$i]['v'],$total)];
+        return [
+            'data_referencia'=>$d,
+            'nota'=>'Dias de atraso contados desde a prestação vencida mais antiga do contrato. Valor = Valor a Pagar + multa já lançada.',
+            'resumo'=>[['Contratos em atraso',(string)count($lines)],['Valor vencido',self::m($total).' MT'],['Mais de 30 dias',self::m($agg[2]['v']+$agg[3]['v']+$agg[4]['v']).' MT'],['Mais de 90 dias',self::m($agg[4]['v']).' MT']],
+            'seccoes'=>[
+                ['titulo'=>'1. Por faixa de atraso','colunas'=>['Faixa','Prestações','Contratos','Valor vencido (MT)','% do vencido'],'linhas'=>$tab],
+                ['titulo'=>'2. Contratos em atraso (mais antigos primeiro)','colunas'=>['Cliente','Contacto','Contrato','Prestações vencidas','Dias de atraso','Valor vencido (MT)','Faixa','Último pagamento','Operador'],'linhas'=>$lines],
+            ],
+        ];
+    }
+
+    /** Desempenho por operador (utilizador que criou a primeira linha do contrato). */
+    private function operadores(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        $rows=$this->rows();$per=[];
+        foreach ($rows->groupBy('Nr do Contracto') as $c) {
+            $first=$c->sortBy('Ordem')->first();$op=trim((string)($first->usuario??''))?:'(sem operador)';
+            $per[$op]??=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'cart'=>0.0,'atr'=>0.0,'cli'=>[],'ativos'=>0];
+            $start=self::d($c->min('Data de Inicio'));
+            if ($start>=$ini && $start<=$fim) { $per[$op]['n']++; $per[$op]['v']+=(float)$c->max('Quantia Creditada'); }
+            foreach ($c as $r) if (in_array($r->Estado,self::PAID,true) && ($pd=self::d($r->{'Data de Pagamento'}))>=$ini && $pd<=$fim) { $per[$op]['rec']+=(float)$r->{'Valor Pago'};$per[$op]['jur']+=(float)$r->{'Valor de Juros'}+(float)($r->{'Valor de Multa'}??0); }
+            $out=$c->filter(fn($r)=>self::outstandingAt($r,$fim));
+            if ($out->isNotEmpty()) {
+                $per[$op]['ativos']++;$per[$op]['cli'][(int)$first->{'Nº de Cliente'}?:$first->{'Nome do Cliente'}]=1;
+                $cap=$out->sum(fn($r)=>self::principal($r));$per[$op]['cart']+=$cap;
+                $late30=$out->contains(fn($r)=>($x=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($x)->addDays(30)->toDateString()<$fim);
+                if ($late30) $per[$op]['atr']+=$cap;
+            }
+        }
+        $lines=[];foreach ($per as $op=>$x) $lines[]=[$op,(string)$x['n'],self::m($x['v']),self::m($x['rec']),self::m($x['jur']),(string)$x['ativos'],(string)count($x['cli']),self::m($x['cart']),self::pct($x['atr'],$x['cart'])];
+        usort($lines,fn($a,$b)=>(float)$b[7]<=>(float)$a[7]);
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Operador = utilizador que registou o contrato (campo «usuario» da primeira prestação). Carteira e atraso à data final do período.',
+            'resumo'=>[['Operadores',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT']],
+            'seccoes'=>[['titulo'=>'Desempenho por operador','colunas'=>['Operador','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e multas (MT)','Contratos em curso','Clientes activos','Carteira (MT)','% carteira > 30 dias'],'linhas'=>$lines]],
+        ];
+    }
+
+    /** Evolução mensal no ano (até ao mês actual). */
+    private function evolucao(int $ano): array
+    {
+        $rows=$this->rows();$today=now('Africa/Maputo')->toDateString();
+        $starts=$rows->groupBy('Nr do Contracto')->map(fn($c)=>['d'=>self::d($c->min('Data de Inicio')),'q'=>(float)$c->max('Quantia Creditada')]);
+        $cx=DB::connection('mysql_legacy')->table('Extracto')->whereYear('Data da Operação',$ano)
+            ->whereRaw("NOT (`Descrição` LIKE '[TRANSFER %' OR `Descrição` LIKE '[ESTORNO TRANSFER %')")
+            ->selectRaw("MONTH(`Data da Operação`) m, ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' THEN Valor ELSE 0 END),2) e, ROUND(SUM(CASE WHEN `Tipo de Movimento`<>'Entradas' THEN Valor ELSE 0 END),2) s")
+            ->groupBy('m')->get()->keyBy('m');
+        $names=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        $lines=[];$tot=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'mul'=>0.0];
+        for ($m=1;$m<=12;$m++) {
+            $a=sprintf('%04d-%02d-01',$ano,$m);if ($a>$today) break;
+            $z=min(CarbonImmutable::parse($a)->endOfMonth()->toDateString(),$today);
+            $dis=$starts->filter(fn($c)=>$c['d']>=$a && $c['d']<=$z);
+            $paid=$rows->filter(fn($r)=>in_array($r->Estado,self::PAID,true) && ($pd=self::d($r->{'Data de Pagamento'}))>=$a && $pd<=$z);
+            $rec=$paid->sum(fn($r)=>(float)$r->{'Valor Pago'});$jur=$paid->sum(fn($r)=>(float)$r->{'Valor de Juros'});$mul=$paid->sum(fn($r)=>(float)($r->{'Valor de Multa'}??0));
+            $out=$rows->filter(fn($r)=>self::outstandingAt($r,$z));$cart=$out->sum(fn($r)=>self::principal($r));
+            $n30=$out->filter(fn($r)=>($x=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($x)->addDays(30)->toDateString()<$z)->pluck('Nr do Contracto')->unique();
+            $par=$out->whereIn('Nr do Contracto',$n30->all())->sum(fn($r)=>self::principal($r));
+            $c=$cx[$m]??null;
+            $lines[]=[$names[$m-1],(string)$dis->count(),self::m($dis->sum('q')),self::m($rec),self::m($jur),self::m($mul),self::m($cart),self::pct($par,$cart),self::m((float)($c->e??0)),self::m((float)($c->s??0))];
+            $tot['n']+=$dis->count();$tot['v']+=$dis->sum('q');$tot['rec']+=$rec;$tot['jur']+=$jur;$tot['mul']+=$mul;
+        }
+        $lines[]=['Total do ano',(string)$tot['n'],self::m($tot['v']),self::m($tot['rec']),self::m($tot['jur']),self::m($tot['mul']),'','','',''];
+        return [
+            'ano'=>$ano,
+            'nota'=>'Carteira e carteira em risco (> 30 dias) no fim de cada mês. Caixa sem transferências internas.',
+            'resumo'=>[['Contratos desembolsados',(string)$tot['n']],['Valor desembolsado',self::m($tot['v']).' MT'],['Recebido',self::m($tot['rec']).' MT'],['Juros recebidos',self::m($tot['jur']).' MT'],['Multas recebidas',self::m($tot['mul']).' MT']],
+            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Multas (MT)','Carteira no fim (MT)','% carteira > 30 dias','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines]],
+        ];
+    }
+
+    /** Caixa por conta e por tipo de movimento. */
+    private function caixa(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        $db=DB::connection('mysql_legacy');
+        $hasAcc=$db->getSchemaBuilder()->hasColumn('Extracto','account_id');
+        $sel=['Tipo de Movimento','Descrição','Valor'];if ($hasAcc) $sel[]='account_id';
+        $mov=$db->table('Extracto')->whereBetween('Data da Operação',[$ini,$fim])->get($sel);
+        $names=[];
+        if ($hasAcc) { try { $names=DB::table('cis_cash_accounts')->get(['id','code','name'])->keyBy('id')->map(fn($a)=>$a->code.' · '.$a->name)->all(); } catch (\Throwable $e) { report($e); } }
+        $type=function ($m) {
+            $d=(string)$m->{'Descrição'};
+            if (str_starts_with($d,'[TRANSFER') || str_starts_with($d,'[ESTORNO TRANSFER')) return 'Transferências internas';
+            if (str_contains($d,'[CAIXA:COBRANCA]') || stripos($d,'Receita de Juros')!==false || stripos($d,'Pagamento')!==false) return 'Cobranças';
+            if (str_contains($d,'[CAIXA:DESEMBOLSO]') || stripos($d,'Desembolso')!==false || stripos($d,'Aumento de Crédito')!==false) return 'Desembolsos';
+            return 'Outros';
+        };
+        $acc=[];$byType=[];
+        foreach ($mov as $m) {
+            $a=$hasAcc&&$m->account_id?($names[$m->account_id]??'Conta '.$m->account_id):'Sem conta (histórico)';
+            $in=$m->{'Tipo de Movimento'}==='Entradas';$v=(float)$m->Valor;$t=$type($m);
+            $acc[$a]??=['e'=>0.0,'s'=>0.0,'n'=>0];$acc[$a][$in?'e':'s']+=$v;$acc[$a]['n']++;
+            $byType[$t]??=['e'=>0.0,'s'=>0.0,'n'=>0];$byType[$t][$in?'e':'s']+=$v;$byType[$t]['n']++;
+        }
+        $l1=[];foreach ($acc as $a=>$x) $l1[]=[$a,(string)$x['n'],self::m($x['e']),self::m($x['s']),self::m($x['e']-$x['s'])];
+        $l2=[];foreach ($byType as $t=>$x) $l2[]=[$t,(string)$x['n'],self::m($x['e']),self::m($x['s']),self::m($x['e']-$x['s'])];
+        usort($l1,fn($a,$b)=>strcmp($a[0],$b[0]));
+        $E=array_sum(array_column($acc,'e'));$S=array_sum(array_column($acc,'s'));
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Tipo de movimento deduzido da descrição do Extracto. As transferências internas entram e saem entre contas (o total do CIS não muda).',
+            'resumo'=>[['Movimentos',(string)count($mov)],['Entradas',self::m($E).' MT'],['Saídas',self::m($S).' MT'],['Saldo do período',self::m($E-$S).' MT']],
+            'seccoes'=>[
+                ['titulo'=>'1. Por conta','colunas'=>['Conta','Movimentos','Entradas (MT)','Saídas (MT)','Saldo do período (MT)'],'linhas'=>$l1],
+                ['titulo'=>'2. Por tipo de movimento','colunas'=>['Tipo','Movimentos','Entradas (MT)','Saídas (MT)','Saldo do período (MT)'],'linhas'=>$l2],
+            ],
+        ];
+    }
+
+    /** Clientes que liquidaram todos os contratos: candidatos a novo crédito. */
+    private function novocredito(): array
+    {
+        $rows=$this->rows();$cl=$this->clients();$lines=[];
+        foreach ($rows->groupBy(fn($r)=>(int)$r->{'Nº de Cliente'}?:(string)$r->{'Nome do Cliente'}) as $k=>$g) {
+            if ($g->contains(fn($r)=>in_array($r->Estado,self::OPEN,true))) continue;
+            $paid=$g->filter(fn($r)=>in_array($r->Estado,self::PAID,true));if ($paid->isEmpty()) continue;
+            $late=$paid->where('Estado','Pago em Atraso')->count();$n=$paid->count();
+            $class=$late===0?'Excelente':($late/$n<=0.2?'Bom':'Atenção');
+            $cli=is_int($k)?($cl[$k]??null):null;
+            $lines[]=[(string)$g->first()->{'Nome do Cliente'},self::contact($cli),(string)$g->pluck('Nr do Contracto')->unique()->count(),self::m($g->groupBy('Nr do Contracto')->sum(fn($c)=>(float)$c->max('Quantia Creditada'))),
+                (string)$n,(string)$late,self::d($paid->max('Data de Pagamento')),$class];
+        }
+        usort($lines,fn($a,$b)=>[array_search($a[7],['Excelente','Bom','Atenção']),$b[6]]<=>[array_search($b[7],['Excelente','Bom','Atenção']),$a[6]]);
+        $cnt=array_count_values(array_column($lines,7));
+        return [
+            'nota'=>'Classificação: Excelente = nenhuma prestação paga em atraso; Bom = até 20% em atraso; Atenção = acima de 20%. Ordenado por classificação e liquidação mais recente.',
+            'resumo'=>[['Clientes elegíveis',(string)count($lines)],['Excelente',(string)($cnt['Excelente']??0)],['Bom',(string)($cnt['Bom']??0)],['Atenção',(string)($cnt['Atenção']??0)]],
+            'seccoes'=>[['titulo'=>'Clientes sem contratos em aberto','colunas'=>['Cliente','Contacto','Contratos','Total creditado (MT)','Prestações pagas','Pagas em atraso','Última liquidação','Classificação'],'linhas'=>$lines]],
         ];
     }
 }
