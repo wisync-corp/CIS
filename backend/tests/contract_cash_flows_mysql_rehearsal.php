@@ -664,7 +664,11 @@ ok(count($plan['linhas'])+count($plan['sem_data'])===$nBefore && $byYear->every(
     && collect($plan['linhas'])->every(fn($l)=>str_starts_with($l['novo'],'CAPTA-'.$l['ano'].'-') && substr($l['data'],0,4)==(string)$l['ano']),'plano: sequência recomeça em 1 em cada ano (ano do desembolso)');
 $sorted=collect($plan['linhas'])->sortBy(fn($l)=>$l['data'].sprintf('%09d',$l['ordem']))->pluck('novo')->values()->all();
 ok($sorted===collect($plan['linhas'])->pluck('novo')->all(),'plano: ordenado pela data de desembolso e ordem de registo');
-// Alvos: o contrato aberto no ensaio ($n) tem histórico e uma saída com o número na descrição.
+// Alvo: um contrato com histórico e com o número na descrição do Extracto (ex.: desembolso pelo CIS).
+$inPlan=collect($plan['linhas'])->pluck('atual')->all();
+$n=collect($db->table('cis_contractos_historico')->distinct()->pluck('contract_number'))
+    ->first(fn($c)=>in_array($c,$inPlan,true) && $db->table('Extracto')->where('Descrição','like','%Desembolso de Empréstimo '.$c.' |%')->exists());
+ok($n!==null,'ensaio: contrato com histórico e desembolso no Extracto ('.($n??'?').')');
 $histN=$db->table('cis_contractos_historico')->where('contract_number',$n)->count();
 $extN=$db->table('Extracto')->where('Contracto',$n)->orWhere('Descrição','like','%'.$n.' |%')->count();
 $db->table('cis_message_log')->insert(['contract_number'=>$n,'phone'=>'258840000000','channel'=>'whatsapp','body'=>'x','sent_by'=>1,'created_at'=>now()]);
