@@ -1585,3 +1585,17 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-receipt .cis-receipt-amount small{color:#475467;font-size:12px}
 .cis-receipt-sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin:46px 0 8px}
 .cis-receipt-sign span{border-top:1px solid #475467;padding-top:6px;text-align:center;font-size:12px;color:#475467}
+
+/* Janela de avisos de cobrança, aberta através do diálogo nativo. */
+.cis-notice-dialog {
+  width: min(56rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: inherit;
+}
+.cis-notice-dialog:not([open]) { display: none; }
+.cis-notice-dialog::backdrop { background: rgb(10 16 26 / 62%); }
+.cis-notice-dialog .cis-table-scroll { margin-block: 0.75rem; }
+.cis-notice-dialog td:last-child { white-space: nowrap; }
