@@ -145,11 +145,12 @@ final class ExtractoController extends Controller
         if ($f['fim']??null) $q->where('Data de Cobrança','<=',$f['fim']);
         if ($f['cliente']!=='') $q->where('Nome do Cliente',$f['cliente']);
         if ($f['contrato']!=='') $q->where('Nr do Contracto',$f['contrato']);
-        return $q->orderBy('Data de Cobrança')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->get([
-            'Ordem','Nº','Nr do Contracto','Nome do Cliente','Nº de Cliente','Nº da Parcela','Data de Inicio',
+        // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
+        $cols=['Ordem','Nº','Nr do Contracto','Nome do Cliente','Nº de Cliente','Nº da Parcela','Data de Inicio',
             'Data de Cobrança','Dias','M. Pagamento','Quantia Creditada','Valor de Juros','Valor de Multa',
-            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado',
-        ]);
+            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado'];
+        return $q->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))
+            ->orderBy('Data de Cobrança')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->get();
     }
 
     private function summarise($rows,string $today,?string $estado): array
