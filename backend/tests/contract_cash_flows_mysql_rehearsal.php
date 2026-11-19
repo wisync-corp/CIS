@@ -720,6 +720,26 @@ ok($noticeAfter['cobranca']===$noticeBefore['cobranca']+1 && $noticeAfter['atras
 ok(in_array('AV-HOJE',array_column(array_map(static fn($line)=>(array)$line,$noticeAfter['linhas']),'contrato'),true),
     'aviso de cobrança indica o contrato');
 
+
+echo "== Recibos de pagamento\n";
+$rcc=new \App\Http\Controllers\Api\ContractReceiptController();
+$paidC=$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])->where('Valor Pago','>',0)->distinct()->pluck('Nr do Contracto');
+$checked=0;
+foreach ($paidC as $c) {
+    $rr=data($rcc->index(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(static fn()=>$user)),$c));
+    $parcelas=collect($rr['recibos'])->pluck('prestacao')->map(fn($x)=>(string)$x)->unique();
+    $paidP=$db->table('Contractos')->where('Nr do Contracto',$c)->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])->where('Valor Pago','>',0)->pluck('Nº da Parcela')->map(fn($x)=>(string)$x)->unique();
+    $extE=$db->table('Extracto')->where('Contracto',$c)->where('Tipo de Movimento','Entradas')->where('Valor','>',0)->pluck('Nr');
+    if (!$paidP->diff($parcelas)->isEmpty() || !$extE->every(fn($nr)=>collect($rr['recibos'])->contains('numero','REC-'.$nr))) { ok(false,"recibos do contrato $c"); break; }
+    $checked++;
+}
+ok($checked===$paidC->count() && $checked>0,"recibos: cada prestação paga e cada entrada no Extracto tem recibo ($checked contratos)");
+$legacy=$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso'])->where('Valor Pago','>',0)->get()
+    ->first(fn($r)=>!$db->table('Extracto')->where('Contracto',$r->{'Nr do Contracto'})->where('Parcela',(string)$r->{'Nº da Parcela'})->where('Tipo de Movimento','Entradas')->exists());
+if ($legacy) { $lr=data($rcc->index(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(static fn()=>$user)),$legacy->{'Nr do Contracto'}));
+    ok(collect($lr['recibos'])->contains(fn($r)=>$r['numero']==='REC-P'.$legacy->Ordem && $r['origem']==='prestacao'),'recibo de pagamento antigo (sem movimento no Extracto): REC-P'.$legacy->Ordem); }
+ok($err(fn()=>$rcc->index(tap(Request::create('/x','GET'),fn($r)=>$r->setUserResolver(static fn()=>$gestor)),(string)$paidC->first()))===403,'recibos: só o administrador');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
