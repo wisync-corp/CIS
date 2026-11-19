@@ -1413,22 +1413,8 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 
 /* ===== Configurações da empresa ===== */
 .cis-spin{animation:cis-spin 1s linear infinite}
-.cis-co{display:flex;flex-direction:column;gap:14px;margin-bottom:18px}
+.cis-co{display:flex;flex-direction:column;gap:14px}
 .cis-co-loading{display:flex;align-items:center;gap:8px;color:var(--cis-text-muted);padding:10px}
-.cis-co-banner{border-radius:18px;padding:20px 22px 18px;color:#fff;background:linear-gradient(120deg,var(--cis-primary) 0%,#6941c6 55%,#12b76a 140%);box-shadow:0 10px 30px rgba(68,40,140,.18);position:relative;overflow:hidden}
-.cis-co-banner:after{content:"";position:absolute;right:-60px;top:-80px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08)}
-.cis-co-banner-top{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
-.cis-co-banner-ico{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.18)}
-.cis-co-banner h2{margin:0;font-size:calc(21px * var(--cis-fs));color:#fff}
-.cis-co-banner p{margin:2px 0 0;opacity:.85;font-size:calc(13px * var(--cis-fs))}
-.cis-co-progress{margin-left:auto;display:grid;grid-template-columns:auto;justify-items:end;gap:2px;min-width:110px}
-.cis-co-progress b{font-size:calc(20px * var(--cis-fs))}.cis-co-progress span{font-size:calc(11px * var(--cis-fs));opacity:.8;text-transform:uppercase;letter-spacing:.05em}
-.cis-co-progress i{display:block;width:110px;height:6px;border-radius:99px;background:linear-gradient(90deg,#fff var(--p),rgba(255,255,255,.25) var(--p))}
-.cis-co-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px;position:relative;z-index:1}
-.cis-co-shortcuts button{font:inherit;text-align:left;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:9px 12px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:background .15s}
-.cis-co-shortcuts button:hover{background:rgba(255,255,255,.22)}
-.cis-co-shortcuts span{font-size:calc(10.5px * var(--cis-fs));text-transform:uppercase;letter-spacing:.06em;opacity:.8;font-weight:700}
-.cis-co-shortcuts b{display:flex;align-items:center;gap:6px;font-size:calc(13.5px * var(--cis-fs))}
 .cis-co-alert{display:flex;gap:9px;align-items:flex-start;border-radius:12px;padding:10px 12px;font-size:calc(13px * var(--cis-fs));line-height:1.45}
 .cis-co-alert svg{flex-shrink:0;margin-top:1px}
 .cis-co-alert.warn{background:#fffaeb;color:#93370d;border:1px solid #fedf89}
@@ -1490,3 +1476,73 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-doc-brand .who small{font-size:11px;color:#475467}
 @media(max-width:1100px){.cis-co-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-co-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}.cis-co-used{margin-left:0;justify-content:flex-start}}
 @media(max-width:640px){.cis-co-grid{grid-template-columns:1fr}.cis-co-field.wide{grid-column:auto}.cis-co-progress{display:none}.cis-co-savebar{flex-wrap:wrap}}
+
+/* ===== Definições: navegação lateral (mesmo padrão dos Relatórios) ===== */
+.cis-settings-layout{display:grid!important;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.cis-settings-nav{position:sticky;top:12px;background:#fff;border:1px solid var(--cis-border);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:12px}
+.cis-settings-nav>div>span{display:block;font-size:calc(11px * var(--cis-fs));font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#475467;padding:2px 4px 6px}
+.cis-settings-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.cis-settings-nav button{display:flex;align-items:center;gap:9px;width:100%;font:inherit;font-size:calc(13.5px * var(--cis-fs));font-weight:700;color:var(--cis-heading);background:transparent;border:1px solid transparent;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left}
+.cis-settings-nav button svg{color:var(--cis-primary);flex-shrink:0}
+.cis-settings-nav button:hover{background:#f9fafb}
+.cis-settings-nav button.on{background:var(--cis-primary-soft,#f4f0ff);border-color:var(--cis-primary)}
+.cis-settings-content{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cis-co-meter{display:inline-flex;align-items:center;gap:8px;margin-top:6px}
+.cis-co-meter i{display:block;height:6px;width:120px;border-radius:99px;background:#eaecf0;overflow:hidden;position:relative}
+.cis-co-meter u{display:block;height:100%;background:var(--cis-primary);border-radius:99px}
+.cis-co-meter b{font-size:calc(11.5px * var(--cis-fs));color:#475467}
+.cis-co-used small{font-size:calc(11px * var(--cis-fs));font-weight:700;color:var(--cis-text-muted);margin-right:2px}
+/* Tabela de preços */
+.cis-price-wrap{overflow-x:auto;border:1px solid #eaecf0;border-radius:12px}
+.cis-price{width:100%;border-collapse:collapse;font-size:calc(13.5px * var(--cis-fs))}
+.cis-price th{background:#f9fafb;text-align:left;font-size:calc(12px * var(--cis-fs));font-weight:800;color:#475467;padding:9px 10px;border-bottom:1px solid #eaecf0}
+.cis-price th.num{text-align:center}
+.cis-price td{padding:6px 10px;border-bottom:1px solid #f2f4f7}
+.cis-price td>input{width:100%;min-width:90px;font:inherit;border:1px solid #d0d5dd;border-radius:8px;padding:7px 9px;font-variant-numeric:tabular-nums}
+.cis-price td.num .cis-co-input{max-width:130px;margin:0 auto}
+.cis-price td.num input{text-align:right;font-variant-numeric:tabular-nums}
+.cis-price td.act{width:44px;text-align:center}
+.cis-price td.act button{border:0;background:transparent;color:#b42318;cursor:pointer;padding:6px;border-radius:8px}
+.cis-price td.act button:hover{background:#fef3f2}
+.cis-price tr.err td>input,.cis-price tr.err .cis-co-input{border-color:#f04438}
+.cis-price tr.msg td{color:#b42318;font-size:calc(12px * var(--cis-fs));font-weight:700;padding-top:0;border-bottom:1px solid #f2f4f7}
+.cis-price tr.gap td{background:#fffaeb;color:#93370d;font-size:calc(12px * var(--cis-fs));font-weight:700}
+.cis-price tr.gap svg{vertical-align:-2px}
+.cis-price input:disabled{background:#f9fafb;color:#475467}
+.cis-price-add{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font:inherit;font-size:calc(13px * var(--cis-fs));font-weight:800;color:var(--cis-primary);background:#fff;border:1px dashed var(--cis-primary);border-radius:10px;padding:8px 14px;cursor:pointer}
+.cis-price-probe{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:14px;padding:12px 14px;border-radius:12px;background:#f9fafb;border:1px solid #eaecf0;color:#344054;font-size:calc(13px * var(--cis-fs))}
+.cis-price-probe label{display:flex;align-items:center;gap:8px;font-weight:800}
+.cis-price-probe .cis-co-input{width:160px}
+.cis-price-probe>span{display:flex;flex-wrap:wrap;gap:6px 14px}
+.cis-price-probe b{color:var(--cis-heading)}.cis-price-probe .bad{color:#b42318;font-weight:700}
+/* Tipos de movimento */
+.cis-mov-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.cis-mov-col{border:1px solid #eaecf0;border-radius:14px;padding:12px 14px;background:#fff}
+.cis-mov-col h4{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:calc(15px * var(--cis-fs));color:var(--cis-heading)}
+.cis-mov-col.in h4 svg{color:#067647}.cis-mov-col.out h4 svg{color:#b42318}
+.cis-mov-col h4 span{margin-left:auto;font-size:calc(11.5px * var(--cis-fs));font-weight:700;color:var(--cis-text-muted)}
+.cis-mov-add{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-bottom:12px}
+.cis-mov-add input,.cis-mov-add select,.cis-mov-col li select{font:inherit;font-size:calc(13px * var(--cis-fs));border:1px solid #d0d5dd;border-radius:9px;padding:7px 9px;background:#fff;min-width:0}
+.cis-mov-add button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:calc(13px * var(--cis-fs));font-weight:800;border:0;background:var(--cis-primary);color:#fff;border-radius:9px;padding:7px 12px;cursor:pointer}
+.cis-mov-add button:disabled{opacity:.45;cursor:not-allowed}
+.cis-mov-add small{grid-column:1/-1;color:#b42318;font-weight:700;font-size:calc(12px * var(--cis-fs))}
+.cis-mov-group{margin-top:8px}
+.cis-mov-gname{display:block;font-size:calc(11px * var(--cis-fs));font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#475467;margin:0 0 4px 2px}
+.cis-mov-col ul{list-style:none;margin:0;padding:0;border:1px solid #f2f4f7;border-radius:10px;overflow:hidden}
+.cis-mov-col li{display:grid;grid-template-columns:minmax(0,1fr) 215px 84px;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f2f4f7;font-size:calc(13.5px * var(--cis-fs))}
+.cis-mov-col li:last-child{border-bottom:0}
+.cis-mov-col li.off .name{color:#98a2b3;text-decoration:line-through}
+.cis-mov-col li small{grid-column:1/-1;color:#b42318;font-weight:700;font-size:calc(12px * var(--cis-fs))}
+.cis-mov-col li .name{display:flex;align-items:center;gap:6px;color:var(--cis-heading);font-weight:600;min-width:0}
+.cis-mov-col li .name svg{color:#98a2b3;flex-shrink:0}
+.cis-mov-col li .pen{border:0;background:transparent;color:#98a2b3;cursor:pointer;padding:3px;border-radius:6px;opacity:0;transition:opacity .15s}
+.cis-mov-col li:hover .pen,.cis-mov-col li .pen:focus{opacity:1}
+.cis-mov-edit{display:flex;gap:4px}
+.cis-mov-edit input{flex:1;min-width:0;font:inherit;font-size:calc(13px * var(--cis-fs));border:1px solid var(--cis-primary);border-radius:8px;padding:5px 8px}
+.cis-mov-edit button{border:1px solid #d0d5dd;background:#fff;border-radius:8px;cursor:pointer;padding:0 7px;color:#344054}
+.cis-mov-toggle{font:inherit;font-size:calc(12px * var(--cis-fs));font-weight:800;border:1px solid #d0d5dd;border-radius:999px;padding:4px 0;background:#f2f4f7;color:#475467;cursor:pointer}
+.cis-mov-toggle.on{background:#ecfdf3;border-color:#abefc6;color:#067647}
+.cis-mov-toggle:disabled{cursor:default;opacity:.8}
+@media(max-width:1200px){.cis-mov-cols{grid-template-columns:1fr}}
+@media(max-width:980px){.cis-settings-layout{grid-template-columns:1fr}.cis-settings-nav{position:static;flex-direction:row;flex-wrap:wrap}.cis-settings-nav ul{flex-direction:row;flex-wrap:wrap}}
+@media(max-width:640px){.cis-mov-add{grid-template-columns:1fr}.cis-mov-col li{grid-template-columns:1fr}}

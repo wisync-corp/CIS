@@ -73,6 +73,9 @@ export default function CashDesk({token}:{token:string}){
  const [newAccount,setNewAccount]=useState({code:'',name:'',type:'banco' as CashAccount['type'],identifier:''});
  const [opening,setOpening]=useState({opening_balance:'',cut_at:todayCut(),evidence_reference:''});
  const [record,setRecord]=useState({account_id:'',type:'entrada' as 'entrada'|'saida',amount:'',category:'',description:'',evidence_reference:''});
+ const [movTypes,setMovTypes]=useState<{tipo_movimento:string;descricao:string;grupo:string|null}[]>([]);
+ useEffect(()=>{fetch(API+'/cis/parametrizacao/tipos-movimento',{headers:{Authorization:'Bearer '+token,Accept:'application/json'}}).then(r=>r.ok?r.json():null).then(d=>setMovTypes(d?.movimentos??[])).catch(()=>{});},[token]);
+ const typeOptions=movTypes.filter(m=>m.tipo_movimento===(record.type==='entrada'?'Entradas':'Saídas'));
  const [transfer,setTransfer]=useState({source_account_id:'',destination_account_id:'',amount:'',description:'',evidence_reference:''});
  const [operationKey,setOperationKey]=useState(()=>crypto.randomUUID());
 
@@ -303,9 +306,12 @@ export default function CashDesk({token}:{token:string}){
     <div className="cis-cash-form-note"><Info size={16}/> A prévia não movimenta dinheiro. {enabled?'Após conferência, poderá confirmar o registo no Extracto.':'O registo real continua bloqueado.'}</div>
     <div className="cis-cash-form-title"><span className="cis-cash-step">{enabled?'ENTRADA / SAÍDA FINANCEIRA':'SIMULAÇÃO FINANCEIRA'}</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Desembolsos e cobranças exigem integração própria com os contratos.</p></div>
     <label>Conta financeira<select required value={record.account_id} onChange={e=>{setRecord(p=>({...p,account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar conta activa</option>{active.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
-    <label>Natureza<select value={record.type} onChange={e=>{setRecord(p=>({...p,type:e.target.value as 'entrada'|'saida'}));setEstimate(null);}}><option value="entrada">Entrada / receita</option><option value="saida">Saída / despesa</option></select></label>
+    <label>Natureza<select value={record.type} onChange={e=>{setRecord(p=>({...p,type:e.target.value as 'entrada'|'saida',category:''}));setEstimate(null);}}><option value="entrada">Entrada / receita</option><option value="saida">Saída / despesa</option></select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={record.amount} onChange={e=>{setRecord(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/><small>Utilize um valor positivo com até duas casas decimais.</small></label>
-    <label>Categoria<input required minLength={2} maxLength={32} pattern="[A-Za-zÀ-ÿ0-9 _-]{2,32}" value={record.category} onChange={e=>{setRecord(p=>({...p,category:e.target.value}));setEstimate(null);}} placeholder="Despesa operacional"/></label>
+    {typeOptions.length>0?<label>Tipo de movimento<select required value={record.category} onChange={e=>{setRecord(p=>({...p,category:e.target.value}));setEstimate(null);}}>
+     <option value="">Seleccionar</option>{[...new Set(typeOptions.map(m=>m.grupo??'Outros'))].map(g=><optgroup key={g} label={g}>{typeOptions.filter(m=>(m.grupo??'Outros')===g).map(m=><option key={m.descricao} value={m.descricao}>{m.descricao}</option>)}</optgroup>)}
+    </select></label>
+    :<label>Categoria<input required minLength={2} maxLength={32} pattern="[A-Za-zÀ-ÿ0-9 _-]{2,32}" value={record.category} onChange={e=>{setRecord(p=>({...p,category:e.target.value}));setEstimate(null);}} placeholder="Despesa operacional"/></label>}
     <label className="cis-cash-wide">Descrição<input required minLength={5} maxLength={100} value={record.description} onChange={e=>{setRecord(p=>({...p,description:e.target.value}));setEstimate(null);}}/></label>
     <label className="cis-cash-wide">Referência ou comprovativo<input required minLength={6} maxLength={70} value={record.evidence_reference} onChange={e=>{setRecord(p=>({...p,evidence_reference:e.target.value}));setEstimate(null);}} placeholder="Referência documental obrigatória em qualquer operação"/></label>
     {record.account_id&&<div className="cis-cash-form-summary">

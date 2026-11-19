@@ -612,6 +612,45 @@ ok($finePreview(['data_referencia'=>'2026-01-21'])['mora']==='0.00','primeiro di
 ok((array)$db->table('Contractos')->where('Ordem',$fineOrder)->first()===$fineSnapshot
     && $db->table('Extracto')->count()===$fineMovements,'prévia sem alteração ao contrato ou ao Extracto');
 
+
+echo "== Parametrização (tabela de preços e tipos de movimento)\n";
+$db->statement('DROP TABLE IF EXISTS cis_parametrizacao_log');$db->statement('DROP TABLE IF EXISTS cis_tipos_movimento');
+$db->statement("CREATE TABLE cis_tipos_movimento(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tipo_movimento ENUM('Entradas','Saídas') NOT NULL,descricao VARCHAR(150) NOT NULL,UNIQUE KEY u(tipo_movimento,descricao)) ENGINE=InnoDB");
+$db->table('cis_tipos_movimento')->insert([['tipo_movimento'=>'Entradas','descricao'=>'Receita de Juros'],['tipo_movimento'=>'Saídas','descricao'=>'Salários'],['tipo_movimento'=>'Saídas','descricao'=>'Desembolso de Empréstimo']]);
+$pc=new \App\Http\Controllers\Api\ParametrizacaoController();
+$preq=fn(string $m,array $q,$u=null)=>tap(Request::create('/x',$m,$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+ok(data($pc->show($preq('GET',[])))['editavel']===false && $err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>0,'ate'=>10,'taxa_30'=>'10']]])))===503,'parametrização: sem migração fica só de consulta');
+(require __DIR__.'/../database/migrations/2026_11_19_000120_parametrizacao_editavel.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_19_000120_parametrizacao_editavel.php')->up();
+$p0=data($pc->show($preq('GET',[])));
+$mv=collect($p0['movimentos'])->keyBy('descricao');
+ok($p0['editavel'] && $mv['Salários']['grupo']==='Despesa operacional' && $mv['Desembolso de Empréstimo']['protegido'] && !$mv['Salários']['protegido'],'parametrização: grupos e tipos base protegidos (migração idempotente)');
+$priceBefore=$db->table('cis_tabela_juros')->orderBy('id')->get()->map(fn($r)=>(array)$r)->all();
+ok($err(fn()=>$pc->show($preq('GET',[],$gestor)))===403 && $err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>0,'ate'=>10,'taxa_30'=>'10']]],$gestor)))===403,'parametrização: só o administrador');
+ok($err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>0,'ate'=>5000,'taxa_15'=>'20'],['de'=>5000,'ate'=>9000,'taxa_30'=>'25']]])))===422
+    && $err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>100,'ate'=>50,'taxa_15'=>'20']]])))===422
+    && $err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>0,'ate'=>50,'taxa_15'=>'','taxa_30'=>'']]])))===422
+    && $err(fn()=>$pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>0,'ate'=>50,'taxa_15'=>'120']]])))===422,'preços: sobreposição, faixa invertida, sem taxa e taxa > 100 recusadas');
+$p1=data($pc->guardarPrecos($preq('PUT',['faixas'=>[['de'=>3001,'ate'=>5000,'taxa_15'=>'20','taxa_30'=>'25,5'],['de'=>0,'ate'=>3000,'taxa_15'=>'20','taxa_30'=>'25'],['de'=>6001,'ate'=>9000,'taxa_30'=>'30']]])));
+ok(count($p1['precos'])===3 && $p1['precos'][1]['taxa_30']==='25.5' && $p1['precos'][2]['taxa_15']===null && $p1['lacunas']===[[5001,6000]]
+    && $db->table('cis_tabela_juros')->count()===5 && $db->table('cis_parametrizacao_log')->where('tabela','tabela_juros')->count()===1,'preços: gravados por faixa e período, lacuna assinalada, alteração registada');
+$sim=new \App\Http\Controllers\Api\FinancialReferenceController();
+$q=json_decode($sim->quote($preq('GET',['montante'=>'4000','periodo_dias'=>'30']))->getContent(),true);
+ok($q['found'] && (float)$q['taxa']===25.5,'preços: novas consultas usam a taxa alterada');
+ok($err(fn()=>$pc->criarMovimento($preq('POST',['tipo_movimento'=>'Saídas','descricao'=>'Salários','grupo'=>'Despesa operacional'])))===422
+    && $err(fn()=>$pc->criarMovimento($preq('POST',['tipo_movimento'=>'Saídas','descricao'=>'Renda [escritório]','grupo'=>'Despesa operacional'])))===422
+    && $err(fn()=>$pc->criarMovimento($preq('POST',['tipo_movimento'=>'Entradas','descricao'=>'Renda','grupo'=>'Investimento'])))===422,'tipos: duplicado, nome inválido e grupo errado recusados');
+$p2=data($pc->criarMovimento($preq('POST',['tipo_movimento'=>'Saídas','descricao'=>'Renda do escritório','grupo'=>'Despesa operacional'])));
+$renda=collect($p2['movimentos'])->firstWhere('descricao','Renda do escritório');
+$base=collect($p2['movimentos'])->firstWhere('descricao','Desembolso de Empréstimo');
+ok($renda && $err(fn()=>$pc->actualizarMovimento($preq('PUT',['activo'=>false]),$base['id']))===422
+    && $err(fn()=>$pc->actualizarMovimento($preq('PUT',['descricao'=>'Outro nome']),$base['id']))===422,'tipos: criado; tipo base não pode ser desactivado nem renomeado');
+data($pc->actualizarMovimento($preq('PUT',['activo'=>false,'descricao'=>'Renda escritório']),$renda['id']));
+$act=json_decode($pc->tiposActivos()->getContent(),true)['movimentos'];
+ok(!collect($act)->contains('descricao','Renda escritório') && collect($act)->contains('descricao','Salários')
+    && $db->table('cis_parametrizacao_log')->where('tabela','tipos_movimento')->count()===2,'tipos: desactivado sai da Caixa; alterações registadas');
+$db->table('cis_tabela_juros')->delete();foreach ($priceBefore as $r) $db->table('cis_tabela_juros')->insert($r);
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

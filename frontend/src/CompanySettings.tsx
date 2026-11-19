@@ -69,7 +69,10 @@ async function shrink(file:File):Promise<string>{
  c.getContext('2d')!.drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/png');
 }
 
-export default function CompanySettings({token}:{token:string}){
+export type CompanySectionId='perfil'|'cobranca'|'scoring'|'incentivos';
+export const COMPANY_SECTIONS=SECTIONS.map(s=>({id:s.id as CompanySectionId,title:s.title,icon:s.icon,desc:s.desc}));
+
+export default function CompanySettings({token,section}:{token:string;section:CompanySectionId}){
  const [saved,setSaved]=useState<Vals|null>(null),[form,setForm]=useState<Vals>({}),[errors,setErrors]=useState<Record<string,string>>({});
  const [installed,setInstalled]=useState(true),[meta,setMeta]=useState<{em:string|null;por:string|null}>({em:null,por:null});
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[msg,setMsg]=useState<{ok:boolean;text:string}|null>(null),[fail,setFail]=useState('');
@@ -99,7 +102,6 @@ export default function CompanySettings({token}:{token:string}){
   }catch(e:any){setMsg({ok:false,text:e.message});}finally{setSaving(false);}
  }
  async function pickLogo(f?:File){if(!f)return;try{const u=await shrink(f);if(u.length>540_000){setErrors(e=>({...e,logotipo:'Logótipo até 400 KB.'}));return;}set('logotipo',u);}catch{setErrors(e=>({...e,logotipo:'A imagem não é válida.'}));}}
- const go=(id:string)=>document.getElementById('cis-co-'+id)?.scrollIntoView({behavior:'smooth',block:'start'});
 
  if(loading)return <section className="cis-panel cis-co"><div className="cis-co-loading"><Loader2 size={18} className="cis-spin"/> A carregar as configurações da empresa…</div></section>;
  if(fail||!saved)return <section className="cis-panel cis-co"><div className="cis-co-alert bad"><AlertTriangle size={17}/>{fail||'Sem dados.'}</div></section>;
@@ -116,19 +118,12 @@ export default function CompanySettings({token}:{token:string}){
    {e?<small className="e">{e}</small>:f.help&&<small>{f.help}</small>}
   </label>;};
 
- return <section className="cis-co" aria-labelledby="cis-co-title">
-  <header className="cis-co-banner">
-   <div className="cis-co-banner-top"><span className="cis-co-banner-ico"><Building2 size={22}/></span>
-    <div><h2 id="cis-co-title">Configurações da empresa</h2><p>Perfil, regras de cobrança e multa, credit scoring e incentivos.</p></div>
-    <div className="cis-co-progress" title="Perfil preenchido"><b>{pct}%</b><span>perfil</span><i style={{['--p' as any]:pct+'%'}}/></div></div>
-   <nav className="cis-co-shortcuts">{SECTIONS.map(s=><button key={s.id} type="button" onClick={()=>go(s.id)}><span>{s.kicker}</span><b><s.icon size={15}/>{s.title}</b></button>)}</nav>
-  </header>
+ return <div className="cis-co">
   {!installed&&<div className="cis-co-alert bad"><AlertTriangle size={17}/><span>Tabela das configurações ainda não instalada. Na VPS: <code>bash deploy/install-company-settings.sh</code>. Até lá são usados os valores por defeito.</span></div>}
-  {missing.length>0&&<div className="cis-co-alert warn"><AlertTriangle size={17}/><span>Falta preencher: <b>{missing.map(f=>f.label).join(', ')}</b>.</span></div>}
-
-  {SECTIONS.map(s=><section key={s.id} id={'cis-co-'+s.id} className="cis-panel cis-co-section">
-   <div className="cis-co-section-head"><span className="cis-co-sico"><s.icon size={18}/></span><div><span className="cis-co-kicker">{s.kicker}</span><h3>{s.title}</h3><p>{s.desc}</p></div>
-    <div className="cis-co-used"><Link2 size={13}/>{s.used.map(u=><span key={u}>{u}</span>)}</div></div>
+  {section==='perfil'&&missing.length>0&&<div className="cis-co-alert warn"><AlertTriangle size={17}/><span>Falta preencher: <b>{missing.map(f=>f.label).join(', ')}</b>.</span></div>}
+  {SECTIONS.filter(s=>s.id===section).map(s=><section key={s.id} className="cis-panel cis-co-section">
+   <div className="cis-co-section-head"><div><h3>{s.title}</h3><p>{s.desc}</p>{s.id==='perfil'&&<span className="cis-co-meter"><i><u style={{width:pct+'%'}}/></i><b>{pct}% preenchido</b></span>}</div>
+    <div className="cis-co-used"><small>Usado em</small>{s.used.map(u=><span key={u}>{u}</span>)}</div></div>
    {s.note&&<div className="cis-co-alert info"><Info size={16}/><span>{s.note}</span></div>}
    {s.id==='perfil'&&<div className={'cis-co-logo'+(errors.logotipo?' err':'')}>
     <button type="button" className="cis-co-logo-circle" onClick={()=>fileRef.current?.click()} aria-label="Alterar logótipo">
@@ -146,7 +141,7 @@ export default function CompanySettings({token}:{token:string}){
     :dirty.length?<span className="warn">{dirty.length} alteração(ões) por guardar</span>
     :<span>{meta.em?`Última alteração: ${new Date(meta.em.replace(' ','T')).toLocaleString('pt-PT',{dateStyle:'short',timeStyle:'short'})}${meta.por?` por ${meta.por}`:''}`:'Valores por defeito — ainda sem alterações.'}</span>}</span>
    <button type="button" onClick={()=>{setForm(saved);setErrors({});setMsg(null);}} disabled={!dirty.length||saving}><RotateCcw size={15}/> Descartar</button>
-   <button type="button" className="primary" onClick={save} disabled={!dirty.length||saving}>{saving?<Loader2 size={15} className="cis-spin"/>:<Save size={15}/>} Salvar configurações</button>
+   <button type="button" className="primary" onClick={save} disabled={!dirty.length||saving}>{saving?<Loader2 size={15} className="cis-spin"/>:<Save size={15}/>} Guardar alterações</button>
   </div>
- </section>;
+ </div>;
 }
