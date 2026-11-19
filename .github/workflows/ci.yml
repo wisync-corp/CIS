@@ -16,6 +16,16 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - name: Pacote da extensão CIS WhatsApp publicado e igual ao código
+        run: |
+          set -euo pipefail
+          z=public/cis-whatsapp-extension.zip
+          test -f "$z" && unzip -tq "$z"
+          test -f dist/cis-whatsapp-extension.zip
+          for f in manifest.json background.js bridge.js wa.js options.html options.js icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png; do
+            cmp <(unzip -p "$z" "$f") "../extension/cis-whatsapp/$f" || { echo "Pacote desactualizado: $f. Execute bash extension/build.sh" >&2; exit 1; }
+          done
+          for f in background.js bridge.js wa.js options.js; do node --check "../extension/cis-whatsapp/$f"; done
   backend:
     runs-on: ubuntu-latest
     defaults:
