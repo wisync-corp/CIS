@@ -1,4 +1,4 @@
-import CompanyBrand from './CompanyBrand';
+import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
@@ -226,7 +226,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
      <tbody>{evidence.prestacoes.map(r=><tr key={r.ordem}><td>{r.contrato}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.multa)}</td><td className="num">{mt(r.valor)}</td><td>{dt(r.data_pagamento)}</td><td>{r.estado}</td></tr>)}</tbody></table></section>
     <section><h2>Movimentos registados</h2>{evidence.movimentos.length?<table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Tipo</th><th className="num">Valor (MT)</th></tr></thead>
      <tbody>{evidence.movimentos.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}</td><td>{m.contrato}{m.parcela?' · P'+m.parcela:''}</td><td>{m.tipo}</td><td className="num">{mt(m.valor)}</td></tr>)}</tbody></table>:<p>Sem movimentos registados no período.</p>}</section>
-    <footer><ShieldCheck size={14}/><span>Código de verificação <b>{evidence.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span></footer>
+    <footer><ShieldCheck size={14}/><span>Código de verificação <b>{evidence.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span><PoweredBy/></footer>
    </article>
   </div>,document.body)}
 
@@ -287,7 +287,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <section><h2>Movimentos</h2><table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Conta</th><th className="num">Entrada</th><th className="num">Saída</th></tr></thead>
      <tbody>{geralDoc.linhas.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}{m.cliente?' · '+m.cliente:''}</td><td>{m.contrato??''}{m.parcela?' · P'+m.parcela:''}</td><td>{m.conta??'—'}</td><td className="num">{m.tipo==='entrada'?mt(m.valor):''}</td><td className="num">{m.tipo==='saida'?mt(m.valor):''}</td></tr>)}</tbody>
      <tfoot><tr><th colSpan={5}>Totais</th><th className="num">{mt(geralDoc.totais.entradas)}</th><th className="num">{mt(geralDoc.totais.saidas)}</th></tr></tfoot></table></section>
-    <footer><ShieldCheck size={14}/><span>Código de verificação <b>{geralDoc.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do Extracto. Valores em Meticais (MT).</span></footer>
+    <footer><ShieldCheck size={14}/><span>Código de verificação <b>{geralDoc.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do Extracto. Valores em Meticais (MT).</span><PoweredBy/></footer>
    </article>
   </div>,document.body)}
  </>;
