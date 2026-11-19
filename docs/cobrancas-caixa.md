@@ -253,3 +253,11 @@ Modelo do GEMIC, guardado em `cis_company_settings` (chave/valor). Instalação:
 - **Cobrança e multa**: limite mensal de dias de mora, tolerância, penalidades automáticas, taxa diária de mora, carência, fins de semana, modalidade do calendário, lembrete e canal. Registado como política; a multa continua a ser calculada pela taxa do contrato e só é cobrada quando o operador escolhe.
 - **Credit scoring**: score mínimo, limiares de baixo/médio risco, máximo de créditos activos e em atraso, taxa de esforço. Usado em «Clientes para novo crédito» (score = % de prestações pagas sem atraso, −20 com crédito activo em atraso).
 - **Incentivos**: por cliente novo, por renovação, % do capital vigente e % dos juros recebidos. Usado em «Desempenho por operador» (coluna «Incentivo estimado»).
+
+## Definições: navegação e parametrização
+
+As Definições do administrador têm uma lista lateral (como nos Relatórios): Empresa (Informações gerais, Cobrança e multa, Credit scoring, Incentivos), Parametrização (Tabela de preços, Tipos de movimento) e Sistema (Aparência, Ligação ao servidor). Os outros utilizadores vêem só a Aparência.
+
+- **Tabela de preços** (`cis_tabela_juros`): uma linha por faixa (De/Até MT) com a taxa de 15 e de 30 dias; taxa em branco = prazo indisponível. Recusa faixas invertidas, sobrepostas, sem taxa ou com taxa > 100%; assinala lacunas. Grava a tabela inteira numa transacção; só afecta simulações e contratos novos.
+- **Tipos de movimento** (`cis_tipos_movimento` + grupo/activo/protegido): Entradas (Receita operacional, Entrada não operacional) e Saídas (Operação de crédito, Despesa operacional, Investimento, Saída não operacional). Criar, renomear, mudar de grupo, activar/desactivar; os tipos base (Receita de Juros, Desembolso de Empréstimo, Aumento de Crédito) estão protegidos. Os tipos activos são a lista da «Entrada / saída» da Caixa.
+- Cada alteração fica em `cis_parametrizacao_log` (antes/depois, utilizador, data).

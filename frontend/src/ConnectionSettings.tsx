@@ -1,14 +1,17 @@
 import {useEffect,useState} from 'react';
-import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette} from 'lucide-react';
+import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server} from 'lucide-react';
 import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
-import FinancialReferences from './FinancialReferences';
-import CompanySettings from './CompanySettings';
+import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
+import {PriceTable,MovementTypes} from './Parametrizacao';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
 
 export default function ConnectionSettings({token,role,theme,onThemeChange}:{token:string;role:string;theme:ThemeId;onThemeChange:(value:ThemeId)=>void}){
  const [fontSize,setFontSize]=useState<FontSizeId>(getFontSize);
+ const admin=role==='administrador';
+ const [tab,setTab]=useState<string>(()=>{try{return admin?(sessionStorage.getItem('cis_settings_tab')||'perfil'):'aparencia';}catch{return admin?'perfil':'aparencia';}});
+ const pick=(t:string)=>{setTab(t);try{sessionStorage.setItem('cis_settings_tab',t);}catch{}};
  const [status,setStatus]=useState<Status|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[reload,setReload]=useState(0);
  useEffect(()=>{if(role!=='administrador'){setLoading(false);return;}const ctrl=new AbortController();setLoading(true);setError('');
  fetch(API+'/admin/connection-status',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
@@ -16,9 +19,19 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
  .then((data:Status)=>setStatus(data)).catch(e=>{if(e.name!=='AbortError')setError(e.message);})
  .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});return ()=>ctrl.abort();
  },[token,role,reload]);
- return <div className="cis-settings-page">
-  {role==='administrador'&&<CompanySettings token={token}/>}
-  <section className="cis-panel cis-settings-appearance" aria-labelledby="appearance-title">
+ const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
+  {grupo:'Empresa',items:COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))},
+  {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight}]},
+  {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
+ const isCompany=COMPANY_SECTIONS.some(s=>s.id===tab);
+ return <div className={'cis-settings-page'+(admin?' cis-settings-layout':'')}>
+  {admin&&<nav className="cis-settings-nav" aria-label="Secções das definições">{NAV.map(g=><div key={g.grupo}><span>{g.grupo}</span>
+   <ul>{g.items.map(it=><li key={it.id}><button type="button" className={tab===it.id?'on':''} aria-current={tab===it.id?'page':undefined} onClick={()=>pick(it.id)}><it.icon size={16}/>{it.title}</button></li>)}</ul></div>)}</nav>}
+  <div className="cis-settings-content">
+  {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
+  {admin&&tab==='precos'&&<PriceTable token={token}/>}
+  {admin&&tab==='movimentos'&&<MovementTypes token={token}/>}
+  {tab==='aparencia'&&<section className="cis-panel cis-settings-appearance" aria-labelledby="appearance-title">
    <div className="cis-panel-head"><div><h2 id="appearance-title"><Palette size={19} style={{verticalAlign:'middle',marginRight:9}}/>Aparência do CIS</h2><p>Escolha a identidade visual do sistema. A alteração é imediata e não afecta os dados financeiros.</p></div></div>
    <div className="cis-theme-grid" role="group" aria-label="Temas disponíveis">
     {themeOptions.map(option=><button type="button" key={option.id} className="cis-theme-option" aria-pressed={theme===option.id} onClick={()=>onThemeChange(option.id)}>
@@ -39,9 +52,8 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
      <span className={'cis-font-sample '+o.id}>Aa</span><b>{o.name}</b><small>{o.hint}</small>
     </button>)}
    </div>
-  </section>
-  {role==='administrador'&&<FinancialReferences token={token}/>}
-  {role==='administrador'&&<section className="cis-panel">
+  </section>}
+  {admin&&tab==='ligacao'&&<section className="cis-panel">
    <div className="cis-panel-head"><div><h2>Estado da ligação MySQL</h2><p>Verificação de configuração, sem exposição de credenciais.</p></div><button type="button" className="cis-client-edit" onClick={()=>setReload(x=>x+1)} aria-label="Actualizar estado"><RefreshCw size={18}/></button></div>
    <div className="cis-banner"><ShieldCheck size={20}/><div><b>As credenciais não devem ser introduzidas neste site.</b><p>Guarda os acessos apenas no ambiente privado do servidor. Esta página não apresenta palavras-passe ou chaves.</p></div></div>
    {loading&&<p>A verificar a configuração…</p>}{error&&<div className="cis-table-error"><AlertCircle size={18}/>{error}</div>}
@@ -53,5 +65,6 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
    </div>}
    <p style={{marginTop:20}}>As informações acima indicam apenas configuração. Não comprovam a ligação efectiva, os privilégios MySQL ou a segurança TLS da sessão. O MySQL local do VPS permanece numa rede privada.</p>
   </section>}
+  </div>
  </div>;
 }
