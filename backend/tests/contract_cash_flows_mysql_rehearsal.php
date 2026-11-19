@@ -480,6 +480,36 @@ if ($late1) {
     ok(!preg_match('/\{[^{}]+\}/u',$m1) && !preg_match('/\{[^{}]+\}/u',$m2) && str_contains($m1,'*em atraso*') && str_contains($m1,'MT'),'modelos CAPTA sem campos por preencher (inclui {Nome do Cliente})');
 }
 
+
+echo "== Prévia da prorrogação de 15 para 30 dias\n";
+$extension=$row([
+    'Nr do Contracto'=>'C-0270', 'Nº'=>270, 'Prazo/Duração'=>'15 Dias',
+    'Data de Inicio'=>'2026-01-20', 'Data de Cobrança'=>'2026-02-04',
+    'Capital'=>500000, 'Valor de Juros'=>50000, 'Valor a Pagar'=>550000, 'Valor Pago'=>0,
+]);
+$db->table('cis_tabela_juros')->insert([
+    'limite_inferior'=>500000,'limite_superior'=>500000,'taxa'=>20,'periodo_referencia'=>30,
+]);
+$before=(array)$db->table('Contractos')->where('Ordem',$extension)->first();
+$movementsBefore=$db->table('Extracto')->count();
+$scenario=new \App\Http\Controllers\Api\CollectionScenarioPreviewController();
+$extensionRequest=['operacao'=>'prorrogar_15_30','prazo_origem_dias'=>15,'prazo_destino_dias'=>30];
+$preview=fn(array $options=[])=>data($scenario->preview(req('/x',$options+$extensionRequest,$user),'C-0270',$extension));
+$both=$preview();
+ok($both['novo_vencimento']==='2026-02-19' && $both['tratamento_juros']===null
+    && count($both['opcoes_juros'])===2,'vencimento original + 30 dias e duas opções sem selecção automática');
+ok($preview(['tratamento_juros'=>'manter'])['resultado_escolhido']
+    ===['juros'=>'50000.00','valor_a_pagar'=>'550000.00'],'manter preserva os valores actuais');
+ok($preview(['tratamento_juros'=>'recalcular'])['resultado_escolhido']
+    ===['juros'=>'100000.00','valor_a_pagar'=>'600000.00'],'recalcular aplica a taxa de 30 dias ao capital');
+ok(status(fn()=>$preview(['tratamento_juros'=>'invalido']))===422,'tratamento desconhecido recusado');
+$db->table('cis_tabela_juros')->where('limite_inferior',500000)->where('limite_superior',500000)->delete();
+ok($preview(['tratamento_juros'=>'manter'])['resultado_escolhido']['juros']==='50000.00',
+    'manter disponível sem taxa de 30 dias');
+ok(status(fn()=>$preview(['tratamento_juros'=>'recalcular']))===409,'recalcular sem taxa válida recusado');
+ok((array)$db->table('Contractos')->where('Ordem',$extension)->first()===$before
+    && $db->table('Extracto')->count()===$movementsBefore,'a prévia não altera a prestação nem cria movimentos');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
