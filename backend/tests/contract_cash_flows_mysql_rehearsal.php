@@ -480,6 +480,34 @@ if ($late1) {
     ok(!preg_match('/\{[^{}]+\}/u',$m1) && !preg_match('/\{[^{}]+\}/u',$m2) && str_contains($m1,'*em atraso*') && str_contains($m1,'MT'),'modelos CAPTA sem campos por preencher (inclui {Nome do Cliente})');
 }
 
+
+echo "== Relatórios regulatórios\n";
+$rc=new \App\Http\Controllers\Api\ReportController();
+$rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+ok(count(data($rc->index($rq([])))['relatorios'])===4,'catálogo com 4 relatórios');
+$mStart=now($tz)->startOfMonth()->toDateString();
+$ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
+$ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
+$sec=collect($ra['seccoes'])->keyBy('titulo');
+$disbN=$sec['1. Desembolsos']['linhas'][0][1];$disbV=$sec['1. Desembolsos']['linhas'][1][1];
+ok((int)$disbN===$ovm['carteira']['contratos_desembolsados_periodo'] && $disbV===$ovm['carteira']['desembolsado_periodo'],'actividade: desembolsos = Visão geral');
+$openCap=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Inicio','<=',$tod)->get()
+    ->sum(fn($r)=>max(0,(float)$r->{'Valor a Pagar'}-(float)$r->{'Valor de Juros'}));
+$cartRow=collect($ra['seccoes'][1]['linhas'])->first(fn($l)=>str_starts_with($l[0],'Carteira em curso'));
+ok(abs((float)$cartRow[1]-$openCap)<0.01 && strlen($ra['codigo_verificacao'])===16,'actividade: carteira na data = prestações em aberto');
+$rec=collect($sec['4. Recebimentos no período']['linhas'])->keyBy(0);
+ok(abs((float)$rec['Total recebido'][1]-(float)$ovm['recebimentos']['recebido_mes'])<0.01,'actividade: recebido no período = Visão geral');
+$rcrc=data($rc->show($rq(['data'=>$tod]),'crc'));
+$l110=collect($rcrc['seccoes'][0]['linhas'])->first(fn($l)=>$l[0]==='C-0110');
+ok($l110 && $l110[13]==='Liquidado' && $l110[10]==='0.00' && str_contains($l110[15],'BI'),'CRC: contrato renovado e liquidado, identificação em falta assinalada');
+$openN=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Inicio','<=',$tod)->distinct()->count('Nr do Contracto');
+ok(collect($rcrc['seccoes'][0]['linhas'])->filter(fn($l)=>$l[13]!=='Liquidado')->count()===$openN,'CRC: uma linha por contrato com saldo');
+$rb=data($rc->show($rq(['ano'=>now($tz)->year]),'branqueamento'));
+ok((int)$rb['resumo'][0][1]>0 && count($rb['seccoes'])===2,'branqueamento: clientes com movimento no ano');
+$ri=data($rc->show($rq([]),'identificacao'));
+ok((int)$ri['resumo'][1][1]===(int)$ri['resumo'][0][1],'identificação: sem BI/NUIT no ensaio, todos assinalados');
+ok($err(fn()=>$rc->show($rq([],$gestor),'actividade'))===403 && $err(fn()=>$rc->show($rq(['inicio'=>$tod,'fim'=>$mStart==$tod?'2000-01-01':$mStart]),'actividade'))===422,'relatórios: só administrador; período inválido recusado');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

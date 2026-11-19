@@ -207,3 +207,28 @@ A ponte activa-se em qualquer endereço específico autorizado, nunca em «todos
 - Actualiza-se sozinho quando a extensão devolve resultados.
 - Se um registo falhar, aparece um aviso no canto superior direito.
 - Se faltar a coluna de estado, o CIS avisa para correr `bash deploy/install-message-center.sh`.
+
+## Relatórios regulatórios (menu «Relatórios», só administrador)
+
+As definições estão todas em `backend/app/Http/Controllers/Api/ReportController.php` (`catalog()` e um método por relatório), para ajustar quando o Banco de Moçambique confirmar os modelos oficiais. Exporta-se em CSV (Excel) e imprime-se ou guarda-se em PDF, com código de verificação.
+
+1. **Relatório periódico de actividade** (Decreto 50/2024, arts. 165 e 167 d)). Escolhe-se um período de/até, com atalhos.
+   - **Desembolsos:** contratos com a primeira Data de Inicio no período; número, valor, montante médio, taxa média e clientes novos.
+   - **Carteira à data final:** prestações iniciadas e não pagas até essa data. Capital = Valor a Pagar − Juros.
+   - **Carteira em risco:** qualquer atraso, mais de 30 dias e mais de 90 dias.
+   - **Recebimentos:** capital, juros, multas e renovações.
+   - **Distribuições:** desembolsos por montante e por género.
+   - **Caixa:** sem transferências internas.
+   - **Maiores exposições:** os 10 clientes com mais capital em curso.
+2. **Central de Registo de Crédito** (Aviso 12/GBM/2024). Situação a uma data.
+   - Uma linha por contrato com saldo, ou liquidado há 30 dias ou menos.
+   - Inclui a identificação do cliente, montante, saldo, valor vencido, dias de atraso e situação: Regular, Em atraso, Incumprimento (mais de 90 dias) ou Liquidado.
+   - Assinala os dados em falta.
+   - Modelo provisório: o formato oficial é definido por Circular.
+3. **Branqueamento de capitais, anual** (Aviso 10/GBM/2024, capítulo XIII e art. 116).
+   - Movimento por cliente no ano: desembolsado + recebido.
+   - Assinala quem está fora do regime simplificado (mais de 30 000 MT num mês ou mais de 240 000 MT no ano) e a identificação em falta.
+   - Os dados anuais entregam-se até 31 de Janeiro.
+4. **Qualidade dos dados de identificação** (art. 138).
+   - Clientes com contratos e BI, NUIT, contacto ou morada em falta, ou com documento caducado.
+   - O NUIB ainda não existe no cadastro.

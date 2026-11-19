@@ -1300,3 +1300,33 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 /* Valores dos cartões: crescem com o texto mas sem sair do cartão (5 cartões por linha). */
 .cis-stat-grid .cis-stat>strong{font-size:calc(clamp(19px,1.65vw,28px) * min(var(--cis-fs),1.12));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .cis-stat-link{display:flex!important;width:fit-content}
+
+/* ===== Relatórios ===== */
+.cis-reports{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+.cis-report-list{border:1px solid var(--cis-border);border-radius:14px;background:#fff;padding:12px;position:sticky;top:12px}
+.cis-report-list h3{margin:4px 4px 10px;font-size:calc(14px * var(--cis-fs))}
+.cis-report-list ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.cis-report-list li button{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;font:inherit;border:1px solid transparent;background:transparent;border-radius:10px;padding:10px;cursor:pointer;color:var(--cis-heading)}
+.cis-report-list li button svg{flex-shrink:0;color:var(--cis-primary);margin-top:2px}
+.cis-report-list li button:hover{background:#f9fafb;border-color:var(--cis-border)}
+.cis-report-list li button.selected{background:var(--cis-primary-soft,#f4f0ff);border-color:var(--cis-primary)}
+.cis-report-list li span{display:flex;flex-direction:column;gap:3px}
+.cis-report-list li b{font-size:calc(13px * var(--cis-fs))}.cis-report-list li small{font-size:calc(11.5px * var(--cis-fs));color:var(--cis-text-muted);line-height:1.35}
+.cis-report-hint{font-size:calc(11.5px * var(--cis-fs));color:var(--cis-text-muted);margin:12px 6px 4px}
+.cis-report-base{display:flex;align-items:flex-start;gap:6px;font-size:calc(12.5px * var(--cis-fs));color:var(--cis-text-muted);margin:4px 0 14px;padding:9px 12px;border-radius:10px;background:#f9fafb;border:1px solid var(--cis-border)}
+.cis-report-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-bottom:16px}
+.cis-report-filters label{display:flex;flex-direction:column;gap:5px;font-size:calc(12px * var(--cis-fs));font-weight:700;color:var(--cis-text-muted)}
+.cis-report-filters input,.cis-report-filters select{font:inherit;font-size:calc(13px * var(--cis-fs));border:1px solid var(--cis-border);border-radius:8px;padding:8px 10px;min-height:38px;background:#fff;color:var(--cis-heading)}
+.cis-report-filters button,.cis-report-presets button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:calc(13px * var(--cis-fs));font-weight:800;border:1px solid var(--cis-border);background:#fff;color:var(--cis-primary);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:38px}
+.cis-report-filters button.primary{background:var(--cis-primary);border-color:var(--cis-primary);color:#fff}
+.cis-report-filters button:disabled{opacity:.55}
+.cis-report-presets{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.cis-report-presets button{min-height:0;padding:6px 10px;font-size:calc(12px * var(--cis-fs))}
+.cis-report-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px;color:var(--cis-text-muted);border:1px dashed var(--cis-border);border-radius:12px}
+.cis-report-preview{border:1px solid var(--cis-border);border-radius:12px;background:#f2f4f7;padding:16px;overflow:auto}
+.cis-report-doc{max-width:none!important}
+.cis-report-summary{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))!important}
+.cis-report-legal{margin-top:16px;font-size:calc(11px * var(--cis-fs));color:#475467}
+.cis-report-legal p{margin:3px 0}
+.cis-report-doc td{font-size:calc(11.5px * var(--cis-fs))}
+@media(max-width:1100px){.cis-reports{grid-template-columns:1fr}.cis-report-list{position:static}}
