@@ -463,6 +463,8 @@ $names=$db->table('cis_message_templates')->pluck('name')->all();
 ok(count($names)===9 && $db->table('cis_message_templates')->where('name','Bom dia')->value('body')==='EDITADO {Nome Completo}'
     && count(array_intersect(['Cobrança Antecipada','Mensagem no próprio dia','Mensagem Vencida','Actualização de Dados'],$names))===4,'modelos CAPTA: idempotente e sem substituir edições');
 $vid=$db->table('cis_message_templates')->where('name','Mensagem Vencida')->value('id');
+$emo=$db->table('cis_message_templates')->whereIn('name',['Actualização de Dados','Cobrança Antecipada','Mensagem Vencida'])->pluck('body')->implode(' ');
+ok(str_contains($emo,'👋') && str_contains($emo,'📄') && str_contains($emo,'💰') && str_contains($emo,'⚠️') && mb_check_encoding($emo,'UTF-8'),'emojis dos modelos guardados intactos (utf8mb4)');
 $pid=$db->table('cis_message_templates')->where('name','Mensagem no próprio dia')->value('id');
 $late1=$late->first();
 if ($late1) {
