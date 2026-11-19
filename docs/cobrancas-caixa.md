@@ -301,3 +301,9 @@ Formato `PREFIXO-ANO-SEQUÊNCIA` (ex.: `CAPTA-2026-0001`), com a sequência a re
 ## Numeração anual dos recibos
 
 Recibos `PREFIXO-ANO-SEQUÊNCIA` (ex.: `REC-2026-0001`), a recomeçar em 1 em cada ano pela **data do pagamento**; prefixo em Definições › Numeração dos contratos (os dígitos são os mesmos dos contratos). Tabela `cis_receipts` (chave estável: `E:<Nr do Extracto>` ou `P:<Ordem>` para pagamentos antigos sem movimento). Na primeira consulta de recibos todo o histórico é numerado por ordem cronológica; depois, cada novo recebimento recebe o próximo número do ano e o número não muda.
+
+## Modelos de contrato (editor com variáveis)
+
+Definições › Parametrização › **Modelos de contrato**: editor de texto com barra de formatação (`# título`, `## cláusula`, `### (subtítulo)`, `**negrito**`, `a)` alíneas, `[[campo a preencher à mão]]`, `{Plano de Pagamentos}`, `{Assinaturas}`), lista de variáveis por grupo (Empresa, Contrato, Mutuário, Documento) e pré-visualização com os dados de um contrato real. Vários modelos, um padrão. Tabela `cis_contract_templates`; o modelo inicial («Contrato de empréstimo», a partir do Book1.xlsx) está em `backend/resources/contratos/modelo-emprestimo.txt`.
+
+Na ficha do contrato, separador **Documento do contrato**: escolher o modelo, ver os dados em falta e «Gerar contrato» → Imprimir / Guardar PDF (cabeçalho da empresa, plano de pagamentos, assinaturas, «Powered by WiSync»). Valores em `GET /cis/contractos/{n}/variaveis-contrato` (inclui o capital por extenso). Novos campos da empresa: «Conta para reembolsos» e «Foro judicial».

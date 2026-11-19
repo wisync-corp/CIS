@@ -781,6 +781,34 @@ $db->table('Extracto')->insert(['Contracto'=>$c1,'Parcela'=>'1','Data da Operaç
 $r2=data($rcc->index($areq(),$c1));
 ok(collect($r2['recibos'])->contains('numero',\App\Services\ReceiptNumbering::format($yR,$maxR+1)),'novo recebimento recebe o próximo número do ano');
 
+
+echo "== Modelos de contrato (editor com variáveis)\n";
+$db->statement('DROP TABLE IF EXISTS cis_contract_templates');
+(require __DIR__.'/../database/migrations/2026_11_19_000160_create_cis_contract_templates.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_19_000160_create_cis_contract_templates.php')->up();
+$ctc=new \App\Http\Controllers\Api\ContractTemplateController();
+$treq=fn(string $m,array $q,$u=null)=>tap(Request::create('/x',$m,$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+$t0=data($ctc->index($treq('GET',[])));
+$body0=$t0['modelos'][0]['corpo'];
+preg_match_all('/\{([^{}\n]+)\}/u',$body0,$mm);
+$names=array_column($t0['variaveis'],'nome');
+ok(count($t0['modelos'])===1 && (bool)$t0['modelos'][0]['padrao'] && str_contains($body0,'## DÉCIMA TERCEIRA') && !array_diff(array_unique($mm[1]),$names),'modelo de empréstimo instalado uma vez, só com variáveis conhecidas');
+$cv=(string)$db->table('Contractos')->orderBy('Ordem')->value('Nr do Contracto');
+$vv=data($ctc->values($treq('GET',[]),$cv));
+$cap=(float)$db->table('Contractos')->where('Nr do Contracto',$cv)->max('Quantia Creditada');
+ok($vv['contrato']===$cv && !array_diff(array_diff($names,['Plano de Pagamentos','Assinaturas']),array_keys($vv['valores']))
+    && $vv['valores']['Capital por Extenso']===\App\Support\Extenso::meticais($cap) && count($vv['plano'])>0,'valores do contrato para todas as variáveis ('.$vv['valores']['Capital por Extenso'].')');
+ok(\App\Support\Extenso::meticais(4800)==='quatro mil e oitocentos meticais' && \App\Support\Extenso::meticais(1250.5)==='mil duzentos e cinquenta meticais e cinquenta centavos','valor por extenso');
+ok($err(fn()=>$ctc->store($treq('POST',['nome'=>'X','corpo'=>'curto'])))===422 && $err(fn()=>$ctc->store($treq('POST',['nome'=>'Novo modelo','corpo'=>str_repeat('Texto do contrato. ',3)],$gestor)))===403,'modelos: validação e só o administrador');
+$t1=data($ctc->store($treq('POST',['nome'=>'Contrato de grupo','corpo'=>"# CONTRATO {Nr do Contrato}\nEntre {Nome da Empresa} e {Nome do Mutuário}.\n{Assinaturas}"])));
+$id1=$t1['id'];
+ok($err(fn()=>$ctc->destroy($treq('DELETE',[]),$t0['modelos'][0]['id']))===422,'não elimina o modelo padrão');
+data($ctc->update($treq('PUT',['padrao'=>true]),$id1));
+$t2=data($ctc->index($treq('GET',[])));
+ok(collect($t2['modelos'])->firstWhere('id',$id1)['padrao'] && collect($t2['modelos'])->where('padrao',true)->count()===1,'tornar padrão: só um modelo padrão');
+data($ctc->destroy($treq('DELETE',[]),$t0['modelos'][0]['id']));
+ok(count(data($ctc->index($treq('GET',[])))['modelos'])===1,'modelo não padrão eliminado');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

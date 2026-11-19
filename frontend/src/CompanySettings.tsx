@@ -11,7 +11,7 @@ type Section={id:string;kicker:string;title:string;icon:any;desc:string;used:str
 
 const PROV:[string,string][]=[['','Seleccionar'],...['Maputo Cidade','Maputo Província','Gaza','Inhambane','Sofala','Manica','Tete','Zambézia','Nampula','Cabo Delgado','Niassa'].map(p=>[p,p] as [string,string])];
 const SECTIONS:Section[]=[
- {id:'perfil',kicker:'Perfil',title:'Informações gerais',icon:Building2,desc:'Identificação da empresa nos extractos, evidências e relatórios.',used:['Extracto de conta (PDF)','Extracto geral (PDF)','Relatórios › Documento'],groups:[
+ {id:'perfil',kicker:'Perfil',title:'Informações gerais',icon:Building2,desc:'Identificação da empresa nos extractos, evidências e relatórios.',used:['Extracto de conta (PDF)','Extracto geral (PDF)','Relatórios › Documento','Contratos'],groups:[
   {title:'Identificação',icon:IdCard,fields:[
    {k:'nome_empresa',label:'Nome da empresa',type:'text',req:true,wide:true,placeholder:'Ex.: CAPTA Microcrédito, Lda'},
    {k:'nuit',label:'NUIT da empresa',type:'text',req:true,placeholder:'9 dígitos',help:'Obrigatório nas comunicações ao Banco de Moçambique.'},
@@ -27,7 +27,10 @@ const SECTIONS:Section[]=[
    {k:'contacto_principal',label:'Contacto principal',type:'text',req:true,placeholder:'84 000 0000'},
    {k:'contacto_alternativo',label:'Contacto alternativo',type:'text',placeholder:'Opcional'},
    {k:'email',label:'Email',type:'email',placeholder:'geral@empresa.co.mz'}]},
-  {title:'Proprietário',icon:UserRound,fields:[{k:'proprietario',label:'Nome do proprietário',type:'text',wide:true}]}]},
+  {title:'Proprietário',icon:UserRound,fields:[{k:'proprietario',label:'Nome do proprietário',type:'text',wide:true}]},
+  {title:'Para os contratos',icon:IdCard,fields:[
+   {k:'conta_reembolsos',label:'Conta para reembolsos',type:'text',wide:true,placeholder:'Ex.: BIM 347807372, titular CAPTA Microcrédito',help:'Aparece no contrato como {Conta para Reembolsos}.'},
+   {k:'foro_judicial',label:'Foro judicial',type:'text',placeholder:'Ex.: Gondola',help:'Tribunal competente: {Foro Judicial}.'}]}]},
  {id:'cobranca',kicker:'Operacional',title:'Cobrança e juros de mora',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos mutuários.',
   used:['Política da empresa (registo)','Lembretes › Centro de mensagens'],
   note:'Hoje o CIS calcula os juros de mora pela taxa de cada contrato e só os cobra quando o gestor marca «Cobrar juros de mora». Estas regras ficam registadas como política da empresa; os juros de mora automáticos só serão ligados depois de aprovados, para não alterar contratos em curso.',

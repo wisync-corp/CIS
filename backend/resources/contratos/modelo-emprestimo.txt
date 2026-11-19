@@ -1,0 +1,92 @@
+# CONTRATO DE EMPRÉSTIMO N.º {Nr do Contrato}
+
+Entre a **{Nome da Empresa}**, NUIT {NUIT da Empresa}, inscrita no Banco de Moçambique sob o n.º {Licença BM}, nos termos do Decreto n.º 57/2004, com sede em {Morada da Empresa}, {Distrito da Empresa}, {Província da Empresa}, adiante designada por Microcrédito,
+
+E
+
+**{Nome do Mutuário}**, portador(a) do {Tipo de Documento} n.º {N.º do Documento}, emitido em {Data de Emissão do Documento}, {Local de Emissão do Documento}, natural de {Naturalidade}, residente em {Morada do Mutuário}, de nacionalidade {Nacionalidade}, com o contacto {Contacto do Mutuário}, doravante designado(a) por Mutuário,
+
+É celebrado o presente contrato de empréstimo, que se rege pelas cláusulas e termos seguintes:
+
+## PRIMEIRA
+### (Condições do empréstimo)
+1. Pelo presente contrato, a Microcrédito concede ao Mutuário um empréstimo para consumo no valor de **{Capital} MT** ({Capital por Extenso}), a ser pago em {N.º de Prestações} prestação(ões).
+2. Para a concessão do primeiro empréstimo, o Mutuário deve depositar um valor de [[valor]] MT em cada semestre.
+
+## SEGUNDA
+### (Taxa de juros e comissões)
+1. O empréstimo vence juros à taxa {Tipo de Juro} de {Taxa de Juro}% por período ({Prazo}), em prestações {Periodicidade} sucessivas, contados sobre o capital em dívida. O total de juros é de {Total de Juros} MT e o montante total a pagar é de **{Total a Pagar} MT**.
+
+## TERCEIRA
+### (Modo e lugar do reembolso)
+1. O Mutuário aceita expressamente devolver o crédito em {N.º de Prestações} prestação(ões), com periodicidade {Periodicidade}, conforme as datas de vencimento e os montantes especificados no plano de pagamentos, que faz parte integrante do presente contrato. O Mutuário compromete-se ainda a efectuar os reembolsos na mesma moeda em que o empréstimo for desembolsado, ou em qualquer outra moeda aceite pela Microcrédito, na conta {Conta para Reembolsos}.
+a) Devendo apresentar os comprovativos no prazo de 24 horas após o pagamento.
+2. Os encargos resultantes da alteração do plano financeiro a pedido do Mutuário são da sua inteira responsabilidade.
+
+## QUARTA
+### (Recapitalização da dívida)
+1. Pela falta de pagamento e incumprimento dos prazos estipulados no contrato, o Mutuário terá um acréscimo de {Taxa de Juros de Mora}% por 7 dias e, após esse prazo, será executado o penhor.
+2. Caso não seja cumprida a cláusula anterior, é executado o penhor sem pré-aviso e extrajudicialmente.
+
+## QUINTA
+### (Imposto de selo e isenções)
+1. O Mutuário fica sujeito ao imposto de selo, sempre que aplicável, cobrado nos termos da lei, devendo ser reconhecidos todos os documentos solicitados.
+2. Pelo presente contrato, o Mutuário só ficará isento do pagamento do imposto de selo caso o empréstimo se destine ao financiamento de actividades previstas no Código do Imposto de Selo.
+
+## SEXTA
+### (Vencimento imediato)
+Pode ser considerado imediatamente vencido este contrato, exigindo-se de imediato o pagamento de todas as quantias de capital e juros ainda em dívida, bem como quaisquer outros encargos devidos pelo Mutuário à Microcrédito por força deste empréstimo, em qualquer dos casos seguintes:
+a) Falta de pagamento pontual de qualquer das prestações acordadas no plano de pagamentos.
+b) Se o Mutuário sofrer protesto de título, execução, penhora ou embargo sobre os seus bens ou sobre o penhor constituído a favor da Microcrédito, ou caso lhe seja decretada a falência.
+c) Infracção de qualquer das cláusulas estabelecidas no presente contrato.
+d) Mudança de domicílio sem prévia comunicação à Microcrédito.
+
+## SÉTIMA
+### (Garantias do Mutuário)
+1. Para assegurar o reembolso do capital, juros e demais encargos inerentes ao empréstimo, o Mutuário constitui a favor da Microcrédito garantias sobre os bens descritos na ficha de penhor em anexo.
+2. As garantias descritas no número anterior poderão ser usadas em futuros créditos, sendo o seu montante actualizado.
+
+## OITAVA
+### (Fiel depositário)
+1. Os bens dados em garantia ficam em poder do Mutuário, que se obriga a guardá-los a título gratuito, na qualidade de fiel depositário e enquanto mero possuidor em nome alheio, nos termos do Decreto-Lei n.º 29.833, de 17 de Agosto de 1939.
+2. Em cumprimento do parágrafo único do artigo 2.º do Decreto-Lei n.º 29.833, de 17 de Agosto de 1939, transcrevem-se os parágrafos primeiro e segundo do seu artigo primeiro:
+a) Se o objecto empenhado ficar em poder do dono, este será considerado possuidor em nome alheio, e ser-lhe-ão impostas as penas de furto se alienar, modificar, destruir ou desencaminhar o objecto sem autorização escrita do credor, bem assim se o empenhar novamente sem que no novo contrato se mencione, de modo expresso, a existência de penhor ou penhores anteriores que, em qualquer caso, preferem por ordem de datas.
+Tratando-se de objecto pertencente a uma pessoa colectiva, o disposto no parágrafo antecedente aplica-se àqueles a quem incumbir a sua administração.
+3. O Mutuário obriga-se a comunicar à Microcrédito todo o acontecimento que perturbe ou possa perturbar o domínio e/ou qualquer diligência judicial que importe a penhora ou apreensão dos bens dados em penhor.
+4. Enquanto estiver em vigor o presente contrato, o Mutuário obriga-se a manter os bens empenhados em perfeito estado de conservação e funcionamento.
+5. O Mutuário fica obrigado a permitir a inspecção dos bens que constituem o penhor sempre que a Microcrédito o considere necessário.
+
+## NONA
+### (Arresto e venda de bens)
+1. O presente penhor pode ser executado logo que, vencida qualquer obrigação que garanta, se verifique mora no seu cumprimento, ou quando qualquer dos bens dados em penhor seja alienado, onerado, penhorado, arrestado ou objecto de qualquer outra forma de apreensão judicial, caso em que também se consideram vencidas as obrigações que o penhor garante.
+2. A Microcrédito fica desde já autorizada, caso ocorra qualquer das situações previstas no número anterior, a proceder à venda extrajudicial dos bens empenhados, a quem melhor entender, pelo preço e demais condições que tenha por convenientes, sem dependência de qualquer formalidade, com o fim de se reembolsar das quantias em dívida.
+
+## DÉCIMA
+### (Sanções)
+Caso se verifique a falta de pagamento pontual das prestações de capital e juros, o Mutuário aceita que a Microcrédito aplique cumulativamente as seguintes sanções:
+a) Juros de mora diários correspondentes a 25,00 MT sobre o capital e juros das prestações em atraso, incluindo os gastos provocados pelas acções de cobrança administrativa e judicial.
+b) Tomada imediata dos bens dados em penhor, mesmo na sua ausência, perante qualquer pessoa maior de idade que resida no local dos bens, familiar, autoridade local ou testemunha idónea.
+c) Os bens dados em penhor só podem ficar 5 dias na posse da Microcrédito; após esse prazo, a Microcrédito colocá-los-á em hasta pública.
+d) Durante os 5 dias, o Mutuário pagará diariamente o valor de 100,00 MT pela guarda dos bens.
+
+## DÉCIMA PRIMEIRA
+### (Reempréstimo)
+Liquidado o empréstimo nas condições previstas na cláusula primeira, o Mutuário poderá solicitar um novo empréstimo, mediante a celebração de novo contrato.
+
+## DÉCIMA SEGUNDA
+### (Lei e foro)
+1. Quaisquer diferendos relacionados com o presente contrato serão resolvidos amigavelmente pelas partes.
+2. Caso as partes não consigam resolver os diferendos nos termos do número anterior, será exclusivamente competente o Tribunal Judicial de {Foro Judicial}, com renúncia expressa a qualquer outro.
+
+## DÉCIMA TERCEIRA
+### (Salvaguarda contratual)
+1. A nulidade ou anulação parcial do contrato de empréstimo não determina a invalidade de todo o contrato, salvo quando se mostre que este não teria sido concluído sem a parte viciada.
+2. Contrato válido de {Data de Desembolso} até {Vencimento Final}.
+
+{Cidade}, {Data de Hoje}
+
+{Assinaturas}
+
+## ANEXO
+### (Plano de pagamentos)
+{Plano de Pagamentos}
