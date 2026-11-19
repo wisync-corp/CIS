@@ -222,7 +222,10 @@ final class ContractOpeningController extends Controller
                 $max=(int)$db->table('Contractos')->max('Nº');
                 $sequence=$max+1;
                 abort_if($sequence>999999999,409,'Limite de numeração atingido.');
-                $number='C-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT);
+                // Numeração anual (PREFIXO-ANO-SEQUÊNCIA) depois da renumeração; antes disso, C-0000.
+                $number=\App\Services\ContractNumbering::active()
+                    ? \App\Services\ContractNumbering::next($db,$d['data_inicio'])
+                    : 'C-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT);
                 abort_if($db->table('Contractos')->where('Nr do Contracto',$number)->exists(),
                     409,'Número de contrato já utilizado; operação cancelada.');
 

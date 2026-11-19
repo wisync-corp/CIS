@@ -30,6 +30,7 @@ class CompanySettingsController
         $clean = []; $errors = [];
         foreach ($in as $k => $v) {
             if (!array_key_exists($k, CS::FIELDS)) { $errors[$k] = 'Campo desconhecido.'; continue; }
+            if (CS::FIELDS[$k][1] === 'sistema') { $errors[$k] = 'Valor gerido pelo sistema.'; continue; }
             [$msg, $val] = self::check($k, $v);
             if ($msg) $errors[$k] = $msg; else $clean[$k] = $val;
         }
@@ -61,9 +62,12 @@ class CompanySettingsController
         if (is_bool($v)) $v = $v ? '1' : '0';
         if (!is_scalar($v) && $v !== null) return ['Valor inválido.', ''];
         $s = trim((string)($v ?? ''));
-        if ($s === '' && !in_array($type, ['booleano', 'lista', 'inteiro', 'valor', 'percentagem'], true)) return [null, ''];
+        if ($s === '' && !in_array($type, ['booleano', 'lista', 'inteiro', 'valor', 'percentagem', 'prefixo'], true)) return [null, ''];
         switch ($type) {
             case 'texto':  return mb_strlen($s) > $rule ? ["Máximo de $rule caracteres.", ''] : [null, $s];
+            case 'prefixo':
+                $s = strtoupper($s);
+                return preg_match('/^[A-Z0-9]{1,10}$/', $s) ? [null, $s] : ['Prefixo com 1 a 10 letras ou números, sem espaços.', ''];
             case 'nuit':   return preg_match('/^\d{9}$/', $s) ? [null, $s] : ['O NUIT tem 9 dígitos.', ''];
             case 'email':  return filter_var($s, FILTER_VALIDATE_EMAIL) ? [null, mb_strtolower($s)] : ['Email inválido.', ''];
             case 'data':

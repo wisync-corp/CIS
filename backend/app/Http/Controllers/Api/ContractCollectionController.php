@@ -521,7 +521,7 @@ final class ContractCollectionController extends Controller
         try {
             $db=DB::connection('mysql_legacy');
             $rows=$db->getSchemaBuilder()->hasTable('cis_contractos_historico')
-                ? $db->table('cis_contractos_historico')->where('contract_number',$numero)
+                ? $db->table('cis_contractos_historico')->whereIn('contract_number',\App\Services\ContractNumbering::aliases($numero))
                     ->orderByDesc('id')->limit(200)->get()
                 : null;
         } catch (\Throwable $e) {

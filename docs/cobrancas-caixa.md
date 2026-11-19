@@ -288,3 +288,12 @@ Os nomes que o utilizador vê (ecrãs, documentos, relatórios e mensagens de er
 | Agenda de cobranças | Folha de cobrança |
 | Extracto do cliente | Extracto de conta |
 | Taxa de juro (%) | Taxa de juro (% por período) |
+
+## Numeração anual dos contratos
+
+Formato `PREFIXO-ANO-SEQUÊNCIA` (ex.: `CAPTA-2026-0001`), com a sequência a recomeçar em 1 em cada ano, pelo **ano do desembolso** (primeira `Data de Inicio` do contrato). O prefixo e os dígitos ficam em Definições › Numeração dos contratos, que mostra a pré-visualização por ano.
+
+- **Renumeração dos contratos existentes** (desde o primeiro ano, ex.: 2023): `bash deploy/renumber-contracts.sh`. Mostra o plano, pede `RENUMERAR`, faz cópia de segurança (`backups/antes-renumeracao-*.sql.gz`), e actualiza numa só transacção: `Contractos.Nr do Contracto`, `Extracto.Contracto` e o número dentro da `Descrição`, `cis_message_log`. Ordem dentro do ano: data de desembolso e, no mesmo dia, ordem de registo. Contratos sem data mantêm o número.
+- O **histórico imutável** (`cis_contractos_historico`) não é alterado: a tabela `cis_contract_numbers` liga cada número antigo ao actual, e o histórico, a ficha do contrato, a pesquisa e o Extracto aceitam o número antigo.
+- Depois da renumeração, os **novos contratos** recebem o próximo número do ano do desembolso. Antes dela, continuam com `C-0000`.
+- Mudar o prefixo depois só afecta os novos contratos, até se voltar a correr o script.

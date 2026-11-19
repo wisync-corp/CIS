@@ -17,3 +17,6 @@
 
 # Pacote da extensão CIS WhatsApp, servido pelo CIS para descarregar (gerado por extension/build.sh).
 !frontend/public/cis-whatsapp-extension.zip
+
+# Cópias de segurança feitas nos scripts de deploy
+backups/
