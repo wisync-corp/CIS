@@ -307,6 +307,21 @@ $ex=$db->table('Extracto')->where('Nr',$r['extracto_nr'])->first();
 ok($pr->{'Data de Pagamento'}===now($tz)->subDays(2)->toDateString() && substr((string)$ex->{'Data da Operação'},0,10)===now($tz)->subDays(2)->toDateString()
     && $pr->Estado==='Pago','pagamento com data passada gravado nessa data (contrato e Extracto)');
 
+
+echo "== Visão geral: filtro de mês e ano\n";
+$ov=new \App\Http\Controllers\Api\OverviewController();
+$get=fn(array $q)=>data($ov(Request::create('/x','GET',$q)));
+$all=$get(['mes'=>'todos','ano'=>'todos']);
+ok($all['recebimentos']['recebido_mes']===$all['recebimentos']['total_recebido'] && $all['periodo']['mes']==='todos','Todos/Todos = total geral');
+$def=$get([]);
+ok($def['periodo']['mes']===(string)now($tz)->month && $def['periodo']['ano']===(string)now($tz)->year && in_array((int)now($tz)->year,$def['periodo']['anos'],true),'por defeito: mês e ano actuais');
+$expM=(float)$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])
+    ->whereYear('Data de Pagamento',now($tz)->year)->whereMonth('Data de Pagamento',now($tz)->month)->sum('Valor Pago');
+ok(abs((float)$def['recebimentos']['recebido_mes']-$expM)<0.01,'recebido no mês actual confere com a base');
+$py=$get(['mes'=>'todos','ano'=>(string)now($tz)->year]);
+ok((float)$py['recebimentos']['recebido_mes']>=(float)$def['recebimentos']['recebido_mes'],'ano inteiro inclui o mês');
+ok($err(fn()=>$ov(Request::create('/x','GET',['mes'=>'13'])))===422,'mês inválido recusado');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
