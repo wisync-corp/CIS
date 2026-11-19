@@ -1569,3 +1569,17 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-num-cmd{display:flex;align-items:center;gap:8px;background:#101828;color:#e4e7ec;border-radius:10px;padding:10px 12px;overflow-x:auto}
 .cis-num-cmd code{background:transparent;color:#e4e7ec;white-space:nowrap}
 .cis-num-note{margin:0;color:var(--cis-text-muted);font-size:calc(12.5px * var(--cis-fs))}
+
+/* Janela de avisos de cobrança, aberta através do diálogo nativo. */
+.cis-notice-dialog {
+  width: min(56rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: inherit;
+}
+.cis-notice-dialog:not([open]) { display: none; }
+.cis-notice-dialog::backdrop { background: rgb(10 16 26 / 62%); }
+.cis-notice-dialog .cis-table-scroll { margin-block: 0.75rem; }
+.cis-notice-dialog td:last-child { white-space: nowrap; }
