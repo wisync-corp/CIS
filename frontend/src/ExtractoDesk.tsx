@@ -9,6 +9,30 @@ import {situacaoContrato} from './glossario';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Mode='geral'|'clientes';
+type Field={key:string;label:string;format?:'date'|'money'|'direction';internal?:boolean};
+const fields:Record<Mode,Field[]>={
+ geral:[
+  {key:'codigo',label:'Referência da operação'},{key:'data',label:'Data do movimento',format:'date'},
+  {key:'descricao',label:'Descrição do movimento'},{key:'conta',label:'Conta financeira'},
+  {key:'tipo',label:'Natureza do movimento',format:'direction'},{key:'valor',label:'Montante (MT)',format:'money'},
+  {key:'contrato',label:'Número do contrato'},{key:'cliente',label:'Mutuário'},
+  {key:'parcela',label:'Número da prestação'},{key:'usuario',label:'Operador do registo',internal:true},
+ ],
+ clientes:[
+  {key:'codigo',label:'Referência do registo'},{key:'contrato',label:'Número do contrato'},
+  {key:'cliente',label:'Mutuário',internal:true},{key:'parcela',label:'Número da prestação'},
+  {key:'inicio',label:'Início da prestação',format:'date'},{key:'vencimento',label:'Data de vencimento',format:'date'},
+  {key:'dias',label:'Dias até ao vencimento'},{key:'forma_pagamento',label:'Modalidade de pagamento'},
+  {key:'capital',label:'Capital concedido (MT)',format:'money'},{key:'juros',label:'Juros contratuais (MT)',format:'money'},
+  {key:'multa',label:'Juros de mora (MT)',format:'money'},{key:'valor',label:'Valor em dívida ou pago (MT)',format:'money'},
+  {key:'valor_previsto',label:'Montante previsto (MT)',format:'money'},{key:'valor_recebido',label:'Montante recebido (MT)',format:'money'},
+  {key:'data_pagamento',label:'Data do pagamento',format:'date'},{key:'estado',label:'Situação da prestação'},
+ ],
+};
+const defaults:Record<Mode,string[]>={
+ geral:['codigo','data','descricao','conta','valor'],
+ clientes:['codigo','contrato','cliente','parcela','vencimento','dias','forma_pagamento','capital','juros','valor','estado'],
+};
 type GeralRow={nr:number;codigo:string;descricao:string;data:string;tipo:'entrada'|'saida';valor:string;contrato:string|null;cliente:string|null;parcela:string|null;conta:string|null;usuario:string|null};
 type ClienteRow={ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
 type GeralResp={linhas:GeralRow[];pagina:number;por_pagina:number;total_linhas:number;totais:{entradas:string;saidas:string;disponivel:string}};
@@ -35,6 +59,15 @@ const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—'
 const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d&&m&&y?`${d}/${m}/${y}`:v;};
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
+function fieldValue(row:object,column:Field,csv=false){
+ const value=(row as Record<string,string|number|null|undefined>)[column.key];
+ if(value===null||value===undefined||value==='')return csv?'':'—';
+ if(column.format==='date')return dt(String(value));
+ if(column.format==='money')return csv?String(value).replace('.',','):mt(value);
+ if(column.format==='direction')return value==='entrada'?'Entrada':'Saída';
+ return value;
+}
+
 export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenContracts}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void;onOpenContracts:(numero?:string)=>void}){
  const company=useCompanyProfile(token);
  const isAdmin=role==='administrador';
@@ -47,6 +80,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const [tipo,setTipo]=useState('todos');const [estado,setEstado]=useState<string>(preset?.estado??'todos');
  const [contaId,setContaId]=useState('');const [accounts,setAccounts]=useState<Account[]>([]);
  const [page,setPage]=useState(1);
+ const [selection,setSelection]=useState(defaults);
+ const [directions,setDirections]=useState<Record<Mode,'asc'|'desc'>>({geral:'desc',clientes:'asc'});
+ const direction=directions[mode];
+ const visible=fields[mode].filter(column=>selection[mode].includes(column.key));
+ function pdfFields(m:Mode){
+  const list=fields[m].filter(column=>!column.internal&&selection[m].includes(column.key));
+  return list.length?list:fields[m].slice(0,1);
+ }
  const [geral,setGeral]=useState<GeralResp|null>(null);const [clientes,setClientes]=useState<ClientesResp|null>(null);
  const [loading,setLoading]=useState(false);const [error,setError]=useState('');
  const [exporting,setExporting]=useState(false);
@@ -56,7 +97,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
- const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams();
+ const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction});
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
   if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
@@ -82,7 +123,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    .finally(()=>{if(!c.signal.aborted)setLoading(false);});
   return()=>c.abort();
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period]);
+ },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period,direction]);
 
  useEffect(()=>{setContrato('');setContratos([]);if(!cliente)return;const c=new AbortController();
   getJson<{contratos:string[]}>('/cis/extractos/contratos?'+new URLSearchParams({cliente}),c.signal).then(j=>setContratos(j.contratos)).catch(()=>{});
@@ -104,10 +145,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   try{
    const all:(GeralRow|ClienteRow)[]=[];let p=1,total=0;
    do{const j=await getJson<GeralResp|ClientesResp>('/cis/extractos/'+mode+'?'+params({page:String(p),por_pagina:'200'}));all.push(...j.linhas);total=j.total_linhas;p++;}while(all.length<total&&p<=100);
-   const head=mode==='geral'?['Cod. Op','Data','Descrição','Tipo','Valor (MT)','Contrato','Mutuário','Prestação','Conta']
-    :['Cod. Op','Contrato','Mutuário','Prestação','Data de vencimento','Dias','Forma de pagamento','Capital (MT)','Juros (MT)','Juros de mora (MT)','Valor da prestação (MT)','Data de pagamento','Estado'];
-   const lines=all.map(r=>mode==='geral'?(()=>{const g=r as GeralRow;return [g.codigo,dt(g.data),g.descricao,g.tipo==='entrada'?'Entrada':'Saída',g.valor.replace('.',','),g.contrato,g.cliente,g.parcela,g.conta];})()
-    :(()=>{const c=r as ClienteRow;return [c.codigo,c.contrato,c.cliente,c.parcela,dt(c.vencimento),c.dias,c.forma_pagamento,c.capital.replace('.',','),c.juros.replace('.',','),c.multa.replace('.',','),c.valor.replace('.',','),dt(c.data_pagamento),c.estado];})());
+   const head=visible.map(column=>column.label);
+   const lines=all.map(row=>visible.map(column=>fieldValue(row,column,true)));
    const csv='﻿'+[head,...lines].map(l=>l.map(csvCell).join(';')).join('\r\n');
    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
    a.download=`extracto-${mode}${cliente?'-'+cliente.replace(/[^\w-]+/g,'_'):''}${contrato?'-'+contrato:''}-${new Date().toISOString().slice(0,10)}.csv`;
@@ -122,14 +161,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  }
  async function infoEvidence(numero:string){
   setEvidenceBusy(true);setInfoError('');
-  try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero})));}
+  try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero,direccao:directions.clientes})));}
   catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
   if(mode==='geral'){try{setGeralDoc(await getJson<GeralEvidence>('/cis/extractos/geral-evidencia?'+params()));}
    catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto geral.');}finally{setEvidenceBusy(false);}return;}
-  try{const p=new URLSearchParams();if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
+  try{const p=new URLSearchParams({direccao:direction});if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
    setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+p));}
   catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
@@ -186,16 +225,38 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     {!canEvidence&&mode==='clientes'&&<small>Escolha um mutuário para gerar o extracto de evidência.</small>}
    </div>
 
+   <div className="cis-extracto-actions">
+    <label>Ordem {mode==='geral'?'por data do movimento':'por vencimento'} <select value={direction} onChange={event=>{
+     const value=event.target.value==='asc'?'asc':'desc';setDirections(old=>({...old,[mode]:value}));setPage(1);
+    }}><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label>
+    <details><summary>Escolher colunas</summary>
+     <div className="cis-extracto-filters">{fields[mode].map(column=><label key={column.key}>
+      <input type="checkbox" checked={selection[mode].includes(column.key)}
+       disabled={selection[mode].length===1&&selection[mode].includes(column.key)}
+       onChange={event=>{const checked=event.target.checked;setSelection(old=>({...old,[mode]:checked?[...old[mode],column.key]:old[mode].filter(key=>key!==column.key)}));}}/> {column.label}
+     </label>)}</div>
+     <button type="button" onClick={()=>setSelection(old=>({...old,[mode]:defaults[mode]}))}>Repor colunas iniciais</button>
+    </details>
+   </div>
+
    {infoBusy&&<div className="cis-loading" role="status">A abrir a informação do contrato {infoBusy}…</div>}
    {infoError&&!info&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{infoError}</div>}
    {loading&&<div className="cis-loading" role="status">A consultar o extracto…</div>}
    {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
    {!loading&&!error&&data&&(data.total_linhas===0?<div className="cis-extracto-empty">Sem registos para os filtros escolhidos.</div>:<>
     <div className="cis-table-scroll"><table>
-     {mode==='geral'?<><thead><tr><th>Cod. Op</th><th>Data</th><th>Descrição</th><th>Conta</th><th className="num">Valor (MT)</th></tr></thead>
-      <tbody>{geral!.linhas.map(r=><tr key={r.nr} className={r.contrato?'cis-extracto-row':''} tabIndex={r.contrato?0:undefined} title={r.contrato?'Ver informação do contrato '+r.contrato:undefined} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{dt(r.data)}</td><td>{r.descricao}</td><td>{r.conta??'—'}</td><td className={'num '+(r.tipo==='entrada'?'pos':'neg')}>{r.tipo==='entrada'?'+':'−'} {mt(r.valor)}</td></tr>)}</tbody></>
-     :<><thead><tr><th>Cod. Op</th><th>Contrato</th><th>Mutuário</th><th>P.</th><th>Vencimento</th><th className="num">Dias</th><th>F. pagamento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Prestação</th><th>Estado</th></tr></thead>
-      <tbody>{clientes!.linhas.map(r=><tr key={r.ordem} className={'cis-extracto-row'} tabIndex={0} title={'Ver informação do contrato '+r.contrato} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{r.contrato}</td><td>{r.cliente}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className={'num '+(r.dias<0&&r.situacao!=='paga'?'neg':'')}>{r.dias}</td><td>{r.forma_pagamento??'—'}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.valor)}</td><td><span className={'cis-extracto-state '+r.situacao}>{r.estado}</span></td></tr>)}</tbody></>}
+     <thead><tr>{visible.map(column=><th key={column.key} className={column.format==='money'?'num':undefined}>{column.label}</th>)}</tr></thead>
+     <tbody>{data.linhas.map(row=>{
+      const canOpen=Boolean(row.contrato);
+      return <tr key={'nr' in row?row.nr:row.ordem} className={canOpen?'cis-extracto-row':''}
+       tabIndex={canOpen?0:undefined} title={canOpen?'Ver informação do contrato '+row.contrato:undefined}
+       onClick={()=>void openInfo(row.contrato)} onKeyDown={event=>{if(event.key==='Enter')void openInfo(row.contrato);}}>
+       {visible.map(column=><td key={column.key} className={column.format==='money'?'num':undefined}>
+        {column.key==='valor'&&'tipo' in row?<span className={row.tipo==='entrada'?'pos':'neg'}>{row.tipo==='entrada'?'+':'−'} {fieldValue(row,column)}</span>
+         :column.key==='estado'&&'situacao' in row?<span className={'cis-extracto-state '+row.situacao}>{row.estado}</span>:fieldValue(row,column)}
+       </td>)}
+      </tr>;
+     })}</tbody>
     </table></div>
     <div className="cis-table-footer"><span>{data.total_linhas.toLocaleString('pt-MZ')} registos · Página {page} de {lastPage}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=lastPage} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div>
    </>)}
@@ -223,8 +284,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     </section>
     <section><h2>Contratos</h2><table><thead><tr><th>Contrato</th><th>Início</th><th className="num">Capital</th><th className="num">Prestações</th><th className="num">Pago</th><th className="num">Em dívida</th><th>Situação</th></tr></thead>
      <tbody>{evidence.contratos.map(k=><tr key={k.contrato}><td>{k.contrato}</td><td>{dt(k.inicio)}</td><td className="num">{mt(k.capital)}</td><td className="num">{k.prestacoes}</td><td className="num">{mt(k.pago)}</td><td className="num">{mt(k.em_divida)}</td><td>{k.situacao}</td></tr>)}</tbody></table></section>
-    <section><h2>Prestações</h2><table><thead><tr><th>Contrato</th><th>P.</th><th>Vencimento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Juros de mora</th><th className="num">Valor</th><th>Pago em</th><th>Estado</th></tr></thead>
-     <tbody>{evidence.prestacoes.map(r=><tr key={r.ordem}><td>{r.contrato}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.multa)}</td><td className="num">{mt(r.valor)}</td><td>{dt(r.data_pagamento)}</td><td>{r.estado}</td></tr>)}</tbody></table></section>
+    <section><h2>Prestações</h2><table><thead><tr>{pdfFields('clientes').map(column=><th key={column.key}>{column.label}</th>)}</tr></thead>
+     <tbody>{evidence.prestacoes.map(row=><tr key={row.ordem}>{pdfFields('clientes').map(column=><td key={column.key} className={column.format==='money'?'num':undefined}>{fieldValue(row,column)}</td>)}</tr>)}</tbody></table></section>
     <section><h2>Movimentos registados</h2>{evidence.movimentos.length?<table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Tipo</th><th className="num">Valor (MT)</th></tr></thead>
      <tbody>{evidence.movimentos.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}</td><td>{m.contrato}{m.parcela?' · P'+m.parcela:''}</td><td>{m.tipo}</td><td className="num">{mt(m.valor)}</td></tr>)}</tbody></table>:<p>Sem movimentos registados no período.</p>}</section>
     <footer><ShieldCheck size={14}/><span>Código de verificação <b>{evidence.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span><PoweredBy/></footer>
@@ -285,9 +346,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
      <div><span>Saídas</span><strong>{mt(geralDoc.totais.saidas)} MT</strong></div>
      <div><span>Total disponível</span><strong>{mt(geralDoc.totais.disponivel)} MT</strong></div>
     </section>
-    <section><h2>Movimentos</h2><table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Conta</th><th className="num">Entrada</th><th className="num">Saída</th></tr></thead>
-     <tbody>{geralDoc.linhas.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}{m.cliente?' · '+m.cliente:''}</td><td>{m.contrato??''}{m.parcela?' · P'+m.parcela:''}</td><td>{m.conta??'—'}</td><td className="num">{m.tipo==='entrada'?mt(m.valor):''}</td><td className="num">{m.tipo==='saida'?mt(m.valor):''}</td></tr>)}</tbody>
-     <tfoot><tr><th colSpan={5}>Totais</th><th className="num">{mt(geralDoc.totais.entradas)}</th><th className="num">{mt(geralDoc.totais.saidas)}</th></tr></tfoot></table></section>
+    <section><h2>Movimentos</h2><table><thead><tr>{pdfFields('geral').map(column=><th key={column.key}>{column.label}</th>)}</tr></thead>
+     <tbody>{geralDoc.linhas.map(row=><tr key={row.codigo}>{pdfFields('geral').map(column=><td key={column.key} className={column.format==='money'?'num':undefined}>{column.key==='valor'?(row.tipo==='entrada'?'+':'−')+' '+fieldValue(row,column):fieldValue(row,column)}</td>)}</tr>)}</tbody></table></section>
     <footer><ShieldCheck size={14}/><span>Código de verificação <b>{geralDoc.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do Extracto. Valores em Meticais (MT).</span><PoweredBy/></footer>
    </article>
   </div>,document.body)}

@@ -60,6 +60,7 @@ final class ExtractoController extends Controller
             'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
             'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
             'base'=>['nullable','in:cobranca,pagamento,desembolso'],
+            'direccao'=>['nullable','in:asc,desc'],
             'page'=>['nullable','integer','min:1'],
             'por_pagina'=>['nullable','integer','min:10','max:200'],
         ]);
@@ -101,7 +102,7 @@ final class ExtractoController extends Controller
 
         $per=(int)($f['por_pagina']??50);
         $page=max(1,(int)($f['page']??1));
-        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->forPage($page,$per));
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->forPage($page,$per),false,$f['direccao']??'desc');
         return response()->json([
             'linhas'=>$rows,
             'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>$t['n'],
@@ -134,7 +135,7 @@ final class ExtractoController extends Controller
         return ['n'=>(int)$t->n,'totais'=>['entradas'=>self::money($e),'saidas'=>self::money($s),'disponivel'=>self::money($e-$s)]];
     }
 
-    private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false)
+    private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false,string $direction='desc')
     {
         $q=clone $q;
         // Só colunas que existem no Extracto desta base (o legado varia entre instalações).
@@ -143,7 +144,7 @@ final class ExtractoController extends Controller
         foreach (['Nr','Contracto','Cliente','Parcela','Tipo de Movimento','Descrição','Data da Operação','Valor','usuario','account_id'] as $c) {
             if (isset($have[$c])) $cols[]='e.'.$c;
         }
-        $q->orderByDesc('e.Data da Operação')->orderByDesc('e.Nr');
+        $q->orderBy('e.Data da Operação',$direction)->orderBy('e.Nr',$direction);
         $limit($q);
         $rows=$q->get($cols);
         // Códigos das contas pela ligação principal: o utilizador de leitura do legado
@@ -183,7 +184,7 @@ final class ExtractoController extends Controller
         $t=$this->geralTotals($q);
         abort_if($t['n']===0,404,'Sem movimentos para os filtros escolhidos.');
         abort_if($t['n']>5000,422,'Demasiados movimentos ('.$t['n'].') para um único documento; reduza o período (máximo 5000).');
-        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->limit(5000),true);
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->limit(5000),true,$f['direccao']??'desc');
         $conta=null;
         if (($f['conta_id']??null) && $hasAccount) {
             $a=DB::table('cis_cash_accounts')->where('id',(int)$f['conta_id'])->first(['code','name']);
@@ -261,7 +262,7 @@ final class ExtractoController extends Controller
             'Data de Cobrança','Dias','M. Pagamento','Quantia Creditada','Valor de Juros','Valor de Multa',
             'Valor a Pagar','Valor Pago','Data de Pagamento','Estado'];
         return $q->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))
-            ->orderBy('Data de Cobrança')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->get();
+            ->orderBy('Data de Cobrança',$f['direccao']??'asc')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->orderBy('Ordem')->get();
     }
 
     private function summarise($rows,string $today,?string $estado): array
@@ -287,6 +288,8 @@ final class ExtractoController extends Controller
                     : (int)$r->Dias,
                 'forma_pagamento'=>$r->{'M. Pagamento'},
                 'capital'=>self::money($r->{'Quantia Creditada'}),
+                'valor_previsto'=>self::money($r->{'Valor a Pagar'}),
+                'valor_recebido'=>$sit==='paga'?self::money($r->{'Valor Pago'}):null,
                 'juros'=>self::money($juros),'multa'=>self::money($multa),
                 'valor'=>self::money(in_array($sit,['aberta','vencida'],true)?self::owed($r):$r->{'Valor Pago'}),
                 'data_pagamento'=>$r->{'Data de Pagamento'}?substr((string)$r->{'Data de Pagamento'},0,10):null,
@@ -391,7 +394,7 @@ final class ExtractoController extends Controller
         $mq=$db->table('Extracto')->whereIn('Contracto',$nums);
         if ($f['inicio']??null) $mq->where('Data da Operação','>=',$f['inicio']);
         if ($f['fim']??null) $mq->where('Data da Operação','<=',$f['fim']);
-        $movements=$mq->orderBy('Data da Operação')->orderBy('Nr')
+        $movements=$mq->orderBy('Data da Operação',$f['direccao']??'asc')->orderBy('Nr',$f['direccao']??'asc')
             ->get(['Nr','Contracto','Cliente','Parcela','Tipo de Movimento','Descrição','Data da Operação','Valor'])
             ->map(fn($m)=>[
                 'codigo'=>'OP-'.$m->Nr,'data'=>substr((string)$m->{'Data da Operação'},0,10),
