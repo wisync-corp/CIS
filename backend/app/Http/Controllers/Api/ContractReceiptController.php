@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Recibos de pagamento de um contrato. Cada entrada no Extracto do contrato é um recibo
- * (N.º REC-<Nr do Extracto>); prestações pagas sem entrada no Extracto (ex.: lançadas no
- * sistema antigo) também têm recibo, com N.º REC-P<Ordem>. Só leitura.
+ * Recibos de pagamento de um contrato. Cada entrada no Extracto do contrato é um recibo;
+ * prestações pagas sem entrada no Extracto (ex.: lançadas no sistema antigo) também têm recibo.
+ * Número anual REC-ANO-SEQUÊNCIA (ReceiptNumbering), pela data do pagamento.
  */
 class ContractReceiptController
 {
@@ -56,7 +56,7 @@ class ContractReceiptController
             if ($p !== '') $covered[$p] = true;
             $desc = (string)($e->{'Descrição'} ?? '');
             $out[] = [
-                'numero' => 'REC-' . $e->Nr, 'origem' => 'extracto', 'extracto_nr' => (int)$e->Nr,
+                'chave' => 'E:' . $e->Nr, 'numero' => 'REC-' . $e->Nr, 'origem' => 'extracto', 'extracto_nr' => (int)$e->Nr,
                 'data' => $d($e->{'Data da Operação'}), 'prestacao' => $p !== '' ? $p : null, 'valor' => $m($e->Valor),
                 'capital' => $paidRow && $single && $paidRow->Estado !== 'Renovado' ? $m($paidRow->{'Amortização'} ?? 0) : null, 'juros' => $paidRow && $single ? $m($paidRow->{'Valor de Juros'} ?? 0) : null,
                 'juros_mora' => $paidRow && $single ? $m($paidRow->{'Valor de Multa'} ?? 0) : null, 'vencimento' => $paidRow ? $d($paidRow->{'Data de Cobrança'}) : null,
@@ -70,13 +70,18 @@ class ContractReceiptController
             $p = (string)$r->{'Nº da Parcela'};
             if (!in_array($r->Estado, self::PAID, true) || isset($covered[$p]) || (float)($r->{'Valor Pago'} ?? 0) <= 0) continue;
             $out[] = [
-                'numero' => 'REC-P' . $r->Ordem, 'origem' => 'prestacao', 'extracto_nr' => null,
+                'chave' => 'P:' . $r->Ordem, 'numero' => 'REC-P' . $r->Ordem, 'origem' => 'prestacao', 'extracto_nr' => null,
                 'data' => $d($r->{'Data de Pagamento'}), 'prestacao' => $p, 'valor' => $m($r->{'Valor Pago'}),
                 'capital' => $m($r->{'Amortização'} ?? 0), 'juros' => $m($r->{'Valor de Juros'} ?? 0), 'juros_mora' => $m($r->{'Valor de Multa'} ?? 0),
                 'vencimento' => $d($r->{'Data de Cobrança'}), 'estado' => $r->Estado, 'forma_pagamento' => $r->{'Forma de Pagamento'} ?? null,
                 'conta' => null, 'referencia' => null, 'descricao' => 'Pagamento da prestação ' . $p,
             ];
         }
+        // Numeração anual (REC-ANO-SEQUÊNCIA), fixa depois de atribuída.
+        $nums = [];
+        try { $nums = \App\Services\ReceiptNumbering::ensure($db, $numero); } catch (\Throwable) {}
+        foreach ($out as &$o) { if (isset($nums[$o['chave']])) $o['numero'] = $nums[$o['chave']]; unset($o['chave']); }
+        unset($o);
         usort($out, fn($a, $b) => [$a['data'] ?? '', $a['numero']] <=> [$b['data'] ?? '', $b['numero']]);
         $total = array_sum(array_map(fn($r) => (float)$r['valor'], $out));
         $owed = $rows->filter(fn($r) => in_array($r->Estado, ['Pendente', 'Pagamento Atrasado'], true))->sum(fn($r) => (float)($r->{'Valor a Pagar'} ?? 0) + (float)($r->{'Valor de Multa'} ?? 0));

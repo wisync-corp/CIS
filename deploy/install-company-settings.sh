@@ -14,6 +14,8 @@ APP=(sudo -n docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f 
 sql(){ printf '%s\n' "$1" | timeout 60 "${DB[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 --batch --skip-column-names "$MYSQL_DATABASE"'; }
 migration=backend/database/migrations/2026_11_19_000110_create_cis_company_settings.php
 param=backend/database/migrations/2026_11_19_000120_parametrizacao_editavel.php
+numbers=backend/database/migrations/2026_11_19_000140_create_cis_contract_numbers.php
+receipts=backend/database/migrations/2026_11_19_000150_create_cis_receipts.php
 defaults=backend/database/migrations/2026_11_19_000130_seed_default_movement_types.php
 echo '=== CIS | INSTALAR CONFIGURAÇÕES DA EMPRESA ==='
 [[ "$(sql 'SELECT DATABASE();')" == cis ]] || { echo 'BLOQUEADO: base inesperada.' >&2; exit 1; }
@@ -26,6 +28,9 @@ done
 "${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${migration#backend/}" --force
 # Parametrização editável (idempotente: só acrescenta colunas/tabela em falta).
 "${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${param#backend/}" --force
+# Numeração anual: correspondência de números de contrato e recibos (REC-ANO-SEQUÊNCIA).
+"${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${numbers#backend/}" --force
+"${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${receipts#backend/}" --force
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_company_settings';")" == 1 ]] || {
   echo 'BLOQUEADO: tabela não confirmada.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_tipos_movimento' AND COLUMN_NAME IN ('grupo','activo','protegido');")" == 3 ]] || {

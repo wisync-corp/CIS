@@ -297,3 +297,7 @@ Formato `PREFIXO-ANO-SEQUÊNCIA` (ex.: `CAPTA-2026-0001`), com a sequência a re
 - O **histórico imutável** (`cis_contractos_historico`) não é alterado: a tabela `cis_contract_numbers` liga cada número antigo ao actual, e o histórico, a ficha do contrato, a pesquisa e o Extracto aceitam o número antigo.
 - Depois da renumeração, os **novos contratos** recebem o próximo número do ano do desembolso. Antes dela, continuam com `C-0000`.
 - Mudar o prefixo depois só afecta os novos contratos, até se voltar a correr o script.
+
+## Numeração anual dos recibos
+
+Recibos `PREFIXO-ANO-SEQUÊNCIA` (ex.: `REC-2026-0001`), a recomeçar em 1 em cada ano pela **data do pagamento**; prefixo em Definições › Numeração dos contratos (os dígitos são os mesmos dos contratos). Tabela `cis_receipts` (chave estável: `E:<Nr do Extracto>` ou `P:<Ordem>` para pagamentos antigos sem movimento). Na primeira consulta de recibos todo o histórico é numerado por ordem cronológica; depois, cada novo recebimento recebe o próximo número do ano e o número não muda.

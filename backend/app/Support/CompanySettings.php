@@ -50,6 +50,8 @@ final class CompanySettings
         'contrato_prefixo'        => ['numeracao','prefixo',null,'CAPTA'],
         'contrato_digitos'        => ['numeracao','inteiro',[3,6],'4'],
         'numeracao_anual_activa'  => ['numeracao','sistema',null,'0'],
+        'recibo_prefixo'          => ['numeracao','prefixo',null,'REC'],
+        'recibos_numerados'       => ['numeracao','sistema',null,'0'],
         // Incentivos
         'incentivo_cliente_novo'  => ['incentivos','valor',null,'0'],
         'incentivo_renovacao'     => ['incentivos','valor',null,'0'],
