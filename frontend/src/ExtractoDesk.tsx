@@ -2,7 +2,7 @@ import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
+import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,ArrowUp,ArrowDown,SlidersHorizontal,ChevronDown} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter from './MessageCenter';
 import {situacaoContrato} from './glossario';
@@ -219,25 +219,37 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e mora {mt(c.juros_pago)}</small></div>
    </div>}
 
-   <div className="cis-extracto-actions">
+   <div className="cis-extracto-toolbar">
+    <div className="cis-extracto-order" role="group" aria-label={mode==='geral'?'Ordem por data do movimento':'Ordem por vencimento'}>
+     <span>{mode==='geral'?'Data do movimento':'Vencimento'}</span>
+     <div className="cis-extracto-order-options">
+      {(['asc','desc'] as const).map(value=><button key={value} type="button" aria-pressed={direction===value}
+       onClick={()=>{setDirections(old=>({...old,[mode]:value}));setPage(1);}}>
+       {value==='asc'?<ArrowUp size={14}/>:<ArrowDown size={14}/>} {value==='asc'?'Crescente':'Decrescente'}
+      </button>)}
+     </div>
+    </div>
+    <details className="cis-extracto-column-control" key={mode}>
+     <summary><SlidersHorizontal size={16}/> Colunas <span>{visible.length} de {fields[mode].length}</span><ChevronDown size={15}/></summary>
+     <div className="cis-extracto-column-panel">
+      <div className="cis-extracto-column-head"><strong>Colunas do extracto</strong>
+       <button type="button" onClick={()=>setSelection(old=>({...old,[mode]:defaults[mode]}))}>Repor predefinições</button>
+      </div>
+      <p>A selecção aplica-se à tabela, ao CSV e às tabelas principais do PDF.</p>
+      <div className="cis-extracto-column-grid">{fields[mode].map(column=><label key={column.key}>
+       <input type="checkbox" checked={selection[mode].includes(column.key)}
+        disabled={selection[mode].length===1&&selection[mode].includes(column.key)}
+        onChange={event=>{const checked=event.target.checked;setSelection(old=>({...old,[mode]:checked?[...old[mode],column.key]:old[mode].filter(key=>key!==column.key)}));}}/>
+       <span>{column.label}</span>
+      </label>)}</div>
+     </div>
+    </details>
+    <div className="cis-extracto-actions cis-extracto-export">
     <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
     <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao mutuário':'Escolha um mutuário para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
-    {!canEvidence&&mode==='clientes'&&<small>Escolha um mutuário para gerar o extracto de evidência.</small>}
+    </div>
    </div>
-
-   <div className="cis-extracto-actions">
-    <label>Ordem {mode==='geral'?'por data do movimento':'por vencimento'} <select value={direction} onChange={event=>{
-     const value=event.target.value==='asc'?'asc':'desc';setDirections(old=>({...old,[mode]:value}));setPage(1);
-    }}><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label>
-    <details><summary>Escolher colunas</summary>
-     <div className="cis-extracto-filters">{fields[mode].map(column=><label key={column.key}>
-      <input type="checkbox" checked={selection[mode].includes(column.key)}
-       disabled={selection[mode].length===1&&selection[mode].includes(column.key)}
-       onChange={event=>{const checked=event.target.checked;setSelection(old=>({...old,[mode]:checked?[...old[mode],column.key]:old[mode].filter(key=>key!==column.key)}));}}/> {column.label}
-     </label>)}</div>
-     <button type="button" onClick={()=>setSelection(old=>({...old,[mode]:defaults[mode]}))}>Repor colunas iniciais</button>
-    </details>
-   </div>
+   {!canEvidence&&mode==='clientes'&&<p className="cis-extracto-export-hint">Seleccione um mutuário ou contrato para gerar o PDF.</p>}
 
    {infoBusy&&<div className="cis-loading" role="status">A abrir a informação do contrato {infoBusy}…</div>}
    {infoError&&!info&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{infoError}</div>}

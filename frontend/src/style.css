@@ -1600,3 +1600,42 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-notice-dialog .cis-table-scroll { margin-block: 0.75rem; }
 .cis-notice-dialog td:last-child { white-space: nowrap; }
 .cis-num-example span.r{margin-left:18px}
+
+.cis-extracto-toolbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem 1rem;
+  padding: 0.75rem 0;
+  margin-block: 1rem;
+  border-block: 1px solid var(--cis-border);
+}
+.cis-extracto-order { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; }
+.cis-extracto-order > span { color: var(--cis-text-muted); font-weight: 700; font-size: 0.82em; }
+.cis-extracto-order-options { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--cis-border); border-radius: 9px; padding: 3px; gap: 2px; }
+.cis-extracto-order-options button, .cis-extracto-column-control summary, .cis-extracto-column-head button {
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.65rem;
+  font: inherit; font-size: 0.82em; font-weight: 700; color: var(--cis-heading);
+  border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.cis-extracto-order-options button[aria-pressed="true"] { background: var(--cis-primary); color: white; }
+.cis-extracto-column-control summary { list-style: none; border: 1px solid var(--cis-border); border-radius: 9px; }
+.cis-extracto-column-control summary::-webkit-details-marker { display: none; }
+.cis-extracto-column-control summary span, .cis-extracto-column-panel p, .cis-extracto-export-hint { color: var(--cis-text-muted); font-size: 0.85em; }
+.cis-extracto-column-control[open] summary > svg:last-child { transform: rotate(180deg); }
+.cis-extracto-column-control[open] { display: contents; }
+.cis-extracto-column-panel {
+  order: 3; flex: 1 0 100%; padding: 0.8rem;
+  border: 1px solid var(--cis-border); border-radius: 9px;
+}
+.cis-extracto-column-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.cis-extracto-column-head button { color: var(--cis-primary); }
+.cis-extracto-column-panel p { margin: 0.15rem 0 0.6rem; }
+.cis-extracto-column-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: 0.35rem 0.7rem; }
+.cis-extracto-column-grid label { display: flex; align-items: center; gap: 0.5rem; min-height: 2rem; cursor: pointer; }
+.cis-extracto-column-grid input { width: 1rem; height: 1rem; flex: 0 0 auto; accent-color: var(--cis-primary); }
+.cis-extracto-export.cis-extracto-actions { margin: 0 0 0 auto; }
+@media (max-width: 42rem) {
+  .cis-extracto-export.cis-extracto-actions { margin-left: 0; }
+}
