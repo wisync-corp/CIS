@@ -1,8 +1,8 @@
-import {useEffect,useMemo,useState,type FormEvent} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {
   ReceiptText,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
   ArrowRight,ArrowLeft,Wallet,Clock3,ShieldCheck,LockKeyhole,Landmark,
-  Calculator,Layers,ArrowDownLeft,RotateCcw,TrendingUp,Info,CreditCard,
+  Layers,ArrowDownLeft,RotateCcw,TrendingUp,Info,CreditCard,
   Filter,BookOpen,ChevronRight,Coins
 } from 'lucide-react';
 
@@ -86,6 +86,12 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [scenarioBusy,setScenarioBusy]=useState(false);
  const [scenarioQuote,setScenarioQuote]=useState<ScenarioQuote|null>(null);
  const [capitalPeriod,setCapitalPeriod]=useState('');
+ const [interestChoice,setInterestChoice]=useState('');
+ const [fineRate,setFineRate]=useState('');
+ const [fineGrace,setFineGrace]=useState('');
+ const [fineCap,setFineCap]=useState('');
+ const [finePreview,setFinePreview]=useState<ScenarioQuote|null>(null);
+ const [fineError,setFineError]=useState('');
  const [accountId,setAccountId]=useState('');
  const [channel,setChannel]=useState('');
  const [evidenceRef,setEvidenceRef]=useState('');
@@ -200,29 +206,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function selectContract(numero:string){setSelected(numero);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
+ function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
- async function simulateScenario(e:FormEvent<HTMLFormElement>){
-  e.preventDefault();if(!selected||scenarioBusy||live||!modeAllowed||!activeOrder)return;
-  const key=ord;
-  if(!key){setMessage('O contrato não possui uma prestação que permita simulação.');return;}
-  setScenarioBusy(true);setScenarioQuote(null);setMessage('');
-  try{
-   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(key)+'/simular-cenario',{
-    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({operacao:mode,
-     ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
-     ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod)}:{}),
-     ...(mode==='prorrogar_15_30'?{prazo_origem_dias:15,prazo_destino_dias:30}:{}),
-     ...(mode==='actualizar_data'?{data_pagamento:reviewDate}:{})})
-   });
-   const data=await response.json().catch(()=>({})) as ScenarioQuote&{message?:string;errors?:Record<string,string[]>};
-   if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível simular a operação.');
-   setScenarioQuote(data);
-  }catch(err){setMessage(err instanceof Error?err.message:'Falha na simulação.');}
-  finally{setScenarioBusy(false);}
- }
-
  async function pay(){
   if(!selected||!ord||!quote||!canExecute)return;
   const key=payKey||newKey();setPayKey(key);setPaying(true);setMessage('');setPayError('');
@@ -244,20 +229,55 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   finally{setPaying(false);}
  }
 
- async function simulate(e:FormEvent){
-  e.preventDefault();if(!selected||!ord||!canQuote||!modeAllowed)return;
-  setQuote(null);setConfirmReceipt(false);setPaymentDone(null);setQuoting(true);setMessage('');
-  try{
-   const r=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+ord+(renewing?'/simular-renovacao':'/simular-cobranca'),{
-    method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({data_pagamento:datePayment,cobrar_multa:penalty,...(renewing?{data_inicio:renewStart}:{})})
-   });
-   const data=await r.json().catch(()=>({})) as Quote&{message?:string;errors?:Record<string,string[]>};
-   if(!r.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Esta prestação ainda não pode ser simulada.');
-   setQuote(data);
-  }catch(e){setMessage(e instanceof Error?e.message:'Falha ao calcular.');}
-  finally{setQuoting(false);}
- }
+ useEffect(()=>{
+  setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setQuoting(false);setScenarioBusy(false);
+  if(view!=='tratamento'||!selected||!ord||!activeOrder||!modeAllowed||paymentDone)return;
+  if(live?!canQuote:(mode==='parcial'&&!partialValid)||(mode==='capitalizar'&&!capitalPeriod))return;
+  const ctrl=new AbortController();
+  setMessage('');
+  if(live)setQuoting(true);else setScenarioBusy(true);
+  const endpoint=live?(renewing?'simular-renovacao':'simular-cobranca'):'simular-cenario';
+  const body=live?{data_pagamento:datePayment,cobrar_multa:penalty,...(renewing?{data_inicio:renewStart}:{})}:{
+   operacao:mode,
+   ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
+   ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod)}:{}),
+   ...(mode==='prorrogar_15_30'?{prazo_origem_dias:15,prazo_destino_dias:30,tratamento_juros:interestChoice||null}:{}),
+   ...(mode==='actualizar_data'?{data_pagamento:reviewDate}:{})
+  };
+  const timer=window.setTimeout(async()=>{
+   try{
+    const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(ord)+'/'+endpoint,{
+     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+     body:JSON.stringify(body),signal:ctrl.signal
+    });
+    const data=await response.json().catch(()=>({})) as {errors?:Record<string,string[]>;message?:string};
+    if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular a operação.');
+    if(!ctrl.signal.aborted){if(live)setQuote(data as unknown as Quote);else setScenarioQuote(data as unknown as ScenarioQuote);}
+   }catch(err){if(!ctrl.signal.aborted)setMessage(err instanceof Error?err.message:'Falha no cálculo.');}
+   finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
+  },400);
+  return()=>{window.clearTimeout(timer);ctrl.abort();};
+ },[selected,ord,view,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
+
+ useEffect(()=>{
+  setFinePreview(null);setFineError('');
+  if(view!=='tratamento'||!selected||!activeOrder||paymentDone||!payDateOk
+     ||!/^\d{1,3}(?:\.\d{1,4})?$/.test(fineRate)||Number(fineRate)>100
+     ||!/^\d+$/.test(fineGrace)||!/^\d+(?:\.\d{1,2})?$/.test(fineCap))return;
+  const ctrl=new AbortController();
+  const timer=window.setTimeout(async()=>{
+   try{
+    const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(ord)+'/simular-cenario',{
+     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},signal:ctrl.signal,
+     body:JSON.stringify({operacao:'mora_diaria',data_referencia:payDate,taxa_mora_diaria:fineRate,carencia_dias:Number(fineGrace),tecto_mora:fineCap})
+    });
+    const data=await response.json().catch(()=>({})) as ScenarioQuote&{errors?:Record<string,string[]>;message?:string};
+    if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular a mora.');
+    if(!ctrl.signal.aborted)setFinePreview(data);
+   }catch(err){if(!ctrl.signal.aborted)setFineError(err instanceof Error?err.message:'Falha no cálculo da mora.');}
+  },400);
+  return()=>{window.clearTimeout(timer);ctrl.abort();};
+ },[selected,ord,view,activeOrder,paymentDone,payDate,payDateOk,fineRate,fineGrace,fineCap,token,refresh]);
 
  return <section className={'cis-collections'+(embeddedContract?' cis-collections-embedded':'')}>
   {!embeddedContract&&<div className="cis-collections-hero"><div><span className="cis-collections-kicker"><ReceiptText size={14}/> CAPTA · OPERAÇÕES DE CRÉDITO</span>
@@ -335,6 +355,16 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        </>}
       </div>
       <div className="cis-collections-panel">
+       {activeOrder&&<details className="cis-collections-technical"><summary>Mora diária</summary>
+        <div className="cis-collections-fields">
+         <label>Taxa diária (%)<input inputMode="decimal" value={fineRate} onChange={e=>setFineRate(e.target.value.replace(',','.'))}/></label>
+         <label>Carência (dias)<input inputMode="numeric" value={fineGrace} onChange={e=>setFineGrace(e.target.value)}/></label>
+         <label>Tecto acumulado (MT)<input inputMode="decimal" value={fineCap} onChange={e=>setFineCap(e.target.value.replace(',','.'))}/></label>
+        </div>
+        <p>Prévia à data de {date(payDate)}. Introduza os parâmetros da política aplicável.</p>
+        {fineError&&<p role="alert">{fineError}</p>}
+        {finePreview&&<p role="status">Mora calculada: <strong>{fmt(String(finePreview.mora))}</strong> · {String(finePreview.dias_sujeitos_a_mora)} dia(s) sujeitos a mora.</p>}
+       </details>}
        <div className="cis-collections-sectionhead"><div><h3>2. Qual é a natureza desta operação?</h3><p>O tratamento depende primeiro de saber se houve recebimento efectivo.</p></div></div>
        <div className="cis-collections-nature" role="group" aria-label="Natureza do tratamento">
         <button type="button" aria-pressed={flowReceived} className={flowReceived?'selected':''} onClick={()=>{setPaymentNature('recebido');setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');}}>
@@ -363,11 +393,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
         {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
-       {live&&<form onSubmit={e=>void simulate(e)}>
-        <button type="submit" className="cis-collections-primary" disabled={!canQuote||quoting}>{quoting?'A calcular…':renewing?'Simular renovação':'Simular pagamento integral'} <Calculator size={16}/></button>
-       </form>}
+       {(quoting||scenarioBusy)&&<p role="status">A calcular valores…</p>}
        {modeLocked&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span><strong>Operação não activada.</strong> O cenário foi identificado no VBA. O CAPTA pode apresentar uma prévia informativa, mas nenhuma alteração financeira será gravada.</span></div>}
-       {modeLocked&&<form onSubmit={e=>void simulateScenario(e)}><button className="cis-collections-primary" type="submit" disabled={scenarioBusy||!activeOrder||mode==='parcial'&&!partialValid||mode==='capitalizar'&&!capitalPeriod}>{scenarioBusy?'A consultar regras…':'Simular cenário sem gravar'} <Calculator size={16}/></button></form>}
        {scenarioQuote&&modeLocked&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><ShieldCheck size={18}/><strong>Prévia informativa do servidor</strong></div><dl>{(['capital_historico','juros_historicos','valor_pago','juros_cobertos','amortizacao','diferenca_aritmetica','capital','juros_actual','juros_novo','prestacao_nova','capital_anterior','juros_anteriores','capital_novo','taxa','periodo_referencia','faixa','juros_novos','data_revisao','dias_atraso','estado_proposto','prestacoes_em_atraso','prestacoes_nao_liquidadas','elegivel_para_analise','prazo_origem_dias','prazo_destino_dias','taxa_destino'] as const).filter(key=>scenarioQuote[key]!==undefined).map(key=><div key={key}><dt>{({'capital_historico':'Capital histórico','juros_historicos':'Juros históricos','valor_pago':'Valor parcial','juros_cobertos':'Juros cobertos','amortizacao':'Amortização indicativa','diferenca_aritmetica':'Diferença aritmética','capital':'Capital','juros_actual':'Juros actuais','juros_novo':'Juros revistos','prestacao_nova':'Prestação indicativa','capital_anterior':'Capital anterior','juros_anteriores':'Juros anteriores','capital_novo':'Novo capital indicativo','taxa':'Taxa (%)','periodo_referencia':'Período (dias)','faixa':'Faixa de capital','juros_novos':'Juros novos','data_revisao':'Data revista','dias_atraso':'Dias em atraso','estado_proposto':'Estado proposto','prestacoes_em_atraso':'Prestações em atraso','prestacoes_nao_liquidadas':'Prestações não liquidadas','elegivel_para_analise':'Elegível para análise','prazo_origem_dias':'Prazo anterior (dias)','prazo_destino_dias':'Novo prazo (dias)','taxa_destino':'Taxa prevista na faixa 30 dias (%)'} as Record<string,string>)[key]}</dt><dd>{Array.isArray(scenarioQuote[key])?(scenarioQuote[key] as unknown[]).join(' – '):typeof scenarioQuote[key]==='boolean'?(scenarioQuote[key]?'Sim':'Não'):String(scenarioQuote[key])}</dd></div>)}</dl><div className="cis-collections-planned"><Info size={16}/><span>{scenarioQuote.aviso}</span></div></div>}
        {mode==='parcial'&&paymentAmount&&<div className="cis-collections-breakdown">
         <h4>Verificação indicativa do pagamento parcial</h4>
@@ -378,6 +405,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {mode==='renovar_juros'&&<div className="cis-collections-planned"><Info size={17}/><span>Na rotina ActualizarFinanceiroCobranca, renovar juros preserva o capital e acrescenta mais um período de juros. Não é um pagamento nem deve criar entrada no Extracto.</span></div>}
        {mode==='capitalizar'&&<div className="cis-collections-planned"><Info size={17}/><span>Capitalização exige recalcular a taxa e o intervalo aplicável a partir das faixas da Table4/Definições. Nunca aplicar taxa presumida nem alterar capital sem validação.</span></div>}
        {mode==='remanescente'&&<div className="cis-collections-planned"><Info size={17}/><span>Liquidar o remanescente exige verificar prestações em atraso, montante realmente devido e evidência de recebimento. O botão VBA não é suficiente para autorizar a operação.</span></div>}
+       {mode==='prorrogar_15_30'&&<label>Tratamento dos juros<select value={interestChoice} onChange={e=>{setInterestChoice(e.target.value);setScenarioQuote(null);}}><option value="">Escolher tratamento</option><option value="manter">Manter juros actuais</option><option value="recalcular">Recalcular à taxa de 30 dias</option></select></label>}
+       {mode==='prorrogar_15_30'&&scenarioQuote&&<p>Novo vencimento: {date(String(scenarioQuote.novo_vencimento??''))}{scenarioQuote.resultado_escolhido!=null&&' · Valor a pagar: '+fmt((scenarioQuote.resultado_escolhido as {valor_a_pagar:string}).valor_a_pagar)}</p>}
        {mode==='prorrogar_15_30'&&<div className="cis-collections-planned"><CalendarDays size={17}/><span>Prazo actual: 15 dias. Prazo pretendido: 30 dias. A mudança exige nova data de vencimento e taxa de referência de 30 dias, sujeitas a revisão. Esta prévia não altera a prestação nem cria recebimento.</span></div>}
        {mode==='renovar_credito'&&<div className="cis-collections-planned"><Info size={17}/><span>Novo crédito com condições diferentes exige novo contrato. Para manter as mesmas condições, use «Renovar empréstimo» em «Houve pagamento».</span></div>}
        {renewing&&<div className="cis-collections-planned"><Info size={17}/><span>Os juros{penalty?' e a multa':''} entram na conta escolhida. A prestação actual fica «Renovado» e o histórico guarda a fotografia antes/depois. Sem limite de renovações.</span></div>}
@@ -390,7 +419,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {!quote.registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real ainda não activado neste servidor. A prévia está correcta, mas o pagamento não pode ser gravado.</span></div>}</div>}
        </>}
        {flowReceived&&live&&quote&&<label className="cis-collections-check"><input type="checkbox" checked={confirmReceipt} onChange={e=>setConfirmReceipt(e.target.checked)}/> Confirmo que recebi {fmt(quote.total)} na conta {activeAccount?activeAccount.code:'seleccionada'}</label>}
-       {flowReceived&&live&&<div className="cis-collections-action"><button type="button" className="cis-collections-primary" disabled={!canExecute} onClick={()=>void pay()}>{paying?'A registar…':payWait>0?'Aguarde '+payWait+' s (limite de segurança)':<><CheckCircle2 size={16}/> {renewing?'Confirmar juros e renovar':'Confirmar e registar pagamento'}</>}</button><small>{!quote?(renewing?'Simule primeiro a renovação.':'Simule primeiro o pagamento integral.'):!quote.registo_activo?'Registo real desligado no servidor: execute deploy/activate-contract-cash-flows.sh na VPS.':!activeAccount?'Seleccione a conta receptora.':!refOk?'Indique a referência do comprovativo.':!confirmReceipt?'Confirme o recebimento efectivo.':'O pagamento é gravado uma única vez: prestação, entrada no Extracto e histórico antes/depois.'}</small></div>}
+       {flowReceived&&live&&<div className="cis-collections-action"><button type="button" className="cis-collections-primary" disabled={!canExecute} onClick={()=>void pay()}>{paying?'A registar…':payWait>0?'Aguarde '+payWait+' s (limite de segurança)':<><CheckCircle2 size={16}/> {renewing?'Confirmar juros e renovar':'Confirmar e registar pagamento'}</>}</button><small>{!quote?'O cálculo aparece quando os dados da operação estiverem completos.':!quote.registo_activo?'Registo real desligado no servidor: execute deploy/activate-contract-cash-flows.sh na VPS.':!activeAccount?'Seleccione a conta receptora.':!refOk?'Indique a referência do comprovativo.':!confirmReceipt?'Confirme o recebimento efectivo.':'O pagamento é gravado uma única vez: prestação, entrada no Extracto e histórico antes/depois.'}</small></div>}
        {payError&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{payError}</div>}
        {paymentDone&&<div className="cis-cash-message success" role="status"><CheckCircle2 size={17}/>{paymentDone.notice}{paymentDone.saldo_conta_actual?' Saldo actual: '+fmt(paymentDone.saldo_conta_actual)+'.':''}{paymentDone.contrato_finalizado?' Contrato finalizado.':''}</div>}
       </div>
