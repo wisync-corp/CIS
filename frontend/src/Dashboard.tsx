@@ -4,6 +4,7 @@ import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transpare
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays} from 'lucide-react';
 import LegacyTable from './LegacyTable';
 import CashDesk from './CashDesk';
+import ExtractoDesk from './ExtractoDesk';
 import Overview from './Overview';
 import SimulatorDesk from './SimulatorDesk';
 import ConnectionSettings from './ConnectionSettings';
@@ -29,7 +30,7 @@ export default function Dashboard({token, name, role, theme, onThemeChange, onLo
    <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><img className="cis-top-logo" src={logoCompactaClaro} alt="CIS" width={92} height={30}/><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right"><span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
    <main className="cis-main">{!(active==='Clientes'&&clientProfileOpen)&&active!=='Caixa'&&active!=='Simulador'&&<><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.' :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Clientes'||active==='Caixa'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
-    {active==='Visão geral'?<Overview token={token} onNavigate={setActive}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen}/>}
+    {active==='Visão geral'?<Overview token={token} onNavigate={setActive}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Extractos'?<ExtractoDesk token={token} role={role}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen}/>}
    </main>
   </div>
  </div>;
