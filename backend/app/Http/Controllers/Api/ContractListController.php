@@ -7,6 +7,35 @@ use Illuminate\Support\Facades\DB;
 
 final class ContractListController extends Controller
 {
+    public function notices(Request $request)
+    {
+        $params = $request->validate([
+            'tipo' => ['nullable', 'in:cobranca,atraso'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $today = now('Africa/Maputo')->startOfDay();
+        $days = (int) \App\Support\CompanySettings::num('lembrete_dias_antes');
+        $due = 'Data de Cobrança';
+        $pending = DB::connection('mysql_legacy')->table('Contractos')
+            ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado'])
+            ->whereNotIn('Estado do Contrato', ['Finalizado', 'Liquidado', 'Cancelado', 'Anulado']);
+        $late = (clone $pending)->where($due, '<', $today->toDateString());
+        $upcoming = (clone $pending)->where($due, '>=', $today->toDateString())
+            ->where($due, '<', $today->copy()->addDays($days + 1)->toDateString());
+        $type = $params['tipo'] ?? 'atraso';
+        $rows = ($type === 'atraso' ? $late : $upcoming)->orderBy($due)->orderBy('Ordem')->paginate(20, [
+            'Nr do Contracto as contrato', 'Nº da Parcela as parcela', 'Nome do Cliente as mutuário',
+            'Data de Cobrança as vencimento', 'Valor a Pagar as valor',
+        ]);
+        return response()->json([
+            'atraso' => $type === 'atraso' ? $rows->total() : $late->count(),
+            'cobranca' => $type === 'cobranca' ? $rows->total() : $upcoming->count(),
+            'antecedencia' => $days,
+            'linhas' => $rows->items(),
+            'paginas' => $rows->lastPage(),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
     // O VBA original utiliza "Em Progresso" e "Finalizado" em Estado do Contrato.
     // O campo Estado da prestação NÃO pode determinar automaticamente o estado do contrato.
     private const SORT_COLUMNS = [

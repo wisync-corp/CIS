@@ -703,6 +703,23 @@ ok($err(fn()=>$cs->update(tap(Request::create('/x','PUT',['valores'=>['contrato_
 $pv=data((new \App\Http\Controllers\Api\ContractNumberingController())->show(tap(Request::create('/x','GET',['prefixo'=>'emp','digitos'=>'6']),fn($r)=>$r->setUserResolver(static fn()=>$user))));
 ok($pv['activa'] && $pv['exemplo']==='EMP-'.$y.'-000001' && array_sum(array_column($pv['resumo'],'contratos'))===$pv['total'],'pré-visualização nas Definições com outro prefixo');
 
+
+echo "== Avisos de cobrança e atrasos\n";
+\App\Support\CompanySettings::forget();
+$noticeList=new \App\Http\Controllers\Api\ContractListController();
+$noticeRequest=fn(string $kind)=>data($noticeList->notices(Request::create('/x','GET',['tipo'=>$kind])));
+$noticeBefore=$noticeRequest('cobranca');
+$noticeToday=\Carbon\CarbonImmutable::now('Africa/Maputo')->startOfDay();
+$row(['Nr do Contracto'=>'AV-HOJE','Nº'=>11001,'Data de Cobrança'=>$noticeToday->toDateString(),'Valor Pago'=>0]);
+$row(['Nr do Contracto'=>'AV-ATRASO','Nº'=>11002,'Data de Cobrança'=>$noticeToday->subDay()->toDateString(),'Valor Pago'=>0]);
+$row(['Nr do Contracto'=>'AV-FORA','Nº'=>11003,'Data de Cobrança'=>$noticeToday->addDays($noticeBefore['antecedencia']+1)->toDateString()]);
+$row(['Nr do Contracto'=>'AV-PAGO','Nº'=>11004,'Estado'=>'Pago','Data de Cobrança'=>$noticeToday->toDateString()]);
+$noticeAfter=$noticeRequest('cobranca');
+ok($noticeAfter['cobranca']===$noticeBefore['cobranca']+1 && $noticeAfter['atraso']===$noticeBefore['atraso']+1,
+    'inclui vencimento de hoje e atraso por data; exclui pago e prazo fora da antecedência');
+ok(in_array('AV-HOJE',array_column(array_map(static fn($line)=>(array)$line,$noticeAfter['linhas']),'contrato'),true),
+    'aviso de cobrança indica o contrato');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
