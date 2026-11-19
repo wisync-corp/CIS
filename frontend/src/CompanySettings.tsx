@@ -41,7 +41,7 @@ const SECTIONS:Section[]=[
   {title:'Calendário e avisos',icon:Info,fields:[
    {k:'fim_de_semana',label:'Prestações ao fim de semana',type:'select',options:[['permitir','Permitir sábados e domingos'],['adiar','Adiar para segunda-feira'],['antecipar','Antecipar para sexta-feira']]},
    {k:'modalidade_calendario',label:'Calendário das prestações',type:'select',options:[['dias_corridos','Dias corridos (15 / 30 dias)'],['mesmo_dia_mes','Mesmo dia de cada mês']]},
-   {k:'lembrete_dias_antes',label:'Lembrete antes do vencimento',type:'number',unit:'dias'},
+   {k:'lembrete_dias_antes',label:'Antecedência dos avisos de cobrança',type:'number',unit:'dias',help:'Número de dias antes do vencimento. Zero mostra só as prestações que vencem hoje.'},
    {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
  {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
