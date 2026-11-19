@@ -1,7 +1,8 @@
+import CompanyBrand from './CompanyBrand';
+import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
-import logoPrincipal from './assets/brand/cis-principal-claro.svg';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter from './MessageCenter';
 
@@ -34,6 +35,7 @@ const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
 export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void}){
+ const company=useCompanyProfile(token);
  const isAdmin=role==='administrador';
  const [mode,setMode]=useState<Mode>(preset?'clientes':isAdmin?'geral':'clientes');
  const [period,setPeriod]=useState<ExtractoPreset|null>(preset??null);
@@ -201,7 +203,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setEvidence(null)} aria-label="Fechar"><X size={16}/></button></div>
    <article className="cis-evidence">
-    <header><img src={logoPrincipal} alt="CIS" width={170} height={50}/><div><h1>{evidence.titulo}</h1><p>Emitido em {dt(evidence.emitido_em.slice(0,10))} às {evidence.emitido_em.slice(11)}{evidence.emitido_por?` por ${evidence.emitido_por}`:''}</p>
+    <header><CompanyBrand company={company}/><div><h1>{evidence.titulo}</h1><p>Emitido em {dt(evidence.emitido_em.slice(0,10))} às {evidence.emitido_em.slice(11)}{evidence.emitido_por?` por ${evidence.emitido_por}`:''}</p>
      <p>Período: {evidence.periodo.inicio||evidence.periodo.fim?`${dt(evidence.periodo.inicio)} a ${dt(evidence.periodo.fim)}`:'todo o histórico'}</p></div></header>
     <section className="cis-evidence-client"><h2>Cliente</h2><dl>
      <div><dt>Nome</dt><dd>{evidence.cliente.nome}</dd></div>
@@ -266,7 +268,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setGeralDoc(null)} aria-label="Fechar"><X size={16}/></button></div>
    <article className="cis-evidence">
-    <header><img src={logoPrincipal} alt="CIS" width={170} height={50}/><div><h1>{geralDoc.titulo}</h1><p>Emitido em {dt(geralDoc.emitido_em.slice(0,10))} às {geralDoc.emitido_em.slice(11)}{geralDoc.emitido_por?` por ${geralDoc.emitido_por}`:''}</p>
+    <header><CompanyBrand company={company}/><div><h1>{geralDoc.titulo}</h1><p>Emitido em {dt(geralDoc.emitido_em.slice(0,10))} às {geralDoc.emitido_em.slice(11)}{geralDoc.emitido_por?` por ${geralDoc.emitido_por}`:''}</p>
      <p>Período: {geralDoc.filtros.inicio||geralDoc.filtros.fim?`${dt(geralDoc.filtros.inicio)} a ${dt(geralDoc.filtros.fim)}`:'todo o histórico'}</p></div></header>
     <section className="cis-evidence-client"><h2>Filtros</h2><dl>
      <div><dt>Conta</dt><dd>{geralDoc.filtros.conta??'Todas'}</dd></div>
