@@ -1,10 +1,11 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward} from 'lucide-react';
+import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff} from 'lucide-react';
+import {onWa,waState,waSend,waStop,jobStatus,getShowPref,setShowPref} from './waBridge';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Template={id:number;name:string;body:string;updated_at:string|null};
 type Preview={contrato:string;cliente:string;contacto:string|null;telefone:string|null;situacao:string;mensagem:string};
-type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada'};
+type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada';jobId?:string};
 type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados';
 const GROUPS:{id:Group;label:string;hint:string}[]=[
  {id:'todos',label:'Todos os contactos',hint:'Um por cliente (contrato mais recente)'},
@@ -29,6 +30,9 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const [group,setGroup]=useState<Group|''>('');const [queue,setQueue]=useState<Recipient[]|null>(null);const [queueInfo,setQueueInfo]=useState('');
  const [busy,setBusy]=useState('');const [error,setError]=useState('');const [notice,setNotice]=useState('');
  const ta=useRef<HTMLTextAreaElement>(null);
+ const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
+ const wa=waState();const [show,setShow]=useState(getShowPref());
+ const [lastJob,setLastJob]=useState<string|null>(null);
  const sendMode=!!contrato;
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
 
@@ -87,6 +91,19 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   await log({contrato:preview.contrato,telefone:preview.telefone,canal,mensagem:text});
   if(canal!=='copia')setNotice('Mensagem aberta no '+(canal==='whatsapp'?'WhatsApp':'SMS')+'. Confirme o envio na aplicação.');
  }
+ function sendWeb(){
+  if(!preview?.telefone||!text.trim())return;
+  const id='c-'+preview.contrato+'-'+Date.now();setLastJob(id);setError('');
+  waSend([{id,phone:preview.telefone,text,meta:{contrato:preview.contrato,cliente:preview.cliente,modelo_id:selId||null}}],show);
+ }
+ function sendQueueWeb(){
+  if(!queue)return;const ts=Date.now();
+  const next=queue.map((r,i)=>r.telefone&&!r.estado&&!(r.jobId&&jobStatus(r.jobId)==='enviada')?{...r,jobId:'q-'+i+'-'+ts}:r);
+  setQueue(next);
+  const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:r.telefone!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:selId||null,grupo:group||null}}));
+  if(!list.length){setNotice('Não há mensagens por enviar na fila.');return;}
+  waSend(list,show);
+ }
  async function loadQueue(){
   if(!group)return;setBusy('queue');setError('');setQueue(null);
   try{const p=new URLSearchParams({grupo:group});if(editing)p.set('texto',body);else if(selId)p.set('modelo_id',String(selId));else p.set('texto',body);
@@ -100,7 +117,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   setQueue(q=>q&&q.map((x,k)=>k===i?{...x,estado:'aberta'}:x));
   await log({contrato:r.contrato,cliente_id:r.cliente_id,telefone:r.telefone,canal:'whatsapp',mensagem:r.mensagem,grupo:group||undefined});
  }
- const nextIdx=queue?queue.findIndex(r=>r.telefone&&!r.estado):-1;
+ const nextIdx=queue?queue.findIndex(r=>r.telefone&&!r.estado&&!(r.jobId&&jobStatus(r.jobId))):-1;
  const done=queue?queue.filter(r=>r.estado==='aberta').length:0;
 
  return <section className={'cis-panel cis-msg'+(sendMode?' cis-msg-send':'')}>
@@ -122,6 +139,14 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    </>}</div>
   </div>
 
+  <div className={'cis-msg-ext'+(wa.available?' on':'')}>
+   <Puzzle size={16}/>
+   {wa.available?<><span><b>Extensão CIS WhatsApp ligada</b>{wa.version?` · v${wa.version}`:''}{wa.running?` · a enviar (${wa.pendentes} na fila)`:''}{wa.aguardaLogin?' · à espera do login no WhatsApp Web':''}</span>
+    <label className="cis-msg-toggle"><input type="checkbox" checked={show} onChange={e=>{setShow(e.target.checked);setShowPref(e.target.checked);}}/>{show?<Eye size={14}/>:<EyeOff size={14}/>} Mostrar o WhatsApp Web durante o envio</label>
+    {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar envio</button>}</>
+   :<span>Para enviar automaticamente pelo WhatsApp Web, instale a extensão <b>CIS WhatsApp</b> no Chrome/Edge: <a href="/cis-whatsapp-extension.zip" download>descarregar</a> · descompacte · <code>chrome://extensions</code> → Modo de programador → «Carregar expandida» → nas opções da extensão autorize o endereço do CIS → recarregue esta página. Sem a extensão, as mensagens abrem no WhatsApp para confirmar o envio.</span>}
+  </div>
+
   <label className="cis-msg-editor">{editing?'Texto do modelo':'Texto do modelo (clique em Editar para alterar)'}
    <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} readOnly={!editing} rows={6} className={editing?'':'locked'} placeholder="Escreva a mensagem e insira campos como {Nome Completo}"/></label>
   {editing&&<div className="cis-msg-tools">
@@ -134,7 +159,8 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   {sendMode&&<div className="cis-msg-preview"><h3>Pré-visualização</h3>
    <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/>
    <div className="cis-msg-btns">
-    <button type="button" className="primary" onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><Send size={14}/> Enviar pelo WhatsApp</button>
+    {wa.available&&<button type="button" className="primary" onClick={sendWeb} disabled={!preview?.telefone||!text.trim()||(!!lastJob&&jobStatus(lastJob)==='a_enviar')}>{lastJob&&jobStatus(lastJob)==='a_enviar'?<><Loader2 size={14} className="spin"/> A enviar…</>:<><Send size={14}/> Enviar pelo WhatsApp Web</>}</button>}
+    <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><Send size={14}/> {wa.available?'Abrir no WhatsApp':'Enviar pelo WhatsApp'}</button>
     <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
     <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
     <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Cliente sem contacto registado.':''}</small>
@@ -148,14 +174,24 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    </div>
    {queue&&<>
     <div className="cis-msg-queue-head"><span>{queueInfo} · {done} aberta(s)</span>
-     <button type="button" className="primary" disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button></div>
+     <div className="cis-msg-btns">
+      {wa.available&&<button type="button" className="primary" disabled={wa.running} onClick={sendQueueWeb}><Send size={14}/> {wa.running?`A enviar… (${wa.pendentes} na fila)`:'Enviar a fila pelo WhatsApp Web'}</button>}
+      {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar</button>}
+      <button type="button" className={wa.available?'':'primary'} disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button>
+     </div></div>
     <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
      <tbody>{queue.map((r,i)=><tr key={r.contrato+i} className={r.estado==='aberta'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{r.contacto??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td>
-      <td>{!r.telefone?<small>Sem contacto</small>:r.estado==='aberta'?<span className="ok"><CheckCircle2 size={14}/> Aberta</span>:<button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>}</td></tr>)}</tbody></table></div>
+      <td>{(()=>{const js=r.jobId?jobStatus(r.jobId):undefined;
+       if(!r.telefone)return <small>Sem contacto</small>;
+       if(js==='enviada')return <span className="ok"><CheckCircle2 size={14}/> Enviada</span>;
+       if(js==='a_enviar')return <span className="wait"><Loader2 size={14} className="spin"/> Na fila</span>;
+       if(js==='falhada')return <span className="fail"><AlertCircle size={14}/> Falhou</span>;
+       if(r.estado==='aberta')return <span className="ok"><CheckCircle2 size={14}/> Aberta</span>;
+       return <button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>;})()}</td></tr>)}</tbody></table></div>
    </>}
   </div>}
 
-  <p className="cis-msg-note"><ImageIcon size={14}/> O CIS prepara cada mensagem e abre-a no WhatsApp do seu dispositivo; o envio é confirmado por si. Para mandar imagem, anexe-a na conversa depois de abrir. Cada mensagem aberta fica registada no CIS.</p>
+  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'O CIS prepara cada mensagem e abre-a no WhatsApp do seu dispositivo; o envio é confirmado por si.'} Imagens não são enviadas automaticamente. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{error}</div>}
   {notice&&!error&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
  </section>;

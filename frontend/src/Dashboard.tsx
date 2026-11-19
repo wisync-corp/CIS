@@ -6,6 +6,8 @@ import LegacyTable from './LegacyTable';
 import CashDesk from './CashDesk';
 import ExtractoDesk from './ExtractoDesk';
 import MessageCenter from './MessageCenter';
+import Toaster from './Toaster';
+import {setWaToken} from './waBridge';
 import Overview,{type ExtractoPreset} from './Overview';
 import SimulatorDesk from './SimulatorDesk';
 import ConnectionSettings from './ConnectionSettings';
@@ -19,6 +21,7 @@ const nav=[
 ];
 export default function Dashboard({token, name, role, theme, onThemeChange, onLogout}:{token:string;name:string;role:string;theme:ThemeId;onThemeChange:(value:ThemeId)=>void;onLogout:()=>void}){
  const [active,setActive]=useState('Visão geral'),[open,setOpen]=useState(false);
+ setWaToken(token);
  const [clientProfileOpen,setClientProfileOpen]=useState(false);
  const [extractoPreset,setExtractoPreset]=useState<(ExtractoPreset&{key:number})|null>(null);
  return <div className="cis-layout">
@@ -35,5 +38,6 @@ export default function Dashboard({token, name, role, theme, onThemeChange, onLo
     {active==='Visão geral'?<Overview token={token} onNavigate={setActive} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter token={token}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen}/>}
    </main>
   </div>
+  <Toaster/>
  </div>;
 }

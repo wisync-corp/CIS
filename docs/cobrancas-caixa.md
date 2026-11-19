@@ -150,3 +150,40 @@ Acções:
   - Pendentes e Atrasados: por contrato, pela data de vencimento.
 - **Imagem:** o WhatsApp não aceita anexos por ligação; anexa-se na conversa depois de a abrir.
 - **A partir do Extracto:** painel Informação → «Mensagem ao cliente» abre o centro de mensagens para esse contrato.
+
+### Envio automático pelo WhatsApp Web (extensão «CIS WhatsApp»)
+
+Código em `extension/cis-whatsapp/`. O pacote para instalar é `frontend/public/cis-whatsapp-extension.zip`, descarregável no CIS em Mensagens; gera-se com `bash extension/build.sh`.
+
+**Instalação** (Chrome/Edge do operador):
+1. Descompactar o ficheiro.
+2. Abrir `chrome://extensions` e ligar o «Modo de programador».
+3. «Carregar expandida» e escolher a pasta.
+4. Nas opções da extensão, escrever o endereço do CIS e «Autorizar».
+5. Recarregar o CIS.
+
+**Fluxo**: Mensagens → «Enviar pelo WhatsApp Web» (um cliente) ou «Enviar a fila pelo WhatsApp Web».
+1. A extensão usa o separador do WhatsApp Web, se já estiver aberto, ou abre-o:
+   - visível, com «Mostrar o WhatsApp Web durante o envio» ligado;
+   - numa janela minimizada, com a opção desligada (é o padrão).
+2. Sem sessão iniciada:
+   - mostra o separador para ler o código QR;
+   - aparece o aviso «WhatsApp Web sem sessão…»;
+   - espera até 10 minutos e continua depois do login;
+   - se o operador escolheu esconder, volta a minimizar.
+3. Para cada mensagem:
+   - abre `web.whatsapp.com/send?phone=…&text=…`;
+   - espera pela caixa de escrita;
+   - carrega em Enviar;
+   - confirma a mensagem na conversa, sem o relógio de pendente.
+
+   Número inválido → falhada, e passa ao seguinte.
+4. O intervalo entre mensagens é de 8 a 18 segundos, variável.
+5. Avisos no canto superior direito: «Mensagem enviada para …», «Não enviada para …: motivo». Continuam se o operador mudar de ecrã.
+6. Registo em `cis_message_log` com `channel=whatsapp_web` e `status` enviada/falhada, mais o motivo. Instala-se com `install-message-center.sh` (migração 000100).
+
+**Limites**:
+- Imagens não são enviadas.
+- O envio só corre com o navegador aberto.
+- Os selectores do WhatsApp Web estão todos em `wa.js` (`SEL`); se o WhatsApp mudar a página, ajustam-se aí.
+- O WhatsApp não autoriza envio automatizado; o intervalo reduz o risco de bloqueio, mas não o elimina.
