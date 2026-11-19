@@ -16,6 +16,7 @@ migration=backend/database/migrations/2026_11_19_000110_create_cis_company_setti
 param=backend/database/migrations/2026_11_19_000120_parametrizacao_editavel.php
 numbers=backend/database/migrations/2026_11_19_000140_create_cis_contract_numbers.php
 receipts=backend/database/migrations/2026_11_19_000150_create_cis_receipts.php
+templates=backend/database/migrations/2026_11_19_000160_create_cis_contract_templates.php
 defaults=backend/database/migrations/2026_11_19_000130_seed_default_movement_types.php
 echo '=== CIS | INSTALAR CONFIGURAÇÕES DA EMPRESA ==='
 [[ "$(sql 'SELECT DATABASE();')" == cis ]] || { echo 'BLOQUEADO: base inesperada.' >&2; exit 1; }
@@ -31,6 +32,8 @@ done
 # Numeração anual: correspondência de números de contrato e recibos (REC-ANO-SEQUÊNCIA).
 "${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${numbers#backend/}" --force
 "${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${receipts#backend/}" --force
+# Modelos de contrato (instala o modelo de empréstimo só se ainda não houver modelos).
+"${APP[@]}" run --rm --no-deps api-preview php artisan migrate --path="${templates#backend/}" --force
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_company_settings';")" == 1 ]] || {
   echo 'BLOQUEADO: tabela não confirmada.' >&2; exit 1; }
 [[ "$(sql "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_tipos_movimento' AND COLUMN_NAME IN ('grupo','activo','protegido');")" == 3 ]] || {

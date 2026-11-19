@@ -1,8 +1,9 @@
 import {useEffect,useState} from 'react';
-import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA} from 'lucide-react';
+import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature} from 'lucide-react';
 import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
 import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
 import {PriceTable,MovementTypes} from './Parametrizacao';
+import ContractTemplates from './ContractTemplates';
 import {GLOSSARIO} from './glossario';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -22,7 +23,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
  },[token,role,reload]);
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
   {grupo:'Empresa',items:COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))},
-  {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight}]},
+  {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight},{id:'modelos',title:'Modelos de contrato',icon:FileSignature}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
  const nav=admin?NAV:[{grupo:'Sistema',items:NAV[2].items.filter(i=>i.id!=='ligacao')}];
  const [gq,setGq]=useState('');
@@ -34,6 +35,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
   {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
   {admin&&tab==='precos'&&<PriceTable token={token}/>}
   {admin&&tab==='movimentos'&&<MovementTypes token={token}/>}
+  {admin&&tab==='modelos'&&<ContractTemplates token={token}/>}
   {tab==='aparencia'&&<section className="cis-panel cis-settings-appearance" aria-labelledby="appearance-title">
    <div className="cis-panel-head"><div><h2 id="appearance-title"><Palette size={19} style={{verticalAlign:'middle',marginRight:9}}/>Aparência do CIS</h2><p>Escolha a identidade visual do sistema. A alteração é imediata e não afecta os dados financeiros.</p></div></div>
    <div className="cis-theme-grid" role="group" aria-label="Temas disponíveis">

@@ -77,6 +77,11 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('parametrizacao/precos',[\App\Http\Controllers\Api\ParametrizacaoController::class,'guardarPrecos'])->middleware('throttle:20,1');
         Route::post('parametrizacao/tipos-movimento',[\App\Http\Controllers\Api\ParametrizacaoController::class,'criarMovimento'])->middleware('throttle:20,1');
         Route::put('parametrizacao/tipos-movimento/{id}',[\App\Http\Controllers\Api\ParametrizacaoController::class,'actualizarMovimento'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::get('contratos/modelos',[\App\Http\Controllers\Api\ContractTemplateController::class,'index'])->middleware('throttle:60,1');
+        Route::post('contratos/modelos',[\App\Http\Controllers\Api\ContractTemplateController::class,'store'])->middleware('throttle:20,1');
+        Route::put('contratos/modelos/{id}',[\App\Http\Controllers\Api\ContractTemplateController::class,'update'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::delete('contratos/modelos/{id}',[\App\Http\Controllers\Api\ContractTemplateController::class,'destroy'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::get('contractos/{numero}/variaveis-contrato',[\App\Http\Controllers\Api\ContractTemplateController::class,'values'])->middleware('throttle:60,1');
         Route::get('contratos/numeracao',[\App\Http\Controllers\Api\ContractNumberingController::class,'show'])->middleware('throttle:30,1');
         Route::get('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'show'])->middleware('throttle:60,1');
         Route::put('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'update'])->middleware('throttle:20,1');

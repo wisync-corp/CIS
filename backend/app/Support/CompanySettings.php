@@ -29,6 +29,8 @@ final class CompanySettings
         'email'                 => ['perfil','email',null,''],
         'proprietario'          => ['perfil','texto',120,''],
         'logotipo'              => ['perfil','imagem',null,''],
+        'conta_reembolsos'      => ['perfil','texto',160,''],
+        'foro_judicial'         => ['perfil','texto',120,''],
         // Cobrança e multa
         'limite_mensal_dias_mora' => ['cobranca','inteiro',[0,31],'30'],
         'tolerancia_dias'         => ['cobranca','inteiro',[0,60],'0'],
