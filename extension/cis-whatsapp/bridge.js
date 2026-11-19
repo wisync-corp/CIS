@@ -2,7 +2,10 @@
 // Página CIS  --window.postMessage({source:'cis-app'})-->  ponte  --porta-->  extensão
 // extensão    --porta-->  ponte  --window.postMessage({source:'cis-wa-ext'})-->  página CIS
 (() => {
-  if (window.__cisBridge) return; window.__cisBridge = true;
+  if (window.__cisBridge) return;
+  // Só no CIS: a página tem de se identificar (evita que outro site autorizado use a extensão).
+  if (!document.querySelector('meta[name="cis-app"]')) return;
+  window.__cisBridge = true;
   let port = null;
   const toPage = msg => window.postMessage({...msg, source: 'cis-wa-ext'}, location.origin);
   function connect() {

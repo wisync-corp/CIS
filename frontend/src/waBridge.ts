@@ -71,6 +71,8 @@ export function waSend(list:WaJob[],show:boolean){
  if(!state.running)pushToast('info',list.length>1?`A enviar ${list.length} mensagens pelo WhatsApp Web…`:'A enviar pelo WhatsApp Web…');
 }
 export function waStop(){post({type:'stop'});}
+/** Pede à extensão que se anuncie (botão «Verificar novamente»). */
+export function waCheck(){post({type:'hello'});}
 
 export function getShowPref(){try{return localStorage.getItem('cis_wa_show')==='1';}catch{return false;}}
 export function setShowPref(v:boolean){try{localStorage.setItem('cis_wa_show',v?'1':'0');}catch{/* sem armazenamento */}}

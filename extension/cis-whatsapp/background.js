@@ -140,21 +140,30 @@ chrome.runtime.onConnect.addListener(port => {
   port.postMessage(status());
 });
 
-// Repor a ponte do CIS depois de reiniciar o navegador/extensão.
-async function registerBridge() {
-  const {cisOrigin} = await chrome.storage.local.get('cisOrigin');
-  if (!cisOrigin) return;
-  const u = new URL(cisOrigin);
-  const pattern = u.protocol + '//' + u.hostname + '/*'; // padrões de permissão não levam porta
-  const has = await chrome.permissions.contains({origins: [pattern]});
-  if (!has) return;
+// Ponte com o CIS: activa em todos os endereços específicos autorizados (opções da extensão OU
+// menu «Permitir neste site» do navegador). Nunca em padrões genéricos (todos os sites) nem no
+// WhatsApp. A ponte só actua se a página se identificar como CIS (<meta name="cis-app">).
+const isCisPattern = o => o && !/whatsapp\.com/.test(o) && !/^\*:|:\/\/\*\/|<all_urls>|:\/\/\*\./.test(o) && /^https?:\/\/[^/*]+\/\*$/.test(o);
+
+async function syncBridges() {
+  const {origins = []} = await chrome.permissions.getAll();
+  const patterns = [...new Set(origins.filter(isCisPattern))];
   const existing = await chrome.scripting.getRegisteredContentScripts({ids: ['cis-bridge']});
   if (existing.length) await chrome.scripting.unregisterContentScripts({ids: ['cis-bridge']});
-  await chrome.scripting.registerContentScripts([{id: 'cis-bridge', matches: [pattern], js: ['bridge.js'], runAt: 'document_start', persistAcrossSessions: true}]);
+  if (patterns.length) {
+    await chrome.scripting.registerContentScripts([{id: 'cis-bridge', matches: patterns, js: ['bridge.js'], runAt: 'document_idle', persistAcrossSessions: true}]);
+    // Liga já os separadores abertos desses endereços (a ponte ignora páginas que não são o CIS).
+    const tabs = await chrome.tabs.query({url: patterns});
+    for (const t of tabs) await chrome.scripting.executeScript({target: {tabId: t.id}, files: ['bridge.js']}).catch(() => {});
+  }
+  await chrome.storage.local.set({cisPatterns: patterns});
+  return patterns;
 }
-chrome.runtime.onInstalled.addListener(registerBridge);
-chrome.runtime.onStartup.addListener(registerBridge);
+chrome.runtime.onInstalled.addListener(() => { syncBridges(); });
+chrome.runtime.onStartup.addListener(() => { syncBridges(); });
+chrome.permissions.onAdded.addListener(() => { syncBridges(); });
+chrome.permissions.onRemoved.addListener(() => { syncBridges(); });
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
-  if (msg?.type === 'cis-register') { registerBridge().then(() => reply({ok: true}), e => reply({ok: false, error: String(e)})); return true; }
+  if (msg?.type === 'cis-register') { syncBridges().then(p => reply({ok: true, patterns: p}), e => reply({ok: false, error: String(e)})); return true; }
   return false;
 });
