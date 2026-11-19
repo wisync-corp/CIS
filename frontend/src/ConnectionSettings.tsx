@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette} from 'lucide-react';
 import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
 import FinancialReferences from './FinancialReferences';
+import CompanySettings from './CompanySettings';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
@@ -16,6 +17,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
  .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});return ()=>ctrl.abort();
  },[token,role,reload]);
  return <div className="cis-settings-page">
+  {role==='administrador'&&<CompanySettings token={token}/>}
   <section className="cis-panel cis-settings-appearance" aria-labelledby="appearance-title">
    <div className="cis-panel-head"><div><h2 id="appearance-title"><Palette size={19} style={{verticalAlign:'middle',marginRight:9}}/>Aparência do CIS</h2><p>Escolha a identidade visual do sistema. A alteração é imediata e não afecta os dados financeiros.</p></div></div>
    <div className="cis-theme-grid" role="group" aria-label="Temas disponíveis">

@@ -71,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('extractos/contratos',[\App\Http\Controllers\Api\ExtractoController::class,'contratos'])->middleware('throttle:60,1');
         Route::get('extractos/geral-evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'geralEvidencia'])->middleware('throttle:20,1');
         Route::get('extractos/informacao',[\App\Http\Controllers\Api\ExtractoController::class,'informacao'])->middleware('throttle:60,1');
+        Route::get('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'show'])->middleware('throttle:60,1');
+        Route::put('configuracoes',[\App\Http\Controllers\Api\CompanySettingsController::class,'update'])->middleware('throttle:20,1');
         Route::get('relatorios',[\App\Http\Controllers\Api\ReportController::class,'index'])->middleware('throttle:60,1');
         Route::get('relatorios/{id}',[\App\Http\Controllers\Api\ReportController::class,'show'])->where('id','[a-z]+')->middleware('throttle:30,1');
         Route::get('mensagens/modelos',[\App\Http\Controllers\Api\MessageCenterController::class,'modelos'])->middleware('throttle:60,1');

@@ -242,7 +242,7 @@ ok($hh['instalado']===true && count($hh['data'])===1 && $hh['data'][0]['antes'][
 
 
 echo "== Renovação do empréstimo (mesmo contrato, juros pagos)\n";
-$err=function(callable $f){ try { $f(); return null; } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { return $e->getStatusCode(); }
+$err=function(callable $f){ try { $f(); return null; } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { return $e->getStatusCode(); } catch (\Illuminate\Validation\ValidationException $e) { return 422; }
     catch (\Illuminate\Validation\ValidationException $e) { return 422; } };
 $oldDue=now($tz)->subDays(5)->toDateString();
 $ren=$row(['Nr do Contracto'=>'C-0110','Nº'=>110,'Data de Inicio'=>now($tz)->subDays(35)->toDateString(),
@@ -481,6 +481,28 @@ if ($late1) {
 }
 
 
+echo "== Configurações da empresa\n";
+$db->statement('DROP TABLE IF EXISTS cis_company_settings');
+\App\Support\CompanySettings::forget();
+ok(\App\Support\CompanySettings::load(true)['instalado']===false && \App\Support\CompanySettings::get('score_minimo')==='60','sem tabela: valores por defeito, sem erro');
+(require __DIR__.'/../database/migrations/2026_11_19_000110_create_cis_company_settings.php')->up();
+$csc=new \App\Http\Controllers\Api\CompanySettingsController();
+$sreq=fn(string $m,array $q,$u=null)=>tap(Request::create('/x',$m,$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+$cs0=data($csc->show($sreq('GET',[])));
+ok($cs0['instalado']===true && $cs0['valores']['fim_de_semana']==='permitir' && count($cs0['provincias'])===11,'configurações: leitura do administrador');
+ok($err(fn()=>$csc->update($sreq('PUT',['valores'=>['nome_empresa'=>'X']],$gestor)))===403,'configurações: só o administrador grava');
+ok($err(fn()=>$csc->update($sreq('PUT',['valores'=>['nuit'=>'12345678']])))===422
+    && $err(fn()=>$csc->update($sreq('PUT',['valores'=>['score_risco_medio'=>'90','score_baixo_risco'=>'80']])))===422
+    && $err(fn()=>$csc->update($sreq('PUT',['valores'=>['logotipo'=>'data:image/png;base64,AAAA']])))===422
+    && $err(fn()=>$csc->update($sreq('PUT',['valores'=>['campo_x'=>'1']])))===422,'configurações: NUIT, limiares, logótipo e campos validados');
+$png='data:image/png;base64,'.base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+$cs1=data($csc->update($sreq('PUT',['valores'=>['nome_empresa'=>'CAPTA Microcrédito','nuit'=>'400123456','provincia'=>'Maputo Cidade','logotipo'=>$png,
+    'penalidades_automaticas'=>true,'taxa_diaria_mora'=>'2,5','capital_inicial'=>'1 500 000,5','incentivo_cliente_novo'=>'100','incentivo_taxa_juros'=>'10']])));
+ok($cs1['valores']['nuit']==='400123456' && $cs1['valores']['penalidades_automaticas']==='1' && $cs1['valores']['taxa_diaria_mora']==='2.5'
+    && $cs1['valores']['capital_inicial']==='1500000.50' && $cs1['actualizado_por']!==null,'configurações: gravadas e normalizadas');
+$pg=data($csc->show($sreq('GET',[],$gestor)));
+ok(!isset($pg['valores']) && $pg['perfil']['nome_empresa']==='CAPTA Microcrédito' && str_starts_with($pg['perfil']['logotipo'],'data:image/png'),'configurações: outros utilizadores só vêem o perfil (documentos)');
+
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
@@ -517,6 +539,8 @@ $sumBands=array_sum(array_map(fn($l)=>(int)$l[2],$at['seccoes'][0]['linhas']));
 ok(count($at['seccoes'][1]['linhas'])===$expAt && $sumBands===$expAt,'atrasos: contratos em atraso e faixas coerentes');
 $op=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'operadores'));
 ok(abs(array_sum(array_map(fn($l)=>(float)$l[2],$op['seccoes'][0]['linhas']))-(float)$disbV)<0.01,'operadores: soma dos desembolsos = relatório de actividade');
+$expInc=0.0;foreach ($op['seccoes'][0]['linhas'] as $l) $expInc+=(int)$l[9]*100+(float)$l[4]*0.10;
+ok(abs((float)str_replace(' MT','',$op['resumo'][4][1])-round($expInc,2))<0.05 && array_sum(array_map(fn($l)=>(int)$l[9],$op['seccoes'][0]['linhas']))<=(int)$disbN,'operadores: incentivo = clientes novos × 100 + 10% dos juros (configurações)');
 $ev=data($rc->show($rq(['ano'=>now($tz)->year]),'evolucao'));
 $yStart=now($tz)->startOfYear()->toDateString();
 $expY=0.0;foreach ($db->table('Contractos')->get()->groupBy('Nr do Contracto') as $c) { $d=substr((string)$c->min('Data de Inicio'),0,10); if ($d>=$yStart && $d<=$tod) $expY+=(float)$c->max('Quantia Creditada'); }
@@ -529,6 +553,11 @@ ok(abs(array_sum(array_map(fn($l)=>(float)$l[2],$cx['seccoes'][0]['linhas']))-$e
 $nc=data($rc->show($rq([]),'novocredito'));
 $openClients=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->pluck('Nome do Cliente')->unique()->all();
 ok(collect($nc['seccoes'][0]['linhas'])->every(fn($l)=>!in_array($l[0],$openClients,true)),'novo crédito: só clientes sem contratos em aberto');
+ok(collect($nc['seccoes'][0]['linhas'])->every(fn($l)=>($l[8]==='Baixo risco')===((int)$l[7]>=80) && ($l[9]==='Sim')===((int)$l[7]>=60)),'novo crédito: score e classificação pelos limiares configurados');
+data($csc->update($sreq('PUT',['valores'=>['max_creditos_activos'=>'3','max_creditos_atraso'=>'5']])));\App\Support\CompanySettings::forget();
+$nc3=data($rc->show($rq([]),'novocredito'));
+ok(count($nc3['seccoes'][0]['linhas'])>=count($nc['seccoes'][0]['linhas']) && collect($nc3['seccoes'][0]['linhas'])->every(fn($l)=>(int)$l[10]<3),'novo crédito: máximo de créditos activos configurável');
+data($csc->update($sreq('PUT',['valores'=>['max_creditos_activos'=>'1','max_creditos_atraso'=>'0']])));\App\Support\CompanySettings::forget();
 ok($err(fn()=>$rc->show($rq([],$gestor),'actividade'))===403 && $err(fn()=>$rc->show($rq(['inicio'=>$tod,'fim'=>$mStart==$tod?'2000-01-01':$mStart]),'actividade'))===422,'relatórios: só administrador; período inválido recusado');
 
 echo "== Prévia da prorrogação de 15 para 30 dias\n";

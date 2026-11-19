@@ -1,7 +1,8 @@
+import CompanyBrand from './CompanyBrand';
+import {useCompanyProfile,type CompanyProfile} from './company';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {BarChart3,FileText,Download,Printer,X,AlertCircle,ShieldCheck,Scale,Landmark,UserCheck,Loader2,CalendarClock,Hourglass,Users,TrendingUp,Wallet,Repeat,RefreshCw,Search,ChevronDown,ChevronUp,Info} from 'lucide-react';
-import logoPrincipal from './assets/brand/cis-principal-claro.svg';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Def={id:string;grupo?:string;titulo:string;periodo:'intervalo'|'futuro'|'data'|'ano'|'nenhum';descricao:string;base_legal:string};
@@ -18,8 +19,8 @@ const money={format:(n:number)=>moneyNF.format(n).replace(/^(-?\d{1,3})(\d{3}),/
 const compact=new Intl.NumberFormat('pt-MZ',{notation:'compact',maximumFractionDigits:1});
 const isMoneyCol=(c:string)=>/\(MT\)/.test(c);
 const isPctCol=(c:string)=>/^%/.test(c)||/\(%\)/.test(c);
-const isNumCol=(c:string)=>isMoneyCol(c)||isPctCol(c)||/^(Contratos|Prestações|Dias|Movimentos|Clientes|Pagas)/.test(c);
-const STATUS_COLS=['Situação','Classificação','Faixa','Fora do regime simplificado','Identificação','Contrato activo'];
+const isNumCol=(c:string)=>isMoneyCol(c)||isPctCol(c)||/^(Contratos|Prestações|Dias|Movimentos|Clientes|Pagas|Score|Renovações|Créditos activos)/.test(c);
+const STATUS_COLS=['Situação','Classificação','Faixa','Fora do regime simplificado','Identificação','Contrato activo','Aprovável'];
 const num=(v:string)=>{if(v==='')return null;const n=Number(v);return isNaN(n)?null:n;};
 const fmtCell=(c:string,v:string,row:string[])=>{
  if(isMoneyCol(c)&&num(v)!==null)return money.format(Number(v));
@@ -30,7 +31,7 @@ const fmtSummary=(v:string)=>{const m=v.match(/^(-?\d+(?:\.\d+)?) MT$/);return m
 const tone=(label:string)=>/risco|atraso|vencid|em falta|sem bi|sem nuit|sem contacto|incumprimento|atenção|fora do regime/i.test(label)?'bad'
  :/recebid|juros|multas|excelente|entradas|elegíveis/i.test(label)?'good'
  :/desembols|carteira|valor a cobrar|saldo|movimento/i.test(label)?'main':'neutral';
-const statusTone=(v:string)=>/incumprimento|atenção|em atraso|^sim$|em falta|mais de 90|61 – 90|31 – 60/i.test(v)?'bad':/^bom$|8 – 30|1 – 7/i.test(v)?'warn':/regular|liquidado|excelente|completa|^não$/i.test(v)?'good':'neutral';
+const statusTone=(v:string,c='')=>c==='Aprovável'?(v==='Sim'?'good':'bad'):/alto risco|incumprimento|atenção|em atraso|^sim$|em falta|mais de 90|61 – 90|31 – 60/i.test(v)?'bad':/^bom$|risco médio|8 – 30|1 – 7/i.test(v)?'warn':/regular|baixo risco|liquidado|excelente|completa|^não$/i.test(v)?'good':'neutral';
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 function startOf(kind:string){const t=today();const [y,m]=t.split('-').map(Number);
  if(kind==='mes_anterior'){const py=m===1?y-1:y,pm=m===1?12:m-1;const last=new Date(Date.UTC(py,pm,0)).getUTCDate();return [`${py}-${String(pm).padStart(2,'0')}-01`,`${py}-${String(pm).padStart(2,'0')}-${last}`];}
@@ -79,7 +80,7 @@ function SectionView({s,open}:{s:Section;open:boolean}){
      <button type="button" onClick={()=>setSort(p=>p?.i===i?{i,dir:p.dir===1?-1:1}:{i,dir:isNumCol(c)?-1:1})} title="Ordenar">{c}{sort?.i===i?(sort.dir===1?<ChevronUp size={12}/>:<ChevronDown size={12}/>):null}</button></th>)}</tr></thead>
     <tbody>{body.map((l,ri)=><tr key={ri}>{l.map((v,j)=>{const c=s.colunas[j];
      if(isPctCol(c)&&num(v)!==null)return <td key={j} className="num"><span className="cis-rep-pct"><i style={{width:Math.min(100,Number(v))+'%'}} className={s.tom==='risco'||/> 30|risco/.test(c)?'bad':''}/><b>{v}%</b></span></td>;
-     if(STATUS_COLS.includes(c)&&v)return <td key={j}><span className={'cis-rep-pill '+statusTone(v)}>{v}</span></td>;
+     if(STATUS_COLS.includes(c)&&v)return <td key={j}><span className={'cis-rep-pill '+statusTone(v,c)}>{v}</span></td>;
      if(c==='Dados em falta'||c==='Em falta')return <td key={j}>{v?<span className="cis-rep-pill bad">{v}</span>:<span className="cis-rep-pill good">Completo</span>}</td>;
      return <td key={j} className={isNumCol(c)?'num':''}>{fmtCell(c,v,l)||'—'}</td>;})}</tr>)}
      {!body.length&&<tr><td colSpan={s.colunas.length} className="cis-rep-empty-row">Nenhuma linha corresponde à pesquisa.</td></tr>}</tbody>
@@ -90,8 +91,8 @@ function SectionView({s,open}:{s:Section;open:boolean}){
  </section>;
 }
 
-const Doc=({r}:{r:Report})=><article className="cis-evidence cis-report-doc">
- <header><img src={logoPrincipal} alt="CIS" width={170} height={50}/><div><h1>{r.titulo}</h1><p>{periodText(r)}</p><p>Emitido em {dt(r.emitido_em)} às {r.emitido_em.slice(11)}{r.emitido_por?` por ${r.emitido_por}`:''}</p></div></header>
+const Doc=({r,company}:{r:Report;company:CompanyProfile|null})=><article className="cis-evidence cis-report-doc">
+ <header><CompanyBrand company={company}/><div><h1>{r.titulo}</h1><p>{periodText(r)}</p><p>Emitido em {dt(r.emitido_em)} às {r.emitido_em.slice(11)}{r.emitido_por?` por ${r.emitido_por}`:''}</p></div></header>
  <section className="cis-evidence-summary cis-report-summary">{r.resumo.map(([k,v])=><div key={k}><span>{k}</span><strong>{fmtSummary(v)}</strong></div>)}</section>
  {r.seccoes.map(s=><section key={s.titulo}><h2>{s.titulo}</h2>{s.linhas.length?<table><thead><tr>{s.colunas.map(c=><th key={c} className={isNumCol(c)?'num':''}>{c}</th>)}</tr></thead>
   <tbody>{s.linhas.map((l,i)=><tr key={i} className={s.total_final&&i===s.linhas.length-1?'total':''}>{l.map((v,j)=><td key={j} className={isNumCol(s.colunas[j])?'num':''}>{fmtCell(s.colunas[j],v,l)}</td>)}</tr>)}</tbody></table>:<p>Sem registos.</p>}</section>)}
@@ -104,6 +105,7 @@ function Seg({items,cur,onPick,label}:{items:[string,string][];cur:string;onPick
 }
 
 export default function ReportsDesk({token}:{token:string}){
+ const company=useCompanyProfile(token);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const [defs,setDefs]=useState<Def[]>([]);const [sel,setSel]=useState('agenda');
  const [inicio,setInicio]=useState(startOf('mes')[0]);const [fim,setFim]=useState(today());
@@ -197,8 +199,8 @@ export default function ReportsDesk({token}:{token:string}){
     <div className="cis-rep-kpis">{rep.resumo.map(([k,v])=><div key={k} className={'cis-rep-kpi '+tone(k)}><span>{k}</span><strong>{fmtSummary(v)}</strong></div>)}</div>
     {rep.seccoes.map((s,i)=><SectionView key={rep.id+rep.emitido_em+s.titulo} s={s} open={i<4||s.linhas.length<=12}/>)}
    </div>}
-   {rep&&view==='documento'&&<div className="cis-report-preview"><Doc r={rep}/></div>}
+   {rep&&view==='documento'&&<div className="cis-report-preview"><Doc r={rep} company={company}/></div>}
   </section>
-  {printing&&rep&&createPortal(<div className="cis-evidence-overlay"><div className="cis-evidence-bar"><b>A preparar a impressão…</b><button type="button" onClick={()=>setPrinting(false)} aria-label="Fechar"><X size={16}/></button></div><Doc r={rep}/></div>,document.body)}
+  {printing&&rep&&createPortal(<div className="cis-evidence-overlay"><div className="cis-evidence-bar"><b>A preparar a impressão…</b><button type="button" onClick={()=>setPrinting(false)} aria-label="Fechar"><X size={16}/></button></div><Doc r={rep} company={company}/></div>,document.body)}
  </div>;
 }

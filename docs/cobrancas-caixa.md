@@ -244,3 +244,12 @@ As definições estão todas em `backend/app/Http/Controllers/Api/ReportControll
    - Excelente: nenhuma prestação paga em atraso;
    - Bom: até 20% das prestações pagas em atraso;
    - Atenção: mais de 20%.
+
+## Configurações da empresa (Definições, administrador)
+
+Modelo do GEMIC, guardado em `cis_company_settings` (chave/valor). Instalação: `bash deploy/install-company-settings.sh`.
+
+- **Informações gerais**: logótipo, nome, NUIT (9 dígitos), licença BM, início de actividade, capital inicial, funcionários, província/distrito, morada, contactos, email e proprietário. Usado no cabeçalho dos extractos (PDF) e dos relatórios (Documento).
+- **Cobrança e multa**: limite mensal de dias de mora, tolerância, penalidades automáticas, taxa diária de mora, carência, fins de semana, modalidade do calendário, lembrete e canal. Registado como política; a multa continua a ser calculada pela taxa do contrato e só é cobrada quando o operador escolhe.
+- **Credit scoring**: score mínimo, limiares de baixo/médio risco, máximo de créditos activos e em atraso, taxa de esforço. Usado em «Clientes para novo crédito» (score = % de prestações pagas sem atraso, −20 com crédito activo em atraso).
+- **Incentivos**: por cliente novo, por renovação, % do capital vigente e % dos juros recebidos. Usado em «Desempenho por operador» (coluna «Incentivo estimado»).

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
+use App\Support\CompanySettings as CS;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -60,7 +61,7 @@ final class ReportController extends Controller
              'descricao'=>'Entradas e saídas de cada conta no período, separadas por tipo de movimento.',
              'base_legal'=>'Relatório de gestão interna (tesouraria).'],
             ['id'=>'novocredito','grupo'=>'Gestão','titulo'=>'Clientes para novo crédito','periodo'=>'nenhum',
-             'descricao'=>'Clientes que liquidaram todos os contratos, com histórico de pontualidade.',
+             'descricao'=>'Score de crédito por pontualidade, com os limiares e limites das Configurações da empresa.',
              'base_legal'=>'Relatório de gestão interna (renovação e fidelização).'],
         ];
     }
@@ -409,27 +410,37 @@ final class ReportController extends Controller
     {
         abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
         $rows=$this->rows();$per=[];
+        $ckey=fn($r)=>(int)$r->{'Nº de Cliente'}?:(string)$r->{'Nome do Cliente'};
+        $firstStart=[];foreach ($rows as $r) { $k=$ckey($r);$d=self::d($r->{'Data de Inicio'});if ($d!=='' && (!isset($firstStart[$k])||$d<$firstStart[$k])) $firstStart[$k]=$d; }
         foreach ($rows->groupBy('Nr do Contracto') as $c) {
             $first=$c->sortBy('Ordem')->first();$op=trim((string)($first->usuario??''))?:'(sem operador)';
-            $per[$op]??=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'cart'=>0.0,'atr'=>0.0,'cli'=>[],'ativos'=>0];
+            $per[$op]??=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'cart'=>0.0,'atr'=>0.0,'cli'=>[],'ativos'=>0,'novos'=>0,'ren'=>0];
             $start=self::d($c->min('Data de Inicio'));
-            if ($start>=$ini && $start<=$fim) { $per[$op]['n']++; $per[$op]['v']+=(float)$c->max('Quantia Creditada'); }
-            foreach ($c as $r) if (in_array($r->Estado,self::PAID,true) && ($pd=self::d($r->{'Data de Pagamento'}))>=$ini && $pd<=$fim) { $per[$op]['rec']+=(float)$r->{'Valor Pago'};$per[$op]['jur']+=(float)$r->{'Valor de Juros'}+(float)($r->{'Valor de Multa'}??0); }
+            if ($start>=$ini && $start<=$fim) { $per[$op]['n']++; $per[$op]['v']+=(float)$c->max('Quantia Creditada'); if (($firstStart[$ckey($first)]??'')===$start) $per[$op]['novos']++; }
+            foreach ($c as $r) if (in_array($r->Estado,self::PAID,true) && ($pd=self::d($r->{'Data de Pagamento'}))>=$ini && $pd<=$fim) {
+                $per[$op]['rec']+=(float)$r->{'Valor Pago'};$per[$op]['jur']+=(float)$r->{'Valor de Juros'}+(float)($r->{'Valor de Multa'}??0);
+                if ($r->Estado==='Renovado') $per[$op]['ren']++;
+            }
             $out=$c->filter(fn($r)=>self::outstandingAt($r,$fim));
             if ($out->isNotEmpty()) {
-                $per[$op]['ativos']++;$per[$op]['cli'][(int)$first->{'Nº de Cliente'}?:$first->{'Nome do Cliente'}]=1;
+                $per[$op]['ativos']++;$per[$op]['cli'][$ckey($first)]=1;
                 $cap=$out->sum(fn($r)=>self::principal($r));$per[$op]['cart']+=$cap;
                 $late30=$out->contains(fn($r)=>($x=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($x)->addDays(30)->toDateString()<$fim);
                 if ($late30) $per[$op]['atr']+=$cap;
             }
         }
-        $lines=[];foreach ($per as $op=>$x) $lines[]=[$op,(string)$x['n'],self::m($x['v']),self::m($x['rec']),self::m($x['jur']),(string)$x['ativos'],(string)count($x['cli']),self::m($x['cart']),self::pct($x['atr'],$x['cart'])];
+        $iN=CS::num('incentivo_cliente_novo');$iR=CS::num('incentivo_renovacao');$iC=CS::num('incentivo_taxa_capital');$iJ=CS::num('incentivo_taxa_juros');
+        $inc=fn($x)=>round($x['novos']*$iN+$x['ren']*$iR+$x['cart']*$iC/100+$x['jur']*$iJ/100,2);
+        $lines=[];foreach ($per as $op=>$x) $lines[]=[$op,(string)$x['n'],self::m($x['v']),self::m($x['rec']),self::m($x['jur']),(string)$x['ativos'],(string)count($x['cli']),self::m($x['cart']),self::pct($x['atr'],$x['cart']),(string)$x['novos'],(string)$x['ren'],self::m($inc($x))];
         usort($lines,fn($a,$b)=>(float)$b[7]<=>(float)$a[7]);
+        $configured=$iN>0||$iR>0||$iC>0||$iJ>0;
         return [
             'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
-            'nota'=>'Operador = utilizador que registou o contrato (campo «usuario» da primeira prestação). Carteira e atraso à data final do período.',
-            'resumo'=>[['Operadores',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT']],
-            'seccoes'=>[['titulo'=>'Desempenho por operador','colunas'=>['Operador','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e multas (MT)','Contratos em curso','Clientes activos','Carteira (MT)','% carteira > 30 dias'],'linhas'=>$lines]],
+            'nota'=>'Operador = utilizador que registou o contrato (campo «usuario» da primeira prestação). Carteira e atraso à data final do período. '
+                .($configured?sprintf('Incentivo = clientes novos × %s + renovações × %s + %s%% da carteira + %s%% dos juros e multas recebidos (Configurações › Incentivos).',self::m($iN),self::m($iR),rtrim(rtrim(number_format($iC,4,'.',''),'0'),'.'),rtrim(rtrim(number_format($iJ,4,'.',''),'0'),'.'))
+                    :'Incentivos por configurar (Definições › Configurações da empresa › Incentivos).'),
+            'resumo'=>[['Operadores',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT'],['Incentivos estimados',self::m(array_sum(array_map($inc,$per))).' MT']],
+            'seccoes'=>[['titulo'=>'Desempenho por operador','colunas'=>['Operador','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e multas (MT)','Contratos em curso','Clientes activos','Carteira (MT)','% carteira > 30 dias','Clientes novos','Renovações','Incentivo estimado (MT)'],'linhas'=>$lines]],
         ];
     }
 
@@ -508,22 +519,31 @@ final class ReportController extends Controller
     /** Clientes que liquidaram todos os contratos: candidatos a novo crédito. */
     private function novocredito(): array
     {
-        $rows=$this->rows();$cl=$this->clients();$lines=[];
+        $rows=$this->rows();$cl=$this->clients();$lines=[];$today=now('Africa/Maputo')->toDateString();
+        $min=(int)CS::get('score_minimo');$low=(int)CS::get('score_baixo_risco');$mid=(int)CS::get('score_risco_medio');
+        $maxAct=max(1,(int)CS::get('max_creditos_activos'));$maxLate=(int)CS::get('max_creditos_atraso');
         foreach ($rows->groupBy(fn($r)=>(int)$r->{'Nº de Cliente'}?:(string)$r->{'Nome do Cliente'}) as $k=>$g) {
-            if ($g->contains(fn($r)=>in_array($r->Estado,self::OPEN,true))) continue;
+            $open=$g->filter(fn($r)=>in_array($r->Estado,self::OPEN,true));
+            $openC=$open->pluck('Nr do Contracto')->unique()->count();
+            $lateC=$open->filter(fn($r)=>($x=self::d($r->{'Data de Cobrança'}))!=='' && $x<$today)->pluck('Nr do Contracto')->unique()->count();
+            // Pode pedir um novo crédito se, com ele, não ultrapassar o máximo de créditos activos.
+            if ($openC>=$maxAct || $lateC>$maxLate) continue;
             $paid=$g->filter(fn($r)=>in_array($r->Estado,self::PAID,true));if ($paid->isEmpty()) continue;
             $late=$paid->where('Estado','Pago em Atraso')->count();$n=$paid->count();
-            $class=$late===0?'Excelente':($late/$n<=0.2?'Bom':'Atenção');
+            $score=(int)round(100*($n-$late)/$n)-($lateC>0?20:0);$score=max(0,$score);
+            $class=$score>=$low?'Baixo risco':($score>=$mid?'Risco médio':'Alto risco');
             $cli=is_int($k)?($cl[$k]??null):null;
             $lines[]=[(string)$g->first()->{'Nome do Cliente'},self::contact($cli),(string)$g->pluck('Nr do Contracto')->unique()->count(),self::m($g->groupBy('Nr do Contracto')->sum(fn($c)=>(float)$c->max('Quantia Creditada'))),
-                (string)$n,(string)$late,self::d($paid->max('Data de Pagamento')),$class];
+                (string)$n,(string)$late,self::d($paid->max('Data de Pagamento')),(string)$score,$class,$score>=$min?'Sim':'Não',(string)$openC];
         }
-        usort($lines,fn($a,$b)=>[array_search($a[7],['Excelente','Bom','Atenção']),$b[6]]<=>[array_search($b[7],['Excelente','Bom','Atenção']),$a[6]]);
-        $cnt=array_count_values(array_column($lines,7));
+        $ord=['Baixo risco','Risco médio','Alto risco'];
+        usort($lines,fn($a,$b)=>[array_search($a[8],$ord),-(int)$a[7],$b[6]]<=>[array_search($b[8],$ord),-(int)$b[7],$a[6]]);
+        $cnt=array_count_values(array_column($lines,8));$ok=count(array_filter($lines,fn($l)=>$l[9]==='Sim'));
         return [
-            'nota'=>'Classificação: Excelente = nenhuma prestação paga em atraso; Bom = até 20% em atraso; Atenção = acima de 20%. Ordenado por classificação e liquidação mais recente.',
-            'resumo'=>[['Clientes elegíveis',(string)count($lines)],['Excelente',(string)($cnt['Excelente']??0)],['Bom',(string)($cnt['Bom']??0)],['Atenção',(string)($cnt['Atenção']??0)]],
-            'seccoes'=>[['titulo'=>'Clientes sem contratos em aberto','colunas'=>['Cliente','Contacto','Contratos','Total creditado (MT)','Prestações pagas','Pagas em atraso','Última liquidação','Classificação'],'linhas'=>$lines]],
+            'nota'=>"Score = % de prestações pagas sem atraso (−20 se tiver crédito activo em atraso). Baixo risco ≥ $low; risco médio ≥ $mid; aprovável com score ≥ $min. "
+                ."Entram clientes com menos de $maxAct crédito(s) activo(s) e no máximo $maxLate em atraso (Configurações › Credit scoring). A decisão final é do gestor.",
+            'resumo'=>[['Clientes avaliados',(string)count($lines)],['Aprováveis (score ≥ '.$min.')',(string)$ok],['Baixo risco',(string)($cnt['Baixo risco']??0)],['Risco médio',(string)($cnt['Risco médio']??0)],['Alto risco',(string)($cnt['Alto risco']??0)]],
+            'seccoes'=>[['titulo'=>$maxAct===1?'Clientes sem contratos em aberto':'Clientes que podem receber novo crédito','colunas'=>['Cliente','Contacto','Contratos','Total creditado (MT)','Prestações pagas','Pagas em atraso','Última liquidação','Score','Classificação','Aprovável','Créditos activos'],'linhas'=>$lines]],
         ];
     }
 }
