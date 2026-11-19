@@ -75,13 +75,13 @@ final class CollectionScenarioPreviewController extends Controller
         if ($operation === 'mora_diaria') {
             abort_unless(in_array($r->Estado, $supported, true)
                 && !in_array($r->{'Estado do Contrato'}, ['Finalizado', 'Cancelado', 'Anulado'], true),
-                409, 'A mora só pode ser simulada em prestações em aberto.');
+                409, 'A mora só pode ser simulada em prestações em curso.');
             $hasPayments = $db->table('Extracto')->where('Contracto', $numero)
                 ->where('Parcela', (string) $r->{'Nº da Parcela'})
                 ->where('Tipo de Movimento', 'Entradas')->exists();
             abort_if($hasPayments || $r->{'Data de Pagamento'} !== null
                 || self::cents($r->{'Valor Pago'} ?? '0', 'valor_pago') > 0, 409,
-                'A prestação tem indícios de pagamento. É necessário identificar o capital em aberto por data.');
+                'A prestação tem indícios de pagamento. É necessário identificar o capital em curso por data.');
             $due = (string) ($r->{'Data de Cobrança'} ?? '');
             abort_unless(preg_match('/^\d{4}-\d{2}-\d{2}$/D', $due) === 1
                 && checkdate((int) substr($due, 5, 2), (int) substr($due, 8, 2), (int) substr($due, 0, 4)),
@@ -161,7 +161,7 @@ final class CollectionScenarioPreviewController extends Controller
                 'opcoes_juros' => $options,
                 'tratamento_juros' => $choice,
                 'resultado_escolhido' => $choice === null ? null : $options[$choice],
-                'aviso' => 'Prévia da prorrogação. A escolha do operador ainda não é gravada no contrato.',
+                'aviso' => 'Prévia da prorrogação. A escolha do gestor de crédito ainda não é gravada no contrato.',
             ])->header('Cache-Control','no-store, private');
         }
         if (in_array($operation,['parcial','renovar_juros','capitalizar','actualizar_data','remanescente'],true)) {

@@ -76,7 +76,7 @@ final class GenericSimulatorController extends Controller
             'total_estimado'=>self::amount($total),
             'faixa'=>[(string)$rows[0]->limite_inferior,(string)$rows[0]->limite_superior],
             'arredondamento'=>'Duas casas, HALF_UP (requer homologação com Excel/VBA)',
-            'aviso'=>'Simulação genérica, independente de contratos. Não corresponde a valor exigível, multa aprovada, pagamento ou nova prestação registada.',
+            'aviso'=>'Simulação genérica, independente de contratos. Não corresponde a valor exigível, juros de mora aprovados, pagamento ou nova prestação registada.',
         ])->header('Cache-Control','no-store, private');
     }
 }

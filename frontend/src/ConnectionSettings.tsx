@@ -59,8 +59,8 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
   {tab==='glossario'&&<section className="cis-panel cis-co-section cis-glossary">
    <div className="cis-co-section-head"><div><h3>Glossário</h3><p>Termos usados no CIS, nos contratos, extractos e relatórios, para toda a equipa falar a mesma linguagem.</p></div>
     <label className="cis-rep-search"><input value={gq} onChange={e=>setGq(e.target.value)} placeholder="Pesquisar termo…" aria-label="Pesquisar no glossário"/></label></div>
-   <table className="cis-glossary-table"><thead><tr><th>Termo</th><th>Significado</th><th>Antes no CIS</th></tr></thead>
-    <tbody>{GLOSSARIO.filter(g=>!gq.trim()||(g.termo+' '+g.significado+' '+(g.antes??'')).toLowerCase().includes(gq.trim().toLowerCase())).map(g=><tr key={g.termo}><td><b>{g.termo}</b></td><td>{g.significado}</td><td>{g.antes??'—'}</td></tr>)}</tbody></table>
+   <table className="cis-glossary-table"><thead><tr><th>Termo</th><th>Significado</th></tr></thead>
+    <tbody>{GLOSSARIO.filter(g=>!gq.trim()||(g.termo+' '+g.significado).toLowerCase().includes(gq.trim().toLowerCase())).map(g=><tr key={g.termo}><td><b>{g.termo}</b></td><td>{g.significado}</td></tr>)}</tbody></table>
   </section>}
   {admin&&tab==='ligacao'&&<section className="cis-panel">
    <div className="cis-panel-head"><div><h2>Estado da ligação MySQL</h2><p>Verificação de configuração, sem exposição de credenciais.</p></div><button type="button" className="cis-client-edit" onClick={()=>setReload(x=>x+1)} aria-label="Actualizar estado"><RefreshCw size={18}/></button></div>
@@ -70,7 +70,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
     <div><span className="cis-ledger-dot"/><span><b>API Laravel</b><small>Servidor CIS</small></span><strong>{status.backend}</strong></div>
     <div><span className="cis-ledger-dot"/><span><b>Configuração MySQL</b><small>Presença das configurações de ligação</small></span><strong>{status.legacy_connection_configured?'Presente':'Incompleta'}</strong></div>
     <div><span className="cis-ledger-dot"/><span><b>Certificado CA</b><small>Certificado opcional para ligações externas TLS</small></span><strong>{status.tls_ca_configured?'Configurado':'Não configurado'}</strong></div>
-    <div><span className="cis-ledger-dot"/><span><b>Consulta financeira em testes</b><small>Não determina acesso à consulta privada de Clientes</small></span><strong>{status.test_data_gate_open?'Aprovada':'Bloqueada'}</strong></div>
+    <div><span className="cis-ledger-dot"/><span><b>Consulta financeira em testes</b><small>Não determina acesso à consulta privada de Mutuários</small></span><strong>{status.test_data_gate_open?'Aprovada':'Bloqueada'}</strong></div>
    </div>}
    <p style={{marginTop:20}}>As informações acima indicam apenas configuração. Não comprovam a ligação efectiva, os privilégios MySQL ou a segurança TLS da sessão. O MySQL local do VPS permanece numa rede privada.</p>
   </section>}

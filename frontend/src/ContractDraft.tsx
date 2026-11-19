@@ -48,8 +48,8 @@ function monthAfter(date:string,months:number):string {
  return target.toISOString().slice(0,10);
 }
 const fields:Field[]=[
- {key:'cliente',label:'Mutuário / cliente',required:true,hint:'Seleccionado exclusivamente a partir dos clientes reais existentes no MySQL.'},
- {key:'cliente_id',label:'ID do cliente',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
+ {key:'cliente',label:'Mutuário',required:true,hint:'Seleccionado exclusivamente a partir dos mutuários reais existentes no MySQL.'},
+ {key:'cliente_id',label:'ID do mutuário',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
  {key:'numero',label:'Número do contrato',hint:'Número provisório calculado pelo maior Nº da tabela Contractos. Será confirmado na gravação e pode mudar se outro contrato for criado primeiro.'},
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
@@ -57,19 +57,19 @@ const fields:Field[]=[
  {key:'quantia',label:'Capital a desembolsar (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
- {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. Três fórmulas adicionais são regras CIS. A sua gravação exige testes e activação específica no servidor.'},
+ {key:'estrategia_calculo',label:'Sistema de amortização',type:'select',required:true,hint:'A estratégia depende do tipo de juro. Três fórmulas adicionais são regras CIS. A sua gravação exige testes e activação específica no servidor.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
  {key:'multa',label:'Taxa de juros de mora (%)',type:'number',required:true},
  {key:'prazo',label:'Prazo',type:'select',required:true,hint:'As opções mudam automaticamente conforme o período seleccionado.'},
- {key:'modalidade',label:'Modalidade de pagamento',type:'select',required:true,hint:'Conforme o prazo: semanal, mensal (apenas 2 ou 3 meses) ou uma única parcela.'},
+ {key:'modalidade',label:'Periodicidade',type:'select',required:true,hint:'Conforme o prazo: semanal, mensal (apenas 2 ou 3 meses) ou prestação única.'},
  {key:'forma',label:'Forma de pagamento',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Corresponde às três opções originais do VBA, com ortografia corrigida na interface.'},
  {key:'disponibilidade',label:'Meio de disponibilização do crédito',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Forma de desembolso; o saldo e o Extracto exigem reconciliação antes de qualquer gravação.'},
 ];
 const groupings=[
  {name:'Mutuário',icon:UserRound,keys:['cliente','cliente_id','cidade']},
  {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
- {name:'Estratégia de cálculo das prestações',icon:Wallet,keys:['estrategia_calculo']},
+ {name:'Sistema de amortização',icon:Wallet,keys:['estrategia_calculo']},
 ];
 export default function ContractDraft({onBack,onContractCreated,token}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string}){
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
@@ -101,7 +101,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
     headers:{Authorization:'Bearer '+token,Accept:'application/json'},
     signal:controller.signal
    }).then(async result=>{
-    if(!result.ok)throw new Error('Não foi possível consultar os clientes autorizados.');
+    if(!result.ok)throw new Error('Não foi possível consultar os mutuários autorizados.');
     return result.json() as Promise<Borrower[]>;
    }).then(list=>{if(!controller.signal.aborted){setClients(list);setActiveSuggestion(0);}})
    .catch(e=>{if(e.name!=='AbortError')setClientError(e.message);})
@@ -244,7 +244,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   setReview(null);setReviewError('');setMessage('');setChecked(false);
   if(fixedRate&&!priced){setQuoteError('Não existe taxa parametrizada válida para este montante e período.');return;}
   if(!validAmount){setReviewError('O montante do crédito deve ser um número inteiro de meticais.');return;}
-  if(!selectedBorrower){setClientError('Seleccione um cliente existente no cadastro.');return;}
+  if(!selectedBorrower){setClientError('Seleccione um mutuário existente no cadastro.');return;}
   setReviewBusy(true);
   try{
    const result=await fetch(API+'/cis/contractos/validar-abertura',{
@@ -335,7 +335,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
        aria-expanded={suggestionsOpen&&clientSearch.trim().length>0}
        aria-controls="cis-client-suggestions"
        aria-activedescendant={suggestionsOpen&&matchingClients[activeSuggestion]?'cis-client-option-'+matchingClients[activeSuggestion].ID:undefined}
-       placeholder="Digite nome ou ID do cliente" value={clientSearch} autoComplete="off"
+       placeholder="Digite nome ou ID do mutuário" value={clientSearch} autoComplete="off"
        onFocus={()=>{if(!selectedBorrower)setSuggestionsOpen(true);}}
        onBlur={()=>setSuggestionsOpen(false)}
        onChange={e=>{
@@ -351,8 +351,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
         if(e.key==='ArrowUp'){e.preventDefault();setActiveSuggestion(i=>Math.max(0,i-1));return;}
         if(e.key==='Enter'&&suggestionsOpen&&matchingClients.length){e.preventDefault();chooseBorrower(matchingClients[activeSuggestion]??matchingClients[0]);}
        }}/>
-      {suggestionsOpen&&clientSearch.trim().length>0&&<div className="cis-client-suggestion-list" role="listbox" id="cis-client-suggestions" aria-label="Clientes correspondentes">
-       {clientLoading?<div className="cis-client-suggestion-status" role="status">A pesquisar clientes…</div>:
+      {suggestionsOpen&&clientSearch.trim().length>0&&<div className="cis-client-suggestion-list" role="listbox" id="cis-client-suggestions" aria-label="Mutuários correspondentes">
+       {clientLoading?<div className="cis-client-suggestion-status" role="status">A pesquisar mutuários…</div>:
         matchingClients.length>0?matchingClients.map((borrower,index)=><button
          type="button" role="option" id={'cis-client-option-'+borrower.ID} key={borrower.ID}
          aria-selected={index===activeSuggestion}
@@ -362,16 +362,16 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
           <strong>{borrower['Nome Completo']}</strong>
           <small>ID {borrower.ID}{borrower.Cidade?' · '+borrower.Cidade:''}</small>
          </button>):
-        <div className="cis-client-suggestion-status" role="status">Nenhum cliente encontrado.</div>}
+        <div className="cis-client-suggestion-status" role="status">Nenhum mutuário encontrado.</div>}
       </div>}
      </div>
      {selectedBorrower&&<small className="cis-client-confirmed">✓ Seleccionado: {selectedBorrower['Nome Completo']} · ID {selectedBorrower.ID}</small>}
-     {!selectedBorrower&&clientSearch.trim().length>0&&<small>Escolha uma das sugestões para associar o cliente ao contrato.</small>}
+     {!selectedBorrower&&clientSearch.trim().length>0&&<small>Escolha uma das sugestões para associar o mutuário ao contrato.</small>}
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
     return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
      {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:defaultStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
-       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&!strategiesForType.includes(choice)}>{choice}{key==='estrategia_calculo'&&!strategiesForType.includes(choice)?' — não aplicável a este juro':''}</option>)}
+       <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&!strategiesForType.includes(choice)}>{key==='modalidade'&&choice==='Uma Parcela'?'Prestação única':choice}{key==='estrategia_calculo'&&!strategiesForType.includes(choice)?' — não aplicável a este juro':''}</option>)}
       </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'1':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
@@ -385,20 +385,20 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
    <div className="cis-contract-draft-count"><span>{weeklyTerm?'N.º de prestações semanais (pendente de regra)':'N.º previsto de prestações (regra do VBA)'}</span><strong>{numeroPrestacoes??'—'}</strong></div>
    <p>{unsupportedSchedule?'Prestações semanais de 7 em 7 dias; no prazo mensal o último vencimento coincide com a data final. A gravação requer aprovação separada dos cálculos semanais.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
    {unsupportedSchedule&&dataFinal&&<p><strong>Data final:</strong> {dataFinal.split('-').reverse().join('/')} · período semanal sujeito à activação autorizada no VPS.</p>}
-   {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Parcela {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
+   {dates.length>0&&<div className="cis-contract-date-preview">{dates.map((date,i)=><div key={i}><strong>Prestação {i+1}</strong><time dateTime={date}>{date.split('-').reverse().join('/')}</time></div>)}</div>}
   </section>
   <section className="cis-panel cis-contract-draft-section"><h3><BadgePlus size={20}/> Criar e desembolsar crédito</h3>
    <p>Esta página destina-se exclusivamente à abertura de um novo contrato. As prestações reais só existem depois da abertura confirmada.</p>
    <div className="cis-contract-notice"><LockKeyhole size={17}/><span>Para aumentar crédito ou consultar cobranças, abra a ficha de um contrato já existente e seleccione a prestação correspondente. A abertura real é verificada e protegida contra valores não suportados pelo esquema legado.</span></div>
   </section>
   <section className="cis-panel cis-contract-draft-section" id="cis-contract-final-review"><h3><CalendarDays size={20}/> Regras de prazo e prestações do VBA</h3>
-   <p>A data de início é preenchida automaticamente com o dia actual em Moçambique, mas pode ser alterada. Uma semana admite parcela única; duas ou três semanas admitem Semanal ou Uma Parcela; um mês admite Semanal ou Uma Parcela; dois ou três meses admitem Semanal, Mensal ou Uma Parcela. O calendário semanal está implementado, mas a gravação depende dos testes e da activação segura. Juros compostos semanais ainda aguardam definição da taxa equivalente.</p>
+   <p>A data de início é preenchida automaticamente com o dia actual em Moçambique, mas pode ser alterada. Uma semana admite prestação única; duas ou três semanas admitem periodicidade semanal ou prestação única; um mês admite semanal ou prestação única; dois ou três meses admitem semanal, mensal ou prestação única. O calendário semanal está implementado, mas a gravação depende dos testes e da activação segura. Juros compostos semanais ainda aguardam definição da taxa equivalente.</p>
    {checked&&<div role="status" className="cis-contract-notice">{message}</div>}
    {reviewError&&<div className="cis-table-error" role="alert">{reviewError}</div>}
    {previewError&&<div className="cis-table-error" role="alert">{previewError}</div>}
    {preview&&<div className="cis-contract-plan-preview"><h4>Pré-visualização das prestações · estratégia seleccionada</h4>
     <p>Prévia sem gravação, segundo a estratégia seleccionada. Regra CIS: valores em MT inteiros com arredondamento para cima e capital totalmente reconciliado. As fórmulas novas são extensões ao VBA original.</p>
-    <div className="cis-table-scroll"><table><thead><tr>{['Parcela','Vencimento','Capital (MT)','Amortização (MT)','Juros (MT)','A pagar (MT)','Estado'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{preview.linhas.map(row=><tr key={row.parcela}>
+    <div className="cis-table-scroll"><table><thead><tr>{['Prestação','Vencimento','Capital (MT)','Amortização (MT)','Juros (MT)','Valor da prestação (MT)','Estado'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{preview.linhas.map(row=><tr key={row.parcela}>
      <td>{row.parcela}</td><td>{row.vencimento.split('-').reverse().join('/')}</td>{[row.capital,row.amortizacao,row.juros,row.valorPagar].map((amount,index)=><td key={index}>{new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(amount)}</td>)}<td>{row.estado}</td>
     </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalJuros)} MT.
     {tipo==='Variável'?' Os juros variáveis são calculados na Cobrança quando for conhecida a data efectiva de pagamento.':''}</p>

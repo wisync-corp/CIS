@@ -18,7 +18,7 @@ final class LegacyClienteEditController extends Controller
             filter_var(env('CIS_CLIENTES_EDIT_APPROVED', false), FILTER_VALIDATE_BOOLEAN)
                 && filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN),
             503,
-            'Edição de clientes não autorizada neste ambiente.'
+            'Edição de mutuários não autorizada neste ambiente.'
         );
         return DB::connection('mysql_editor');
     }
@@ -29,7 +29,7 @@ final class LegacyClienteEditController extends Controller
         $records = $db->table('Clientes')->where('ID', $id)->limit(2)
             ->get(array_merge(['ID'], self::FIELDS));
         abort_if($records->count() !== 1, $records->isEmpty() ? 404 : 409,
-            'ID de cliente inexistente ou não exclusivo.');
+            'ID de mutuário inexistente ou não exclusivo.');
         return response()->json($records->first());
     }
 
@@ -64,13 +64,13 @@ final class LegacyClienteEditController extends Controller
             $records = $db->table('Clientes')->where('ID', $id)->lockForUpdate()
                 ->limit(2)->get(array_merge(['ID'], self::FIELDS));
             abort_if($records->count() !== 1, $records->isEmpty() ? 404 : 409,
-                'ID de cliente inexistente ou não exclusivo.');
+                'ID de mutuário inexistente ou não exclusivo.');
             $current = (array) $records->first();
             $diff = [];
             foreach ($changes as $field => $newValue) {
                 $old = $current[$field];
                 if (($original[$field] ?? null) !== $old) {
-                    abort(409, 'Este cliente foi modificado entretanto. Actualize a página antes de guardar.');
+                    abort(409, 'Este mutuário foi modificado entretanto. Actualize a página antes de guardar.');
                 }
                 if ($old !== $newValue) {
                     $diff[$field] = ['before' => $old, 'after' => $newValue];

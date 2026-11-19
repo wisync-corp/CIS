@@ -11,7 +11,7 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
  {tab:'Contrato',icon:FileText,fields:[
 
 
-  {name:'Nº de Cliente',label:'N.º do cliente'},
+  {name:'Nº de Cliente',label:'N.º do mutuário'},
   {name:'Data de Inicio',label:'Data de início',kind:'date'},
   {name:'Data Final',label:'Data final',kind:'date'},
   {name:'Cidade',label:'Cidade'},

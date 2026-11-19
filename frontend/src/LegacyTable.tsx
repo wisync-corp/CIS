@@ -9,22 +9,22 @@ type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void};
 type Row=Record<string,unknown>;
 type Paged={data:Row[];current_page:number;last_page:number;total:number};
 type ContractSummary={total:number;por_estado:{estado:string;total:number}[];por_situacao?:{situacao:string;total:number}[]};
-const situationInfo:Record<string,{label:string;hint:string;tone:string}>={'Pendente':{label:'Em curso',hint:'Prestações dentro do prazo',tone:''},'Pagamento Atrasado':{label:'Em atraso',hint:'Prestações vencidas e não pagas',tone:' warning'},'Finalizado':{label:'Liquidado',hint:'Sem prestações por pagar',tone:''}};
+const situationInfo:Record<string,{label:string;hint:string;tone:string}>={'Pendente':{label:'Em curso',hint:'Prestações dentro do prazo',tone:''},'Pagamento Atrasado':{label:'Em atraso',hint:'Prestações em atraso',tone:' warning'},'Finalizado':{label:'Liquidado',hint:'Sem prestações por pagar',tone:''}};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const fields:Record<string,{key:string;label:string}[]>={
- 'Clientes':[{key:'ID',label:'ID'},{key:'Nome Completo',label:'Nome completo'},{key:'Cidade',label:'Cidade'},{key:'Provincia',label:'Província'}],
+ 'Mutuários':[{key:'ID',label:'ID'},{key:'Nome Completo',label:'Nome completo'},{key:'Cidade',label:'Cidade'},{key:'Provincia',label:'Província'}],
  'Extractos':[{key:'Data da Operação',label:'Data'},{key:'Contracto',label:'Contrato'},{key:'Parcela',label:'Prestação'},{key:'Tipo de Movimento',label:'Tipo de movimento'},{key:'Descrição',label:'Descrição'},{key:'Valor',label:'Valor'}],
  'Contratos e prestações':[{key:'numero',label:'N.º do contrato'},{key:'cliente',label:'Mutuário'},{key:'cliente_id',label:'N.º do mutuário'},{key:'capital',label:'Capital'},{key:'prestacao_a_pagar',label:'Próxima prestação'},{key:'linhas_prestacoes',label:'Prestações'},{key:'situacao',label:'Situação'},{key:'estado',label:'Estado do contrato'}]
 };
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const monetary=new Set(['capital','prestacao_a_pagar','Valor','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago']);
 export default function LegacyTable({module,token,onProfileChange}:Props){
- const endpoint=module==='Clientes'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
+ const endpoint=module==='Mutuários'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
  const [selected,setSelected]=useState<number|null>(null);
  const [selectedContract,setSelectedContract]=useState<string|null>(null);
  const [contractDraftOpen,setContractDraftOpen]=useState(false);
  const [newlyCreatedContract,setNewlyCreatedContract]=useState<string|null>(null);
- useEffect(()=>{onProfileChange?.((module==='Clientes'&&selected!==null)||(module==='Contratos e prestações'&&(selectedContract!==null||contractDraftOpen)));return ()=>onProfileChange?.(false);},[module,selected,selectedContract,contractDraftOpen,onProfileChange]);
+ useEffect(()=>{onProfileChange?.((module==='Mutuários'&&selected!==null)||(module==='Contratos e prestações'&&(selectedContract!==null||contractDraftOpen)));return ()=>onProfileChange?.(false);},[module,selected,selectedContract,contractDraftOpen,onProfileChange]);
  const [page,setPage]=useState(1),[search,setSearch]=useState(''),[term,setTerm]=useState('');
  const [contractStates,setContractStates]=useState<string[]>([]);
  const [contractSummary,setContractSummary]=useState<ContractSummary|null>(null);
@@ -92,7 +92,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} justCreated={newlyCreatedContract===selectedContract} onBack={()=>{setSelectedContract(null);setNewlyCreatedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">
-  <div className="cis-panel-head"><div><h2>{module==='Clientes'?'Cadastro de clientes':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
+  <div className="cis-panel-head"><div><h2>{module==='Mutuários'?'Cadastro de mutuários':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
   {endpoint==='contractos'&&contractSummary&&<div className="cis-contract-summary" aria-label="Resumo dos contratos por estado">
    <button type="button" className={'cis-contract-summary-card '+(situationFilter===''?'selected':'')} aria-pressed={situationFilter===''} onClick={()=>{setSituationFilter('');setPage(1);}}>
     <span>Todos os contratos</span><strong>{contractSummary.total.toLocaleString('pt-MZ')}</strong><small>Contratos distintos</small>
@@ -104,7 +104,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
     </button>;})}
   </div>}
   {endpoint==='contractos'&&summaryError&&<div className="cis-table-error" role="alert">{summaryError}</div>}
-  <div className="cis-table-controls"><form onSubmit={e=>{e.preventDefault();if(endpoint==='extracto'&&startDate&&endDate&&startDate>endDate){setError('A data inicial não pode ser posterior à data final.');return;}setPage(1);setTerm(search.trim());setAppliedDates({inicio:startDate,fim:endDate});}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={endpoint==='clientes'?'Digite ou digitalize o nome ou ID':endpoint==='extracto'?'Digite ou digitalize o contrato':'Pesquise contrato, cliente ou ID (automático)'} aria-label="Pesquisa automática" autoComplete="off"/><span className="cis-auto-search-hint">Pesquisa automática</span></form><button type="button" className="cis-refresh" onClick={()=>setRefresh(n=>n+1)} aria-label="Actualizar"><RefreshCw size={18}/></button></div>
+  <div className="cis-table-controls"><form onSubmit={e=>{e.preventDefault();if(endpoint==='extracto'&&startDate&&endDate&&startDate>endDate){setError('A data inicial não pode ser posterior à data final.');return;}setPage(1);setTerm(search.trim());setAppliedDates({inicio:startDate,fim:endDate});}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={endpoint==='clientes'?'Digite ou digitalize o nome ou ID':endpoint==='extracto'?'Digite ou digitalize o contrato':'Pesquise contrato, mutuário ou ID (automático)'} aria-label="Pesquisa automática" autoComplete="off"/><span className="cis-auto-search-hint">Pesquisa automática</span></form><button type="button" className="cis-refresh" onClick={()=>setRefresh(n=>n+1)} aria-label="Actualizar"><RefreshCw size={18}/></button></div>
   {endpoint==='contractos'&&<div className="cis-contract-filters">
    <label htmlFor="cis-contract-state"><Filter size={17}/> Estado do contrato</label>
    <select id="cis-contract-state" value={stateFilter} onChange={e=>{setStateFilter(e.target.value);setPage(1);}} aria-label="Filtrar pelo estado do contrato">

@@ -144,7 +144,7 @@ final class ParcelasQuoteController extends Controller
             'calculo'=>'Parcelas.frm: '.($mode==='multa'?'base × taxa/100':'base × (1 + taxa/100)'),
             'arredondamento'=>'2 casas decimais, HALF_UP; sujeito a homologação versus Format do VBA',
             'aviso'=>$mode==='multa'
-                ?'O Parcelas.frm consulta a taxa por faixa do valor dos juros, mesmo no modo multa. A taxa contratual de multa pode divergir. Taxa manual, quando escolhida, é apenas indicativa. Não cobrar nem lançar esta prévia.'
+                ?'O Parcelas.frm consulta a taxa por faixa do valor dos juros, mesmo no modo juros de mora. A taxa contratual de juros de mora pode divergir. Taxa manual, quando escolhida, é apenas indicativa. Não cobrar nem lançar esta prévia.'
                 :'Valor de referência = Valor a Pagar - recebimento parcial. O VBA original usa txt_vpago alimentado por Valor Pago, podendo produzir saldo negativo. Taxa manual é simulação, não aprovação. Prévia sem criar/recalendarizar prestações.'
         ];
         if($mode==='multa') {

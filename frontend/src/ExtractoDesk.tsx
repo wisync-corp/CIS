@@ -123,7 +123,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  async function infoEvidence(numero:string){
   setEvidenceBusy(true);setInfoError('');
   try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero})));}
-  catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do cliente.');}finally{setEvidenceBusy(false);}
+  catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
@@ -131,7 +131,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto geral.');}finally{setEvidenceBusy(false);}return;}
   try{const p=new URLSearchParams();if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
    setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+p));}
-  catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do cliente.');}finally{setEvidenceBusy(false);}
+  catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
  function printEvidence(){
   const prev=document.title;document.title=geralDoc?`Extracto geral ${geralDoc.emitido_em.slice(0,10)}`:`Extracto ${evidence?.cliente.nome??''} ${evidence?.emitido_em.slice(0,10)??''}`.trim();
@@ -150,7 +150,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    <div className="cis-panel-head"><div><h2>Extracto de movimentos</h2><p>{mode==='geral'?'Entradas e saídas registadas na Caixa (Extracto).':'Prestações dos mutuários: em curso, em atraso e pagas.'}</p></div>
     <div className="cis-extracto-modes" role="tablist" aria-label="Tipo de extracto">
      {isAdmin&&<button type="button" role="tab" aria-selected={mode==='geral'} className={mode==='geral'?'selected':''} onClick={()=>switchMode('geral')}>Geral</button>}
-     <button type="button" role="tab" aria-selected={mode==='clientes'} className={mode==='clientes'?'selected':''} onClick={()=>switchMode('clientes')}>Clientes</button>
+     <button type="button" role="tab" aria-selected={mode==='clientes'} className={mode==='clientes'?'selected':''} onClick={()=>switchMode('clientes')}>Mutuários</button>
     </div></div>
 
    <div className="cis-extracto-actions"><button type="button" onClick={()=>onOpenContracts()}><FileText size={15}/> Ir para Contratos e prestações</button></div>
@@ -182,8 +182,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
    <div className="cis-extracto-actions">
     <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
-    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao cliente':'Escolha um cliente para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
-    {!canEvidence&&mode==='clientes'&&<small>Escolha um cliente para gerar o extracto de evidência.</small>}
+    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao mutuário':'Escolha um mutuário para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
+    {!canEvidence&&mode==='clientes'&&<small>Escolha um mutuário para gerar o extracto de evidência.</small>}
    </div>
 
    {infoBusy&&<div className="cis-loading" role="status">A abrir a informação do contrato {infoBusy}…</div>}
@@ -192,7 +192,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
    {!loading&&!error&&data&&(data.total_linhas===0?<div className="cis-extracto-empty">Sem registos para os filtros escolhidos.</div>:<>
     <div className="cis-table-scroll"><table>
-     {mode==='geral'?<><thead><tr><th>Cod. Op</th><th>Data</th><th>Descrição</th><th>Conta</th><th className="num">Quantia (MT)</th></tr></thead>
+     {mode==='geral'?<><thead><tr><th>Cod. Op</th><th>Data</th><th>Descrição</th><th>Conta</th><th className="num">Valor (MT)</th></tr></thead>
       <tbody>{geral!.linhas.map(r=><tr key={r.nr} className={r.contrato?'cis-extracto-row':''} tabIndex={r.contrato?0:undefined} title={r.contrato?'Ver informação do contrato '+r.contrato:undefined} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{dt(r.data)}</td><td>{r.descricao}</td><td>{r.conta??'—'}</td><td className={'num '+(r.tipo==='entrada'?'pos':'neg')}>{r.tipo==='entrada'?'+':'−'} {mt(r.valor)}</td></tr>)}</tbody></>
      :<><thead><tr><th>Cod. Op</th><th>Contrato</th><th>Mutuário</th><th>P.</th><th>Vencimento</th><th className="num">Dias</th><th>F. pagamento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Prestação</th><th>Estado</th></tr></thead>
       <tbody>{clientes!.linhas.map(r=><tr key={r.ordem} className={'cis-extracto-row'} tabIndex={0} title={'Ver informação do contrato '+r.contrato} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{r.contrato}</td><td>{r.cliente}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className={'num '+(r.dias<0&&r.situacao!=='paga'?'neg':'')}>{r.dias}</td><td>{r.forma_pagamento??'—'}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.valor)}</td><td><span className={'cis-extracto-state '+r.situacao}>{r.estado}</span></td></tr>)}</tbody></>}
@@ -202,15 +202,15 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   </section>
 
   {evidence&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto de conta">
-   <div className="cis-evidence-bar"><b>Pré-visualização do extracto do cliente</b><span>Use «Imprimir / Guardar PDF» e escolha «Guardar como PDF» para enviar ao cliente.</span>
+   <div className="cis-evidence-bar"><b>Pré-visualização do extracto do mutuário</b><span>Use «Imprimir / Guardar PDF» e escolha «Guardar como PDF» para enviar ao mutuário.</span>
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setEvidence(null)} aria-label="Fechar"><X size={16}/></button></div>
    <article className="cis-evidence">
     <header><CompanyBrand company={company}/><div><h1>{evidence.titulo}</h1><p>Emitido em {dt(evidence.emitido_em.slice(0,10))} às {evidence.emitido_em.slice(11)}{evidence.emitido_por?` por ${evidence.emitido_por}`:''}</p>
      <p>Período: {evidence.periodo.inicio||evidence.periodo.fim?`${dt(evidence.periodo.inicio)} a ${dt(evidence.periodo.fim)}`:'todo o histórico'}</p></div></header>
-    <section className="cis-evidence-client"><h2>Cliente</h2><dl>
+    <section className="cis-evidence-client"><h2>Mutuário</h2><dl>
      <div><dt>Nome</dt><dd>{evidence.cliente.nome}</dd></div>
-     {evidence.cliente.id&&<div><dt>N.º de cliente</dt><dd>{evidence.cliente.numeracao??evidence.cliente.id}</dd></div>}
+     {evidence.cliente.id&&<div><dt>N.º de mutuário</dt><dd>{evidence.cliente.numeracao??evidence.cliente.id}</dd></div>}
      {evidence.cliente.bi&&<div><dt>N.º de BI</dt><dd>{evidence.cliente.bi}</dd></div>}
      {evidence.cliente.contacto&&<div><dt>Contacto</dt><dd>{evidence.cliente.contacto}</dd></div>}
      {evidence.cliente.morada&&<div><dt>Morada</dt><dd>{evidence.cliente.morada}</dd></div>}
@@ -235,7 +235,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    <aside className="cis-info" role="dialog" aria-modal="true" aria-label={'Informação do contrato '+info.contrato} onClick={ev=>ev.stopPropagation()}>
     <header><div><span><Info size={15}/> Informação</span><h3>Contrato {info.contrato}</h3></div><button type="button" onClick={()=>setInfo(null)} aria-label="Fechar"><X size={17}/></button></header>
     <span className={'cis-info-state '+(info.situacao==='Pagamento atrasado'?'late':info.situacao==='Pendente'?'open':'done')}>{situacaoContrato(info.situacao)}</span>
-    <section><h4>Cliente</h4><dl>
+    <section><h4>Mutuário</h4><dl>
      <div><dt>Código</dt><dd>{info.cliente.codigo??'—'}</dd></div>
      <div><dt>Nome</dt><dd>{info.cliente.nome}</dd></div>
      <div><dt>Contacto</dt><dd>{info.cliente.contacto?<a href={'tel:+'+phoneDigits(info.cliente.contacto)}><Phone size={13}/> {info.cliente.contacto}</a>:'—'}</dd></div>
@@ -257,7 +257,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
     <div className="cis-info-actions">
      <button type="button" onClick={()=>onOpenContracts(info.contrato)}><FileText size={15}/> Abrir contrato e prestações</button>
-     <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao cliente</button>
+     <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao mutuário</button>
      <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto de conta (PDF)'}</button>
     </div>
    </aside>
@@ -277,7 +277,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <section className="cis-evidence-client"><h2>Filtros</h2><dl>
      <div><dt>Conta</dt><dd>{geralDoc.filtros.conta??'Todas'}</dd></div>
      <div><dt>Tipo</dt><dd>{geralDoc.filtros.tipo==='entradas'?'Entradas':geralDoc.filtros.tipo==='saidas'?'Saídas':'Entradas e saídas'}</dd></div>
-     <div><dt>Cliente</dt><dd>{geralDoc.filtros.cliente??'Todos'}</dd></div>
+     <div><dt>Mutuário</dt><dd>{geralDoc.filtros.cliente??'Todos'}</dd></div>
      <div><dt>Contrato</dt><dd>{geralDoc.filtros.contrato??'Todos'}</dd></div>
     </dl></section>
     <section className="cis-evidence-summary cis-evidence-summary-3">

@@ -27,7 +27,7 @@ const SECTIONS:Section[]=[
    {k:'contacto_alternativo',label:'Contacto alternativo',type:'text',placeholder:'Opcional'},
    {k:'email',label:'Email',type:'email',placeholder:'geral@empresa.co.mz'}]},
   {title:'Proprietário',icon:UserRound,fields:[{k:'proprietario',label:'Nome do proprietário',type:'text',wide:true}]}]},
- {id:'cobranca',kicker:'Operacional',title:'Cobrança e juros de mora',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos clientes.',
+ {id:'cobranca',kicker:'Operacional',title:'Cobrança e juros de mora',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos mutuários.',
   used:['Política da empresa (registo)','Lembretes › Centro de mensagens'],
   note:'Hoje o CIS calcula os juros de mora pela taxa de cada contrato e só os cobra quando o gestor marca «Cobrar juros de mora». Estas regras ficam registadas como política da empresa; os juros de mora automáticos só serão ligados depois de aprovados, para não alterar contratos em curso.',
   groups:[
@@ -39,9 +39,9 @@ const SECTIONS:Section[]=[
    {k:'dias_carencia',label:'Período de carência',type:'number',unit:'dias',help:'Dias entre o desembolso e o início da contagem.'}]},
   {title:'Calendário e avisos',icon:Info,fields:[
    {k:'fim_de_semana',label:'Prestações ao fim de semana',type:'select',options:[['permitir','Permitir sábados e domingos'],['adiar','Adiar para segunda-feira'],['antecipar','Antecipar para sexta-feira']]},
-   {k:'modalidade_calendario',label:'Modalidade do calendário',type:'select',options:[['dias_corridos','Dias corridos (15 / 30 dias)'],['mesmo_dia_mes','Mesmo dia de cada mês']]},
+   {k:'modalidade_calendario',label:'Calendário das prestações',type:'select',options:[['dias_corridos','Dias corridos (15 / 30 dias)'],['mesmo_dia_mes','Mesmo dia de cada mês']]},
    {k:'lembrete_dias_antes',label:'Lembrete antes do vencimento',type:'number',unit:'dias'},
-   {k:'canal_notificacao',label:'Canal de notificação ao cliente',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
+   {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
  {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
    {k:'score_minimo',label:'Score mínimo para aprovação',type:'number',unit:'0–100'},

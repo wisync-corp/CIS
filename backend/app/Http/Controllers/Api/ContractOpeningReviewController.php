@@ -90,7 +90,7 @@ final class ContractOpeningReviewController extends Controller
         $rows = DB::connection('mysql_legacy')->table('Clientes')
             ->where('ID', $values['cliente_id'])->limit(2)
             ->get(['ID','Numeração','Nome Completo','Cidade']);
-        abort_if($rows->count() !== 1, 422, 'Cliente inexistente ou identificador duplicado.');
+        abort_if($rows->count() !== 1, 422, 'Mutuário inexistente ou identificador duplicado.');
 
         $issues = [];
         $rate = null;
@@ -194,7 +194,7 @@ final class ContractOpeningReviewController extends Controller
             'dados_verificados' => count($issues) === 0,
             'autorizado_para_gravar' => false, // aguardando desembolso integrado por conta da Caixa
             'pendencias' => [
-                'O servidor verificará novamente saldo disponível, taxa, cliente e esquema antes de gravar.',
+                'O servidor verificará novamente saldo disponível, taxa, mutuário e esquema antes de gravar.',
                 'Todas as quantias e parcelas são inteiras; os juros são arredondados para cima e o capital é reconciliado integralmente.',
                 'A nova abertura real está bloqueada até integrar saída por conta reconciliada na Caixa, com registo atómico e permissões.',
             ],

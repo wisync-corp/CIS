@@ -77,7 +77,7 @@ final class ClientSecurityInfoController extends Controller
         if ($hasThirdParty && (!$validated['referencia_contacto_informado']
             || trim((string)($validated['pessoa_referencia_nome'] ?? '')) === ''
             || trim((string)($validated['pessoa_referencia_contacto'] ?? '')) === '')) {
-            return response()->json(['message' => 'Preencha nome e contacto da pessoa de referência e confirme que o cliente foi informado.'], 422);
+            return response()->json(['message' => 'Preencha nome e contacto da pessoa de referência e confirme que o mutuário foi informado.'], 422);
         }
 
         // O utilizador mysql_editor dispõe de UPDATE apenas sobre os campos autorizados.
@@ -97,7 +97,7 @@ final class ClientSecurityInfoController extends Controller
             abort_if($rows->count() !== 1, $rows->isEmpty() ? 404 : 409);
             $db->table('Clientes')->where('ID', $id)->update($values);
         }, 3);
-        return response()->json(['message' => 'Informações complementares actualizadas na ficha do cliente.'])
+        return response()->json(['message' => 'Informações complementares actualizadas na ficha do mutuário.'])
             ->header('Cache-Control', 'no-store, private');
     }
 }

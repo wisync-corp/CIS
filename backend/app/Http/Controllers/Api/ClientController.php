@@ -34,12 +34,12 @@ class ClientController extends Controller {
   $this->allowed();$data=$this->validateData($request);
   $data['created_by']=$request->user()->id;$data['created_at']=now();$data['updated_at']=now();
   $id=DB::connection('sqlite')->table('clients')->insertGetId($data);
-  return response()->json(['id'=>$id,'message'=>'Cliente registado no CIS local.'],201);
+  return response()->json(['id'=>$id,'message'=>'Mutuário registado no CIS local.'],201);
  }
  public function update(Request $request,int $id) {
   $this->allowed();$data=$this->validateData($request);$data['updated_at']=now();
   $updated=DB::connection('sqlite')->table('clients')->where('id',$id)->where('created_by',$request->user()->id)->update($data);
-  abort_if(!$updated,404,'Cliente não encontrado.');
-  return response()->json(['message'=>'Cliente actualizado.']);
+  abort_if(!$updated,404,'Mutuário não encontrado.');
+  return response()->json(['message'=>'Mutuário actualizado.']);
  }
 }

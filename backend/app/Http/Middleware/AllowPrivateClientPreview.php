@@ -17,10 +17,10 @@ final class AllowPrivateClientPreview
         $preview = filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN);
         $user = $request->user();
         if (!$approved || !$preview) {
-            abort(503, 'Consulta de clientes ainda não autorizada neste ambiente.');
+            abort(503, 'Consulta de mutuários ainda não autorizada neste ambiente.');
         }
         if (!$user || !$user->active || $user->role !== 'administrador') {
-            abort(403, 'Consulta de clientes permitida apenas ao administrador autorizado.');
+            abort(403, 'Consulta de mutuários permitida apenas ao administrador autorizado.');
         }
         $response = $next($request);
         $response->headers->set('Cache-Control', 'no-store, private');

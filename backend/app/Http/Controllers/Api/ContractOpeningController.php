@@ -182,9 +182,9 @@ final class ContractOpeningController extends Controller
                     ->limit(2)
                     ->get(['ID','Nome Completo','Cidade']);
                 abort_if($buyer->count()!==1,422,
-                    'Cliente inexistente ou identificador duplicado.');
+                    'Mutuário inexistente ou identificador duplicado.');
                 $buyer = $buyer[0];
-                abort_if(!trim((string)$buyer->{'Nome Completo'}),422,'Cliente sem nome.');
+                abort_if(!trim((string)$buyer->{'Nome Completo'}),422,'Mutuário sem nome.');
 
                 $rate=(float)$d['taxa_informada'];
                 $band='';
@@ -217,7 +217,7 @@ final class ContractOpeningController extends Controller
                     ->where('Data de Inicio',$d['data_inicio'])
                     ->whereBetween('Quantia Creditada',[(float)$d['montante']-0.01,(float)$d['montante']+0.01])
                     ->exists();
-                abort_if($dup,409,'Já existe contrato com mesmo cliente, data e montante. Verifique a carteira.');
+                abort_if($dup,409,'Já existe contrato com mesmo mutuário, data e montante. Verifique a carteira.');
 
                 $max=(int)$db->table('Contractos')->max('Nº');
                 $sequence=$max+1;

@@ -9,9 +9,9 @@ type Preview={contrato:string;cliente:string;contacto:string|null;telefone:strin
 type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada';jobId?:string};
 type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados';
 const GROUPS:{id:Group;label:string;hint:string}[]=[
- {id:'todos',label:'Todos os contactos',hint:'Um por cliente (contrato mais recente)'},
- {id:'activos',label:'Contactos activos',hint:'Clientes com contrato em aberto'},
- {id:'inactivos',label:'Contactos inactivos',hint:'Clientes sem contratos em aberto'},
+ {id:'todos',label:'Todos os contactos',hint:'Um por mutuário (contrato mais recente)'},
+ {id:'activos',label:'Contactos activos',hint:'Mutuários com contrato em curso'},
+ {id:'inactivos',label:'Contactos inactivos',hint:'Mutuários sem contratos em curso'},
  {id:'pendentes',label:'Contratos em curso',hint:'Dentro do prazo'},
  {id:'atrasados',label:'Contratos em atraso',hint:'Com prestações em atraso'},
 ];
@@ -92,7 +92,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  async function sendOne(canal:'whatsapp'|'sms'|'copia'){
   if(!preview)return;setError('');
   if(canal==='copia'){try{await navigator.clipboard.writeText(text);setNotice('Mensagem copiada.');}catch{setError('Não foi possível copiar automaticamente; seleccione o texto e copie.');return;}}
-  else if(!preview.telefone){setError('Cliente sem contacto válido.');return;}
+  else if(!preview.telefone){setError('Mutuário sem contacto válido.');return;}
   else if(canal==='whatsapp')openWa(waUrl(preview.telefone,text));else window.open(smsUrl(preview.telefone,text),'_blank','noopener');
   await log({contrato:preview.contrato,telefone:preview.telefone,canal,mensagem:text});
   if(canal!=='copia')setNotice(canal==='whatsapp'?'Mensagem aberta no WhatsApp Web: carregue em Enviar nessa página.':'Mensagem aberta no SMS: confirme o envio.');
@@ -143,8 +143,8 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
 
  return <section className={'cis-panel cis-msg'+(sendMode?' cis-msg-send':'')}>
   <header className="cis-msg-head">
-   <div><h2><MessageSquare size={18}/> {sendMode?'Mensagem ao cliente':'Centro de mensagens'}</h2>
-    <p>{sendMode?<>Contrato <b>{contrato}</b>{preview?<> · {preview.cliente} · {situ(preview.situacao)}</>:null}</>:'Escolha um modelo, ajuste o texto e envie a um cliente ou a um grupo.'}</p></div>
+   <div><h2><MessageSquare size={18}/> {sendMode?'Mensagem ao mutuário':'Centro de mensagens'}</h2>
+    <p>{sendMode?<>Contrato <b>{contrato}</b>{preview?<> · {preview.cliente} · {situ(preview.situacao)}</>:null}</>:'Escolha um modelo, ajuste o texto e envie a um mutuário ou a um grupo.'}</p></div>
    <div className="cis-msg-head-right">
     {wa.available?<span className="cis-msg-chip on"><Puzzle size={14}/> WhatsApp Web automático{wa.version?` · v${wa.version}`:''}{wa.running?` · a enviar (${wa.pendentes})`:''}{wa.aguardaLogin?' · aguarda login':''}</span>
      :<button type="button" className="cis-msg-chip off" onClick={()=>setHelp(v=>!v)} aria-expanded={help}><Puzzle size={14}/> Extensão não detectada · como ligar</button>}
@@ -201,7 +201,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
     <div className="cis-msg-card">
      <h3>Pré-visualização</h3>
      <div className="cis-wa-screen">
-      <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Cliente'):'Cliente (exemplo)'}</b><small>{sendMode?(preview?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
+      <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Mutuário'):'Mutuário (exemplo)'}</b><small>{sendMode?(preview?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
       <div className="cis-wa-chat"><div className="cis-wa-bubble">
        {image&&<img src={image.dataUrl} alt=""/>}
        <WaText text={sendMode?text:body} fields={!sendMode}/>
@@ -218,7 +218,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
         <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
         <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
        </div>
-       <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Cliente sem contacto registado.':''}</small>
+       <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Mutuário sem contacto registado.':''}</small>
       </div>
      </>}
     </div>
@@ -242,7 +242,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
      {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar</button>}
      <button type="button" className={wa.available?'':'primary'} disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button>
     </div></div>
-   <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
+   <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Mutuário</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
     <tbody>{queue.map((r,i)=><tr key={r.contrato+i} className={r.estado==='aberta'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{r.contacto??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td><td>{statusCell(r,i)}</td></tr>)}</tbody></table></div>
   </div>}
 
