@@ -24,6 +24,23 @@ final class ExtractoController extends Controller
     private const OPEN=['Pendente','Pagamento Atrasado'];
     private const PAID=['Pago','Pago em Atraso','Renovado'];
 
+    /** Erros de base de dados com causa legível (código MySQL) em vez de «Server Error». */
+    private function guard(callable $f)
+    {
+        try { return $f(); }
+        catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            $code=(int)($e->errorInfo[1]??0);
+            $why=match ($code) {
+                1142,1143=>'o utilizador de leitura não tem permissão sobre uma tabela/coluna',
+                1054=>'coluna inexistente nesta base',
+                1146=>'tabela inexistente nesta base',
+                default=>'erro de base de dados',
+            };
+            abort(503,'Extracto indisponível: '.$why.' (MySQL '.$code.'). Detalhe no registo do servidor.');
+        }
+    }
+
     private function today(): string
     {
         return now('Africa/Maputo')->toDateString();
@@ -57,13 +74,18 @@ final class ExtractoController extends Controller
     private static function describe(object $r): string
     {
         $d=trim((string)$r->{'Descrição'});
-        if (in_array($d,['Desembolso de Empréstimo','Aumento de Crédito'],true)) return $d.' - '.$r->Contracto;
-        if ($d==='Receita de Juros') return $d.' - '.$r->Contracto.' - '.$r->Cliente.' - '.$r->Parcela;
+        if (in_array($d,['Desembolso de Empréstimo','Aumento de Crédito'],true)) return $d.' - '.($r->Contracto??'');
+        if ($d==='Receita de Juros') return $d.' - '.($r->Contracto??'').' - '.($r->Cliente??'').' - '.($r->Parcela??'');
         return $d;
     }
 
     /** GET /cis/extractos/geral */
     public function geral(Request $request)
+    {
+        return $this->guard(fn()=>$this->geralImpl($request));
+    }
+
+    private function geralImpl(Request $request)
     {
         // Movimentos da Caixa: mesmo acesso que a página Caixa (só administrador).
         abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
@@ -110,26 +132,44 @@ final class ExtractoController extends Controller
     private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false)
     {
         $q=clone $q;
-        $cols=['e.Nr','e.Contracto','e.Cliente','e.Parcela','e.Tipo de Movimento','e.Descrição','e.Data da Operação','e.Valor','e.usuario'];
-        if ($hasAccount) {
-            $q->leftJoin('cis_cash_accounts as a','a.id','=','e.account_id');
-            $cols[]='a.code as conta';
+        // Só colunas que existem no Extracto desta base (o legado varia entre instalações).
+        $have=array_flip($q->getConnection()->getSchemaBuilder()->getColumnListing('Extracto'));
+        $cols=[];
+        foreach (['Nr','Contracto','Cliente','Parcela','Tipo de Movimento','Descrição','Data da Operação','Valor','usuario','account_id'] as $c) {
+            if (isset($have[$c])) $cols[]='e.'.$c;
         }
         $q->orderByDesc('e.Data da Operação')->orderByDesc('e.Nr');
         $limit($q);
-        return $q->get($cols)->map(fn($r)=>[
+        $rows=$q->get($cols);
+        // Códigos das contas pela ligação principal: o utilizador de leitura do legado
+        // não tem (nem deve ter) acesso às tabelas cis_cash_*.
+        $codes=[];
+        if ($hasAccount) {
+            $ids=$rows->pluck('account_id')->filter()->unique()->values()->all();
+            if ($ids) {
+                try { $codes=DB::table('cis_cash_accounts')->whereIn('id',$ids)->pluck('code','id')->all(); }
+                catch (\Throwable $e) { report($e); }
+            }
+        }
+        return $rows->map(fn($r)=>[
                 'nr'=>(int)$r->Nr,'codigo'=>'OP-'.$r->Nr,
                 'descricao'=>$public?self::publicDescription($r):self::describe($r),
                 'data'=>substr((string)$r->{'Data da Operação'},0,10),
                 'tipo'=>$r->{'Tipo de Movimento'}==='Entradas'?'entrada':'saida',
                 'valor'=>self::money($r->Valor),
-                'contrato'=>$r->Contracto,'cliente'=>$r->Cliente,'parcela'=>$r->Parcela,
-                'conta'=>$r->conta??null,'usuario'=>$r->usuario,
+                'contrato'=>$r->Contracto??null,'cliente'=>$r->Cliente??null,'parcela'=>$r->Parcela??null,
+                'conta'=>isset($r->account_id)&&$r->account_id!==null?($codes[$r->account_id]??null):null,
+                'usuario'=>$r->usuario??null,
             ])->values()->all();
     }
 
     /** GET /cis/extractos/geral-evidencia : extracto geral imprimível (filtros actuais, até 5000 linhas). */
     public function geralEvidencia(Request $request)
+    {
+        return $this->guard(fn()=>$this->geralEvidenciaImpl($request));
+    }
+
+    private function geralEvidenciaImpl(Request $request)
     {
         abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
         $f=$this->filters($request);
@@ -237,6 +277,11 @@ final class ExtractoController extends Controller
     /** GET /cis/extractos/clientes */
     public function clientes(Request $request)
     {
+        return $this->guard(fn()=>$this->clientesImpl($request));
+    }
+
+    private function clientesImpl(Request $request)
+    {
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
         [$all,$tot]=$this->summarise($this->clientRows($db,$f),$this->today(),$f['estado']??'todos');
@@ -251,6 +296,11 @@ final class ExtractoController extends Controller
 
     /** GET /cis/extractos/contratos?cliente= : contratos de um cliente (como o combo do VBA). */
     public function contratos(Request $request)
+    {
+        return $this->guard(fn()=>$this->contratosImpl($request));
+    }
+
+    private function contratosImpl(Request $request)
     {
         $d=$request->validate(['cliente'=>['nullable','string','max:255'],'termo'=>['nullable','string','max:100']]);
         $db=DB::connection('mysql_legacy');
@@ -269,6 +319,11 @@ final class ExtractoController extends Controller
 
     /** GET /cis/extractos/evidencia?cliente=&contrato=&inicio=&fim= : extracto para entregar ao cliente. */
     public function evidencia(Request $request)
+    {
+        return $this->guard(fn()=>$this->evidenciaImpl($request));
+    }
+
+    private function evidenciaImpl(Request $request)
     {
         $f=$this->filters($request);
         abort_if($f['cliente']==='' && $f['contrato']==='',422,'Escolha o cliente ou o contrato para gerar o extracto.');
