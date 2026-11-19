@@ -529,25 +529,27 @@ Artisan::command('cis:actualizar-contratos {--aplicar : Gravar o recálculo das 
     $open = $db->table('Contractos')
         ->whereNotIn('Estado do Contrato', ['Finalizado', 'Cancelado', 'Anulado'])
         ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado']);
-    $movement = static function ($query) {
-        $query->selectRaw('1')->from('Extracto')
-            ->whereColumn('Extracto.Contracto', 'Contractos.Nr do Contracto')
-            ->whereColumn('Extracto.Parcela', 'Contractos.Nº da Parcela')
+    // Os identificadores são comparados como texto exacto para evitar coerção numérica.
+    $linkedEntry = static function ($query): void {
+        $query->whereRaw("TRIM(`Extracto`.`Contracto`) <> ''")
+            ->whereRaw("TRIM(`Extracto`.`Parcela`) <> ''")
+            ->whereRaw('CAST(`Extracto`.`Contracto` AS BINARY) = CAST(`Contractos`.`Nr do Contracto` AS BINARY)')
+            ->whereRaw('CAST(`Extracto`.`Parcela` AS BINARY) = CAST(`Contractos`.`Nº da Parcela` AS BINARY)')
             ->where('Extracto.Tipo de Movimento', 'Entradas');
+    };
+    $movement = static function ($query) use ($linkedEntry): void {
+        $query->selectRaw('1')->from('Extracto');
+        $linkedEntry($query);
     };
     $review = (clone $open)->whereExists($movement)->count();
     $eligible = (clone $open)->whereNotExists($movement)
         ->whereNull('Data de Pagamento')
         ->where(fn ($query) => $query->whereNull('Valor Pago')->orWhere('Valor Pago', 0));
-    $this->line('Prestações em aberto com entradas no Extracto para reconciliar: '.$review);
+    $this->line('Prestações em aberto com entradas do Extracto ligadas ao contrato e à parcela: '.$review);
     $this->line('Prestações elegíveis para recálculo: '.(clone $eligible)->count());
 
     if (!$apply) {
-        $rows = (clone $open)->join('Extracto', function ($join) {
-            $join->on('Extracto.Contracto', '=', 'Contractos.Nr do Contracto')
-                ->on('Extracto.Parcela', '=', 'Contractos.Nº da Parcela')
-                ->where('Extracto.Tipo de Movimento', 'Entradas');
-        })->orderByDesc('Extracto.Nr')->limit(50)->get([
+        $rows = (clone $open)->join('Extracto', $linkedEntry)->orderByDesc('Extracto.Nr')->limit(50)->get([
             'Extracto.Nr as movimento',
             'Contractos.Nr do Contracto as contrato',
             'Contractos.Nº da Parcela as parcela',
