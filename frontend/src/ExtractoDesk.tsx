@@ -34,7 +34,7 @@ const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—'
 const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d&&m&&y?`${d}/${m}/${y}`:v;};
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
-export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void}){
+export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenContracts}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void;onOpenContracts:(numero?:string)=>void}){
  const company=useCompanyProfile(token);
  const isAdmin=role==='administrador';
  const [mode,setMode]=useState<Mode>(preset?'clientes':isAdmin?'geral':'clientes');
@@ -152,6 +152,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
      <button type="button" role="tab" aria-selected={mode==='clientes'} className={mode==='clientes'?'selected':''} onClick={()=>switchMode('clientes')}>Clientes</button>
     </div></div>
 
+   <div className="cis-extracto-actions"><button type="button" onClick={()=>onOpenContracts()}><FileText size={15}/> Ir para Contratos e prestações</button></div>
+
    {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
     <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Cobrança de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
@@ -253,6 +255,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
     </dl></section>
     {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
     <div className="cis-info-actions">
+     <button type="button" onClick={()=>onOpenContracts(info.contrato)}><FileText size={15}/> Abrir contrato e prestações</button>
      <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao cliente</button>
      <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto do cliente (PDF)'}</button>
     </div>
