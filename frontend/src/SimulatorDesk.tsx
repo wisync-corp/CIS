@@ -17,7 +17,7 @@ const formatMoney=(value:string)=>{
 const calculations:{id:Mode;title:string;description:string}[]=[
  {id:'prestacao',title:'Prestação com juros',description:'Base + juros correspondentes à taxa.'},
  {id:'juros',title:'Apenas juros',description:'Calcula os juros, sem adicionar capital.'},
- {id:'multa',title:'Multa indicativa',description:'Percentagem sobre a base introduzida; não é uma cobrança.'},
+ {id:'multa',title:'Juros de mora (indicativo)',description:'Percentagem sobre a base introduzida; não é uma cobrança.'},
 ];
 const terms:Term[]=['1 Semana','2 Semanas','3 Semanas','Mês'];
 

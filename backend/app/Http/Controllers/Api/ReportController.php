@@ -45,22 +45,22 @@ final class ReportController extends Controller
              'descricao'=>'Clientes com contratos e dados de identificação em falta (BI, NUIT, contacto, morada).',
              'base_legal'=>'Aviso n.º 10/GBM/2024, art. 138 (identificação simplificada: nome, tipo e número do documento, NUIB).'],
             // ---- Gestão (uso interno) ----
-            ['id'=>'agenda','grupo'=>'Gestão','titulo'=>'Agenda de cobranças','periodo'=>'futuro',
-             'descricao'=>'Prestações a vencer no período, dia a dia, com contacto do cliente; e vencidas por cobrar.',
+            ['id'=>'agenda','grupo'=>'Gestão','titulo'=>'Folha de cobrança','periodo'=>'futuro',
+             'descricao'=>'Prestações a vencer no período, dia a dia, com contacto do mutuário; e prestações em atraso por cobrar.',
              'base_legal'=>'Relatório de gestão interna (planeamento das cobranças).'],
             ['id'=>'atrasos','grupo'=>'Gestão','titulo'=>'Antiguidade dos atrasos','periodo'=>'data',
-             'descricao'=>'Dívida vencida por faixas de dias e lista por contrato, com contacto e último pagamento.',
+             'descricao'=>'Valor vencido por escalões de dias e lista por contrato, com contacto e último pagamento.',
              'base_legal'=>'Relatório de gestão interna (acompanhamento do risco de crédito).'],
-            ['id'=>'operadores','grupo'=>'Gestão','titulo'=>'Desempenho por operador','periodo'=>'intervalo',
-             'descricao'=>'Por utilizador que criou os contratos: desembolsos, recebido, carteira e atraso.',
+            ['id'=>'operadores','grupo'=>'Gestão','titulo'=>'Desempenho por gestor de crédito','periodo'=>'intervalo',
+             'descricao'=>'Por gestor de crédito (utilizador que registou os contratos): desembolsos, recebido, carteira, atraso e incentivos.',
              'base_legal'=>'Relatório de gestão interna (desempenho da equipa).'],
             ['id'=>'evolucao','grupo'=>'Gestão','titulo'=>'Evolução mensal','periodo'=>'ano',
-             'descricao'=>'Mês a mês: desembolsos, recebimentos, juros, carteira, carteira em risco e Caixa.',
+             'descricao'=>'Mês a mês: desembolsos, recebimentos, juros, carteira, PAR 30 e Caixa.',
              'base_legal'=>'Relatório de gestão interna (tendências e resultados).'],
             ['id'=>'caixa','grupo'=>'Gestão','titulo'=>'Caixa por conta','periodo'=>'intervalo',
              'descricao'=>'Entradas e saídas de cada conta no período, separadas por tipo de movimento.',
              'base_legal'=>'Relatório de gestão interna (tesouraria).'],
-            ['id'=>'novocredito','grupo'=>'Gestão','titulo'=>'Clientes para novo crédito','periodo'=>'nenhum',
+            ['id'=>'novocredito','grupo'=>'Gestão','titulo'=>'Mutuários para novo crédito','periodo'=>'nenhum',
              'descricao'=>'Score de crédito por pontualidade, com os limiares e limites das Configurações da empresa.',
              'base_legal'=>'Relatório de gestão interna (renovação e fidelização).'],
         ];
@@ -205,31 +205,31 @@ final class ReportController extends Controller
             'nota'=>'Carteira e carteira em risco reconstituídas à data '.CarbonImmutable::parse($fim)->format('d/m/Y').' (prestação iniciada e não paga até essa data). Capital = Valor a Pagar − Juros.',
             'resumo'=>[
                 ['Contratos desembolsados',(string)$disb->count()],['Valor desembolsado',self::m($disb->sum('q')).' MT'],
-                ['Carteira em curso',self::m($cart).' MT'],['Valor em dívida (com juros)',self::m($owed).' MT'],
-                ['Carteira em risco > 30 dias',self::pct($parC($par30),$cart).'%'],['Recebido no período',self::m($tot).' MT'],
-                ['Clientes activos',(string)$activos],['Clientes novos',(string)$novos],
+                ['Carteira em curso',self::m($cart).' MT'],['Saldo em dívida (com juros)',self::m($owed).' MT'],
+                ['Carteira em risco a 30 dias (PAR 30)',self::pct($parC($par30),$cart).'%'],['Recebido no período',self::m($tot).' MT'],
+                ['Mutuários activos',(string)$activos],['Mutuários novos',(string)$novos],
             ],
             'seccoes'=>[
                 ['titulo'=>'1. Desembolsos','colunas'=>['Indicador','Valor'],'linhas'=>[
                     ['Número de contratos desembolsados',(string)$disb->count()],
                     ['Valor desembolsado (MT)',self::m($disb->sum('q'))],
                     ['Montante médio por contrato (MT)',self::m($disb->count()?$disb->avg('q'):0)],
-                    ['Taxa de juro média (%)',number_format($avgRate,2,'.','')],
-                    ['Clientes novos (primeiro contrato no período)',(string)$novos],
+                    ['Taxa de juro média (% por período)',number_format($avgRate,2,'.','')],
+                    ['Mutuários novos (primeiro contrato no período)',(string)$novos],
                 ]],
                 ['titulo'=>'2. Carteira à data de '.CarbonImmutable::parse($fim)->format('d/m/Y'),'colunas'=>['Indicador','Valor'],'linhas'=>[
                     ['Contratos em curso',(string)$out->pluck('Nr do Contracto')->unique()->count()],
-                    ['Clientes activos',(string)$activos],
+                    ['Mutuários activos',(string)$activos],
                     ['Carteira em curso — capital (MT)',self::m($cart)],
-                    ['Valor em dívida com juros (MT)',self::m($owed)],
+                    ['Saldo em dívida com juros (MT)',self::m($owed)],
                 ]],
-                ['titulo'=>'3. Carteira em risco (prestações em atraso)','tom'=>'risco','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
+                ['titulo'=>'3. Carteira em risco (PAR)','tom'=>'risco','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
                     ['Qualquer atraso',(string)$par1->count(),(string)$par1->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par1)),self::pct($parC($par1),$cart)],
-                    ['Mais de 30 dias',(string)$par30->count(),(string)$par30->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par30)),self::pct($parC($par30),$cart)],
-                    ['Mais de 90 dias',(string)$par90->count(),(string)$par90->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par90)),self::pct($parC($par90),$cart)],
+                    ['Mais de 30 dias (PAR 30)',(string)$par30->count(),(string)$par30->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par30)),self::pct($parC($par30),$cart)],
+                    ['Mais de 90 dias (PAR 90)',(string)$par90->count(),(string)$par90->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par90)),self::pct($parC($par90),$cart)],
                 ]],
                 ['titulo'=>'4. Recebimentos no período','colunas'=>['Componente','Valor (MT)'],'linhas'=>[
-                    ['Capital (amortização)',self::m($cap)],['Juros',self::m($jur)],['Multas',self::m($mul)],['Total recebido',self::m($tot)],
+                    ['Capital (amortização)',self::m($cap)],['Juros',self::m($jur)],['Juros de mora',self::m($mul)],['Total recebido',self::m($tot)],
                     ['Prestações pagas (n.º)',(string)$paid->count()],['Renovações (n.º)',(string)$ren->count()],['Juros de renovações',self::m($ren->sum(fn($r)=>(float)$r->{'Valor de Juros'}))],
                 ]],
                 ['titulo'=>'5. Distribuição dos desembolsos por montante','colunas'=>['Faixa (MT)','Contratos','Valor (MT)','% do valor'],'linhas'=>$dist,'grafico'=>['Valor (MT)']],
@@ -237,7 +237,7 @@ final class ReportController extends Controller
                 ['titulo'=>'7. Caixa no período (sem transferências internas)','colunas'=>['Movimento','Valor (MT)'],'linhas'=>[
                     ['Entradas',self::m((float)($cx->e??0))],['Saídas',self::m((float)($cx->s??0))],['Saldo do período',self::m((float)($cx->e??0)-(float)($cx->s??0))],
                 ]],
-                ['titulo'=>'8. Maiores exposições (10 clientes)','colunas'=>['Cliente','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
+                ['titulo'=>'8. Maiores exposições (10 clientes)','colunas'=>['Mutuário','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
             ],
         ];
     }
@@ -274,7 +274,7 @@ final class ReportController extends Controller
             'nota'=>'Modelo provisório: o formato oficial é definido por Circular do Banco de Moçambique (Aviso 12/GBM/2024, art. 11). O reporte deve ser feito até 24 horas após cada operação; este ficheiro dá a situação de todos os contratos à data indicada. Contratos liquidados nos últimos 30 dias incluídos.',
             'resumo'=>[['Contratos reportáveis',(string)count($lines)],['Saldo total (capital)',self::m($sum).' MT'],['Contratos em atraso',(string)$late],['Com identificação em falta',(string)$missing]],
             'seccoes'=>[['titulo'=>'Operações de crédito à data de '.CarbonImmutable::parse($d)->format('d/m/Y'),
-                'colunas'=>['Contrato','Cliente','N.º cliente','Tipo documento','N.º documento','NUIT','Data desembolso','Prazo','Taxa (%)','Montante (MT)','Saldo capital (MT)','Valor vencido (MT)','Dias de atraso','Situação','Data liquidação','Dados em falta'],
+                'colunas'=>['Contrato','Mutuário','N.º mutuário','Tipo documento','N.º documento','NUIT','Data desembolso','Prazo','Taxa (%)','Montante (MT)','Saldo capital (MT)','Valor vencido (MT)','Dias de atraso','Situação','Data liquidação','Dados em falta'],
                 'linhas'=>$lines]],
         ];
     }
@@ -340,7 +340,7 @@ final class ReportController extends Controller
         return [
             'nota'=>'Identificação mínima (Aviso 10/GBM/2024, art. 138): nome completo, tipo e número do documento e NUIB. O NUIB ainda não existe no cadastro do CIS. Clientes com contratos activos aparecem primeiro.',
             'resumo'=>[['Clientes com contratos',(string)$total],['Com dados em falta',(string)count($lines)],['Sem BI',(string)$cnt['BI']],['Sem NUIT',(string)$cnt['NUIT']],['Sem contacto',(string)$cnt['Contacto']]],
-            'seccoes'=>[['titulo'=>'Clientes com dados de identificação em falta','colunas'=>['Cliente','N.º cliente','Contrato activo','Contratos','Em falta','Observação'],'linhas'=>$lines]],
+            'seccoes'=>[['titulo'=>'Clientes com dados de identificação em falta','colunas'=>['Mutuário','N.º mutuário','Contrato activo','Contratos','Em falta','Observação'],'linhas'=>$lines]],
         ];
     }
     // ================================================================== GESTÃO
@@ -348,7 +348,7 @@ final class ReportController extends Controller
     private static function owed(object $r): float { return (float)$r->{'Valor a Pagar'}+(float)($r->{'Valor de Multa'}??0); }
     private static function contact(?object $cli): string { return self::v($cli,'Contacto'); }
 
-    /** Agenda de cobranças: prestações em aberto com vencimento no período (pode ser futuro). */
+    /** Folha de cobrança: prestações em aberto com vencimento no período (pode ser futuro). */
     private function agenda(string $ini,string $fim): array
     {
         abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
@@ -364,13 +364,13 @@ final class ReportController extends Controller
             ->map(fn($g,$w)=>['Semana de '.CarbonImmutable::parse($w)->format('d/m'),(string)$g->count(),self::m($g->sum(fn($r)=>self::owed($r)))])->values()->all();
         return [
             'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
-            'nota'=>'Valor = Valor a Pagar + multa já lançada. As vencidas por cobrar são as prestações em aberto com vencimento antes do início do período.',
+            'nota'=>'Valor = valor da prestação + juros de mora já lançados. As prestações em atraso por cobrar são as que venceram antes do início do período e não foram pagas.',
             'resumo'=>[['Prestações a vencer',(string)$due->count()],['Valor a cobrar',self::m($due->sum(fn($r)=>self::owed($r))).' MT'],
-                ['Clientes',(string)$due->pluck('Nº de Cliente')->unique()->count()],['Vencidas por cobrar',(string)$late->count()],['Valor vencido',self::m($late->sum(fn($r)=>self::owed($r))).' MT']],
+                ['Mutuários',(string)$due->pluck('Nº de Cliente')->unique()->count()],['Em atraso por cobrar',(string)$late->count()],['Valor vencido',self::m($late->sum(fn($r)=>self::owed($r))).' MT']],
             'seccoes'=>[
                 ['titulo'=>'1. Previsão por semana','colunas'=>['Semana','Prestações','Valor (MT)'],'linhas'=>$weeks,'grafico'=>['Valor (MT)']],
-                ['titulo'=>'2. Prestações a vencer','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$due->map($line)->values()->all()],
-                ['titulo'=>'3. Vencidas por cobrar (antes do período)','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$late->map($line)->values()->all()],
+                ['titulo'=>'2. Prestações a vencer','colunas'=>['Vencimento','Mutuário','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$due->map($line)->values()->all()],
+                ['titulo'=>'3. Prestações em atraso por cobrar (antes do período)','colunas'=>['Vencimento','Mutuário','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$late->map($line)->values()->all()],
             ],
         ];
     }
@@ -379,7 +379,7 @@ final class ReportController extends Controller
     private function atrasos(string $d): array
     {
         $rows=$this->rows();$cl=$this->clients();
-        $bands=[['1 – 7 dias',1,7],['8 – 30 dias',8,30],['31 – 60 dias',31,60],['61 – 90 dias',61,90],['Mais de 90 dias',91,PHP_INT_MAX]];
+        $bands=[['1 – 7 dias',1,7],['8 – 30 dias',8,30],['31 – 60 dias',31,60],['61 – 90 dias',61,90],['Mais de 90 dias (PAR 90)',91,PHP_INT_MAX]];
         $lines=[];$agg=array_fill(0,5,['p'=>0,'c'=>0,'v'=>0.0]);$total=0.0;
         foreach ($rows->groupBy('Nr do Contracto') as $n=>$c) {
             $over=$c->filter(fn($r)=>self::outstandingAt($r,$d) && ($x=self::d($r->{'Data de Cobrança'}))!=='' && $x<$d);
@@ -396,16 +396,16 @@ final class ReportController extends Controller
         $tab=[];foreach ($bands as $i=>$b) $tab[]=[$b[0],(string)$agg[$i]['p'],(string)$agg[$i]['c'],self::m($agg[$i]['v']),self::pct($agg[$i]['v'],$total)];
         return [
             'data_referencia'=>$d,
-            'nota'=>'Dias de atraso contados desde a prestação vencida mais antiga do contrato. Valor = Valor a Pagar + multa já lançada.',
-            'resumo'=>[['Contratos em atraso',(string)count($lines)],['Valor vencido',self::m($total).' MT'],['Mais de 30 dias',self::m($agg[2]['v']+$agg[3]['v']+$agg[4]['v']).' MT'],['Mais de 90 dias',self::m($agg[4]['v']).' MT']],
+            'nota'=>'Dias de atraso contados desde a prestação em atraso mais antiga do contrato. Valor = valor da prestação + juros de mora já lançados.',
+            'resumo'=>[['Contratos em atraso',(string)count($lines)],['Valor vencido',self::m($total).' MT'],['Mais de 30 dias (PAR 30)',self::m($agg[2]['v']+$agg[3]['v']+$agg[4]['v']).' MT'],['Mais de 90 dias (PAR 90)',self::m($agg[4]['v']).' MT']],
             'seccoes'=>[
                 ['titulo'=>'1. Por faixa de atraso','colunas'=>['Faixa','Prestações','Contratos','Valor vencido (MT)','% do vencido'],'linhas'=>$tab,'grafico'=>['Valor vencido (MT)'],'tom'=>'risco'],
-                ['titulo'=>'2. Contratos em atraso (mais antigos primeiro)','colunas'=>['Cliente','Contacto','Contrato','Prestações vencidas','Dias de atraso','Valor vencido (MT)','Faixa','Último pagamento','Operador'],'linhas'=>$lines],
+                ['titulo'=>'2. Contratos em atraso (mais antigos primeiro)','colunas'=>['Mutuário','Contacto','Contrato','Prestações em atraso','Dias de atraso','Valor vencido (MT)','Faixa','Último pagamento','Gestor de crédito'],'linhas'=>$lines],
             ],
         ];
     }
 
-    /** Desempenho por operador (utilizador que criou a primeira linha do contrato). */
+    /** Desempenho por gestor de crédito (utilizador que criou a primeira linha do contrato). */
     private function operadores(string $ini,string $fim): array
     {
         abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
@@ -413,7 +413,7 @@ final class ReportController extends Controller
         $ckey=fn($r)=>(int)$r->{'Nº de Cliente'}?:(string)$r->{'Nome do Cliente'};
         $firstStart=[];foreach ($rows as $r) { $k=$ckey($r);$d=self::d($r->{'Data de Inicio'});if ($d!=='' && (!isset($firstStart[$k])||$d<$firstStart[$k])) $firstStart[$k]=$d; }
         foreach ($rows->groupBy('Nr do Contracto') as $c) {
-            $first=$c->sortBy('Ordem')->first();$op=trim((string)($first->usuario??''))?:'(sem operador)';
+            $first=$c->sortBy('Ordem')->first();$op=trim((string)($first->usuario??''))?:'(sem gestor)';
             $per[$op]??=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'cart'=>0.0,'atr'=>0.0,'cli'=>[],'ativos'=>0,'novos'=>0,'ren'=>0];
             $start=self::d($c->min('Data de Inicio'));
             if ($start>=$ini && $start<=$fim) { $per[$op]['n']++; $per[$op]['v']+=(float)$c->max('Quantia Creditada'); if (($firstStart[$ckey($first)]??'')===$start) $per[$op]['novos']++; }
@@ -436,11 +436,11 @@ final class ReportController extends Controller
         $configured=$iN>0||$iR>0||$iC>0||$iJ>0;
         return [
             'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
-            'nota'=>'Operador = utilizador que registou o contrato (campo «usuario» da primeira prestação). Carteira e atraso à data final do período. '
-                .($configured?sprintf('Incentivo = clientes novos × %s + renovações × %s + %s%% da carteira + %s%% dos juros e multas recebidos (Configurações › Incentivos).',self::m($iN),self::m($iR),rtrim(rtrim(number_format($iC,4,'.',''),'0'),'.'),rtrim(rtrim(number_format($iJ,4,'.',''),'0'),'.'))
-                    :'Incentivos por configurar (Definições › Configurações da empresa › Incentivos).'),
-            'resumo'=>[['Operadores',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT'],['Incentivos estimados',self::m(array_sum(array_map($inc,$per))).' MT']],
-            'seccoes'=>[['titulo'=>'Desempenho por operador','colunas'=>['Operador','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e multas (MT)','Contratos em curso','Clientes activos','Carteira (MT)','% carteira > 30 dias','Clientes novos','Renovações','Incentivo estimado (MT)'],'linhas'=>$lines]],
+            'nota'=>'Gestor de crédito = utilizador que registou o contrato (campo «usuario» da primeira prestação). Carteira e atraso à data final do período. '
+                .($configured?sprintf('Incentivo = mutuários novos × %s + renovações × %s + %s%% da carteira + %s%% dos juros e juros de mora recebidos (Definições › Incentivos).',self::m($iN),self::m($iR),rtrim(rtrim(number_format($iC,4,'.',''),'0'),'.'),rtrim(rtrim(number_format($iJ,4,'.',''),'0'),'.'))
+                    :'Incentivos por configurar (Definições › Incentivos).'),
+            'resumo'=>[['Gestores de crédito',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT'],['Incentivos estimados',self::m(array_sum(array_map($inc,$per))).' MT']],
+            'seccoes'=>[['titulo'=>'Desempenho por gestor de crédito','colunas'=>['Gestor de crédito','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e mora (MT)','Contratos em curso','Mutuários activos','Carteira (MT)','PAR 30 (%)','Mutuários novos','Renovações','Incentivo estimado (MT)'],'linhas'=>$lines]],
         ];
     }
 
@@ -472,8 +472,8 @@ final class ReportController extends Controller
         return [
             'ano'=>$ano,
             'nota'=>'Carteira e carteira em risco (> 30 dias) no fim de cada mês. Caixa sem transferências internas.',
-            'resumo'=>[['Contratos desembolsados',(string)$tot['n']],['Valor desembolsado',self::m($tot['v']).' MT'],['Recebido',self::m($tot['rec']).' MT'],['Juros recebidos',self::m($tot['jur']).' MT'],['Multas recebidas',self::m($tot['mul']).' MT']],
-            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Multas (MT)','Carteira no fim (MT)','% carteira > 30 dias','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines,'grafico'=>['Desembolsado (MT)','Recebido (MT)'],'total_final'=>true]],
+            'resumo'=>[['Contratos desembolsados',(string)$tot['n']],['Valor desembolsado',self::m($tot['v']).' MT'],['Recebido',self::m($tot['rec']).' MT'],['Juros recebidos',self::m($tot['jur']).' MT'],['Juros de mora recebidos',self::m($tot['mul']).' MT']],
+            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Juros de mora (MT)','Carteira no fim (MT)','PAR 30 (%)','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines,'grafico'=>['Desembolsado (MT)','Recebido (MT)'],'total_final'=>true]],
         ];
     }
 
@@ -541,9 +541,9 @@ final class ReportController extends Controller
         $cnt=array_count_values(array_column($lines,8));$ok=count(array_filter($lines,fn($l)=>$l[9]==='Sim'));
         return [
             'nota'=>"Score = % de prestações pagas sem atraso (−20 se tiver crédito activo em atraso). Baixo risco ≥ $low; risco médio ≥ $mid; aprovável com score ≥ $min. "
-                ."Entram clientes com menos de $maxAct crédito(s) activo(s) e no máximo $maxLate em atraso (Configurações › Credit scoring). A decisão final é do gestor.",
-            'resumo'=>[['Clientes avaliados',(string)count($lines)],['Aprováveis (score ≥ '.$min.')',(string)$ok],['Baixo risco',(string)($cnt['Baixo risco']??0)],['Risco médio',(string)($cnt['Risco médio']??0)],['Alto risco',(string)($cnt['Alto risco']??0)]],
-            'seccoes'=>[['titulo'=>$maxAct===1?'Clientes sem contratos em aberto':'Clientes que podem receber novo crédito','colunas'=>['Cliente','Contacto','Contratos','Total creditado (MT)','Prestações pagas','Pagas em atraso','Última liquidação','Score','Classificação','Aprovável','Créditos activos'],'linhas'=>$lines]],
+                ."Entram mutuários com menos de $maxAct crédito(s) activo(s) e no máximo $maxLate em atraso (Definições › Credit scoring). A decisão final é do gestor de crédito.",
+            'resumo'=>[['Mutuários avaliados',(string)count($lines)],['Aprováveis (score ≥ '.$min.')',(string)$ok],['Baixo risco',(string)($cnt['Baixo risco']??0)],['Risco médio',(string)($cnt['Risco médio']??0)],['Alto risco',(string)($cnt['Alto risco']??0)]],
+            'seccoes'=>[['titulo'=>$maxAct===1?'Mutuários sem contratos em curso':'Mutuários que podem receber novo crédito','colunas'=>['Mutuário','Contacto','Contratos','Capital desembolsado (MT)','Prestações pagas','Pagas em atraso','Última liquidação','Score','Classificação','Aprovável','Créditos activos'],'linhas'=>$lines]],
         ];
     }
 }

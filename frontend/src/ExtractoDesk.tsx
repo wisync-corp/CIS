@@ -5,6 +5,7 @@ import {createPortal} from 'react-dom';
 import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter from './MessageCenter';
+import {situacaoContrato} from './glossario';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Mode='geral'|'clientes';
@@ -103,8 +104,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   try{
    const all:(GeralRow|ClienteRow)[]=[];let p=1,total=0;
    do{const j=await getJson<GeralResp|ClientesResp>('/cis/extractos/'+mode+'?'+params({page:String(p),por_pagina:'200'}));all.push(...j.linhas);total=j.total_linhas;p++;}while(all.length<total&&p<=100);
-   const head=mode==='geral'?['Cod. Op','Data','Descrição','Tipo','Valor (MT)','Contrato','Cliente','Parcela','Conta']
-    :['Cod. Op','Contrato','Cliente','Parcela','Vencimento','Dias','F. Pagamento','Capital (MT)','Juros (MT)','Multa (MT)','Quantia (MT)','Data de pagamento','Estado'];
+   const head=mode==='geral'?['Cod. Op','Data','Descrição','Tipo','Valor (MT)','Contrato','Mutuário','Prestação','Conta']
+    :['Cod. Op','Contrato','Mutuário','Prestação','Data de vencimento','Dias','Forma de pagamento','Capital (MT)','Juros (MT)','Juros de mora (MT)','Valor da prestação (MT)','Data de pagamento','Estado'];
    const lines=all.map(r=>mode==='geral'?(()=>{const g=r as GeralRow;return [g.codigo,dt(g.data),g.descricao,g.tipo==='entrada'?'Entrada':'Saída',g.valor.replace('.',','),g.contrato,g.cliente,g.parcela,g.conta];})()
     :(()=>{const c=r as ClienteRow;return [c.codigo,c.contrato,c.cliente,c.parcela,dt(c.vencimento),c.dias,c.forma_pagamento,c.capital.replace('.',','),c.juros.replace('.',','),c.multa.replace('.',','),c.valor.replace('.',','),dt(c.data_pagamento),c.estado];})());
    const csv='﻿'+[head,...lines].map(l=>l.map(csvCell).join(';')).join('\r\n');
@@ -146,7 +147,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
  return <>
   <section className="cis-panel cis-list-panel cis-extracto">
-   <div className="cis-panel-head"><div><h2>Extracto de movimentos</h2><p>{mode==='geral'?'Entradas e saídas registadas na Caixa (Extracto).':'Prestações dos clientes: em aberto, vencidas e pagas.'}</p></div>
+   <div className="cis-panel-head"><div><h2>Extracto de movimentos</h2><p>{mode==='geral'?'Entradas e saídas registadas na Caixa (Extracto).':'Prestações dos mutuários: em curso, em atraso e pagas.'}</p></div>
     <div className="cis-extracto-modes" role="tablist" aria-label="Tipo de extracto">
      {isAdmin&&<button type="button" role="tab" aria-selected={mode==='geral'} className={mode==='geral'?'selected':''} onClick={()=>switchMode('geral')}>Geral</button>}
      <button type="button" role="tab" aria-selected={mode==='clientes'} className={mode==='clientes'?'selected':''} onClick={()=>switchMode('clientes')}>Clientes</button>
@@ -156,15 +157,15 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
    {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
-    <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Cobrança de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
+    <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Vencimento de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
-    <div className="cis-extracto-client"><label><span><Search size={14}/> Cliente</span><input value={clienteInput} onChange={e=>typeClient(e.target.value)} placeholder="Todos" autoComplete="off" aria-autocomplete="list"/></label>
+    <div className="cis-extracto-client"><label><span><Search size={14}/> Mutuário</span><input value={clienteInput} onChange={e=>typeClient(e.target.value)} placeholder="Todos" autoComplete="off" aria-autocomplete="list"/></label>
      {suggestions.length>0&&<ul role="listbox">{suggestions.map(s=><li key={s.nome}><button type="button" onClick={()=>pickClient(s.nome)}><b>{s.nome}</b><small>{s.id?`ID ${s.id} · `:''}{s.contratos} contrato(s)</small></button></li>)}</ul>}</div>
     <label>Contrato<select value={contrato} onChange={e=>{setContrato(e.target.value);setPage(1);}} disabled={!cliente||!contratos.length}><option value="">Todos</option>{contratos.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
     {mode==='geral'?<>
      <label>Tipo<select value={tipo} onChange={e=>{setTipo(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="entradas">Entradas</option><option value="saidas">Saídas</option></select></label>
      {accounts.length>0&&<label>Conta<select value={contaId} onChange={e=>{setContaId(e.target.value);setPage(1);}}><option value="">Todas</option>{accounts.map(a=><option key={a.id} value={String(a.id)}>{a.code} · {a.name}</option>)}</select></label>}
-    </>:<label>Estado<select value={estado} onChange={e=>{setEstado(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="aberta">Abertas</option><option value="vencida">Vencidas</option><option value="paga">Pagas</option></select></label>}
+    </>:<label>Estado<select value={estado} onChange={e=>{setEstado(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="aberta">Em curso</option><option value="vencida">Em atraso</option><option value="paga">Pagas</option></select></label>}
     <button type="button" className="cis-extracto-clear" onClick={clearAll}>Limpar</button>
    </div>
 
@@ -174,14 +175,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div><span><Wallet size={15}/> Total disponível</span><strong>{mt(g.disponivel)} MT</strong></div>
    </div>}
    {mode==='clientes'&&c&&<div className="cis-extracto-totals">
-    <div><span>Total em aberto · {c.n_aberto}</span><strong>{mt(c.aberto)} MT</strong><small>Juros {mt(c.juros_aberto)}</small></div>
-    <div><span>Total vencido · {c.n_vencido}</span><strong className="neg">{mt(c.vencido)} MT</strong><small>Juros e multa {mt(c.juros_vencido)}</small></div>
-    <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e multa {mt(c.juros_pago)}</small></div>
+    <div><span>Em curso · {c.n_aberto}</span><strong>{mt(c.aberto)} MT</strong><small>Juros {mt(c.juros_aberto)}</small></div>
+    <div><span>Valor vencido · {c.n_vencido}</span><strong className="neg">{mt(c.vencido)} MT</strong><small>Juros e mora {mt(c.juros_vencido)}</small></div>
+    <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e mora {mt(c.juros_pago)}</small></div>
    </div>}
 
    <div className="cis-extracto-actions">
     <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
-    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao cliente':'Escolha um cliente para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto do cliente (PDF)'}</button>
+    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao cliente':'Escolha um cliente para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto de conta (PDF)'}</button>
     {!canEvidence&&mode==='clientes'&&<small>Escolha um cliente para gerar o extracto de evidência.</small>}
    </div>
 
@@ -193,14 +194,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div className="cis-table-scroll"><table>
      {mode==='geral'?<><thead><tr><th>Cod. Op</th><th>Data</th><th>Descrição</th><th>Conta</th><th className="num">Quantia (MT)</th></tr></thead>
       <tbody>{geral!.linhas.map(r=><tr key={r.nr} className={r.contrato?'cis-extracto-row':''} tabIndex={r.contrato?0:undefined} title={r.contrato?'Ver informação do contrato '+r.contrato:undefined} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{dt(r.data)}</td><td>{r.descricao}</td><td>{r.conta??'—'}</td><td className={'num '+(r.tipo==='entrada'?'pos':'neg')}>{r.tipo==='entrada'?'+':'−'} {mt(r.valor)}</td></tr>)}</tbody></>
-     :<><thead><tr><th>Cod. Op</th><th>Contrato</th><th>Cliente</th><th>P.</th><th>Cobrança</th><th className="num">Dias</th><th>F. Pagto</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Quantia</th><th>Estado</th></tr></thead>
+     :<><thead><tr><th>Cod. Op</th><th>Contrato</th><th>Mutuário</th><th>P.</th><th>Vencimento</th><th className="num">Dias</th><th>F. pagamento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Prestação</th><th>Estado</th></tr></thead>
       <tbody>{clientes!.linhas.map(r=><tr key={r.ordem} className={'cis-extracto-row'} tabIndex={0} title={'Ver informação do contrato '+r.contrato} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{r.contrato}</td><td>{r.cliente}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className={'num '+(r.dias<0&&r.situacao!=='paga'?'neg':'')}>{r.dias}</td><td>{r.forma_pagamento??'—'}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.valor)}</td><td><span className={'cis-extracto-state '+r.situacao}>{r.estado}</span></td></tr>)}</tbody></>}
     </table></div>
     <div className="cis-table-footer"><span>{data.total_linhas.toLocaleString('pt-MZ')} registos · Página {page} de {lastPage}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=lastPage} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div>
    </>)}
   </section>
 
-  {evidence&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto do cliente">
+  {evidence&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto de conta">
    <div className="cis-evidence-bar"><b>Pré-visualização do extracto do cliente</b><span>Use «Imprimir / Guardar PDF» e escolha «Guardar como PDF» para enviar ao cliente.</span>
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setEvidence(null)} aria-label="Fechar"><X size={16}/></button></div>
@@ -215,14 +216,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
      {evidence.cliente.morada&&<div><dt>Morada</dt><dd>{evidence.cliente.morada}</dd></div>}
     </dl></section>
     <section className="cis-evidence-summary">
-     <div><span>Em aberto</span><strong>{mt(evidence.totais.aberto)} MT</strong></div>
-     <div><span>Vencido</span><strong>{mt(evidence.totais.vencido)} MT</strong></div>
+     <div><span>Em curso</span><strong>{mt(evidence.totais.aberto)} MT</strong></div>
+     <div><span>Valor vencido</span><strong>{mt(evidence.totais.vencido)} MT</strong></div>
      <div><span>Pago</span><strong>{mt(evidence.totais.pago)} MT</strong></div>
-     <div><span>Total em dívida</span><strong>{mt(Number(evidence.totais.aberto)+Number(evidence.totais.vencido))} MT</strong></div>
+     <div><span>Saldo em dívida</span><strong>{mt(Number(evidence.totais.aberto)+Number(evidence.totais.vencido))} MT</strong></div>
     </section>
     <section><h2>Contratos</h2><table><thead><tr><th>Contrato</th><th>Início</th><th className="num">Capital</th><th className="num">Prestações</th><th className="num">Pago</th><th className="num">Em dívida</th><th>Situação</th></tr></thead>
      <tbody>{evidence.contratos.map(k=><tr key={k.contrato}><td>{k.contrato}</td><td>{dt(k.inicio)}</td><td className="num">{mt(k.capital)}</td><td className="num">{k.prestacoes}</td><td className="num">{mt(k.pago)}</td><td className="num">{mt(k.em_divida)}</td><td>{k.situacao}</td></tr>)}</tbody></table></section>
-    <section><h2>Prestações</h2><table><thead><tr><th>Contrato</th><th>P.</th><th>Vencimento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Multa</th><th className="num">Valor</th><th>Pago em</th><th>Estado</th></tr></thead>
+    <section><h2>Prestações</h2><table><thead><tr><th>Contrato</th><th>P.</th><th>Vencimento</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Juros de mora</th><th className="num">Valor</th><th>Pago em</th><th>Estado</th></tr></thead>
      <tbody>{evidence.prestacoes.map(r=><tr key={r.ordem}><td>{r.contrato}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.multa)}</td><td className="num">{mt(r.valor)}</td><td>{dt(r.data_pagamento)}</td><td>{r.estado}</td></tr>)}</tbody></table></section>
     <section><h2>Movimentos registados</h2>{evidence.movimentos.length?<table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Tipo</th><th className="num">Valor (MT)</th></tr></thead>
      <tbody>{evidence.movimentos.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}</td><td>{m.contrato}{m.parcela?' · P'+m.parcela:''}</td><td>{m.tipo}</td><td className="num">{mt(m.valor)}</td></tr>)}</tbody></table>:<p>Sem movimentos registados no período.</p>}</section>
@@ -233,7 +234,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   {info&&createPortal(<div className="cis-info-backdrop" onClick={()=>setInfo(null)}>
    <aside className="cis-info" role="dialog" aria-modal="true" aria-label={'Informação do contrato '+info.contrato} onClick={ev=>ev.stopPropagation()}>
     <header><div><span><Info size={15}/> Informação</span><h3>Contrato {info.contrato}</h3></div><button type="button" onClick={()=>setInfo(null)} aria-label="Fechar"><X size={17}/></button></header>
-    <span className={'cis-info-state '+(info.situacao==='Pagamento atrasado'?'late':info.situacao==='Pendente'?'open':'done')}>{info.situacao}</span>
+    <span className={'cis-info-state '+(info.situacao==='Pagamento atrasado'?'late':info.situacao==='Pendente'?'open':'done')}>{situacaoContrato(info.situacao)}</span>
     <section><h4>Cliente</h4><dl>
      <div><dt>Código</dt><dd>{info.cliente.codigo??'—'}</dd></div>
      <div><dt>Nome</dt><dd>{info.cliente.nome}</dd></div>
@@ -242,22 +243,22 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <section><h4>Contrato</h4><dl>
      <div><dt>Data de início</dt><dd>{dt(info.data_inicio)}</dd></div>
      <div><dt>Data final</dt><dd>{dt(info.data_final)}</dd></div>
-     <div><dt>Quantia creditada</dt><dd>{mt(info.quantia_creditada)} MT</dd></div>
+     <div><dt>Capital desembolsado</dt><dd>{mt(info.quantia_creditada)} MT</dd></div>
      {info.forma_pagamento&&<div><dt>Forma de pagamento</dt><dd>{info.forma_pagamento}</dd></div>}
     </dl></section>
     <section><h4>Prestações</h4><div className="cis-info-grid">
      <div><span>Total</span><b>{info.prestacoes.total}</b></div><div><span>Pagas</span><b>{info.prestacoes.pagas}</b></div>
-     <div><span>Em aberto</span><b>{info.prestacoes.em_aberto}</b></div><div className={info.prestacoes.vencidas?'late':''}><span>Vencidas</span><b>{info.prestacoes.vencidas}</b></div>
+     <div><span>Em curso</span><b>{info.prestacoes.em_aberto}</b></div><div className={info.prestacoes.vencidas?'late':''}><span>Em atraso</span><b>{info.prestacoes.vencidas}</b></div>
     </div><dl>
-     <div><dt>Em dívida</dt><dd className={Number(info.em_divida)>0?'neg':''}>{mt(info.em_divida)} MT</dd></div>
+     <div><dt>Saldo em dívida</dt><dd className={Number(info.em_divida)>0?'neg':''}>{mt(info.em_divida)} MT</dd></div>
      <div><dt>Pago</dt><dd>{mt(info.pago)} MT</dd></div>
-     {info.proximo_vencimento&&<div><dt>{info.prestacoes.vencidas?'Vencida desde':'Próximo vencimento'}</dt><dd>{dt(info.proximo_vencimento)}{info.dias_atraso?` · ${info.dias_atraso} dia(s) de atraso`:''}</dd></div>}
+     {info.proximo_vencimento&&<div><dt>{info.prestacoes.vencidas?'Em atraso desde':'Próximo vencimento'}</dt><dd>{dt(info.proximo_vencimento)}{info.dias_atraso?` · ${info.dias_atraso} dia(s) de atraso`:''}</dd></div>}
     </dl></section>
     {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
     <div className="cis-info-actions">
      <button type="button" onClick={()=>onOpenContracts(info.contrato)}><FileText size={15}/> Abrir contrato e prestações</button>
      <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao cliente</button>
-     <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto do cliente (PDF)'}</button>
+     <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto de conta (PDF)'}</button>
     </div>
    </aside>
   </div>,document.body)}

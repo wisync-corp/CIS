@@ -54,13 +54,13 @@ const fields:Field[]=[
  {key:'cidade',label:'Cidade',required:true},
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
- {key:'quantia',label:'Quantia creditada (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
+ {key:'quantia',label:'Capital a desembolsar (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
  {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
  {key:'estrategia_calculo',label:'Fórmula de cálculo',type:'select',required:true,hint:'A estratégia depende do tipo de juro. Três fórmulas adicionais são regras CIS. A sua gravação exige testes e activação específica no servidor.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
  {key:'juros',label:'Taxa de juro (%)',type:'number',required:true,hint:'Para juro Fixo, consultada automaticamente na tabela de preços pelas condições indicadas.'},
- {key:'multa',label:'Taxa de multa (%)',type:'number',required:true},
+ {key:'multa',label:'Taxa de juros de mora (%)',type:'number',required:true},
  {key:'prazo',label:'Prazo',type:'select',required:true,hint:'As opções mudam automaticamente conforme o período seleccionado.'},
  {key:'modalidade',label:'Modalidade de pagamento',type:'select',required:true,hint:'Conforme o prazo: semanal, mensal (apenas 2 ou 3 meses) ou uma única parcela.'},
  {key:'forma',label:'Forma de pagamento',type:'select',choices:['Transferência/Depósito Bancário','Transferência Móvel','Numerário'],required:true,hint:'Corresponde às três opções originais do VBA, com ortografia corrigida na interface.'},
@@ -381,7 +381,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
     </label>;
    })}</div>
   </section>)}
-  <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de prestações · preparação</h3>
+  <section className="cis-panel cis-contract-draft-section"><h3><CalendarDays size={20}/> Plano de pagamentos · preparação</h3>
    <div className="cis-contract-draft-count"><span>{weeklyTerm?'N.º de prestações semanais (pendente de regra)':'N.º previsto de prestações (regra do VBA)'}</span><strong>{numeroPrestacoes??'—'}</strong></div>
    <p>{unsupportedSchedule?'Prestações semanais de 7 em 7 dias; no prazo mensal o último vencimento coincide com a data final. A gravação requer aprovação separada dos cálculos semanais.':'Para os prazos mensais, as datas seguem DateAdd do VBA (adicionar meses ao início). O plano financeiro indicativo surge depois de validar os dados.'} Nenhuma operação é gravada nesta etapa.</p>
    {unsupportedSchedule&&dataFinal&&<p><strong>Data final:</strong> {dataFinal.split('-').reverse().join('/')} · período semanal sujeito à activação autorizada no VPS.</p>}

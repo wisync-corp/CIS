@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
+import {coluna,estadoPrestacao} from './glossario';
 
 type Item=Record<string,string|number|null>;
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-type Tab='Contrato'|'Plano de prestações'|'Condições financeiras'|'Pagamentos'|'Documento original';
+type Tab='Contrato'|'Plano de pagamentos'|'Condições financeiras'|'Pagamentos'|'Documento original';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
@@ -16,14 +17,14 @@ const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind
   {name:'Cidade',label:'Cidade'},
   {name:'Estado do Contrato',label:'Estado do contrato'}]},
  {tab:'Condições financeiras',icon:Wallet,fields:[
-  {name:'Quantia Creditada',label:'Quantia creditada',kind:'money'},
-  {name:'% de Juro',label:'Taxa de juro (%)',kind:'percent'},
+  {name:'Quantia Creditada',label:'Capital desembolsado',kind:'money'},
+  {name:'% de Juro',label:'Taxa de juro (% por período)',kind:'percent'},
   {name:'Tipo de Juro',label:'Tipo de juro'},
-  {name:'Estratégia de Cálculo',label:'Estratégia de cálculo das prestações'},
-  {name:'% de Multa',label:'Taxa de multa (%)',kind:'percent'},
-  {name:'M. Pagamento',label:'Modalidade de pagamento'},
+  {name:'Estratégia de Cálculo',label:'Sistema de amortização'},
+  {name:'% de Multa',label:'Taxa de juros de mora (%)',kind:'percent'},
+  {name:'M. Pagamento',label:'Periodicidade'},
   {name:'Forma de Pagamento',label:'Forma de pagamento'},
-  {name:'Prazo/Duração',label:'Prazo / duração'},
+  {name:'Prazo/Duração',label:'Prazo'},
   {name:'Disponibilidade',label:'Disponibilidade'},
   {name:'Nº de Prestações',label:'Número de prestações'}]},
 ];
@@ -124,7 +125,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <div className="cis-profile-heading">
      <span>FICHA DE CRÉDITO · {numero}</span>
      <h2>{format(contract,'Nome do Cliente')}</h2>
-     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{format(contract,'Estado do Contrato')}</span><span>Cliente #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{format(contract,'Estado do Contrato')}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
     </div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
@@ -152,14 +153,14 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
      {([
       {name:'Contrato' as Tab,icon:FileText,detail:'Dados principais'},
       {name:'Condições financeiras' as Tab,icon:Wallet,detail:'Termos do crédito'},
-      {name:'Plano de prestações' as Tab,icon:CalendarDays,detail:'Vencimentos'},
+      {name:'Plano de pagamentos' as Tab,icon:CalendarDays,detail:'Vencimentos'},
       {name:'Pagamentos' as Tab,icon:ReceiptText,detail:'Recebimentos'},
       {name:'Documento original' as Tab,icon:Eye,detail:'Documentação'}
      ]).map(({name,icon:Icon,detail})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}>
       <Icon size={19}/><span>{name}<small>{detail}</small></span><ChevronRight className="cis-credit-nav-chevron" size={15}/></button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de prestações'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':'Informações essenciais do contrato.'}</p></div></header>
+     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de pagamentos'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':'Informações essenciais do contrato.'}</p></div></header>
      {tab==='Pagamentos'?<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder}/>:tab==='Documento original'?<section className="cis-contract-operation">
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
       <h4>Documento associado ao contrato</h4>
@@ -168,14 +169,14 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
        <div className="cis-profile-field"><span>Documento original</span><div className="cis-profile-field-value">Ainda não associado ao armazenamento privado do CIS</div></div>
       </div>
       <p>Será necessário importar os PDFs originais e confirmar a correspondência de cada documento com o seu contrato, protegendo os ficheiros por permissões. Não será criado um documento fictício.</p>
-     </section>:tab==='Plano de prestações'?<>
+     </section>:tab==='Plano de pagamentos'?<>
       <div className="cis-contract-count"><CalendarDays size={18}/>{data.installment_rows} linha(s) de prestação registada(s)</div>
       <div className="cis-table-scroll"><table><thead><tr>{installmentColumns.map(({name,kind})=><th key={name} aria-sort={sortColumn===name?(sortDirection==='asc'?'ascending':'descending'):undefined}>
-       <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${name} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
-        {name}{sortColumn===name?(sortDirection==='asc'?<ChevronUp size={15}/>:<ChevronDown size={15}/>):<ArrowDownUp size={14}/>}
+       <button type="button" className="cis-contract-sort" onClick={()=>sortBy(name)} title={`Ordenar ${coluna(name)} por ${kind==='date'?'data':kind==='number'?'número':'texto'}`}>
+        {coluna(name)}{sortColumn===name?(sortDirection==='asc'?<ChevronUp size={15}/>:<ChevronDown size={15}/>):<ArrowDownUp size={14}/>}
        </button></th>)}<th>Operação da prestação</th></tr></thead>
        <tbody>{sortedInstallments.map((item,index)=><tr key={String(item.Ordem??index)}>
-        {installmentColumns.map(({name,kind})=><td key={name}>{format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
+        {installmentColumns.map(({name,kind})=><td key={name}>{name==='Estado'?estadoPrestacao(item.Estado):format(item,name,kind==='date'?'date':kind==='number'&&name!=='Nº da Parcela'?'money':undefined)}</td>)}
         <td><button type="button" className="cis-contract-draft-button" onClick={()=>{const eligible=['Pendente','Pagamento Atrasado'].includes(String(item.Estado??''))&&!/finalizado|liquidado|cancelado|anulado/i.test(String(contract?.['Estado do Contrato']??''));setPaymentOrder(eligible?String(item.Ordem??''):undefined);setTab('Pagamentos');}}><ReceiptText size={15}/> {['Pendente','Pagamento Atrasado'].includes(String(item.Estado??''))&&!/finalizado|liquidado|cancelado|anulado/i.test(String(contract?.['Estado do Contrato']??''))?'Efectuar pagamento':'Ver histórico'}</button></td>
        </tr>)}</tbody></table></div>
      </>:<div className="cis-credit-section">

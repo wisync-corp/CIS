@@ -219,9 +219,9 @@ final class ExtractoController extends Controller
     {
         return match (true) {
             $r->Estado==='Renovado'=>'Renovada',
-            $sit==='paga'=>(string)$r->Estado,
-            $sit==='aberta'=>'Aberta',
-            $sit==='vencida'=>'Vencida',
+            $sit==='paga'=>match ((string)$r->Estado) { 'Pago'=>'Paga', 'Pago em Atraso'=>'Paga com atraso', default=>(string)$r->Estado },
+            $sit==='aberta'=>'Em curso',
+            $sit==='vencida'=>'Em atraso',
             default=>(string)$r->Estado,
         };
     }

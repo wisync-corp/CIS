@@ -12,11 +12,11 @@ const GROUPS:{id:Group;label:string;hint:string}[]=[
  {id:'todos',label:'Todos os contactos',hint:'Um por cliente (contrato mais recente)'},
  {id:'activos',label:'Contactos activos',hint:'Clientes com contrato em aberto'},
  {id:'inactivos',label:'Contactos inactivos',hint:'Clientes sem contratos em aberto'},
- {id:'pendentes',label:'Contratos pendentes',hint:'Em aberto, dentro do prazo'},
- {id:'atrasados',label:'Contratos com pagamento atrasado',hint:'Com prestações vencidas'},
+ {id:'pendentes',label:'Contratos em curso',hint:'Dentro do prazo'},
+ {id:'atrasados',label:'Contratos em atraso',hint:'Com prestações em atraso'},
 ];
 const EMOJIS=['😊','🙏','👍','✅','⚠️','📅','💰','📞','📌','🔔','❗','🤝','👋','💳','🏦','📄'];
-const situ=(s:string)=>s==='atrasado'?'Pagamento atrasado':s==='pendente'?'Pendente':'Finalizado';
+const situ=(s:string)=>s==='atrasado'?'Em atraso':s==='pendente'?'Em curso':'Liquidado';
 // Directo no WhatsApp Web: o wa.me passa pela página de partilha («Open app») e estraga alguns emojis.
 const waUrl=(tel:string,msg:string)=>'https://web.whatsapp.com/send?phone='+tel+'&text='+encodeURIComponent(msg);
 // Reutiliza sempre o mesmo separador do WhatsApp Web (evita «WhatsApp aberto noutra janela»).

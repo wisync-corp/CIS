@@ -1549,3 +1549,9 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-doc-powered{margin-left:auto;white-space:nowrap;color:#667085;font-size:calc(10.5px * var(--cis-fs));letter-spacing:.02em}
 .cis-doc-powered b{color:#344054;font-weight:800}
 .cis-evidence header>div:only-child{margin-left:auto}
+
+.cis-glossary-table{width:100%;border-collapse:collapse;font-size:calc(13.5px * var(--cis-fs))}
+.cis-glossary-table th{text-align:left;background:#f9fafb;font-size:calc(12px * var(--cis-fs));color:#475467;font-weight:800;padding:9px 12px;border-bottom:1px solid #eaecf0}
+.cis-glossary-table td{padding:9px 12px;border-bottom:1px solid #f2f4f7;vertical-align:top;color:var(--cis-heading)}
+.cis-glossary-table td:last-child{color:var(--cis-text-muted);font-size:calc(12.5px * var(--cis-fs))}
+.cis-glossary-table td:first-child{white-space:nowrap}
