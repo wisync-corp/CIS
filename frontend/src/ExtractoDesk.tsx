@@ -125,9 +125,9 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
     </div></div>
 
    <div className="cis-extracto-filters">
-    <label><CalendarDays size={15}/> {mode==='geral'?'Operação de':'Cobrança de'}<input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
+    <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':'Cobrança de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
-    <div className="cis-extracto-client"><label><Search size={15}/> Cliente<input value={clienteInput} onChange={e=>typeClient(e.target.value)} placeholder="Todos" autoComplete="off" aria-autocomplete="list"/></label>
+    <div className="cis-extracto-client"><label><span><Search size={14}/> Cliente</span><input value={clienteInput} onChange={e=>typeClient(e.target.value)} placeholder="Todos" autoComplete="off" aria-autocomplete="list"/></label>
      {suggestions.length>0&&<ul role="listbox">{suggestions.map(s=><li key={s.nome}><button type="button" onClick={()=>pickClient(s.nome)}><b>{s.nome}</b><small>{s.id?`ID ${s.id} · `:''}{s.contratos} contrato(s)</small></button></li>)}</ul>}</div>
     <label>Contrato<select value={contrato} onChange={e=>{setContrato(e.target.value);setPage(1);}} disabled={!cliente||!contratos.length}><option value="">Todos</option>{contratos.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
     {mode==='geral'?<>

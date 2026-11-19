@@ -1038,7 +1038,7 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-extracto-modes button.selected{background:var(--cis-primary);color:#fff}
 .cis-extracto-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:6px 0 16px}
 .cis-extracto-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--cis-text-muted)}
-.cis-extracto-filters label svg{display:inline;vertical-align:-2px}
+.cis-extracto-filters label>span{display:inline-flex;align-items:center;gap:5px}
 .cis-extracto-filters input,.cis-extracto-filters select{font:inherit;font-size:13px;color:var(--cis-heading);background:#fff;border:1px solid var(--cis-border);border-radius:8px;padding:8px 10px;min-height:38px;min-width:150px}
 .cis-extracto-filters select:disabled{opacity:.55}
 .cis-extracto-client{position:relative}
@@ -1094,6 +1094,7 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 @media print{
  @page{size:A4;margin:12mm}
  body.cis-printing-evidence>*:not(.cis-evidence-overlay){display:none!important}
+ html:has(body.cis-printing-evidence),body.cis-printing-evidence{background:#fff!important}
  body.cis-printing-evidence .cis-evidence-overlay{position:static;background:none;padding:0;overflow:visible}
  body.cis-printing-evidence .cis-evidence-bar{display:none}
  body.cis-printing-evidence .cis-evidence{width:100%;max-width:none;padding:0;border-radius:0;font-size:10.5px}
