@@ -11,6 +11,13 @@
     handle /up {
         reverse_proxy api:8000
     }
+    # Pacotes .zip (extensão CIS WhatsApp): sem fallback para a página do CIS.
+    @zip path *.zip
+    handle @zip {
+        root * /srv/cis
+        header Content-Disposition "attachment"
+        file_server
+    }
     handle {
         root * /srv/cis
         try_files {path} /index.html
