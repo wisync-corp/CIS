@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
-import {coluna,estadoPrestacao} from './glossario';
+import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 
 type Item=Record<string,string|number|null>;
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
@@ -125,7 +125,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <div className="cis-profile-heading">
      <span>FICHA DE CRÉDITO · {numero}</span>
      <h2>{format(contract,'Nome do Cliente')}</h2>
-     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{format(contract,'Estado do Contrato')}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
     </div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>

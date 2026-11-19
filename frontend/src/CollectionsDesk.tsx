@@ -1,8 +1,8 @@
-import CompanyBrand from './CompanyBrand';
+import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
 import {useEffect,useMemo,useState} from 'react';
-import {coluna,estadoPrestacao} from './glossario';
+import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 import {
   ReceiptText,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
   ArrowRight,ArrowLeft,Wallet,Clock3,ShieldCheck,LockKeyhole,Landmark,
@@ -25,6 +25,8 @@ type Quote={
  nova_prestacao?:{parcela:number;data_inicio:string;data_vencimento:string;prazo:string;capital:string;juros:string;valor_a_pagar:string;juros_estimado:boolean}
 };
 type PaymentResult={registado:boolean;repetido:boolean;extracto_nr:number;conta?:string;saldo_conta_actual?:string;contrato_finalizado?:boolean;notice:string;total_texto?:string;valor?:string};
+type Receipt={numero:string;origem:'extracto'|'prestacao';extracto_nr:number|null;data:string|null;prestacao:string|null;valor:string;capital:string|null;juros:string|null;juros_mora:string|null;vencimento:string|null;estado:string|null;forma_pagamento:string|null;conta:string|null;referencia:string|null;descricao:string};
+type ReceiptList={contrato:string;mutuario:{nome:string;numero:number|string|null};recibos:Receipt[];total_recebido:string;saldo_em_divida:string;emitido_em:string;emitido_por:string|null};
 type HistoryEvent={id:number;operacao:string;parcela:number|null;valor:string|null;extracto_nr:number|null;referencia:string|null;motivo:string|null;antes:Row|null;depois:Row|null;em:string};
 const historyLabels:Record<string,string>={cobranca_total:'Liquidação da prestação',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
 const historyFields=['Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','% de Juro','Estado','Data de Pagamento','Situação de Pagamento'];
@@ -110,7 +112,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  useEffect(()=>{if(payWaitUntil<=Date.now())return;const id=window.setInterval(()=>setClock(Date.now()),1000);return()=>window.clearInterval(id);},[payWaitUntil]);
  const payWait=Math.max(0,Math.ceil((payWaitUntil-clock)/1000));
  const company=useCompanyProfile(token);
- const [receipt,setReceipt]=useState<{event:HistoryEvent;contract:string}|null>(null);
+ const [receipt,setReceipt]=useState<Receipt|null>(null);
+ const [receipts,setReceipts]=useState<ReceiptList|null>(null),[receiptsError,setReceiptsError]=useState('');
  const [receiptBusy,setReceiptBusy]=useState(false);
  const [receiptError,setReceiptError]=useState('');
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
@@ -219,22 +222,28 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
- function canPrintReceipt(event:HistoryEvent){
-  return ['cobranca_total','renovar_juros','pagamento_parcial'].includes(event.operacao)
-   && Number(event.extracto_nr)>0&&Number(event.valor)>0&&Boolean(event.depois?.['Data de Pagamento']);
- }
+ useEffect(()=>{
+  if(!selected){setReceipts(null);return;}
+  const ctrl=new AbortController();setReceipts(null);setReceiptsError('');
+  fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/recibos',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
+   .then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Não foi possível consultar os recibos.');return d as ReceiptList;})
+   .then(d=>{if(!ctrl.signal.aborted)setReceipts(d);})
+   .catch(e=>{if(e.name!=='AbortError'&&!ctrl.signal.aborted)setReceiptsError(e.message);});
+  return ()=>ctrl.abort();
+ },[selected,refresh,token]);
+ const receiptFor=(nr:number|null|undefined)=>nr?receipts?.recibos.find(r=>r.extracto_nr===Number(nr))??null:null;
 
  async function openReceipt(nr:number){
   if(!selected||receiptBusy)return;
   setReceiptBusy(true);setReceiptError('');
   try{
-   const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/historico-alteracoes',{
-    headers:{Authorization:'Bearer '+token,Accept:'application/json'}
-   });
-   const data=await response.json() as {data?:HistoryEvent[]};
-   const event=response.ok&&data.data?.find(item=>Number(item.extracto_nr)===nr&&canPrintReceipt(item));
-   if(!event)throw new Error('O recebimento não está disponível no histórico do contrato.');
-   setReceipt({event,contract:selected});
+   const r=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/recibos',{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
+   const d=await r.json() as ReceiptList;
+   if(!r.ok)throw new Error('Não foi possível consultar o recibo.');
+   setReceipts(d);
+   const found=d.recibos.find(x=>x.extracto_nr===nr);
+   if(!found)throw new Error('O recebimento ainda não aparece no Extracto deste contrato.');
+   setReceipt(found);
   }catch(error){setReceiptError(error instanceof Error?error.message:'Não foi possível consultar o recibo.');}
   finally{setReceiptBusy(false);}
  }
@@ -242,7 +251,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  function printReceipt(){
   if(!receipt)return;
   const previous=document.title;
-  document.title='REC-'+receipt.event.extracto_nr;
+  document.title=receipt.numero;
   document.body.classList.add('cis-printing-evidence');
   const done=()=>{
    document.title=previous;
@@ -359,16 +368,18 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
      </div>
      <div className="cis-collections-panel">
       <div className="cis-collections-sectionhead"><div><h3>Recibos de pagamento</h3><p>Abra o recibo e escolha «Imprimir / Guardar PDF».</p></div></div>
-      {events===null?<p role="status">A consultar os recebimentos…</p>
-       :historyError?<p role="alert">Não foi possível consultar os recebimentos deste contrato.</p>
-       :events.some(canPrintReceipt)?<ul>{events.filter(canPrintReceipt).map(event=><li key={event.id}>
-        <button type="button" onClick={()=>setReceipt({event,contract:selected})}><ReceiptText size={16}/> REC-{event.extracto_nr}</button>
-        {' · Prestação '+(event.parcela??'—')+' · '+fmt(event.valor)}
-       </li>)}</ul>:<p>Este contrato ainda não tem recebimentos com movimento no Extracto e histórico de cobrança no CIS.</p>}
+      {receiptsError?<p role="alert">{receiptsError}</p>
+       :receipts===null?<p role="status">A consultar os recebimentos…</p>
+       :receipts.recibos.length?<div className="cis-receipt-list">
+        <table><thead><tr><th>Recibo</th><th>Data</th><th>Prestação</th><th>Forma</th><th className="num">Valor</th><th aria-label="Acções"/></tr></thead>
+         <tbody>{receipts.recibos.map(r=><tr key={r.numero}><td><b>{r.numero}</b>{r.origem==='prestacao'&&<small> · sem movimento no Extracto</small>}</td><td>{date(r.data)}</td><td>{r.prestacao??'—'}</td><td>{text(r.forma_pagamento)}</td><td className="num">{fmt(r.valor)}</td>
+          <td><button type="button" onClick={()=>setReceipt(r)}><ReceiptText size={15}/> Abrir recibo</button></td></tr>)}</tbody>
+         <tfoot><tr><td colSpan={4}>Total recebido</td><td className="num">{fmt(receipts.total_recebido)}</td><td/></tr></tfoot></table></div>
+       :<p>Este contrato ainda não tem pagamentos registados.</p>}
      </div>
      {view==='resumo'?<div className="cis-collections-panel cis-collections-overview">
       <div className="cis-collections-sectionhead"><div><h3>Prestações por receber</h3><p>Escolha a prestação que pretende tratar. O sistema verifica o estado do contrato e da prestação antes de abrir o formulário.</p></div><span>{pending.length} pendentes</span></div>
-      {contractClosed&&<div className="cis-collections-risk"><LockKeyhole size={16}/> Contrato com estado «{contractStatus}». Não é permitido iniciar nova cobrança nesta ficha.</div>}
+      {contractClosed&&<div className="cis-collections-risk"><LockKeyhole size={16}/> Contrato com estado «{situacaoContrato(contractStatus)}». Não é permitido iniciar nova cobrança nesta ficha.</div>}
       <div className="cis-collections-overview-list">{rows.map(row=><div className="cis-collections-overview-row" key={String(row.Ordem)}>
        <div className="cis-collections-overview-id"><span>Prestação {text(row['Nº da Parcela'])}</span><strong>{fmt(row['Valor a Pagar'])}</strong></div>
        <div className="cis-collections-overview-meta"><span>Vencimento: {date(row['Data de Cobrança'])}</span><span className={isPending(row)?'pending':'settled'}>{estadoPrestacao(row.Estado)} · {text(row['Situação de Pagamento'])}</span></div>
@@ -492,7 +503,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       {events===null?<div className="cis-cash-loading" role="status">A carregar o histórico…</div>:!events.length?<p className="cis-collections-mode-hint">Ainda não há alterações registadas pelo CIS neste contrato.</p>:
        <div className="cis-collections-history">{events.map(ev=><details key={ev.id}><summary><strong>{historyLabels[ev.operacao]??ev.operacao}</strong><span>Prestação {ev.parcela??'—'}</span><span>{fmt(ev.valor)}</span><span>{text(ev.em).replace('T',' ').slice(0,16)}</span></summary>
         <table><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>{historyFields.filter(f=>ev.antes?.[f]!==undefined||ev.depois?.[f]!==undefined).map(f=><tr key={f} className={String(ev.antes?.[f]??'')!==String(ev.depois?.[f]??'')?'changed':''}><td>{coluna(f)}</td><td>{text(ev.antes?.[f])}</td><td>{text(ev.depois?.[f])}</td></tr>)}</tbody></table>
-        {canPrintReceipt(ev)&&selected&&<button type="button" onClick={()=>setReceipt({event:ev,contract:selected})}><ReceiptText size={16}/> Recibo numerado</button>}
+        {receiptFor(ev.extracto_nr)&&<button type="button" onClick={()=>setReceipt(receiptFor(ev.extracto_nr))}><ReceiptText size={16}/> Recibo {receiptFor(ev.extracto_nr)!.numero}</button>}
         <small>{ev.extracto_nr?'Extracto Nr '+ev.extracto_nr+' · ':''}{ev.referencia?'REF '+ev.referencia+' · ':''}{text(ev.motivo)}</small></details>)}</div>}
       <div className="cis-collections-scope"><ShieldCheck size={16}/> Leitura apenas: não altera Contractos, Extracto nem o estado de pagamento.</div>
      </div>}
@@ -503,18 +514,27 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     <button type="button" className="primary" onClick={printReceipt}>Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setReceipt(null)}>Fechar</button>
    </div>
-   <article className="cis-evidence">
-    <header><CompanyBrand company={company}/><div><h1>Recibo de pagamento</h1><p>N.º REC-{receipt.event.extracto_nr}</p></div></header>
-    <section className="cis-evidence-client"><h2>Dados do recebimento</h2><dl>
-     <div><dt>Mutuário</dt><dd>{text(receipt.event.depois?.['Nome do Cliente'])}</dd></div>
-     <div><dt>Contrato</dt><dd>{receipt.contract}</dd></div>
-     <div><dt>Prestação</dt><dd>{receipt.event.parcela??'—'}</dd></div>
-     <div><dt>Data do pagamento</dt><dd>{date(receipt.event.depois?.['Data de Pagamento'])}</dd></div>
-     <div><dt>Operação</dt><dd>{historyLabels[receipt.event.operacao]}</dd></div>
-     <div><dt>Valor recebido</dt><dd>{fmt(receipt.event.valor)}</dd></div>
-     {receipt.event.referencia&&<div><dt>Referência</dt><dd>{receipt.event.referencia}</dd></div>}
+   <article className="cis-evidence cis-receipt">
+    <header><CompanyBrand company={company}/><div><h1>Recibo de pagamento</h1><p>N.º <b>{receipt.numero}</b></p><p>Emitido em {date(receipts?.emitido_em?.slice(0,10))}{receipts?.emitido_por?` por ${receipts.emitido_por}`:''}</p></div></header>
+    <section className="cis-evidence-client"><h2>Mutuário</h2><dl>
+     <div><dt>Nome</dt><dd>{text(receipts?.mutuario.nome)}</dd></div>
+     {receipts?.mutuario.numero!=null&&<div><dt>N.º do mutuário</dt><dd>{receipts.mutuario.numero}</dd></div>}
+     <div><dt>Contrato</dt><dd>{receipts?.contrato??selected}</dd></div>
     </dl></section>
-    <footer>Comprovativo do recebimento original identificado no Extracto pelo movimento {receipt.event.extracto_nr}.</footer>
+    <section className="cis-receipt-amount"><span>Valor recebido</span><strong>{fmt(receipt.valor)}</strong><small>em {date(receipt.data)}</small></section>
+    <section className="cis-evidence-client"><h2>Pagamento</h2><dl>
+     <div><dt>Prestação</dt><dd>{receipt.prestacao??'—'}{receipt.vencimento?` · vencimento ${date(receipt.vencimento)}`:''}</dd></div>
+     {receipt.capital!=null&&Number(receipt.capital)>0&&<div><dt>Capital</dt><dd>{fmt(receipt.capital)}</dd></div>}
+     {receipt.juros!=null&&<div><dt>Juros</dt><dd>{fmt(receipt.juros)}</dd></div>}
+     {receipt.juros_mora!=null&&Number(receipt.juros_mora)>0&&<div><dt>Juros de mora</dt><dd>{fmt(receipt.juros_mora)}</dd></div>}
+     <div><dt>Estado da prestação</dt><dd>{estadoPrestacao(receipt.estado)}</dd></div>
+     {receipt.forma_pagamento&&<div><dt>Forma de pagamento</dt><dd>{receipt.forma_pagamento}</dd></div>}
+     {receipt.conta&&<div><dt>Conta</dt><dd>{receipt.conta}</dd></div>}
+     {receipt.referencia&&<div><dt>Referência</dt><dd>{receipt.referencia}</dd></div>}
+     {receipts&&<div><dt>Saldo em dívida do contrato (hoje)</dt><dd>{fmt(receipts.saldo_em_divida)}</dd></div>}
+    </dl></section>
+    <div className="cis-receipt-sign"><span>O mutuário</span><span>Pela empresa</span></div>
+    <footer><ShieldCheck size={14}/><span>{receipt.origem==='extracto'?`Recebimento registado no Extracto (movimento ${receipt.extracto_nr}).`:'Pagamento registado na prestação (sem movimento no Extracto).'} Valores em Meticais (MT).</span><PoweredBy/></footer>
    </article>
   </div>,document.body)}
   <div className="cis-collections-footer"><ShieldCheck size={16}/> Fonte única dos lançamentos: Extracto. A Tesouraria opcional terá reconciliação bancária, sem duplicar os movimentos da Caixa.</div>
