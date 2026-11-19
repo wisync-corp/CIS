@@ -341,6 +341,42 @@ $inM=$open->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,7)===now($
 ok($def['carteira']['vencidas_periodo']+$def['carteira']['pendentes_periodo']===$inM->count()
     && abs((float)$def['carteira']['valor_pendente_periodo']+(float)$def['carteira']['valor_vencido_periodo']-(float)$inM->sum('Valor a Pagar'))<0.01,'mês actual: vencidas e pendentes pela data de vencimento');
 
+
+echo "== Extracto (geral, clientes, evidência)\n";
+$ex=new \App\Http\Controllers\Api\ExtractoController();
+$greq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
+$eg=data($ex->geral($greq(['por_pagina'=>200])));
+$expE=round((float)$db->table('Extracto')->where('Tipo de Movimento','Entradas')->sum('Valor'),2);
+$expS=round((float)$db->table('Extracto')->where('Tipo de Movimento','<>','Entradas')->sum('Valor'),2);
+ok($eg['total_linhas']===$db->table('Extracto')->count() && abs((float)$eg['totais']['entradas']-$expE)<0.01
+    && abs((float)$eg['totais']['saidas']-$expS)<0.01 && abs((float)$eg['totais']['disponivel']-($expE-$expS))<0.01,'geral: entradas, saídas e disponível');
+$egc=data($ex->geral($greq(['contrato'=>'C-0110','tipo'=>'entradas'])));
+ok($egc['total_linhas']===$db->table('Extracto')->where('Contracto','C-0110')->where('Tipo de Movimento','Entradas')->count()
+    && collect($egc['linhas'])->every(fn($l)=>$l['contrato']==='C-0110' && $l['tipo']==='entrada'),'geral: filtro por contrato e tipo');
+$egn=data($ex->geral($greq(['conta_id'=>$numerario])));
+ok($egn['total_linhas']===$db->table('Extracto')->where('account_id',$numerario)->count() && ($egn['linhas'][0]['conta']??null)!==null,'geral: filtro por conta da Caixa');
+ok($err(fn()=>$ex->geral($greq([],$gestor)))===403,'geral reservado ao administrador');
+ok($err(fn()=>$ex->geral($greq(['inicio'=>'2026-02-01','fim'=>'2026-01-01'])))===422,'intervalo de datas inválido recusado');
+$ec=data($ex->clientes($greq(['por_pagina'=>200])));
+$tod=now($tz)->toDateString();
+$openV=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->get()
+    ->filter(fn($r)=>$r->Estado==='Pagamento Atrasado'||$r->{'Data de Cobrança'}<$tod);
+ok($ec['total_linhas']===$db->table('Contractos')->count() && $ec['totais']['n_vencido']===$openV->count()
+    && abs((float)$ec['totais']['vencido']-$openV->sum(fn($r)=>(float)$r->{'Valor a Pagar'}+(float)$r->{'Valor de Multa'}))<0.01,'clientes: vencidas pela data e valor em dívida');
+$paidSum=(float)$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])->sum('Valor Pago');
+ok(abs((float)$ec['totais']['pago']-$paidSum)<0.01,'clientes: total pago (inclui renovações)');
+$ecv=data($ex->clientes($greq(['estado'=>'vencida'])));
+ok($ecv['total_linhas']===$openV->count() && collect($ecv['linhas'])->every(fn($l)=>$l['estado']==='Vencida'),'clientes: filtro Vencidas');
+$name=$db->table('Contractos')->where('Nr do Contracto','C-0110')->value('Nome do Cliente');
+$lk=data($ex->contratos($greq(['termo'=>mb_substr($name,0,4)])));
+$lc=data($ex->contratos($greq(['cliente'=>$name])));
+ok(collect($lk['clientes'])->pluck('nome')->contains($name) && in_array('C-0110',$lc['contratos'],true),'pesquisa de cliente e contratos do cliente');
+$ev=data($ex->evidencia($greq(['contrato'=>'C-0110'])));
+ok(count($ev['prestacoes'])===3 && $ev['contratos'][0]['contrato']==='C-0110' && $ev['contratos'][0]['situacao']==='Liquidado'
+    && strlen($ev['codigo_verificacao'])===16 && count($ev['movimentos'])===$db->table('Extracto')->where('Contracto','C-0110')->count(),'evidência: contrato renovado e liquidado com prestações e movimentos');
+ok(collect($ev['movimentos'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'evidência sem marcas internas nem referências');
+ok($err(fn()=>$ex->evidencia($greq([])))===422,'evidência exige cliente ou contrato');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

@@ -76,3 +76,32 @@ Fluxo: «Houve pagamento» → «Renovar empréstimo». Só está disponível qu
 - Juros variáveis, dias de atraso, estado (Pago/Pago em Atraso) e multa são calculados até à data escolhida.
 - A data fica registada em `Data de Pagamento` e no Extracto (`Data da Operação`).
 - Pagamento antecipado de uma prestação, por exemplo depois de uma renovação, é permitido.
+
+## Extracto (menu «Extractos»)
+
+Equivale ao formulário VBA «Extracto de Movimentos».
+
+**Geral** (só administrador): movimentos do Extracto.
+- Filtros: datas da operação, cliente, contrato, tipo (entradas/saídas) e conta da Caixa.
+- Totais: Entradas, Saídas e Total disponível.
+
+**Clientes**: prestações.
+- Filtros: datas de cobrança, cliente, contrato e estado (Abertas/Vencidas/Pagas).
+- Totais: Em aberto, Vencido, Pago, cada um com os juros (e a multa).
+- Diferenças em relação ao VBA:
+  - «Vencido» soma o valor em dívida (Valor a Pagar + multa); o VBA somava o Valor Pago, que é 0.
+  - Uma prestação em aberto com vencimento passado conta como vencida mesmo que o Estado ainda diga «Pendente».
+  - «Renovado» conta como paga.
+
+**Exportar CSV (Excel)**: todas as linhas do filtro actual, separador `;`, compatível com Excel.
+
+**Extracto do cliente (PDF)**: evidência para entregar ao cliente.
+- Contém:
+  - os dados do cliente;
+  - o resumo (em aberto, vencido, pago, total em dívida);
+  - os contratos;
+  - todas as prestações;
+  - os movimentos registados.
+- Inclui um código de verificação (SHA-256 do conteúdo).
+- As descrições aparecem sem marcas internas ([CAIXA:…], REF:).
+- Gera-se com «Imprimir / Guardar PDF» → «Guardar como PDF».
