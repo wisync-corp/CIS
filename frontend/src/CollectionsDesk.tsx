@@ -114,6 +114,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [receiptBusy,setReceiptBusy]=useState(false);
  const [receiptError,setReceiptError]=useState('');
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
+ const [historyError,setHistoryError]=useState(false);
  const [view,setView]=useState<'resumo'|'tratamento'|'historico'>(initialOrder?'tratamento':'resumo');
  const [refresh,setRefresh]=useState(0);
 
@@ -160,12 +161,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  },[token]);
 
  useEffect(()=>{
-  if(!selected||view!=='historico')return;
-  const ctrl=new AbortController();setEvents(null);
+  if(!selected)return;
+  const ctrl=new AbortController();setEvents(null);setHistoryError(false);
   fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/historico-alteracoes',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
-   .then(r=>r.ok?r.json():{data:[]}).then(d=>{if(!ctrl.signal.aborted)setEvents(d.data??[]);}).catch(()=>{if(!ctrl.signal.aborted)setEvents([]);});
+   .then(r=>{if(!r.ok)throw new Error('Histórico indisponível');return r.json();})
+   .then(d=>{if(!ctrl.signal.aborted)setEvents(d.data??[]);})
+   .catch(()=>{if(!ctrl.signal.aborted){setEvents([]);setHistoryError(true);}});
   return()=>ctrl.abort();
- },[selected,view,refresh,token]);
+ },[selected,refresh,token]);
  const rows=profile?.installments??[];
  const selectedInstallment=rows.find(r=>String(r.Ordem)===ord);
  const pending=rows.filter(isPending);
@@ -212,7 +215,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const refOk=evidenceRef.trim().length>=4;
  const canExecute=live&&flowReceived&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
 
- function selectContract(numero:string){setSelected(numero);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
@@ -353,6 +356,15 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       <button type="button" role="tab" aria-selected={view==='resumo'} className={view==='resumo'?'selected':''} onClick={()=>setView('resumo')}><Wallet size={16}/> Resumo</button>
       {activeOrder&&<button type="button" role="tab" aria-selected={view==='tratamento'} className={view==='tratamento'?'selected':''} onClick={()=>setView('tratamento')}><ReceiptText size={16}/> Tratamento do pagamento</button>}
       <button type="button" role="tab" aria-selected={view==='historico'} className={view==='historico'?'selected':''} onClick={()=>setView('historico')}><BookOpen size={16}/> Histórico</button>
+     </div>
+     <div className="cis-collections-panel">
+      <div className="cis-collections-sectionhead"><div><h3>Recibos de pagamento</h3><p>Abra o recibo e escolha «Imprimir / Guardar PDF».</p></div></div>
+      {events===null?<p role="status">A consultar os recebimentos…</p>
+       :historyError?<p role="alert">Não foi possível consultar os recebimentos deste contrato.</p>
+       :events.some(canPrintReceipt)?<ul>{events.filter(canPrintReceipt).map(event=><li key={event.id}>
+        <button type="button" onClick={()=>setReceipt({event,contract:selected})}><ReceiptText size={16}/> REC-{event.extracto_nr}</button>
+        {' · Prestação '+(event.parcela??'—')+' · '+fmt(event.valor)}
+       </li>)}</ul>:<p>Este contrato ainda não tem recebimentos com movimento no Extracto e histórico de cobrança no CIS.</p>}
      </div>
      {view==='resumo'?<div className="cis-collections-panel cis-collections-overview">
       <div className="cis-collections-sectionhead"><div><h3>Prestações por receber</h3><p>Escolha a prestação que pretende tratar. O sistema verifica o estado do contrato e da prestação antes de abrir o formulário.</p></div><span>{pending.length} pendentes</span></div>
