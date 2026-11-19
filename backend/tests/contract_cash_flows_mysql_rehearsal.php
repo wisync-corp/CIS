@@ -484,7 +484,7 @@ if ($late1) {
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
-ok(count(data($rc->index($rq([])))['relatorios'])===4,'catálogo com 4 relatórios');
+ok(count(data($rc->index($rq([])))['relatorios'])===10,'catálogo com 10 relatórios (4 regulatórios + 6 de gestão)');
 $mStart=now($tz)->startOfMonth()->toDateString();
 $ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
 $ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
@@ -506,6 +506,29 @@ $rb=data($rc->show($rq(['ano'=>now($tz)->year]),'branqueamento'));
 ok((int)$rb['resumo'][0][1]>0 && count($rb['seccoes'])===2,'branqueamento: clientes com movimento no ano');
 $ri=data($rc->show($rq([]),'identificacao'));
 ok((int)$ri['resumo'][1][1]===(int)$ri['resumo'][0][1],'identificação: sem BI/NUIT no ensaio, todos assinalados');
+// Gestão
+$in60=now($tz)->addDays(60)->toDateString();
+$ag=data($rc->show($rq(['inicio'=>$tod,'fim'=>$in60]),'agenda'));
+$expAg=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->whereBetween('Data de Cobrança',[$tod,$in60])->count();
+ok(count($ag['seccoes'][1]['linhas'])===$expAg && (int)$ag['resumo'][0][1]===$expAg,'agenda: prestações a vencer nos próximos 60 dias');
+$at=data($rc->show($rq(['data'=>$tod]),'atrasos'));
+$expAt=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Cobrança','<',$tod)->where('Data de Inicio','<=',$tod)->distinct()->count('Nr do Contracto');
+$sumBands=array_sum(array_map(fn($l)=>(int)$l[2],$at['seccoes'][0]['linhas']));
+ok(count($at['seccoes'][1]['linhas'])===$expAt && $sumBands===$expAt,'atrasos: contratos em atraso e faixas coerentes');
+$op=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'operadores'));
+ok(abs(array_sum(array_map(fn($l)=>(float)$l[2],$op['seccoes'][0]['linhas']))-(float)$disbV)<0.01,'operadores: soma dos desembolsos = relatório de actividade');
+$ev=data($rc->show($rq(['ano'=>now($tz)->year]),'evolucao'));
+$yStart=now($tz)->startOfYear()->toDateString();
+$expY=0.0;foreach ($db->table('Contractos')->get()->groupBy('Nr do Contracto') as $c) { $d=substr((string)$c->min('Data de Inicio'),0,10); if ($d>=$yStart && $d<=$tod) $expY+=(float)$c->max('Quantia Creditada'); }
+$totRow=collect($ev['seccoes'][0]['linhas'])->last();
+ok($totRow[0]==='Total do ano' && abs((float)$totRow[2]-$expY)<0.01,'evolução: desembolsado no ano confere');
+$cx=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'caixa'));
+$expE=(float)$db->table('Extracto')->whereBetween('Data da Operação',[$mStart,$tod])->where('Tipo de Movimento','Entradas')->sum('Valor');
+ok(abs(array_sum(array_map(fn($l)=>(float)$l[2],$cx['seccoes'][0]['linhas']))-$expE)<0.01
+    && abs(array_sum(array_map(fn($l)=>(float)$l[2],$cx['seccoes'][1]['linhas']))-$expE)<0.01,'caixa por conta e por tipo: entradas conferem com o Extracto');
+$nc=data($rc->show($rq([]),'novocredito'));
+$openClients=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->pluck('Nome do Cliente')->unique()->all();
+ok(collect($nc['seccoes'][0]['linhas'])->every(fn($l)=>!in_array($l[0],$openClients,true)),'novo crédito: só clientes sem contratos em aberto');
 ok($err(fn()=>$rc->show($rq([],$gestor),'actividade'))===403 && $err(fn()=>$rc->show($rq(['inicio'=>$tod,'fim'=>$mStart==$tod?'2000-01-01':$mStart]),'actividade'))===422,'relatórios: só administrador; período inválido recusado');
 
 } catch (\Throwable $e) {
