@@ -1,8 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Copy,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
+import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
 import logoPrincipal from './assets/brand/cis-principal-claro.svg';
 import type {ExtractoPreset} from './Overview';
+import MessageCenter from './MessageCenter';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Mode='geral'|'clientes';
@@ -30,10 +31,6 @@ type GeralEvidence={titulo:string;emitido_em:string;emitido_por:string|null;
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—':money.format(Number(v));
 const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d&&m&&y?`${d}/${m}/${y}`:v;};
-function messageFor(i:Informacao){const n=i.cliente.nome.split(' ')[0]||i.cliente.nome;
- if(i.situacao==='Pagamento atrasado')return `Caro(a) ${n}, o contrato ${i.contrato} tem ${i.prestacoes.vencidas} prestação(ões) vencida(s)${i.proximo_vencimento?' desde '+dt(i.proximo_vencimento):''} (${i.dias_atraso} dia(s) de atraso). Valor em dívida: ${mt(i.em_divida)} MT. Pedimos que regularize o pagamento com a maior brevidade. Obrigado.`;
- if(i.situacao==='Pendente')return `Caro(a) ${n}, lembramos que a próxima prestação do contrato ${i.contrato} vence a ${dt(i.proximo_vencimento)}. Valor em dívida: ${mt(i.em_divida)} MT. Obrigado.`;
- return `Caro(a) ${n}, confirmamos que o contrato ${i.contrato} está totalmente liquidado. Obrigado pela confiança.`;}
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
 export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void}){
@@ -52,7 +49,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
  const [exporting,setExporting]=useState(false);
  const [evidence,setEvidence]=useState<Evidence|null>(null);
  const [info,setInfo]=useState<Informacao|null>(null);const [infoBusy,setInfoBusy]=useState('');const [infoError,setInfoError]=useState('');
- const [msg,setMsg]=useState<string|null>(null);const [copied,setCopied]=useState(false);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
+ const [msgContract,setMsgContract]=useState<string|null>(null);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
@@ -116,7 +113,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
  }
 
  async function openInfo(numero:string|null){
-  if(!numero)return;setInfoBusy(numero);setInfoError('');setMsg(null);setCopied(false);
+  if(!numero)return;setInfoBusy(numero);setInfoError('');
   try{setInfo(await getJson<Informacao>('/cis/extractos/informacao?'+new URLSearchParams({contrato:numero})));}
   catch(err){setInfo(null);setInfoError(err instanceof Error?err.message:'Não foi possível abrir a informação do contrato.');}finally{setInfoBusy('');}
  }
@@ -125,7 +122,6 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
   try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero})));}
   catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do cliente.');}finally{setEvidenceBusy(false);}
  }
- async function copyMsg(){if(msg===null)return;try{await navigator.clipboard.writeText(msg);setCopied(true);}catch{const t=document.createElement('textarea');t.value=msg;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();setCopied(true);}}
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
   if(mode==='geral'){try{setGeralDoc(await getJson<GeralEvidence>('/cis/extractos/geral-evidencia?'+params()));}
@@ -255,21 +251,14 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
     </dl></section>
     {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
     <div className="cis-info-actions">
-     <button type="button" className="primary" onClick={()=>{setMsg(m=>m===null?messageFor(info):null);setCopied(false);}}><MessageSquare size={15}/> Mensagem ao cliente</button>
+     <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao cliente</button>
      <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto do cliente (PDF)'}</button>
     </div>
-    {msg!==null&&<section className="cis-info-msg"><h4>Mensagem</h4>
-     <textarea value={msg} onChange={ev=>{setMsg(ev.target.value);setCopied(false);}} rows={6} aria-label="Texto da mensagem"/>
-     <div className="cis-info-actions">
-      <button type="button" onClick={()=>void copyMsg()}><Copy size={14}/> {copied?'Copiada':'Copiar'}</button>
-      {phoneDigits(info.cliente.contacto)?<>
-       <a className="cis-info-link" href={'https://wa.me/'+phoneDigits(info.cliente.contacto)+'?text='+encodeURIComponent(msg)} target="_blank" rel="noopener noreferrer">WhatsApp</a>
-       <a className="cis-info-link" href={'sms:+'+phoneDigits(info.cliente.contacto)+'?body='+encodeURIComponent(msg)}>SMS</a>
-      </>:<small>Cliente sem contacto registado: copie a mensagem.</small>}
-     </div>
-     <small>A mensagem não é enviada pelo CIS: abre no WhatsApp/SMS do seu dispositivo para confirmar e enviar.</small>
-    </section>}
    </aside>
+  </div>,document.body)}
+
+  {msgContract&&createPortal(<div className="cis-msg-overlay" role="dialog" aria-modal="true" aria-label="Centro de mensagens" onClick={()=>setMsgContract(null)}>
+   <div onClick={ev=>ev.stopPropagation()}><MessageCenter token={token} contrato={msgContract} onClose={()=>setMsgContract(null)}/></div>
   </div>,document.body)}
 
   {geralDoc&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto geral">
