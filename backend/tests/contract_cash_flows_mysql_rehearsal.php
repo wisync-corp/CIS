@@ -689,7 +689,7 @@ $y=(int)substr($today,0,4);$maxY=(int)$db->table('cis_contract_numbers')->where(
 $ob=['cliente_id'=>7,'montante'=>101,'tipo_juro'=>'Fixo','estrategia_calculo'=>ContractCalculationStrategy::FIXED_AMORTIZATION,
     'periodo_dias'=>30,'prazo'=>'1 Mês','taxa_informada'=>15,'taxa_multa'=>10,'prazo_meses'=>1,'modalidade'=>'Uma Parcela',
     'forma_pagamento'=>'Numerário','disponibilidade'=>'Numerário','data_inicio'=>$today,'confirmacao_desembolso'=>true,'referencia'=>'SAIDA-RN1'];
-$on=data($open->store(req('/x',$ob+['conta_id'=>$banco,'idempotency_key'=>'99999999-9999-4999-8999-999999999999'],$user)));
+$on=data((new ContractOpeningController())->store(req('/x',$ob+['conta_id'=>$banco,'idempotency_key'=>'99999999-9999-4999-8999-999999999999'],$user)));
 ok(($on['numero']??'')===\App\Services\ContractNumbering::format($y,$maxY+1),'novo contrato recebe o próximo número do ano ('.($on['numero']??'?').')');
 $db->table('cis_company_settings')->updateOrInsert(['chave'=>'contrato_prefixo'],['valor'=>'CPT','updated_at'=>now(),'created_at'=>now()]);
 $db->table('cis_company_settings')->updateOrInsert(['chave'=>'contrato_digitos'],['valor'=>'5','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
