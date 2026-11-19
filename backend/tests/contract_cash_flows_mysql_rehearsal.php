@@ -560,6 +560,29 @@ ok(status(fn()=>$preview(['tratamento_juros'=>'recalcular']))===409,'recalcular 
 ok((array)$db->table('Contractos')->where('Ordem',$extension)->first()===$before
     && $db->table('Extracto')->count()===$movementsBefore,'a prévia não altera a prestação nem cria movimentos');
 
+
+echo "== Prévia de mora diária\n";
+$fineOrder=$row([
+    'Nr do Contracto'=>'C-0370', 'Nº'=>370, 'Data de Cobrança'=>'2026-01-20',
+    'Capital'=>12000, 'Amortização'=>5000, 'Valor de Juros'=>1000,
+    'Valor a Pagar'=>6000, 'Valor Pago'=>0,
+]);
+$fineScenario=new \App\Http\Controllers\Api\CollectionScenarioPreviewController();
+$fineInput=['operacao'=>'mora_diaria','data_referencia'=>'2026-01-24','taxa_mora_diaria'=>'0.10',
+    'carencia_dias'=>1,'tecto_mora'=>'50.00'];
+$finePreview=fn(array $changes=[])=>data($fineScenario->preview(req('/x',$changes+$fineInput,$user),'C-0370',$fineOrder));
+$fineMovements=$db->table('Extracto')->count();
+$fineSnapshot=(array)$db->table('Contractos')->where('Ordem',$fineOrder)->first();
+$fine=$finePreview();
+ok($fine['mora']==='15.00' && $fine['capital_vencido']==='5000.00'
+    && $fine['dias_sujeitos_a_mora']===3,'mora apenas sobre o capital vencido, após carência');
+$fine=$finePreview(['tecto_mora'=>'9.00']);
+ok($fine['mora']==='9.00' && $fine['limitada_pelo_tecto'],'mora limitada pelo tecto');
+ok($finePreview(['data_referencia'=>'2026-01-20'])['mora']==='0.00','vencimento sem mora');
+ok($finePreview(['data_referencia'=>'2026-01-21'])['mora']==='0.00','primeiro dia de atraso ainda em carência');
+ok((array)$db->table('Contractos')->where('Ordem',$fineOrder)->first()===$fineSnapshot
+    && $db->table('Extracto')->count()===$fineMovements,'prévia sem alteração ao contrato ou ao Extracto');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
