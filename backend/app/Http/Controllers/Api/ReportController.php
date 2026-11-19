@@ -222,7 +222,7 @@ final class ReportController extends Controller
                     ['Carteira em curso — capital (MT)',self::m($cart)],
                     ['Valor em dívida com juros (MT)',self::m($owed)],
                 ]],
-                ['titulo'=>'3. Carteira em risco (prestações em atraso)','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
+                ['titulo'=>'3. Carteira em risco (prestações em atraso)','tom'=>'risco','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
                     ['Qualquer atraso',(string)$par1->count(),(string)$par1->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par1)),self::pct($parC($par1),$cart)],
                     ['Mais de 30 dias',(string)$par30->count(),(string)$par30->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par30)),self::pct($parC($par30),$cart)],
                     ['Mais de 90 dias',(string)$par90->count(),(string)$par90->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par90)),self::pct($parC($par90),$cart)],
@@ -231,7 +231,7 @@ final class ReportController extends Controller
                     ['Capital (amortização)',self::m($cap)],['Juros',self::m($jur)],['Multas',self::m($mul)],['Total recebido',self::m($tot)],
                     ['Prestações pagas (n.º)',(string)$paid->count()],['Renovações (n.º)',(string)$ren->count()],['Juros de renovações',self::m($ren->sum(fn($r)=>(float)$r->{'Valor de Juros'}))],
                 ]],
-                ['titulo'=>'5. Distribuição dos desembolsos por montante','colunas'=>['Faixa (MT)','Contratos','Valor (MT)','% do valor'],'linhas'=>$dist],
+                ['titulo'=>'5. Distribuição dos desembolsos por montante','colunas'=>['Faixa (MT)','Contratos','Valor (MT)','% do valor'],'linhas'=>$dist,'grafico'=>['Valor (MT)']],
                 ['titulo'=>'6. Desembolsos por género','colunas'=>['Género','Contratos','Valor (MT)'],'linhas'=>$gen],
                 ['titulo'=>'7. Caixa no período (sem transferências internas)','colunas'=>['Movimento','Valor (MT)'],'linhas'=>[
                     ['Entradas',self::m((float)($cx->e??0))],['Saídas',self::m((float)($cx->s??0))],['Saldo do período',self::m((float)($cx->e??0)-(float)($cx->s??0))],
@@ -367,7 +367,7 @@ final class ReportController extends Controller
             'resumo'=>[['Prestações a vencer',(string)$due->count()],['Valor a cobrar',self::m($due->sum(fn($r)=>self::owed($r))).' MT'],
                 ['Clientes',(string)$due->pluck('Nº de Cliente')->unique()->count()],['Vencidas por cobrar',(string)$late->count()],['Valor vencido',self::m($late->sum(fn($r)=>self::owed($r))).' MT']],
             'seccoes'=>[
-                ['titulo'=>'1. Previsão por semana','colunas'=>['Semana','Prestações','Valor (MT)'],'linhas'=>$weeks],
+                ['titulo'=>'1. Previsão por semana','colunas'=>['Semana','Prestações','Valor (MT)'],'linhas'=>$weeks,'grafico'=>['Valor (MT)']],
                 ['titulo'=>'2. Prestações a vencer','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$due->map($line)->values()->all()],
                 ['titulo'=>'3. Vencidas por cobrar (antes do período)','colunas'=>['Vencimento','Cliente','Contacto','Contrato','Forma de pagamento','Valor (MT)'],'linhas'=>$late->map($line)->values()->all()],
             ],
@@ -398,7 +398,7 @@ final class ReportController extends Controller
             'nota'=>'Dias de atraso contados desde a prestação vencida mais antiga do contrato. Valor = Valor a Pagar + multa já lançada.',
             'resumo'=>[['Contratos em atraso',(string)count($lines)],['Valor vencido',self::m($total).' MT'],['Mais de 30 dias',self::m($agg[2]['v']+$agg[3]['v']+$agg[4]['v']).' MT'],['Mais de 90 dias',self::m($agg[4]['v']).' MT']],
             'seccoes'=>[
-                ['titulo'=>'1. Por faixa de atraso','colunas'=>['Faixa','Prestações','Contratos','Valor vencido (MT)','% do vencido'],'linhas'=>$tab],
+                ['titulo'=>'1. Por faixa de atraso','colunas'=>['Faixa','Prestações','Contratos','Valor vencido (MT)','% do vencido'],'linhas'=>$tab,'grafico'=>['Valor vencido (MT)'],'tom'=>'risco'],
                 ['titulo'=>'2. Contratos em atraso (mais antigos primeiro)','colunas'=>['Cliente','Contacto','Contrato','Prestações vencidas','Dias de atraso','Valor vencido (MT)','Faixa','Último pagamento','Operador'],'linhas'=>$lines],
             ],
         ];
@@ -462,7 +462,7 @@ final class ReportController extends Controller
             'ano'=>$ano,
             'nota'=>'Carteira e carteira em risco (> 30 dias) no fim de cada mês. Caixa sem transferências internas.',
             'resumo'=>[['Contratos desembolsados',(string)$tot['n']],['Valor desembolsado',self::m($tot['v']).' MT'],['Recebido',self::m($tot['rec']).' MT'],['Juros recebidos',self::m($tot['jur']).' MT'],['Multas recebidas',self::m($tot['mul']).' MT']],
-            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Multas (MT)','Carteira no fim (MT)','% carteira > 30 dias','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines]],
+            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Multas (MT)','Carteira no fim (MT)','% carteira > 30 dias','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines,'grafico'=>['Desembolsado (MT)','Recebido (MT)'],'total_final'=>true]],
         ];
     }
 
