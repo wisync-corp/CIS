@@ -44,6 +44,7 @@ final class CollectionScenarioPreviewController extends Controller
             'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato,prorrogar_15_30'],
             'prazo_origem_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:15'],
             'prazo_destino_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:30'],
+            'tratamento_juros'=>['nullable','in:manter,recalcular'],
             'valor_pago'=>['required_if:operacao,parcial','nullable','string','max:20'],
             'data_pagamento'=>['required_if:operacao,actualizar_data','nullable','date_format:Y-m-d'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
@@ -75,17 +76,52 @@ final class CollectionScenarioPreviewController extends Controller
             abort_unless($termValues->count()===1,409,'Prazo do contrato divergente ou não identificado.');
             $term=strtolower($termValues[0]);
             abort_unless(preg_match('/^(?:15\s*dias?|2\s*semanas)$/u',$term)===1,409,'Esta operação exige prazo actual comprovado de 15 dias / 2 semanas.');
-            abort_unless(\Illuminate\Support\Facades\Schema::hasTable('cis_tabela_juros'),503,'Tabela de taxas indisponível.');
-            $capital=(string)($r->Capital??'0');
-            $rows30=DB::table('cis_tabela_juros')->where('limite_inferior','<=',$capital)
-              ->where('limite_superior','>=',$capital)->where('periodo_referencia',30)
-              ->limit(2)->get(['taxa']);
-            abort_unless($rows30->count()===1,409,'Não existe uma taxa única para este capital e o período de 30 dias.');
+            $start = (string) ($r->{'Data de Inicio'} ?? '');
+            abort_unless(preg_match('/^\d{4}-\d{2}-\d{2}$/D', $start) === 1
+                && checkdate((int) substr($start, 5, 2), (int) substr($start, 8, 2), (int) substr($start, 0, 4)),
+                409, 'Data de início original inválida ou em falta.');
+            $dueDate = \Carbon\CarbonImmutable::parse($start, 'Africa/Maputo')->addDays(30)->toDateString();
+            $capital = self::cents($r->Capital ?? '0', 'capital');
+            if ($capital === 0) {
+                $capital = self::cents($r->{'Quantia Creditada'} ?? '0', 'capital');
+            }
+            $interest = self::cents($r->{'Valor de Juros'} ?? '0', 'juros');
+            $due = self::cents($r->{'Valor a Pagar'} ?? '0', 'valor_a_pagar');
+            abort_unless($capital > 0 && $due > 0 && $due >= $interest, 409,
+                'Os valores actuais da prestação não permitem calcular a prorrogação.');
+
+            $options = [
+                'manter' => ['juros' => self::fmt($interest), 'valor_a_pagar' => self::fmt($due)],
+            ];
+            $rate = null;
+            if (\Illuminate\Support\Facades\Schema::hasTable('cis_tabela_juros')) {
+                $rateRows = DB::table('cis_tabela_juros')
+                    ->where('limite_inferior', '<=', self::fmt($capital))
+                    ->where('limite_superior', '>=', self::fmt($capital))
+                    ->where('periodo_referencia', 30)->limit(2)->get(['taxa']);
+                if ($rateRows->count() === 1 && is_numeric($rateRows[0]->taxa) && $rateRows[0]->taxa >= 0) {
+                    $rate = (string) $rateRows[0]->taxa;
+                    $newInterest = (int) round($capital * (float) $rate / 100);
+                    $options['recalcular'] = [
+                        'juros' => self::fmt($newInterest),
+                        'valor_a_pagar' => self::fmt($due - $interest + $newInterest),
+                    ];
+                }
+            }
+            $choice = $d['tratamento_juros'] ?? null;
+            abort_if($choice !== null && !isset($options[$choice]), 409,
+                'Não existe uma taxa única e válida para a prorrogação a 30 dias.');
             return response()->json($base+[
-              'resultado'=>'proposta_alteracao_prazo_sem_gravacao',
-              'prazo_origem_dias'=>15,'prazo_destino_dias'=>30,
-              'taxa_destino'=>(string)$rows30[0]->taxa,
-              'aviso'=>'Apenas prévia da elegibilidade e taxa de referência. Não altera data de vencimento, juros, capital, prestação nem Extracto. A política de prorrogação necessita de homologação.',
+                'resultado' => 'proposta_alteracao_prazo_sem_gravacao',
+                'prazo_origem_dias' => 15,
+                'prazo_destino_dias' => 30,
+                'data_inicio_original' => $start,
+                'novo_vencimento' => $dueDate,
+                'taxa_destino' => $rate,
+                'opcoes_juros' => $options,
+                'tratamento_juros' => $choice,
+                'resultado_escolhido' => $choice === null ? null : $options[$choice],
+                'aviso' => 'Prévia da prorrogação. A escolha do operador ainda não é gravada no contrato.',
             ])->header('Cache-Control','no-store, private');
         }
         if (in_array($operation,['parcial','renovar_juros','capitalizar','actualizar_data','remanescente'],true)) {
