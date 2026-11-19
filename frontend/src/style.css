@@ -1469,7 +1469,6 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-co-savebar button:disabled{opacity:.5;cursor:not-allowed}
 /* Cabeçalho dos documentos com a identificação da empresa */
 .cis-doc-brand{display:flex;align-items:center;gap:12px;text-align:left}
-.cis-doc-brand img{width:170px;height:50px;object-fit:contain;object-position:left center;background:#fff}
 .cis-doc-brand img.own{width:64px;height:64px;object-position:center}
 .cis-doc-brand .who{display:flex;flex-direction:column;gap:1px;text-align:left}
 .cis-doc-brand .who b{font-size:15px;color:#101828}
@@ -1546,3 +1545,7 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 @media(max-width:1200px){.cis-mov-cols{grid-template-columns:1fr}}
 @media(max-width:980px){.cis-settings-layout{grid-template-columns:1fr}.cis-settings-nav{position:static;flex-direction:row;flex-wrap:wrap}.cis-settings-nav ul{flex-direction:row;flex-wrap:wrap}}
 @media(max-width:640px){.cis-mov-add{grid-template-columns:1fr}.cis-mov-col li{grid-template-columns:1fr}}
+
+.cis-doc-powered{margin-left:auto;white-space:nowrap;color:#667085;font-size:calc(10.5px * var(--cis-fs));letter-spacing:.02em}
+.cis-doc-powered b{color:#344054;font-weight:800}
+.cis-evidence header>div:only-child{margin-left:auto}

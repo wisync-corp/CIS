@@ -1,4 +1,4 @@
-import CompanyBrand from './CompanyBrand';
+import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile,type CompanyProfile} from './company';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
@@ -97,7 +97,7 @@ const Doc=({r,company}:{r:Report;company:CompanyProfile|null})=><article classNa
  {r.seccoes.map(s=><section key={s.titulo}><h2>{s.titulo}</h2>{s.linhas.length?<table><thead><tr>{s.colunas.map(c=><th key={c} className={isNumCol(c)?'num':''}>{c}</th>)}</tr></thead>
   <tbody>{s.linhas.map((l,i)=><tr key={i} className={s.total_final&&i===s.linhas.length-1?'total':''}>{l.map((v,j)=><td key={j} className={isNumCol(s.colunas[j])?'num':''}>{fmtCell(s.colunas[j],v,l)}</td>)}</tr>)}</tbody></table>:<p>Sem registos.</p>}</section>)}
  <section className="cis-report-legal"><p><b>Base legal:</b> {r.base_legal}</p><p><b>Nota:</b> {r.nota}</p></section>
- <footer><ShieldCheck size={14}/><span>Código de verificação <b>{r.codigo_verificacao}</b> · gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span></footer>
+ <footer><ShieldCheck size={14}/><span>Código de verificação <b>{r.codigo_verificacao}</b> · gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span><PoweredBy/></footer>
 </article>;
 
 function Seg({items,cur,onPick,label}:{items:[string,string][];cur:string;onPick:(k:string)=>void;label:string}){
@@ -142,7 +142,8 @@ export default function ReportsDesk({token}:{token:string}){
   if(!rep)return;const out:string[][]=[[rep.titulo],[periodText(rep)],[`Emitido em ${rep.emitido_em}`,rep.emitido_por??''],[`Código de verificação ${rep.codigo_verificacao}`],[]];
   out.push(['Resumo']);for(const [k,v] of rep.resumo)out.push([k,v]);out.push([]);
   for(const s of rep.seccoes){out.push([s.titulo]);out.push(s.colunas);for(const l of s.linhas)out.push(l.map((v,i)=>isMoneyCol(s.colunas[i])?v.replace('.',','):v));out.push([]);}
-  out.push(['Base legal',rep.base_legal]);out.push(['Nota',rep.nota]);
+  out.push(['Base legal',rep.base_legal]);out.push(['Nota',rep.nota]);out.push([]);out.push(['Powered by WiSync']);
+  if(company?.nome_empresa)out.unshift([company.nome_empresa+(company.nuit?` · NUIT ${company.nuit}`:'')]);
   const csv='﻿'+out.map(l=>l.map(csvCell).join(';')).join('\r\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`relatorio-${rep.id}-${(rep.data_referencia||rep.ano||rep.intervalo?.fim||today())}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
