@@ -69,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('extractos/geral',[\App\Http\Controllers\Api\ExtractoController::class,'geral'])->middleware('throttle:60,1');
         Route::get('extractos/clientes',[\App\Http\Controllers\Api\ExtractoController::class,'clientes'])->middleware('throttle:60,1');
         Route::get('extractos/contratos',[\App\Http\Controllers\Api\ExtractoController::class,'contratos'])->middleware('throttle:60,1');
+        Route::get('extractos/geral-evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'geralEvidencia'])->middleware('throttle:20,1');
         Route::get('extractos/evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'evidencia'])->middleware('throttle:20,1');
         Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');
         Route::get('contractos/saldo',[ContractOpeningReviewController::class,'cashBalance'])->middleware('throttle:10,1');

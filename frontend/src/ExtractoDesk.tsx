@@ -17,6 +17,10 @@ type Evidence={titulo:string;emitido_em:string;emitido_por:string|null;periodo:{
  movimentos:{codigo:string;data:string;descricao:string;contrato:string;parcela:string|null;tipo:string;valor:string}[];
  totais:ClientesTot;codigo_verificacao:string};
 type Account={id:number;code:string;name:string};
+type GeralEvidence={titulo:string;emitido_em:string;emitido_por:string|null;
+ filtros:{inicio:string|null;fim:string|null;cliente:string|null;contrato:string|null;conta:string|null;tipo:string};
+ linhas:{codigo:string;descricao:string;data:string;tipo:'entrada'|'saida';valor:string;contrato:string|null;cliente:string|null;parcela:string|null;conta:string|null}[];
+ total_linhas:number;totais:{entradas:string;saidas:string;disponivel:string};codigo_verificacao:string};
 
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—':money.format(Number(v));
@@ -36,7 +40,7 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
  const [geral,setGeral]=useState<GeralResp|null>(null);const [clientes,setClientes]=useState<ClientesResp|null>(null);
  const [loading,setLoading]=useState(false);const [error,setError]=useState('');
  const [exporting,setExporting]=useState(false);
- const [evidence,setEvidence]=useState<Evidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
+ const [evidence,setEvidence]=useState<Evidence|null>(null);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
@@ -100,12 +104,14 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
 
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
+  if(mode==='geral'){try{setGeralDoc(await getJson<GeralEvidence>('/cis/extractos/geral-evidencia?'+params()));}
+   catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto geral.');}finally{setEvidenceBusy(false);}return;}
   try{const p=new URLSearchParams();if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);
    setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+p));}
   catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do cliente.');}finally{setEvidenceBusy(false);}
  }
  function printEvidence(){
-  const prev=document.title;document.title=`Extracto ${evidence?.cliente.nome??''} ${evidence?.emitido_em.slice(0,10)??''}`.trim();
+  const prev=document.title;document.title=geralDoc?`Extracto geral ${geralDoc.emitido_em.slice(0,10)}`:`Extracto ${evidence?.cliente.nome??''} ${evidence?.emitido_em.slice(0,10)??''}`.trim();
   document.body.classList.add('cis-printing-evidence');
   const done=()=>{document.body.classList.remove('cis-printing-evidence');document.title=prev;window.removeEventListener('afterprint',done);};
   window.addEventListener('afterprint',done);window.print();setTimeout(done,1500);
@@ -114,7 +120,7 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
  const data=mode==='geral'?geral:clientes;
  const lastPage=data?Math.max(1,Math.ceil(data.total_linhas/data.por_pagina)):1;
  const g=geral?.totais,c=clientes?.totais;
- const canEvidence=!!(cliente||contrato);
+ const canEvidence=mode==='geral'?!!data&&data.total_linhas>0:!!(cliente||contrato);
 
  return <>
   <section className="cis-panel cis-list-panel cis-extracto">
@@ -150,8 +156,8 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
 
    <div className="cis-extracto-actions">
     <button type="button" onClick={()=>void exportCsv()} disabled={exporting||!data||!data.total_linhas}><Download size={15}/>{exporting?'A exportar…':'Exportar CSV (Excel)'}</button>
-    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={canEvidence?'Gerar extracto para entregar ao cliente':'Escolha um cliente para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':'Extracto do cliente (PDF)'}</button>
-    {!canEvidence&&<small>Escolha um cliente para gerar o extracto de evidência.</small>}
+    <button type="button" className="primary" onClick={()=>void openEvidence()} disabled={!canEvidence||evidenceBusy} title={mode==='geral'?'Gerar o extracto geral com os filtros actuais':canEvidence?'Gerar extracto para entregar ao cliente':'Escolha um cliente para gerar o extracto'}><FileText size={15}/>{evidenceBusy?'A preparar…':mode==='geral'?'Extracto geral (PDF)':'Extracto do cliente (PDF)'}</button>
+    {!canEvidence&&mode==='clientes'&&<small>Escolha um cliente para gerar o extracto de evidência.</small>}
    </div>
 
    {loading&&<div className="cis-loading" role="status">A consultar o extracto…</div>}
@@ -194,6 +200,31 @@ export default function ExtractoDesk({token,role}:{token:string;role:string}){
     <section><h2>Movimentos registados</h2>{evidence.movimentos.length?<table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Tipo</th><th className="num">Valor (MT)</th></tr></thead>
      <tbody>{evidence.movimentos.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}</td><td>{m.contrato}{m.parcela?' · P'+m.parcela:''}</td><td>{m.tipo}</td><td className="num">{mt(m.valor)}</td></tr>)}</tbody></table>:<p>Sem movimentos registados no período.</p>}</section>
     <footer><ShieldCheck size={14}/><span>Código de verificação <b>{evidence.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span></footer>
+   </article>
+  </div>,document.body)}
+
+  {geralDoc&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto geral">
+   <div className="cis-evidence-bar"><b>Pré-visualização do extracto geral</b><span>{geralDoc.total_linhas} movimento(s) com os filtros actuais. Use «Imprimir / Guardar PDF».</span>
+    <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
+    <button type="button" onClick={()=>setGeralDoc(null)} aria-label="Fechar"><X size={16}/></button></div>
+   <article className="cis-evidence">
+    <header><img src={logoPrincipal} alt="CIS" width={170} height={50}/><div><h1>{geralDoc.titulo}</h1><p>Emitido em {dt(geralDoc.emitido_em.slice(0,10))} às {geralDoc.emitido_em.slice(11)}{geralDoc.emitido_por?` por ${geralDoc.emitido_por}`:''}</p>
+     <p>Período: {geralDoc.filtros.inicio||geralDoc.filtros.fim?`${dt(geralDoc.filtros.inicio)} a ${dt(geralDoc.filtros.fim)}`:'todo o histórico'}</p></div></header>
+    <section className="cis-evidence-client"><h2>Filtros</h2><dl>
+     <div><dt>Conta</dt><dd>{geralDoc.filtros.conta??'Todas'}</dd></div>
+     <div><dt>Tipo</dt><dd>{geralDoc.filtros.tipo==='entradas'?'Entradas':geralDoc.filtros.tipo==='saidas'?'Saídas':'Entradas e saídas'}</dd></div>
+     <div><dt>Cliente</dt><dd>{geralDoc.filtros.cliente??'Todos'}</dd></div>
+     <div><dt>Contrato</dt><dd>{geralDoc.filtros.contrato??'Todos'}</dd></div>
+    </dl></section>
+    <section className="cis-evidence-summary cis-evidence-summary-3">
+     <div><span>Entradas</span><strong>{mt(geralDoc.totais.entradas)} MT</strong></div>
+     <div><span>Saídas</span><strong>{mt(geralDoc.totais.saidas)} MT</strong></div>
+     <div><span>Total disponível</span><strong>{mt(geralDoc.totais.disponivel)} MT</strong></div>
+    </section>
+    <section><h2>Movimentos</h2><table><thead><tr><th>Data</th><th>Referência</th><th>Descrição</th><th>Contrato</th><th>Conta</th><th className="num">Entrada</th><th className="num">Saída</th></tr></thead>
+     <tbody>{geralDoc.linhas.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}{m.cliente?' · '+m.cliente:''}</td><td>{m.contrato??''}{m.parcela?' · P'+m.parcela:''}</td><td>{m.conta??'—'}</td><td className="num">{m.tipo==='entrada'?mt(m.valor):''}</td><td className="num">{m.tipo==='saida'?mt(m.valor):''}</td></tr>)}</tbody>
+     <tfoot><tr><th colSpan={5}>Totais</th><th className="num">{mt(geralDoc.totais.entradas)}</th><th className="num">{mt(geralDoc.totais.saidas)}</th></tr></tfoot></table></section>
+    <footer><ShieldCheck size={14}/><span>Código de verificação <b>{geralDoc.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do Extracto. Valores em Meticais (MT).</span></footer>
    </article>
   </div>,document.body)}
  </>;
