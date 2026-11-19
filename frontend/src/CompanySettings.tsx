@@ -10,7 +10,7 @@ type Section={id:string;kicker:string;title:string;icon:any;desc:string;used:str
 
 const PROV:[string,string][]=[['','Seleccionar'],...['Maputo Cidade','Maputo Província','Gaza','Inhambane','Sofala','Manica','Tete','Zambézia','Nampula','Cabo Delgado','Niassa'].map(p=>[p,p] as [string,string])];
 const SECTIONS:Section[]=[
- {id:'perfil',kicker:'Perfil',title:'Informações gerais',icon:Building2,desc:'Identificação da empresa nos extractos, evidências e relatórios.',used:['Extracto do cliente (PDF)','Extracto geral (PDF)','Relatórios › Documento'],groups:[
+ {id:'perfil',kicker:'Perfil',title:'Informações gerais',icon:Building2,desc:'Identificação da empresa nos extractos, evidências e relatórios.',used:['Extracto de conta (PDF)','Extracto geral (PDF)','Relatórios › Documento'],groups:[
   {title:'Identificação',icon:IdCard,fields:[
    {k:'nome_empresa',label:'Nome da empresa',type:'text',req:true,wide:true,placeholder:'Ex.: CAPTA Microcrédito, Lda'},
    {k:'nuit',label:'NUIT da empresa',type:'text',req:true,placeholder:'9 dígitos',help:'Obrigatório nas comunicações ao Banco de Moçambique.'},
@@ -27,36 +27,36 @@ const SECTIONS:Section[]=[
    {k:'contacto_alternativo',label:'Contacto alternativo',type:'text',placeholder:'Opcional'},
    {k:'email',label:'Email',type:'email',placeholder:'geral@empresa.co.mz'}]},
   {title:'Proprietário',icon:UserRound,fields:[{k:'proprietario',label:'Nome do proprietário',type:'text',wide:true}]}]},
- {id:'cobranca',kicker:'Operacional',title:'Cobrança e multa',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos clientes.',
+ {id:'cobranca',kicker:'Operacional',title:'Cobrança e juros de mora',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos clientes.',
   used:['Política da empresa (registo)','Lembretes › Centro de mensagens'],
-  note:'Hoje o CIS calcula a multa pela taxa de cada contrato («% de Multa») e só a cobra quando o operador marca «Cobrar multa». Estas regras ficam registadas como política da empresa; a multa automática só será ligada depois de aprovada, para não alterar contratos em curso.',
+  note:'Hoje o CIS calcula os juros de mora pela taxa de cada contrato e só os cobra quando o gestor marca «Cobrar juros de mora». Estas regras ficam registadas como política da empresa; os juros de mora automáticos só serão ligados depois de aprovados, para não alterar contratos em curso.',
   groups:[
   {title:'Mora',icon:Gavel,fields:[
    {k:'limite_mensal_dias_mora',label:'Limite mensal de dias de mora',type:'number',unit:'dias',help:'Máximo de dias por mês em que a taxa diária é aplicada.'},
-   {k:'tolerancia_dias',label:'Tolerância antes da mora',type:'number',unit:'dias',help:'Dias após o vencimento sem multa.'},
-   {k:'penalidades_automaticas',label:'Aplicar penalidades automaticamente',type:'bool',help:'Sim: a multa é proposta sem intervenção do operador.'},
+   {k:'tolerancia_dias',label:'Período de tolerância',type:'number',unit:'dias',help:'Dias após o vencimento sem juros de mora.'},
+   {k:'penalidades_automaticas',label:'Juros de mora automáticos',type:'bool',help:'Sim: os juros de mora são propostos sem intervenção do gestor.'},
    {k:'taxa_diaria_mora',label:'Taxa diária de juros de mora',type:'number',unit:'%',step:'0.01'},
-   {k:'dias_carencia',label:'Dias de carência por defeito',type:'number',unit:'dias',help:'Dias entre o desembolso e o início da contagem.'}]},
+   {k:'dias_carencia',label:'Período de carência',type:'number',unit:'dias',help:'Dias entre o desembolso e o início da contagem.'}]},
   {title:'Calendário e avisos',icon:Info,fields:[
    {k:'fim_de_semana',label:'Prestações ao fim de semana',type:'select',options:[['permitir','Permitir sábados e domingos'],['adiar','Adiar para segunda-feira'],['antecipar','Antecipar para sexta-feira']]},
    {k:'modalidade_calendario',label:'Modalidade do calendário',type:'select',options:[['dias_corridos','Dias corridos (15 / 30 dias)'],['mesmo_dia_mes','Mesmo dia de cada mês']]},
    {k:'lembrete_dias_antes',label:'Lembrete antes do vencimento',type:'number',unit:'dias'},
    {k:'canal_notificacao',label:'Canal de notificação ao cliente',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
- {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por cliente.',used:['Relatórios › Clientes para novo crédito'],groups:[
+ {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
    {k:'score_minimo',label:'Score mínimo para aprovação',type:'number',unit:'0–100'},
    {k:'score_baixo_risco',label:'Limiar de baixo risco',type:'number',unit:'0–100'},
    {k:'score_risco_medio',label:'Limiar de risco médio',type:'number',unit:'0–100',help:'Abaixo deste valor: alto risco.'}]},
-  {title:'Limites por cliente',icon:UserRound,fields:[
+  {title:'Limites por mutuário',icon:UserRound,fields:[
    {k:'max_creditos_activos',label:'Máximo de créditos activos',type:'number'},
    {k:'max_creditos_atraso',label:'Máximo de créditos em atraso',type:'number'},
-   {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Prestação ÷ rendimento mensal do cliente.'}]}]},
- {id:'incentivos',kicker:'Equipa',title:'Incentivos',icon:Award,desc:'Valores para o mapa de incentivos dos promotores e gestores.',used:['Relatórios › Desempenho por operador'],groups:[
+   {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Valor da prestação ÷ rendimento mensal do mutuário.'}]}]},
+ {id:'incentivos',kicker:'Equipa',title:'Incentivos',icon:Award,desc:'Valores para o mapa de incentivos dos gestores de crédito.',used:['Relatórios › Desempenho por gestor de crédito'],groups:[
   {title:'Por operação',icon:Award,fields:[
-   {k:'incentivo_cliente_novo',label:'Por cliente novo',type:'number',unit:'MZN',step:'0.01'},
+   {k:'incentivo_cliente_novo',label:'Por mutuário novo',type:'number',unit:'MZN',step:'0.01'},
    {k:'incentivo_renovacao',label:'Por renovação',type:'number',unit:'MZN',step:'0.01'}]},
   {title:'Por carteira',icon:Gauge,fields:[
-   {k:'incentivo_taxa_capital',label:'Taxa sobre o capital vigente',type:'number',unit:'%',step:'0.01'},
+   {k:'incentivo_taxa_capital',label:'Taxa sobre o saldo em dívida (carteira)',type:'number',unit:'%',step:'0.01'},
    {k:'incentivo_taxa_juros',label:'Taxa sobre juros recebidos',type:'number',unit:'%',step:'0.01'}]}]},
 ];
 const PROFILE_KEYS=SECTIONS[0].groups.flatMap(g=>g.fields.map(f=>f.k)).concat('logotipo');

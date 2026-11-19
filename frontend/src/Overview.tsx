@@ -38,15 +38,15 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
  const stats=[
   {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s) em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período',go:{base:'desembolso',estado:'todos'} as const},
   {name:'Juros efectivamente recebidos',icon:ArrowUpRight,value:mt(r?.juros_mes),hint:r?`Em ${per} · total geral ${mt(r.juros)}`:'Separados da amortização',go:{base:'pagamento',estado:'paga'} as const},
-  {name:'Multas recebidas',icon:ArrowDownRight,value:mt(r?.multas_mes),hint:r?`Em ${per} · total geral ${mt(r.multas)}`:'Por atraso no pagamento',go:{base:'pagamento',estado:'paga'} as const},
-  {name:'Prestações vencidas',icon:CalendarDays,value:c?String(c.vencidas_periodo):'—',hint:c?`${mt(c.valor_vencido_periodo)} em atraso · ${c.contratos_vencidos_periodo} contrato(s) · vencimento em ${per}`:'Vencimento anterior a hoje',alert:!!c&&c.vencidas_periodo>0,go:{base:'cobranca',estado:'vencida'} as const},
-  {name:'Prestações pendentes',icon:Clock,value:c?String(c.pendentes_periodo):'—',hint:c?`${mt(c.valor_pendente_periodo)} a receber · ${c.contratos_pendentes_periodo} contrato(s) · vencimento em ${per}`:'Ainda dentro do prazo',go:{base:'cobranca',estado:'aberta'} as const}
+  {name:'Juros de mora recebidos',icon:ArrowDownRight,value:mt(r?.multas_mes),hint:r?`Em ${per} · total geral ${mt(r.multas)}`:'Por atraso no pagamento',go:{base:'pagamento',estado:'paga'} as const},
+  {name:'Prestações em atraso',icon:CalendarDays,value:c?String(c.vencidas_periodo):'—',hint:c?`${mt(c.valor_vencido_periodo)} em atraso · ${c.contratos_vencidos_periodo} contrato(s) · vencimento em ${per}`:'Vencimento anterior a hoje',alert:!!c&&c.vencidas_periodo>0,go:{base:'cobranca',estado:'vencida'} as const},
+  {name:'Prestações em curso',icon:Clock,value:c?String(c.pendentes_periodo):'—',hint:c?`${mt(c.valor_pendente_periodo)} a receber · ${c.contratos_pendentes_periodo} contrato(s) · vencimento em ${per}`:'Ainda dentro do prazo',go:{base:'cobranca',estado:'aberta'} as const}
  ];
  const ledger:[string,string,string|undefined][]=[
   ['Capital','Desembolsado no período',c?.desembolsado_periodo],
   ['Amortização','Capital recuperado no período',r?.capital_recuperado_mes],
   ['Juros','Receita financeira recebida no período',r?.juros_mes],
-  ['Multa','Encargos por atraso recebidos no período',r?.multas_mes],
+  ['Juros de mora','Penalização por atraso recebida no período',r?.multas_mes],
   ['Prestação','Prestações dos contratos desembolsados no período',c?.prestacoes_desembolsadas_periodo]
  ];
  return <>
@@ -55,7 +55,7 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
    <label>Mês<select value={mes} onChange={e=>setMes(e.target.value)}><option value="todos">Todos</option>{MONTHS.map((n,i)=><option key={n} value={String(i+1)}>{n}</option>)}</select></label>
    <label>Ano<select value={ano} onChange={e=>setAno(e.target.value)}><option value="todos">Todos</option>{years.map(y=><option key={y} value={String(y)}>{y}</option>)}</select></label>
    {(mes!==nowMaputo().m||ano!==nowMaputo().y)&&<button type="button" onClick={()=>{const n=nowMaputo();setMes(n.m);setAno(n.y);}}>Mês actual</button>}
-   <small>Vencidas e pendentes contam pela data de vencimento. Os saldos das contas são sempre os de hoje.</small>
+   <small>Prestações em atraso e em curso contam pela data de vencimento. Os saldos das contas são sempre os de hoje.</small>
   </div>
   <section className="cis-banner cis-overview-banner"><Wallet size={21}/><div>
    {error?<><b>Indicadores indisponíveis</b><p><AlertCircle size={13}/> {error}</p></>:

@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
+import {coluna,estadoPrestacao} from './glossario';
 import {
   ReceiptText,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
   ArrowRight,ArrowLeft,Wallet,Clock3,ShieldCheck,LockKeyhole,Landmark,
@@ -22,21 +23,21 @@ type Quote={
 };
 type PaymentResult={registado:boolean;repetido:boolean;extracto_nr:number;conta?:string;saldo_conta_actual?:string;contrato_finalizado?:boolean;notice:string;total_texto?:string;valor?:string};
 type HistoryEvent={id:number;operacao:string;parcela:number|null;valor:string|null;extracto_nr:number|null;referencia:string|null;motivo:string|null;antes:Row|null;depois:Row|null;em:string};
-const historyLabels:Record<string,string>={cobranca_total:'Pagamento integral',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
+const historyLabels:Record<string,string>={cobranca_total:'Liquidação da prestação',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
 const historyFields=['Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','% de Juro','Estado','Data de Pagamento','Situação de Pagamento'];
 const newKey=()=>typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(Number(c)^Math.random()*16>>Number(c)/4).toString(16));
 type Mode='total'|'renovar_emprestimo'|'parcial'|'renovar_juros'|'capitalizar'|'remanescente'|'renovar_credito'|'actualizar_data'|'finalizar_contrato'|'prorrogar_15_30';
 const statuses:Record<Mode,{name:string;details:string;group:string}>={
- total:{name:'Pagamento integral',details:'Liquidação completa da prestação, com eventual multa por atraso.',group:'Com pagamento'},
- renovar_emprestimo:{name:'Renovar empréstimo',details:'O cliente paga só os juros; o mesmo contrato recebe nova prestação com o mesmo capital e prazo.',group:'Com pagamento'},
+ total:{name:'Liquidação da prestação',details:'Pagamento completo da prestação, com eventuais juros de mora.',group:'Com pagamento'},
+ renovar_emprestimo:{name:'Renovação',details:'O mutuário paga só os juros; o mesmo contrato recebe nova prestação com o mesmo capital e prazo.',group:'Com pagamento'},
  parcial:{name:'Pagamento parcial',details:'Registar montante inferior ao devido; juros antes da amortização.',group:'Com pagamento'},
- renovar_juros:{name:'Renovar juros',details:'Novo período de juros sobre o capital ainda devido, sem recebimento.',group:'Sem pagamento'},
+ renovar_juros:{name:'Renovação dos juros',details:'Novo período de juros sobre o capital ainda devido, sem recebimento.',group:'Sem pagamento'},
  capitalizar:{name:'Capitalizar juros',details:'Incorporar juros no capital e apurar nova taxa pela tabela de faixas.',group:'Sem pagamento'},
  remanescente:{name:'Liquidar remanescente',details:'Liquidação final após parcial, sujeita a controlo dos atrasos.',group:'Regularização'},
  renovar_credito:{name:'Renovar crédito',details:'Nova operação de crédito após o termo da anterior; exige novo contrato e desembolso autorizado.',group:'Novo crédito'},
  actualizar_data:{name:'Rever data de pagamento',details:'Verificar data efectiva, dias de atraso, estado e eventual recálculo de juros variáveis.',group:'Regularização'},
- finalizar_contrato:{name:'Finalizar contrato',details:'Verificar se todas as prestações se encontram efectivamente liquidadas antes de encerrar.',group:'Encerramento'},
- prorrogar_15_30:{name:'Passar de 15 para 30 dias',details:'Avaliar a alteração do prazo de 15 para 30 dias antes de qualquer recálculo ou aprovação.',group:'Alteração de prazo'}
+ finalizar_contrato:{name:'Encerrar contrato liquidado',details:'Verificar se todas as prestações estão liquidadas antes de encerrar.',group:'Encerramento'},
+ prorrogar_15_30:{name:'Prorrogação de 15 para 30 dias',details:'Avaliar a alteração do prazo de 15 para 30 dias antes de qualquer recálculo ou aprovação.',group:'Alteração de prazo'}
 };
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt=(value:unknown)=>value===null||value===undefined||String(value)===''||!Number.isFinite(Number(value))
@@ -318,7 +319,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       {contractClosed&&<div className="cis-collections-risk"><LockKeyhole size={16}/> Contrato com estado «{contractStatus}». Não é permitido iniciar nova cobrança nesta ficha.</div>}
       <div className="cis-collections-overview-list">{rows.map(row=><div className="cis-collections-overview-row" key={String(row.Ordem)}>
        <div className="cis-collections-overview-id"><span>Parcela {text(row['Nº da Parcela'])}</span><strong>{fmt(row['Valor a Pagar'])}</strong></div>
-       <div className="cis-collections-overview-meta"><span>Vencimento: {date(row['Data de Cobrança'])}</span><span className={isPending(row)?'pending':'settled'}>{text(row.Estado)} · {text(row['Situação de Pagamento'])}</span></div>
+       <div className="cis-collections-overview-meta"><span>Vencimento: {date(row['Data de Cobrança'])}</span><span className={isPending(row)?'pending':'settled'}>{estadoPrestacao(row.Estado)} · {text(row['Situação de Pagamento'])}</span></div>
        <button type="button" disabled={!installmentEligible(row)} onClick={()=>{chooseOrd(String(row.Ordem));setView('tratamento');}}>
         {installmentEligible(row)?<>Efectuar pagamento <ArrowRight size={15}/></>:<><LockKeyhole size={14}/> Indisponível</>}
        </button>
@@ -347,9 +348,9 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
          <dl><div><dt>Capital</dt><dd>{fmt(selectedInstallment.Capital)}</dd></div>
           <div><dt>Amortização</dt><dd>{fmt(selectedInstallment['Amortização'])}</dd></div>
           <div><dt>Juros</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div>
-          <div><dt>Multa registada</dt><dd>{fmt(selectedInstallment['Valor de Multa'])}</dd></div>
+          <div><dt>Juros de mora registados</dt><dd>{fmt(selectedInstallment['Valor de Multa'])}</dd></div>
           <div><dt>Taxa de juro</dt><dd>{text(profile.contract['% de Juro'])}</dd></div>
-          <div><dt>Taxa de multa</dt><dd>{text(profile.contract['% de Multa'])}</dd></div>
+          <div><dt>Taxa de juros de mora</dt><dd>{text(profile.contract['% de Multa'])}</dd></div>
           <div><dt>Tipo de juro</dt><dd>{text(profile.contract['Tipo de Juro'])}</dd></div></dl>
         </details>
        </>}
@@ -383,12 +384,12 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        }
        {hasChoice&&<>
        <div className="cis-collections-fields">
-        {flowReceived&&<label>Data real de pagamento (Maputo)<input type="date" value={payDate} max={today()} readOnly={!canChangeDate} onChange={e=>{setPayDate(e.target.value);setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);}}/><small>{!canChangeDate?'Data de hoje. Só o administrador pode alterar a data de pagamento.':payDate===today()?'Hoje. Pode escolher uma data passada se o dinheiro foi recebido antes.':'Data passada: juros, atraso e multa são calculados até esta data. Não é aceite em dias com fecho de Caixa.'}</small></label>}
+        {flowReceived&&<label>Data real de pagamento (Maputo)<input type="date" value={payDate} max={today()} readOnly={!canChangeDate} onChange={e=>{setPayDate(e.target.value);setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);}}/><small>{!canChangeDate?'Data de hoje. Só o administrador pode alterar a data de pagamento.':payDate===today()?'Hoje. Pode escolher uma data passada se o dinheiro foi recebido antes.':'Data passada: juros, atraso e juros de mora são calculados até esta data. Não é aceite em dias com fecho de Caixa.'}</small></label>}
         {flowReceived&&<label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A modalidade contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>}
         {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória</span><select value={accountId} onChange={e=>{setAccountId(e.target.value);setConfirmReceipt(false);}}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+fmt(a.saldo_disponivel):''}</option>)}</select><small>{activeAccount?'O valor recebido entra no saldo desta conta.':'Escolha a conta onde o dinheiro foi efectivamente recebido.'}</small></label>}
         {flowReceived&&<label>Referência do comprovativo / operação <span className="cis-collections-required">Obrigatória</span><input type="text" maxLength={60} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>Fica gravada no Extracto e no histórico da prestação.</small></label>}
         {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Normalmente começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}).</small></label>}
-        {flowReceived&&live&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar multa por atraso quando aplicável</label>}
+        {flowReceived&&live&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar juros de mora quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
         {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
@@ -409,11 +410,11 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {mode==='prorrogar_15_30'&&scenarioQuote&&<p>Novo vencimento: {date(String(scenarioQuote.novo_vencimento??''))}{scenarioQuote.resultado_escolhido!=null&&' · Valor a pagar: '+fmt((scenarioQuote.resultado_escolhido as {valor_a_pagar:string}).valor_a_pagar)}</p>}
        {mode==='prorrogar_15_30'&&<div className="cis-collections-planned"><CalendarDays size={17}/><span>Prazo actual: 15 dias. Prazo pretendido: 30 dias. A mudança exige nova data de vencimento e taxa de referência de 30 dias, sujeitas a revisão. Esta prévia não altera a prestação nem cria recebimento.</span></div>}
        {mode==='renovar_credito'&&<div className="cis-collections-planned"><Info size={17}/><span>Novo crédito com condições diferentes exige novo contrato. Para manter as mesmas condições, use «Renovar empréstimo» em «Houve pagamento».</span></div>}
-       {renewing&&<div className="cis-collections-planned"><Info size={17}/><span>Os juros{penalty?' e a multa':''} entram na conta escolhida. A prestação actual fica «Renovado» e o histórico guarda a fotografia antes/depois. Sem limite de renovações.</span></div>}
+       {renewing&&<div className="cis-collections-planned"><Info size={17}/><span>Os juros{penalty?' e os juros de mora':''} entram na conta escolhida. A prestação actual fica «Renovado» e o histórico guarda a fotografia antes/depois. Sem limite de renovações.</span></div>}
        {mode==='actualizar_data'&&<div className="cis-collections-planned"><CalendarDays size={17}/><span>Data seleccionada: {date(reviewDate)}. Vencimento da prestação: {date(selectedInstallment?.['Data de Cobrança'])}. O VBA permite rever datas passadas e recalcular juros variáveis; alterações retroactivas exigem trilho de auditoria e não são executadas aqui.</span></div>}
        {mode==='finalizar_contrato'&&<div className="cis-collections-planned"><ShieldCheck size={17}/><span>{pending.length?'Existem '+pending.length+' prestação(ões) pendentes. Não é possível presumir liquidação integral ou encerrar o contrato.':'A lista não apresenta prestações pendentes. É necessário confirmar todos os pagamentos e o Extracto antes da finalização.'}</span></div>}
        {quote&&live&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
-        <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Multa</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>{renewing?'Juros a receber agora':'Total proposto'}</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{renewing?'Renovado':quote.estado}</dd></div></dl>
+        <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Juros de mora</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>{renewing?'Juros a receber agora':'Total proposto'}</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{renewing?'Renovado':quote.estado}</dd></div></dl>
         {quote.nova_prestacao&&<><h4>Nova prestação no mesmo contrato</h4><dl><div><dt>Parcela</dt><dd>{quote.nova_prestacao.parcela}</dd></div><div><dt>Início</dt><dd>{date(quote.nova_prestacao.data_inicio)}</dd></div><div><dt>Vencimento (automático)</dt><dd>{date(quote.nova_prestacao.data_vencimento)}</dd></div><div><dt>Prazo</dt><dd>{quote.nova_prestacao.prazo}</dd></div><div><dt>Capital</dt><dd>{fmt(quote.nova_prestacao.capital)}</dd></div><div><dt>Juros{quote.nova_prestacao.juros_estimado?' (estimados)':''}</dt><dd>{fmt(quote.nova_prestacao.juros)}</dd></div><div className="total"><dt>Prestação a pagar</dt><dd>{fmt(quote.nova_prestacao.valor_a_pagar)}</dd></div></dl></>}
         {quote.aviso&&<p className="cis-collections-mode-hint">{quote.origem==='historico'?'Contrato histórico (VBA). ':''}{quote.aviso}</p>}
         {!quote.registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real ainda não activado neste servidor. A prévia está correcta, mas o pagamento não pode ser gravado.</span></div>}</div>}
@@ -426,15 +427,15 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
      </div>}</div>:
      <div className="cis-collections-panel">
       <div className="cis-collections-sectionhead"><div><h3>Prestações e histórico financeiro</h3><p>Campos originais da tabela Contractos. Inclui movimentos completos, parciais e atrasados quando registados.</p></div><span>{rows.length} linha(s)</span></div>
-      <div className="cis-table-scroll"><table className="cis-collections-table"><thead><tr><th>Parcela</th><th>Vencimento</th><th>Data de pagamento</th><th>Capital</th><th>Amortização</th><th>Juros</th><th>Multa</th><th>Previsto</th><th>Recebido</th><th>Estado</th><th>Situação</th></tr></thead><tbody>{rows.map((row,i)=><tr key={String(row.Ordem??i)}>
+      <div className="cis-table-scroll"><table className="cis-collections-table"><thead><tr><th>Prestação</th><th>Vencimento</th><th>Data de pagamento</th><th>Capital</th><th>Amortização</th><th>Juros</th><th>Juros de mora</th><th>Previsto</th><th>Recebido</th><th>Estado</th><th>Situação</th></tr></thead><tbody>{rows.map((row,i)=><tr key={String(row.Ordem??i)}>
        <td>{text(row['Nº da Parcela'])}</td><td>{date(row['Data de Cobrança'])}</td><td>{date(row['Data de Pagamento'])}</td>
        <td>{fmt(row.Capital)}</td><td>{fmt(row['Amortização'])}</td><td>{fmt(row['Valor de Juros'])}</td><td>{fmt(row['Valor de Multa'])}</td><td>{fmt(row['Valor a Pagar'])}</td><td>{fmt(row['Valor Pago'])}</td>
-       <td><span className={'cis-collections-pill '+(paid(row)?'paid':isPending(row)?'pending':'')}>{text(row.Estado)}</span></td><td>{text(row['Situação de Pagamento'])}</td>
+       <td><span className={'cis-collections-pill '+(paid(row)?'paid':isPending(row)?'pending':'')}>{estadoPrestacao(row.Estado)}</span></td><td>{text(row['Situação de Pagamento'])}</td>
       </tr>)}</tbody></table></div>
       <div className="cis-collections-sectionhead cis-collections-history-head"><div><h3>Alterações registadas</h3><p>Fotografia permanente de cada prestação antes e depois de cada operação. Não pode ser alterada nem apagada.</p></div><span>{events?events.length:'—'} registo(s)</span></div>
       {events===null?<div className="cis-cash-loading" role="status">A carregar o histórico…</div>:!events.length?<p className="cis-collections-mode-hint">Ainda não há alterações registadas pelo CIS neste contrato.</p>:
        <div className="cis-collections-history">{events.map(ev=><details key={ev.id}><summary><strong>{historyLabels[ev.operacao]??ev.operacao}</strong><span>Parcela {ev.parcela??'—'}</span><span>{fmt(ev.valor)}</span><span>{text(ev.em).replace('T',' ').slice(0,16)}</span></summary>
-        <table><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>{historyFields.filter(f=>ev.antes?.[f]!==undefined||ev.depois?.[f]!==undefined).map(f=><tr key={f} className={String(ev.antes?.[f]??'')!==String(ev.depois?.[f]??'')?'changed':''}><td>{f}</td><td>{text(ev.antes?.[f])}</td><td>{text(ev.depois?.[f])}</td></tr>)}</tbody></table>
+        <table><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>{historyFields.filter(f=>ev.antes?.[f]!==undefined||ev.depois?.[f]!==undefined).map(f=><tr key={f} className={String(ev.antes?.[f]??'')!==String(ev.depois?.[f]??'')?'changed':''}><td>{coluna(f)}</td><td>{text(ev.antes?.[f])}</td><td>{text(ev.depois?.[f])}</td></tr>)}</tbody></table>
         <small>{ev.extracto_nr?'Extracto Nr '+ev.extracto_nr+' · ':''}{ev.referencia?'REF '+ev.referencia+' · ':''}{text(ev.motivo)}</small></details>)}</div>}
       <div className="cis-collections-scope"><ShieldCheck size={16}/> Leitura apenas: não altera Contractos, Extracto nem o estado de pagamento.</div>
      </div>}

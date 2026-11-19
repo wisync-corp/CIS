@@ -366,7 +366,7 @@ ok($ec['total_linhas']===$db->table('Contractos')->count() && $ec['totais']['n_v
 $paidSum=(float)$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])->sum('Valor Pago');
 ok(abs((float)$ec['totais']['pago']-$paidSum)<0.01,'clientes: total pago (inclui renovações)');
 $ecv=data($ex->clientes($greq(['estado'=>'vencida'])));
-ok($ecv['total_linhas']===$openV->count() && collect($ecv['linhas'])->every(fn($l)=>$l['estado']==='Vencida'),'clientes: filtro Vencidas');
+ok($ecv['total_linhas']===$openV->count() && collect($ecv['linhas'])->every(fn($l)=>$l['estado']==='Em atraso'),'clientes: filtro Vencidas');
 $name=$db->table('Contractos')->where('Nr do Contracto','C-0110')->value('Nome do Cliente');
 $lk=data($ex->contratos($greq(['termo'=>mb_substr($name,0,4)])));
 $lc=data($ex->contratos($greq(['cliente'=>$name])));

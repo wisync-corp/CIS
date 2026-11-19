@@ -235,12 +235,12 @@ As definições estão todas em `backend/app/Http/Controllers/Api/ReportControll
 
 ### Relatórios de gestão (grupo «Gestão»)
 
-1. **Agenda de cobranças** (período futuro; por omissão, os próximos 30 dias): previsão por semana, prestações a vencer dia a dia com o contacto, e vencidas por cobrar.
+1. **Folha de cobrança** (antes «Agenda de cobranças») (período futuro; por omissão, os próximos 30 dias): previsão por semana, prestações a vencer dia a dia com o contacto, e vencidas por cobrar.
 2. **Antiguidade dos atrasos** (a uma data): faixas de 1–7, 8–30, 31–60, 61–90 e mais de 90 dias, mais a lista por contrato com contacto, último pagamento e operador.
-3. **Desempenho por operador** (período): por utilizador que registou o contrato (`usuario` da primeira prestação). Mostra desembolsado, recebido, juros e multas, contratos e clientes activos, carteira e % da carteira com mais de 30 dias.
+3. **Desempenho por gestor de crédito** (período): por utilizador que registou o contrato (`usuario` da primeira prestação). Mostra desembolsado, recebido, juros e multas, contratos e clientes activos, carteira e % da carteira com mais de 30 dias.
 4. **Evolução mensal** (ano): por mês, desembolsos, recebido, juros, multas, carteira no fim do mês, % da carteira com mais de 30 dias e Caixa.
 5. **Caixa por conta** (período): por conta e por tipo de movimento (cobranças, desembolsos, transferências internas, outros). O tipo é deduzido da descrição.
-6. **Clientes para novo crédito**: clientes sem contratos em aberto, classificados assim:
+6. **Mutuários para novo crédito**: clientes sem contratos em aberto, classificados assim:
    - Excelente: nenhuma prestação paga em atraso;
    - Bom: até 20% das prestações pagas em atraso;
    - Atenção: mais de 20%.
@@ -251,8 +251,8 @@ Modelo do GEMIC, guardado em `cis_company_settings` (chave/valor). Instalação:
 
 - **Informações gerais**: logótipo, nome, NUIT (9 dígitos), licença BM, início de actividade, capital inicial, funcionários, província/distrito, morada, contactos, email e proprietário. Usado no cabeçalho dos extractos (PDF) e dos relatórios (Documento).
 - **Cobrança e multa**: limite mensal de dias de mora, tolerância, penalidades automáticas, taxa diária de mora, carência, fins de semana, modalidade do calendário, lembrete e canal. Registado como política; a multa continua a ser calculada pela taxa do contrato e só é cobrada quando o operador escolhe.
-- **Credit scoring**: score mínimo, limiares de baixo/médio risco, máximo de créditos activos e em atraso, taxa de esforço. Usado em «Clientes para novo crédito» (score = % de prestações pagas sem atraso, −20 com crédito activo em atraso).
-- **Incentivos**: por cliente novo, por renovação, % do capital vigente e % dos juros recebidos. Usado em «Desempenho por operador» (coluna «Incentivo estimado»).
+- **Credit scoring**: score mínimo, limiares de baixo/médio risco, máximo de créditos activos e em atraso, taxa de esforço. Usado em «Mutuários para novo crédito» (score = % de prestações pagas sem atraso, −20 com crédito activo em atraso).
+- **Incentivos**: por cliente novo, por renovação, % do capital vigente e % dos juros recebidos. Usado em «Desempenho por gestor de crédito» (coluna «Incentivo estimado»).
 
 ## Definições: navegação e parametrização
 
@@ -261,3 +261,30 @@ As Definições do administrador têm uma lista lateral (como nos Relatórios): 
 - **Tabela de preços** (`cis_tabela_juros`): uma linha por faixa (De/Até MT) com a taxa de 15 e de 30 dias; taxa em branco = prazo indisponível. Recusa faixas invertidas, sobrepostas, sem taxa ou com taxa > 100%; assinala lacunas. Grava a tabela inteira numa transacção; só afecta simulações e contratos novos.
 - **Tipos de movimento** (`cis_tipos_movimento` + grupo/activo/protegido): Entradas (Receita operacional, Entrada não operacional) e Saídas (Operação de crédito, Despesa operacional, Investimento, Saída não operacional). Criar, renomear, mudar de grupo, activar/desactivar; os tipos base (Receita de Juros, Desembolso de Empréstimo, Aumento de Crédito) estão protegidos. Os tipos activos são a lista da «Entrada / saída» da Caixa.
 - Cada alteração fica em `cis_parametrizacao_log` (antes/depois, utilizador, data).
+
+## Glossário (linguagem de actuação)
+
+Os nomes que o utilizador vê seguem o glossário de microcrédito (ver `frontend/src/glossario.ts` e Definições › Glossário). Só muda o texto: as colunas e os valores gravados na base (ex.: `Valor de Multa`, `Pagamento Atrasado`) mantêm-se.
+
+| Antes | Agora |
+|---|---|
+| Cliente (no contrato) | Mutuário |
+| Quantia creditada / Total creditado | Capital desembolsado |
+| Valor a pagar | Valor da prestação |
+| Parcela | Prestação |
+| Multa | Juros de mora |
+| Data de cobrança | Data de vencimento |
+| Modalidade de pagamento | Periodicidade |
+| Estratégia de cálculo | Sistema de amortização |
+| Plano de prestações | Plano de pagamentos |
+| Em dívida | Saldo em dívida |
+| Vencidas / Pagamento atrasado | Em atraso |
+| Pendente / Finalizado (contrato) | Em curso / Liquidado |
+| Pago / Pago em atraso / Renovado (prestação) | Paga / Paga com atraso / Renovada |
+| Pagamento integral | Liquidação da prestação |
+| Renovar empréstimo | Renovação |
+| Carteira em risco > 30 dias | Carteira em risco a 30 dias (PAR 30) |
+| Operador | Gestor de crédito |
+| Agenda de cobranças | Folha de cobrança |
+| Extracto do cliente | Extracto de conta |
+| Taxa de juro (%) | Taxa de juro (% por período) |

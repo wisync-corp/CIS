@@ -1,8 +1,9 @@
 import {useEffect,useState} from 'react';
-import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server} from 'lucide-react';
+import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA} from 'lucide-react';
 import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
 import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
 import {PriceTable,MovementTypes} from './Parametrizacao';
+import {GLOSSARIO} from './glossario';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
@@ -22,10 +23,12 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
   {grupo:'Empresa',items:COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))},
   {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight}]},
-  {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
+  {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
+ const nav=admin?NAV:[{grupo:'Sistema',items:NAV[2].items.filter(i=>i.id!=='ligacao')}];
+ const [gq,setGq]=useState('');
  const isCompany=COMPANY_SECTIONS.some(s=>s.id===tab);
- return <div className={'cis-settings-page'+(admin?' cis-settings-layout':'')}>
-  {admin&&<nav className="cis-settings-nav" aria-label="Secções das definições">{NAV.map(g=><div key={g.grupo}><span>{g.grupo}</span>
+ return <div className="cis-settings-page cis-settings-layout">
+  {<nav className="cis-settings-nav" aria-label="Secções das definições">{nav.map(g=><div key={g.grupo}><span>{g.grupo}</span>
    <ul>{g.items.map(it=><li key={it.id}><button type="button" className={tab===it.id?'on':''} aria-current={tab===it.id?'page':undefined} onClick={()=>pick(it.id)}><it.icon size={16}/>{it.title}</button></li>)}</ul></div>)}</nav>}
   <div className="cis-settings-content">
   {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
@@ -52,6 +55,12 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
      <span className={'cis-font-sample '+o.id}>Aa</span><b>{o.name}</b><small>{o.hint}</small>
     </button>)}
    </div>
+  </section>}
+  {tab==='glossario'&&<section className="cis-panel cis-co-section cis-glossary">
+   <div className="cis-co-section-head"><div><h3>Glossário</h3><p>Termos usados no CIS, nos contratos, extractos e relatórios, para toda a equipa falar a mesma linguagem.</p></div>
+    <label className="cis-rep-search"><input value={gq} onChange={e=>setGq(e.target.value)} placeholder="Pesquisar termo…" aria-label="Pesquisar no glossário"/></label></div>
+   <table className="cis-glossary-table"><thead><tr><th>Termo</th><th>Significado</th><th>Antes no CIS</th></tr></thead>
+    <tbody>{GLOSSARIO.filter(g=>!gq.trim()||(g.termo+' '+g.significado+' '+(g.antes??'')).toLowerCase().includes(gq.trim().toLowerCase())).map(g=><tr key={g.termo}><td><b>{g.termo}</b></td><td>{g.significado}</td><td>{g.antes??'—'}</td></tr>)}</tbody></table>
   </section>}
   {admin&&tab==='ligacao'&&<section className="cis-panel">
    <div className="cis-panel-head"><div><h2>Estado da ligação MySQL</h2><p>Verificação de configuração, sem exposição de credenciais.</p></div><button type="button" className="cis-client-edit" onClick={()=>setReload(x=>x+1)} aria-label="Actualizar estado"><RefreshCw size={18}/></button></div>

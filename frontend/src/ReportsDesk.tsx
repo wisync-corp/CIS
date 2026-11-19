@@ -19,7 +19,7 @@ const money={format:(n:number)=>moneyNF.format(n).replace(/^(-?\d{1,3})(\d{3}),/
 const compact=new Intl.NumberFormat('pt-MZ',{notation:'compact',maximumFractionDigits:1});
 const isMoneyCol=(c:string)=>/\(MT\)/.test(c);
 const isPctCol=(c:string)=>/^%/.test(c)||/\(%\)/.test(c);
-const isNumCol=(c:string)=>isMoneyCol(c)||isPctCol(c)||/^(Contratos|Prestações|Dias|Movimentos|Clientes|Pagas|Score|Renovações|Créditos activos)/.test(c);
+const isNumCol=(c:string)=>isMoneyCol(c)||isPctCol(c)||/^(Contratos|Prestações|Dias|Movimentos|Clientes|Mutuários|Pagas|Score|Renovações|Créditos activos)/.test(c);
 const STATUS_COLS=['Situação','Classificação','Faixa','Fora do regime simplificado','Identificação','Contrato activo','Aprovável'];
 const num=(v:string)=>{if(v==='')return null;const n=Number(v);return isNaN(n)?null:n;};
 const fmtCell=(c:string,v:string,row:string[])=>{
@@ -79,7 +79,7 @@ function SectionView({s,open}:{s:Section;open:boolean}){
    <div className="cis-rep-table"><table><thead><tr>{s.colunas.map((c,i)=><th key={c} className={isNumCol(c)?'num':''} aria-sort={sort?.i===i?(sort.dir===1?'ascending':'descending'):undefined}>
      <button type="button" onClick={()=>setSort(p=>p?.i===i?{i,dir:p.dir===1?-1:1}:{i,dir:isNumCol(c)?-1:1})} title="Ordenar">{c}{sort?.i===i?(sort.dir===1?<ChevronUp size={12}/>:<ChevronDown size={12}/>):null}</button></th>)}</tr></thead>
     <tbody>{body.map((l,ri)=><tr key={ri}>{l.map((v,j)=>{const c=s.colunas[j];
-     if(isPctCol(c)&&num(v)!==null)return <td key={j} className="num"><span className="cis-rep-pct"><i style={{width:Math.min(100,Number(v))+'%'}} className={s.tom==='risco'||/> 30|risco/.test(c)?'bad':''}/><b>{v}%</b></span></td>;
+     if(isPctCol(c)&&num(v)!==null)return <td key={j} className="num"><span className="cis-rep-pct"><i style={{width:Math.min(100,Number(v))+'%'}} className={s.tom==='risco'||/> 30|PAR|risco/.test(c)?'bad':''}/><b>{v}%</b></span></td>;
      if(STATUS_COLS.includes(c)&&v)return <td key={j}><span className={'cis-rep-pill '+statusTone(v,c)}>{v}</span></td>;
      if(c==='Dados em falta'||c==='Em falta')return <td key={j}>{v?<span className="cis-rep-pill bad">{v}</span>:<span className="cis-rep-pill good">Completo</span>}</td>;
      return <td key={j} className={isNumCol(c)?'num':''}>{fmtCell(c,v,l)||'—'}</td>;})}</tr>)}
