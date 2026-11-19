@@ -381,6 +381,21 @@ ok($gd['total_linhas']===$egn['total_linhas'] && count($gd['linhas'])===$gd['tot
     && str_starts_with((string)$gd['filtros']['conta'],'DINHEIRO') && strlen($gd['codigo_verificacao'])===16,'extracto geral (PDF): todas as linhas e totais da conta');
 ok(collect($gd['linhas'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'extracto geral sem marcas internas');
 ok($err(fn()=>$ex->geralEvidencia($greq([],$gestor)))===403,'extracto geral (PDF) reservado ao administrador');
+// Leitor restrito como na VPS (cis_reader): só SELECT nas tabelas do legado, nada de cis_cash_*.
+$db->statement("CREATE USER IF NOT EXISTS 'ci_reader'@'%' IDENTIFIED BY 'ci_reader_pw'");
+foreach (['Contractos','Extracto','Clientes'] as $tb) $db->statement("GRANT SELECT ON `cis_ci`.`$tb` TO 'ci_reader'@'%'");
+$legacyCfg=config('database.connections.mysql_legacy');
+config(['database.connections.mysql_legacy.username'=>'ci_reader','database.connections.mysql_legacy.password'=>'ci_reader_pw']);
+DB::purge('mysql_legacy');
+try {
+    $rg=data($ex->geral($greq(['conta_id'=>$numerario])));
+    $rc=data($ex->clientes($greq([])));
+    $rv=data($ex->evidencia($greq(['contrato'=>'C-0110'])));
+    $rd=data($ex->geralEvidencia($greq([])));
+    ok($rg['total_linhas']===$egn['total_linhas'] && ($rg['linhas'][0]['conta']??null)==='DINHEIRO' && $rc['total_linhas']>0
+        && count($rv['prestacoes'])===3 && $rd['total_linhas']>0,'extracto funciona com leitor restrito (sem acesso a cis_cash_*)');
+} catch (\Throwable $e) { ok(false,'extracto com leitor restrito: '.$e->getMessage()); }
+finally { config(['database.connections.mysql_legacy'=>$legacyCfg]); DB::purge('mysql_legacy'); }
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
