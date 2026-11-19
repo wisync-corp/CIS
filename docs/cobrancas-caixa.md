@@ -93,6 +93,8 @@ Equivale ao formulário VBA «Extracto de Movimentos».
   - Uma prestação em aberto com vencimento passado conta como vencida mesmo que o Estado ainda diga «Pendente».
   - «Renovado» conta como paga.
 
+**Extracto geral (PDF)** (modo Geral): documento imprimível com os filtros actuais, os totais Entradas/Saídas/Disponível, todas as linhas (até 5000) e um código de verificação.
+
 **Exportar CSV (Excel)**: todas as linhas do filtro actual, separador `;`, compatível com Excel.
 
 **Extracto do cliente (PDF)**: evidência para entregar ao cliente.

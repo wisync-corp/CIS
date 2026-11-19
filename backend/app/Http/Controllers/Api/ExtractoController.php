@@ -69,6 +69,21 @@ final class ExtractoController extends Controller
         abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
+        [$q,$hasAccount]=$this->geralQuery($db,$f);
+        $t=$this->geralTotals($q);
+
+        $per=(int)($f['por_pagina']??50);
+        $page=max(1,(int)($f['page']??1));
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->forPage($page,$per));
+        return response()->json([
+            'linhas'=>$rows,
+            'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>$t['n'],
+            'totais'=>$t['totais'],
+        ])->header('Cache-Control','no-store, private');
+    }
+
+    private function geralQuery($db,array $f): array
+    {
         $hasAccount=$db->getSchemaBuilder()->hasColumn('Extracto','account_id');
         $q=$db->table('Extracto as e');
         if ($f['inicio']??null) $q->where('e.Data da Operação','>=',$f['inicio']);
@@ -78,36 +93,69 @@ final class ExtractoController extends Controller
         if (($f['conta_id']??null) && $hasAccount) $q->where('e.account_id',(int)$f['conta_id']);
         if (($f['tipo']??'todos')==='entradas') $q->where('e.Tipo de Movimento','Entradas');
         if (($f['tipo']??'todos')==='saidas') $q->where('e.Tipo de Movimento','<>','Entradas');
+        return [$q,$hasAccount];
+    }
 
+    private function geralTotals($q): array
+    {
         $t=(clone $q)->selectRaw("
             COUNT(*) AS n,
             ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' THEN Valor ELSE 0 END),2) AS entradas,
             ROUND(SUM(CASE WHEN `Tipo de Movimento`<>'Entradas' THEN Valor ELSE 0 END),2) AS saidas
         ")->first();
+        $e=(float)$t->entradas;$s=(float)$t->saidas;
+        return ['n'=>(int)$t->n,'totais'=>['entradas'=>self::money($e),'saidas'=>self::money($s),'disponivel'=>self::money($e-$s)]];
+    }
 
-        $per=(int)($f['por_pagina']??50);
-        $page=max(1,(int)($f['page']??1));
+    private function geralRows($q,bool $hasAccount,callable $limit,bool $public=false)
+    {
+        $q=clone $q;
         $cols=['e.Nr','e.Contracto','e.Cliente','e.Parcela','e.Tipo de Movimento','e.Descrição','e.Data da Operação','e.Valor','e.usuario'];
         if ($hasAccount) {
             $q->leftJoin('cis_cash_accounts as a','a.id','=','e.account_id');
             $cols[]='a.code as conta';
         }
-        $rows=$q->orderByDesc('e.Data da Operação')->orderByDesc('e.Nr')
-            ->forPage($page,$per)->get($cols)->map(fn($r)=>[
+        $q->orderByDesc('e.Data da Operação')->orderByDesc('e.Nr');
+        $limit($q);
+        return $q->get($cols)->map(fn($r)=>[
                 'nr'=>(int)$r->Nr,'codigo'=>'OP-'.$r->Nr,
-                'descricao'=>self::describe($r),
+                'descricao'=>$public?self::publicDescription($r):self::describe($r),
                 'data'=>substr((string)$r->{'Data da Operação'},0,10),
                 'tipo'=>$r->{'Tipo de Movimento'}==='Entradas'?'entrada':'saida',
                 'valor'=>self::money($r->Valor),
                 'contrato'=>$r->Contracto,'cliente'=>$r->Cliente,'parcela'=>$r->Parcela,
                 'conta'=>$r->conta??null,'usuario'=>$r->usuario,
-            ]);
-        $e=(float)$t->entradas;$s=(float)$t->saidas;
-        return response()->json([
-            'linhas'=>$rows,
-            'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>(int)$t->n,
-            'totais'=>['entradas'=>self::money($e),'saidas'=>self::money($s),'disponivel'=>self::money($e-$s)],
-        ])->header('Cache-Control','no-store, private');
+            ])->values()->all();
+    }
+
+    /** GET /cis/extractos/geral-evidencia : extracto geral imprimível (filtros actuais, até 5000 linhas). */
+    public function geralEvidencia(Request $request)
+    {
+        abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
+        $f=$this->filters($request);
+        $db=DB::connection('mysql_legacy');
+        [$q,$hasAccount]=$this->geralQuery($db,$f);
+        $t=$this->geralTotals($q);
+        abort_if($t['n']===0,404,'Sem movimentos para os filtros escolhidos.');
+        abort_if($t['n']>5000,422,'Demasiados movimentos ('.$t['n'].') para um único documento; reduza o período (máximo 5000).');
+        $rows=$this->geralRows($q,$hasAccount,fn($qq)=>$qq->limit(5000),true);
+        $conta=null;
+        if (($f['conta_id']??null) && $hasAccount) {
+            $a=DB::table('cis_cash_accounts')->where('id',(int)$f['conta_id'])->first(['code','name']);
+            $conta=$a?$a->code.' · '.$a->name:null;
+        }
+        $doc=[
+            'titulo'=>'Extracto geral de movimentos',
+            'emitido_em'=>now('Africa/Maputo')->format('Y-m-d H:i'),
+            'emitido_por'=>$request->user()?->name,
+            'filtros'=>['inicio'=>$f['inicio']??null,'fim'=>$f['fim']??null,'cliente'=>$f['cliente']?:null,
+                'contrato'=>$f['contrato']?:null,'conta'=>$conta,'tipo'=>$f['tipo']??'todos'],
+            'linhas'=>array_map(fn($r)=>array_diff_key($r,['usuario'=>1,'nr'=>1]),$rows),
+            'total_linhas'=>$t['n'],
+            'totais'=>$t['totais'],
+        ];
+        $doc['codigo_verificacao']=strtoupper(substr(hash('sha256',json_encode($doc,JSON_UNESCAPED_UNICODE)),0,16));
+        return response()->json($doc)->header('Cache-Control','no-store, private');
     }
 
     /** Classificação de uma prestação para o extracto de clientes. */

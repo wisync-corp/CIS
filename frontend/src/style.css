@@ -1085,6 +1085,8 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-evidence dl div{display:flex;gap:8px}.cis-evidence dt{color:#475467;min-width:110px}.cis-evidence dd{margin:0;font-weight:700}
 .cis-evidence-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:16px 0 4px}
 .cis-evidence-summary div{border:1px solid #d0d5dd;border-radius:8px;padding:8px 10px}
+.cis-evidence-summary-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cis-evidence tfoot th{background:#f2f4f7;border-top:2px solid #101828}
 .cis-evidence-summary span{display:block;font-size:11px;color:#475467}.cis-evidence-summary strong{font-size:14px}
 .cis-evidence table{width:100%;border-collapse:collapse}
 .cis-evidence th,.cis-evidence td{border-bottom:1px solid #e4e7ec;padding:5px 6px;text-align:left;vertical-align:top}

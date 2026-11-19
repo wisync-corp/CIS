@@ -376,6 +376,11 @@ ok(count($ev['prestacoes'])===3 && $ev['contratos'][0]['contrato']==='C-0110' &&
     && strlen($ev['codigo_verificacao'])===16 && count($ev['movimentos'])===$db->table('Extracto')->where('Contracto','C-0110')->count(),'evidência: contrato renovado e liquidado com prestações e movimentos');
 ok(collect($ev['movimentos'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'evidência sem marcas internas nem referências');
 ok($err(fn()=>$ex->evidencia($greq([])))===422,'evidência exige cliente ou contrato');
+$gd=data($ex->geralEvidencia($greq(['conta_id'=>$numerario])));
+ok($gd['total_linhas']===$egn['total_linhas'] && count($gd['linhas'])===$gd['total_linhas'] && $gd['totais']===data($ex->geral($greq(['conta_id'=>$numerario])))['totais']
+    && str_starts_with((string)$gd['filtros']['conta'],'DINHEIRO') && strlen($gd['codigo_verificacao'])===16,'extracto geral (PDF): todas as linhas e totais da conta');
+ok(collect($gd['linhas'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'extracto geral sem marcas internas');
+ok($err(fn()=>$ex->geralEvidencia($greq([],$gestor)))===403,'extracto geral (PDF) reservado ao administrador');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
