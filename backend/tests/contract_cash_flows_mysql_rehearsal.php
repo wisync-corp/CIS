@@ -220,7 +220,7 @@ ok((float)$ov['carteira']['capital_em_carteira']>=5000,'capital em carteira incl
 ok($ov['caixa']['disponivel']===true && $ov['caixa']['saldo_total']==='21130.50','saldo da Caixa = 1250,50 + 19880,00');
 ok($ov['caixa']['entradas_mes']==='4030.50' && $ov['caixa']['desembolsos_mes']==='3000.00','entradas 4030,50 e desembolsos 3000,00 no mês');
 $db->table('Contractos')->where('Ordem',$dupe)->update(['Data de Cobrança'=>now($tz)->subDays(3)->toDateString()]);
-$ov=data((new \App\Http\Controllers\Api\OverviewController())());
+$ov=data((new \App\Http\Controllers\Api\OverviewController())(Request::create('/x','GET')));
 ok($ov['carteira']['prestacoes_vencidas']===1 && $ov['carteira']['valor_vencido']==='1150.50' && $ov['carteira']['contratos_em_atraso']===1,'prestação com vencimento passado conta como vencida (1150,50)');
 
 echo "== Lista de contratos: capital, prestação a pagar e situação\n";
