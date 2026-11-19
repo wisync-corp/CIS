@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Search,Download,Printer,FileText,X,AlertCircle,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
+import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Copy,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck} from 'lucide-react';
 import logoPrincipal from './assets/brand/cis-principal-claro.svg';
 import type {ExtractoPreset} from './Overview';
 
@@ -18,6 +18,10 @@ type Evidence={titulo:string;emitido_em:string;emitido_por:string|null;periodo:{
  movimentos:{codigo:string;data:string;descricao:string;contrato:string;parcela:string|null;tipo:string;valor:string}[];
  totais:ClientesTot;codigo_verificacao:string};
 type Account={id:number;code:string;name:string};
+type Informacao={contrato:string;data_inicio:string|null;data_final:string|null;quantia_creditada:string;forma_pagamento:string|null;situacao:'Pendente'|'Pagamento atrasado'|'Finalizado';
+ prestacoes:{total:number;pagas:number;em_aberto:number;vencidas:number};em_divida:string;pago:string;proximo_vencimento:string|null;dias_atraso:number;
+ cliente:{id:number|null;codigo:string|null;nome:string;contacto:string|null}};
+const phoneDigits=(c:string|null)=>{const d=(c??'').replace(/\D/g,'');if(!d)return '';if(d.length===9&&/^[82]/.test(d))return '258'+d;return d.replace(/^00/,'');};
 type GeralEvidence={titulo:string;emitido_em:string;emitido_por:string|null;
  filtros:{inicio:string|null;fim:string|null;cliente:string|null;contrato:string|null;conta:string|null;tipo:string};
  linhas:{codigo:string;descricao:string;data:string;tipo:'entrada'|'saida';valor:string;contrato:string|null;cliente:string|null;parcela:string|null;conta:string|null}[];
@@ -26,6 +30,10 @@ type GeralEvidence={titulo:string;emitido_em:string;emitido_por:string|null;
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const mt=(v:string|number|null|undefined)=>v===null||v===undefined||v===''?'—':money.format(Number(v));
 const dt=(v:string|null|undefined)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d&&m&&y?`${d}/${m}/${y}`:v;};
+function messageFor(i:Informacao){const n=i.cliente.nome.split(' ')[0]||i.cliente.nome;
+ if(i.situacao==='Pagamento atrasado')return `Caro(a) ${n}, o contrato ${i.contrato} tem ${i.prestacoes.vencidas} prestação(ões) vencida(s)${i.proximo_vencimento?' desde '+dt(i.proximo_vencimento):''} (${i.dias_atraso} dia(s) de atraso). Valor em dívida: ${mt(i.em_divida)} MT. Pedimos que regularize o pagamento com a maior brevidade. Obrigado.`;
+ if(i.situacao==='Pendente')return `Caro(a) ${n}, lembramos que a próxima prestação do contrato ${i.contrato} vence a ${dt(i.proximo_vencimento)}. Valor em dívida: ${mt(i.em_divida)} MT. Obrigado.`;
+ return `Caro(a) ${n}, confirmamos que o contrato ${i.contrato} está totalmente liquidado. Obrigado pela confiança.`;}
 const csvCell=(v:unknown)=>{const s=v===null||v===undefined?'':String(v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 
 export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void}){
@@ -42,7 +50,9 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
  const [geral,setGeral]=useState<GeralResp|null>(null);const [clientes,setClientes]=useState<ClientesResp|null>(null);
  const [loading,setLoading]=useState(false);const [error,setError]=useState('');
  const [exporting,setExporting]=useState(false);
- const [evidence,setEvidence]=useState<Evidence|null>(null);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
+ const [evidence,setEvidence]=useState<Evidence|null>(null);
+ const [info,setInfo]=useState<Informacao|null>(null);const [infoBusy,setInfoBusy]=useState('');const [infoError,setInfoError]=useState('');
+ const [msg,setMsg]=useState<string|null>(null);const [copied,setCopied]=useState(false);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
@@ -105,6 +115,17 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
   }catch(e){setError(e instanceof Error?e.message:'Falha na exportação.');}finally{setExporting(false);}
  }
 
+ async function openInfo(numero:string|null){
+  if(!numero)return;setInfoBusy(numero);setInfoError('');setMsg(null);setCopied(false);
+  try{setInfo(await getJson<Informacao>('/cis/extractos/informacao?'+new URLSearchParams({contrato:numero})));}
+  catch(err){setInfo(null);setInfoError(err instanceof Error?err.message:'Não foi possível abrir a informação do contrato.');}finally{setInfoBusy('');}
+ }
+ async function infoEvidence(numero:string){
+  setEvidenceBusy(true);setInfoError('');
+  try{setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+new URLSearchParams({contrato:numero})));}
+  catch(err){setInfoError(err instanceof Error?err.message:'Não foi possível gerar o extracto do cliente.');}finally{setEvidenceBusy(false);}
+ }
+ async function copyMsg(){if(msg===null)return;try{await navigator.clipboard.writeText(msg);setCopied(true);}catch{const t=document.createElement('textarea');t.value=msg;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();setCopied(true);}}
  async function openEvidence(){
   setEvidenceBusy(true);setError('');
   if(mode==='geral'){try{setGeralDoc(await getJson<GeralEvidence>('/cis/extractos/geral-evidencia?'+params()));}
@@ -164,14 +185,16 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
     {!canEvidence&&mode==='clientes'&&<small>Escolha um cliente para gerar o extracto de evidência.</small>}
    </div>
 
+   {infoBusy&&<div className="cis-loading" role="status">A abrir a informação do contrato {infoBusy}…</div>}
+   {infoError&&!info&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{infoError}</div>}
    {loading&&<div className="cis-loading" role="status">A consultar o extracto…</div>}
    {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
    {!loading&&!error&&data&&(data.total_linhas===0?<div className="cis-extracto-empty">Sem registos para os filtros escolhidos.</div>:<>
     <div className="cis-table-scroll"><table>
      {mode==='geral'?<><thead><tr><th>Cod. Op</th><th>Data</th><th>Descrição</th><th>Conta</th><th className="num">Quantia (MT)</th></tr></thead>
-      <tbody>{geral!.linhas.map(r=><tr key={r.nr}><td>{r.codigo}</td><td>{dt(r.data)}</td><td>{r.descricao}</td><td>{r.conta??'—'}</td><td className={'num '+(r.tipo==='entrada'?'pos':'neg')}>{r.tipo==='entrada'?'+':'−'} {mt(r.valor)}</td></tr>)}</tbody></>
+      <tbody>{geral!.linhas.map(r=><tr key={r.nr} className={r.contrato?'cis-extracto-row':''} tabIndex={r.contrato?0:undefined} title={r.contrato?'Ver informação do contrato '+r.contrato:undefined} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{dt(r.data)}</td><td>{r.descricao}</td><td>{r.conta??'—'}</td><td className={'num '+(r.tipo==='entrada'?'pos':'neg')}>{r.tipo==='entrada'?'+':'−'} {mt(r.valor)}</td></tr>)}</tbody></>
      :<><thead><tr><th>Cod. Op</th><th>Contrato</th><th>Cliente</th><th>P.</th><th>Cobrança</th><th className="num">Dias</th><th>F. Pagto</th><th className="num">Capital</th><th className="num">Juros</th><th className="num">Quantia</th><th>Estado</th></tr></thead>
-      <tbody>{clientes!.linhas.map(r=><tr key={r.ordem}><td>{r.codigo}</td><td>{r.contrato}</td><td>{r.cliente}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className={'num '+(r.dias<0&&r.situacao!=='paga'?'neg':'')}>{r.dias}</td><td>{r.forma_pagamento??'—'}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.valor)}</td><td><span className={'cis-extracto-state '+r.situacao}>{r.estado}</span></td></tr>)}</tbody></>}
+      <tbody>{clientes!.linhas.map(r=><tr key={r.ordem} className={'cis-extracto-row'} tabIndex={0} title={'Ver informação do contrato '+r.contrato} onClick={()=>void openInfo(r.contrato)} onKeyDown={ev=>{if(ev.key==='Enter')void openInfo(r.contrato);}}><td>{r.codigo}</td><td>{r.contrato}</td><td>{r.cliente}</td><td>{r.parcela}</td><td>{dt(r.vencimento)}</td><td className={'num '+(r.dias<0&&r.situacao!=='paga'?'neg':'')}>{r.dias}</td><td>{r.forma_pagamento??'—'}</td><td className="num">{mt(r.capital)}</td><td className="num">{mt(r.juros)}</td><td className="num">{mt(r.valor)}</td><td><span className={'cis-extracto-state '+r.situacao}>{r.estado}</span></td></tr>)}</tbody></>}
     </table></div>
     <div className="cis-table-footer"><span>{data.total_linhas.toLocaleString('pt-MZ')} registos · Página {page} de {lastPage}</span><div><button type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}><ChevronLeft size={17}/> Anterior</button><button type="button" disabled={page>=lastPage} onClick={()=>setPage(p=>p+1)}>Seguinte <ChevronRight size={17}/></button></div></div>
    </>)}
@@ -205,6 +228,48 @@ export default function ExtractoDesk({token,role,preset,onClearPreset}:{token:st
      <tbody>{evidence.movimentos.map(m=><tr key={m.codigo}><td>{dt(m.data)}</td><td>{m.codigo}</td><td>{m.descricao}</td><td>{m.contrato}{m.parcela?' · P'+m.parcela:''}</td><td>{m.tipo}</td><td className="num">{mt(m.valor)}</td></tr>)}</tbody></table>:<p>Sem movimentos registados no período.</p>}</section>
     <footer><ShieldCheck size={14}/><span>Código de verificação <b>{evidence.codigo_verificacao}</b> · documento gerado pelo CIS a partir dos registos do sistema. Valores em Meticais (MT).</span></footer>
    </article>
+  </div>,document.body)}
+
+  {info&&createPortal(<div className="cis-info-backdrop" onClick={()=>setInfo(null)}>
+   <aside className="cis-info" role="dialog" aria-modal="true" aria-label={'Informação do contrato '+info.contrato} onClick={ev=>ev.stopPropagation()}>
+    <header><div><span><Info size={15}/> Informação</span><h3>Contrato {info.contrato}</h3></div><button type="button" onClick={()=>setInfo(null)} aria-label="Fechar"><X size={17}/></button></header>
+    <span className={'cis-info-state '+(info.situacao==='Pagamento atrasado'?'late':info.situacao==='Pendente'?'open':'done')}>{info.situacao}</span>
+    <section><h4>Cliente</h4><dl>
+     <div><dt>Código</dt><dd>{info.cliente.codigo??'—'}</dd></div>
+     <div><dt>Nome</dt><dd>{info.cliente.nome}</dd></div>
+     <div><dt>Contacto</dt><dd>{info.cliente.contacto?<a href={'tel:+'+phoneDigits(info.cliente.contacto)}><Phone size={13}/> {info.cliente.contacto}</a>:'—'}</dd></div>
+    </dl></section>
+    <section><h4>Contrato</h4><dl>
+     <div><dt>Data de início</dt><dd>{dt(info.data_inicio)}</dd></div>
+     <div><dt>Data final</dt><dd>{dt(info.data_final)}</dd></div>
+     <div><dt>Quantia creditada</dt><dd>{mt(info.quantia_creditada)} MT</dd></div>
+     {info.forma_pagamento&&<div><dt>Forma de pagamento</dt><dd>{info.forma_pagamento}</dd></div>}
+    </dl></section>
+    <section><h4>Prestações</h4><div className="cis-info-grid">
+     <div><span>Total</span><b>{info.prestacoes.total}</b></div><div><span>Pagas</span><b>{info.prestacoes.pagas}</b></div>
+     <div><span>Em aberto</span><b>{info.prestacoes.em_aberto}</b></div><div className={info.prestacoes.vencidas?'late':''}><span>Vencidas</span><b>{info.prestacoes.vencidas}</b></div>
+    </div><dl>
+     <div><dt>Em dívida</dt><dd className={Number(info.em_divida)>0?'neg':''}>{mt(info.em_divida)} MT</dd></div>
+     <div><dt>Pago</dt><dd>{mt(info.pago)} MT</dd></div>
+     {info.proximo_vencimento&&<div><dt>{info.prestacoes.vencidas?'Vencida desde':'Próximo vencimento'}</dt><dd>{dt(info.proximo_vencimento)}{info.dias_atraso?` · ${info.dias_atraso} dia(s) de atraso`:''}</dd></div>}
+    </dl></section>
+    {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
+    <div className="cis-info-actions">
+     <button type="button" className="primary" onClick={()=>{setMsg(m=>m===null?messageFor(info):null);setCopied(false);}}><MessageSquare size={15}/> Mensagem ao cliente</button>
+     <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto do cliente (PDF)'}</button>
+    </div>
+    {msg!==null&&<section className="cis-info-msg"><h4>Mensagem</h4>
+     <textarea value={msg} onChange={ev=>{setMsg(ev.target.value);setCopied(false);}} rows={6} aria-label="Texto da mensagem"/>
+     <div className="cis-info-actions">
+      <button type="button" onClick={()=>void copyMsg()}><Copy size={14}/> {copied?'Copiada':'Copiar'}</button>
+      {phoneDigits(info.cliente.contacto)?<>
+       <a className="cis-info-link" href={'https://wa.me/'+phoneDigits(info.cliente.contacto)+'?text='+encodeURIComponent(msg)} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+       <a className="cis-info-link" href={'sms:+'+phoneDigits(info.cliente.contacto)+'?body='+encodeURIComponent(msg)}>SMS</a>
+      </>:<small>Cliente sem contacto registado: copie a mensagem.</small>}
+     </div>
+     <small>A mensagem não é enviada pelo CIS: abre no WhatsApp/SMS do seu dispositivo para confirmar e enviar.</small>
+    </section>}
+   </aside>
   </div>,document.body)}
 
   {geralDoc&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto geral">

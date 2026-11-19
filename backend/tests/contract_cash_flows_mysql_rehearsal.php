@@ -376,6 +376,14 @@ ok(count($ev['prestacoes'])===3 && $ev['contratos'][0]['contrato']==='C-0110' &&
     && strlen($ev['codigo_verificacao'])===16 && count($ev['movimentos'])===$db->table('Extracto')->where('Contracto','C-0110')->count(),'evidência: contrato renovado e liquidado com prestações e movimentos');
 ok(collect($ev['movimentos'])->every(fn($m)=>!str_contains($m['descricao'],'[CAIXA') && !str_contains($m['descricao'],'REF:')),'evidência sem marcas internas nem referências');
 ok($err(fn()=>$ex->evidencia($greq([])))===422,'evidência exige cliente ou contrato');
+$inf=data($ex->informacao($greq(['contrato'=>'C-0110'])));
+$cid=(int)$db->table('Contractos')->where('Nr do Contracto','C-0110')->value('Nº de Cliente');
+ok($inf['contrato']==='C-0110' && $inf['situacao']==='Finalizado' && $inf['prestacoes']['total']===3 && $inf['prestacoes']['pagas']===3
+    && $inf['em_divida']==='0.00' && $inf['cliente']['codigo']===str_pad((string)$cid,3,'0',STR_PAD_LEFT)
+    && $inf['quantia_creditada']===number_format((float)$db->table('Contractos')->where('Nr do Contracto','C-0110')->max('Quantia Creditada'),2,'.',''),'informação: contrato renovado finalizado, código do cliente com 3 dígitos');
+$late=$db->table('Contractos')->whereIn('Estado',['Pendente','Pagamento Atrasado'])->where('Data de Cobrança','<',$tod)->value('Nr do Contracto');
+if ($late) { $il=data($ex->informacao($greq(['contrato'=>$late]))); ok($il['situacao']==='Pagamento atrasado' && $il['prestacoes']['vencidas']>0 && $il['dias_atraso']>0,'informação: contrato com atraso'); }
+ok($err(fn()=>$ex->informacao($greq(['contrato'=>'NAO-EXISTE'])))===404,'informação: contrato inexistente');
 // Cartões da Visão geral → Extracto: os números têm de coincidir.
 foreach ([['todos','todos'],[(string)now($tz)->month,(string)now($tz)->year]] as [$m,$y]) {
     $o=data($ov(Request::create('/x','GET',['mes'=>$m,'ano'=>$y])));

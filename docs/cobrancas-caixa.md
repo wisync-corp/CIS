@@ -121,3 +121,15 @@ Cada cartão da Visão geral abre o Extracto (Clientes) já filtrado, com o mesm
 
 Os números do cartão e do Extracto coincidem; o ensaio MySQL verifica-o.
 Vencida = em aberto com vencimento antes de hoje, a mesma regra nos dois ecrãs.
+
+### Informação do contrato (formulário VBA «Informação»)
+
+Um clique numa linha do Extracto (Geral com contrato, ou Clientes) abre o painel «Informação». Mostra:
+- o cliente: código com 3 dígitos, nome e contacto;
+- o contrato: data de início, data final, quantia creditada e forma de pagamento;
+- a situação: Pendente, Pagamento atrasado ou Finalizado;
+- as prestações: total, pagas, em aberto e vencidas, o valor em dívida e pago, e o próximo vencimento ou os dias de atraso.
+
+Acções:
+- **Mensagem ao cliente** (substitui o frmMessageCenter): texto pronto conforme a situação, editável. Pode ser copiado ou aberto no WhatsApp ou SMS do dispositivo, para o operador confirmar e enviar. O CIS não envia mensagens sozinho.
+- **Extracto do cliente (PDF)** do contrato.

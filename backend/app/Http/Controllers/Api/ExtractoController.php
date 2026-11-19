@@ -416,6 +416,59 @@ final class ExtractoController extends Controller
         return response()->json($doc)->header('Cache-Control','no-store, private');
     }
 
+    /** GET /cis/extractos/informacao?contrato= : painel «Informação» (formulário VBA Informação). */
+    public function informacao(Request $request)
+    {
+        return $this->guard(fn()=>$this->informacaoImpl($request));
+    }
+
+    private function informacaoImpl(Request $request)
+    {
+        $d=$request->validate(['contrato'=>['required','string','max:155']]);
+        $numero=trim($d['contrato']);
+        $db=DB::connection('mysql_legacy');
+        $today=$this->today();
+        $rows=$this->clientRows($db,['cliente'=>'','contrato'=>$numero]);
+        abort_if($rows->isEmpty(),404,'Contrato não encontrado.');
+        $first=$rows->first();
+        $sit=['aberta'=>0,'vencida'=>0,'paga'=>0];$owed=0.0;$paid=0.0;$next=null;$maxLate=0;
+        foreach ($rows as $r) {
+            $s=self::situation($r,$today);
+            if (isset($sit[$s])) $sit[$s]++;
+            if ($s==='aberta'||$s==='vencida') {
+                $owed+=self::owed($r);
+                $due=substr((string)$r->{'Data de Cobrança'},0,10);
+                if ($due!=='' && ($next===null || $due<$next)) $next=$due;
+                if ($s==='vencida' && $due!=='') $maxLate=max($maxLate,(int)\Carbon\CarbonImmutable::parse($due)->diffInDays(\Carbon\CarbonImmutable::parse($today)));
+            }
+            if ($s==='paga') $paid+=(float)$r->{'Valor Pago'};
+        }
+        $situacao=$sit['vencida']>0?'Pagamento atrasado':(($sit['aberta']>0)?'Pendente':'Finalizado');
+        $final=$db->table('Contractos')->where('Nr do Contracto',$numero)->max('Data Final');
+        $clientId=(int)($first->{'Nº de Cliente'}??0);
+        $client=['id'=>$clientId?:null,'codigo'=>$clientId?str_pad((string)$clientId,3,'0',STR_PAD_LEFT):null,
+            'nome'=>$first->{'Nome do Cliente'},'contacto'=>null];
+        if ($clientId) {
+            $c=$db->table('Clientes')->where('ID',$clientId)->first();
+            if ($c) {
+                if (property_exists($c,'Nome Completo') && trim((string)$c->{'Nome Completo'})!=='') $client['nome']=trim((string)$c->{'Nome Completo'});
+                if (property_exists($c,'Contacto') && trim((string)$c->Contacto)!=='') $client['contacto']=trim((string)$c->Contacto);
+            }
+        }
+        return response()->json([
+            'contrato'=>$numero,
+            'data_inicio'=>substr((string)$rows->min('Data de Inicio'),0,10)?:null,
+            'data_final'=>$final?substr((string)$final,0,10):null,
+            'quantia_creditada'=>self::money($rows->max('Quantia Creditada')),
+            'forma_pagamento'=>$first->{'M. Pagamento'},
+            'situacao'=>$situacao,
+            'prestacoes'=>['total'=>$rows->count(),'pagas'=>$sit['paga'],'em_aberto'=>$sit['aberta'],'vencidas'=>$sit['vencida']],
+            'em_divida'=>self::money($owed),'pago'=>self::money($paid),
+            'proximo_vencimento'=>$next,'dias_atraso'=>$maxLate,
+            'cliente'=>$client,
+        ])->header('Cache-Control','no-store, private');
+    }
+
     /** Descrição sem marcas internas ([CAIXA:…], REF:, chaves) para o documento do cliente. */
     private static function publicDescription(object $m): string
     {
