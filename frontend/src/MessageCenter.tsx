@@ -1,5 +1,5 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
-import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff} from 'lucide-react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff,ExternalLink} from 'lucide-react';
 import MessageLog from './MessageLog';
 import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref,type WaImage} from './waBridge';
 
@@ -37,7 +37,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
  const wa=waState();const [show,setShow]=useState(getShowPref());
  const [lastJob,setLastJob]=useState<string|null>(null);
- const [image,setImage]=useState<WaImage|null>(null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);
+ const [image,setImage]=useState<WaImage|null>(null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);const [help,setHelp]=useState(false);
  const sendMode=!!contrato;
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
 
@@ -132,91 +132,136 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const nextIdx=queue?queue.findIndex(r=>r.telefone&&!r.estado&&!(r.jobId&&jobStatus(r.jobId))):-1;
  const done=queue?queue.filter(r=>r.estado==='aberta').length:0;
 
+ const statusCell=(r:Recipient,i:number)=>{const js=r.jobId?jobStatus(r.jobId):undefined;
+  if(!r.telefone)return <small>Sem contacto</small>;
+  if(js==='enviada')return <span className="ok"><CheckCircle2 size={14}/> Enviada</span>;
+  if(js==='a_enviar')return <span className="wait"><Loader2 size={14} className="spin"/> Na fila</span>;
+  if(js==='falhada')return <span className="fail"><AlertCircle size={14}/> Falhou</span>;
+  if(r.estado==='aberta')return <span className="ok"><CheckCircle2 size={14}/> Aberta</span>;
+  return <button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>;};
+ const sending=!!lastJob&&jobStatus(lastJob)==='a_enviar';
+
  return <section className={'cis-panel cis-msg'+(sendMode?' cis-msg-send':'')}>
-  <div className="cis-panel-head"><div><h2><MessageSquare size={18}/> Centro de mensagens</h2>
-   <p>{sendMode?<>Mensagem para o contrato <b>{contrato}</b>{preview?<> · {preview.cliente} · {situ(preview.situacao)}</>:null}</>:'Modelos de mensagem com campos do contrato e envio pelo WhatsApp do operador.'}</p></div>
-   {onClose&&<button type="button" className="cis-msg-close" onClick={onClose} aria-label="Fechar"><X size={17}/></button>}</div>
-
-  <div className="cis-msg-templates">
-   <label>Modelo{editing==='new'?<input value={name} onChange={e=>setName(e.target.value)} placeholder="Nome do novo modelo" maxLength={80} autoFocus/>
-    :<select value={selId} onChange={e=>setSelId(e.target.value?Number(e.target.value):'')} disabled={!!editing}><option value="">— escolher —</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>}</label>
-   {editing==='edit'&&<label>Nome<input value={name} onChange={e=>setName(e.target.value)} maxLength={80}/></label>}
-   <div className="cis-msg-btns">{!editing?<>
-    <button type="button" onClick={startNew}><Plus size={14}/> Novo</button>
-    <button type="button" onClick={startEdit} disabled={!sel}><Pencil size={14}/> Editar</button>
-    <button type="button" onClick={()=>void remove()} disabled={!sel||busy==='del'}><Trash2 size={14}/> Eliminar</button>
-   </>:<>
-    <button type="button" className="primary" onClick={()=>void save()} disabled={busy==='save'||name.trim().length<3||body.trim().length<3}><Save size={14}/> {busy==='save'?'A guardar…':'Guardar'}</button>
-    <button type="button" onClick={cancel}><X size={14}/> Cancelar</button>
-   </>}</div>
-  </div>
-
-  <div className={'cis-msg-ext'+(wa.available?' on':'')}>
-   <Puzzle size={16}/>
-   {wa.available?<><span><b>Extensão CIS WhatsApp ligada</b>{wa.version?` · v${wa.version}`:''}{wa.running?` · a enviar (${wa.pendentes} na fila)`:''}{wa.aguardaLogin?' · à espera do login no WhatsApp Web':''}</span>
-    <label className="cis-msg-toggle"><input type="checkbox" checked={show} onChange={e=>{setShow(e.target.checked);setShowPref(e.target.checked);}}/>{show?<Eye size={14}/>:<EyeOff size={14}/>} Mostrar o WhatsApp Web durante o envio</label>
-    {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar envio</button>}</>
-   :<><span><b>Extensão CIS WhatsApp não detectada</b> — as mensagens abrem no WhatsApp Web para enviar à mão.<br/>
-     <b>Já instalada?</b> Com esta página aberta, clique no ícone <b>CIS WhatsApp</b> na barra do navegador e carregue em <b>«Ligar este endereço»</b> (o endereço aparece preenchido). Volte aqui e carregue em «Verificar novamente».<br/>
-     <b>Ainda não instalada?</b> <a href="/cis-whatsapp-extension.zip" download>Descarregar</a> → extrair → <code>chrome://extensions</code> (ou <code>edge://extensions</code>) → Modo de programador → «Carregar expandida» → escolher a pasta.</span>
-    <button type="button" className="check" onClick={()=>{setChecking(true);waCheck();setTimeout(()=>setChecking(false),1500);}} disabled={checking}>{checking?<><Loader2 size={13} className="spin"/> A verificar…</>:'Verificar novamente'}</button></>}
-  </div>
-
-  <div className="cis-msg-image">
-   <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
-   {image?<><img src={image.dataUrl} alt="Imagem a enviar"/><span><b>{image.name}</b><small>{wa.available?'Vai com cada mensagem, com o texto como legenda.':'Só é enviada automaticamente com a extensão; sem ela, anexe-a no WhatsApp.'}</small></span>
-    <button type="button" onClick={()=>setImage(null)}><X size={13}/> Remover imagem</button></>
-   :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar imagem</button>}
-  </div>
-
-  <label className="cis-msg-editor">{editing?'Texto do modelo':'Texto do modelo (clique em Editar para alterar)'}
-   <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} readOnly={!editing} rows={6} className={editing?'':'locked'} placeholder="Escreva a mensagem e insira campos como {Nome Completo}"/></label>
-  {editing&&<div className="cis-msg-tools">
-   <select value={field} onChange={e=>setField(e.target.value)} aria-label="Campo"><option value="">Inserir campo…</option>{fields.map(f=><option key={f} value={f}>{f}</option>)}</select>
-   <button type="button" onClick={()=>field&&insert(field)} disabled={!field}>Inserir</button>
-   <button type="button" onClick={()=>setShowEmoji(v=>!v)} aria-expanded={showEmoji}>😊 Emojis</button>
-   {showEmoji&&<div className="cis-msg-emojis">{EMOJIS.map(e=><button type="button" key={e} onClick={()=>insert(e)}>{e}</button>)}</div>}
-  </div>}
-
-  {sendMode&&<div className="cis-msg-preview"><h3>Pré-visualização</h3>
-   <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/>
-   <div className="cis-msg-btns">
-    {wa.available&&<button type="button" className="primary" onClick={sendWeb} disabled={!preview?.telefone||!text.trim()||(!!lastJob&&jobStatus(lastJob)==='a_enviar')}>{lastJob&&jobStatus(lastJob)==='a_enviar'?<><Loader2 size={14} className="spin"/> A enviar…</>:<><Send size={14}/> Enviar pelo WhatsApp Web</>}</button>}
-    <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><Send size={14}/> {wa.available?'Abrir no WhatsApp Web':'Abrir no WhatsApp Web'}</button>
-    <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
-    <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
-    <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Cliente sem contacto registado.':''}</small>
-   </div></div>}
-
-  {!sendMode&&<div className="cis-msg-bulk"><h3><Users size={16}/> Mandar para todos</h3>
-   <div className="cis-msg-btns">
-    <select value={group} onChange={e=>{setGroup(e.target.value as Group);setQueue(null);}} aria-label="Grupo"><option value="">Escolher destinatários…</option>{GROUPS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
-    <button type="button" className="primary" onClick={()=>void loadQueue()} disabled={!group||(!selId&&!body.trim())||busy==='queue'}>{busy==='queue'?'A preparar…':'Preparar fila'}</button>
-    {group&&<small>{GROUPS.find(g=>g.id===group)?.hint}</small>}
+  <header className="cis-msg-head">
+   <div><h2><MessageSquare size={18}/> {sendMode?'Mensagem ao cliente':'Centro de mensagens'}</h2>
+    <p>{sendMode?<>Contrato <b>{contrato}</b>{preview?<> · {preview.cliente} · {situ(preview.situacao)}</>:null}</>:'Escolha um modelo, ajuste o texto e envie a um cliente ou a um grupo.'}</p></div>
+   <div className="cis-msg-head-right">
+    {wa.available?<span className="cis-msg-chip on"><Puzzle size={14}/> WhatsApp Web automático{wa.version?` · v${wa.version}`:''}{wa.running?` · a enviar (${wa.pendentes})`:''}{wa.aguardaLogin?' · aguarda login':''}</span>
+     :<button type="button" className="cis-msg-chip off" onClick={()=>setHelp(v=>!v)} aria-expanded={help}><Puzzle size={14}/> Extensão não detectada · como ligar</button>}
+    {wa.available&&<label className="cis-msg-toggle" title="Mostrar o WhatsApp Web durante o envio"><input type="checkbox" checked={show} onChange={e=>{setShow(e.target.checked);setShowPref(e.target.checked);}}/>{show?<Eye size={14}/>:<EyeOff size={14}/>} Mostrar WhatsApp Web</label>}
+    {wa.running&&<button type="button" className="cis-msg-stop" onClick={waStop}><Square size={13}/> Parar</button>}
+    {onClose&&<button type="button" className="cis-msg-close" onClick={onClose} aria-label="Fechar"><X size={17}/></button>}
    </div>
-   {queue&&<>
-    <div className="cis-msg-queue-head"><span>{queueInfo} · {done} aberta(s)</span>
-     <div className="cis-msg-btns">
-      {wa.available&&<button type="button" className="primary" disabled={wa.running} onClick={sendQueueWeb}><Send size={14}/> {wa.running?`A enviar… (${wa.pendentes} na fila)`:'Enviar a fila pelo WhatsApp Web'}</button>}
-      {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar</button>}
-      <button type="button" className={wa.available?'':'primary'} disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button>
-     </div></div>
-    <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
-     <tbody>{queue.map((r,i)=><tr key={r.contrato+i} className={r.estado==='aberta'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{r.contacto??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td>
-      <td>{(()=>{const js=r.jobId?jobStatus(r.jobId):undefined;
-       if(!r.telefone)return <small>Sem contacto</small>;
-       if(js==='enviada')return <span className="ok"><CheckCircle2 size={14}/> Enviada</span>;
-       if(js==='a_enviar')return <span className="wait"><Loader2 size={14} className="spin"/> Na fila</span>;
-       if(js==='falhada')return <span className="fail"><AlertCircle size={14}/> Falhou</span>;
-       if(r.estado==='aberta')return <span className="ok"><CheckCircle2 size={14}/> Aberta</span>;
-       return <button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>;})()}</td></tr>)}</tbody></table></div>
-   </>}
+  </header>
+  {!wa.available&&help&&<div className="cis-msg-help">
+   <p><b>Já instalada?</b> Com esta página aberta, clique no ícone <b>CIS WhatsApp</b> na barra do navegador e carregue em <b>«Ligar este endereço»</b> (o endereço aparece preenchido).</p>
+   <p><b>Ainda não instalada?</b> <a href="/cis-whatsapp-extension.zip" download>Descarregar a extensão</a> → extrair → <code>edge://extensions</code> ou <code>chrome://extensions</code> → Modo de programador → «Carregar expandida» → escolher a pasta.</p>
+   <p>Sem a extensão, as mensagens abrem já escritas no WhatsApp Web e o envio é confirmado por si.</p>
+   <button type="button" onClick={()=>{setChecking(true);waCheck();setTimeout(()=>setChecking(false),1500);}} disabled={checking}>{checking?<><Loader2 size={13} className="spin"/> A verificar…</>:'Verificar novamente'}</button>
   </div>}
 
-  <MessageLog token={token} contrato={contrato} refreshKey={logKey}/>
+  <div className="cis-msg-grid">
+   <aside className="cis-msg-list" aria-label="Modelos">
+    <div className="cis-msg-list-head"><h3>Modelos</h3><button type="button" onClick={startNew} disabled={!!editing}><Plus size={14}/> Novo</button></div>
+    <ul>{templates.map(t=><li key={t.id}><button type="button" className={t.id===selId?'selected':''} disabled={!!editing} onClick={()=>setSelId(t.id)}>
+     <b>{t.name}</b><small>{t.body.replace(/[*_~]/g,'').replace(/\s+/g,' ').slice(0,70)}{t.body.length>70?'…':''}</small></button></li>)}</ul>
+    {!templates.length&&<p className="cis-msg-muted">Ainda não há modelos.</p>}
+   </aside>
 
-  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'Sem a extensão, o CIS abre cada mensagem já escrita no WhatsApp Web (sempre no mesmo separador) e o envio é confirmado por si.'} Imagens (JPG/PNG/WebP até 5 MB) seguem com a extensão, com o texto como legenda. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
+   <div className="cis-msg-main">
+    <div className="cis-msg-card">
+     <div className="cis-msg-card-head">
+      {editing?<input className="cis-msg-name" value={name} onChange={e=>setName(e.target.value)} placeholder="Nome do modelo" maxLength={80} autoFocus={editing==='new'} aria-label="Nome do modelo"/>
+       :<h3>{sel?.name??'Escolha um modelo'}</h3>}
+      <div className="cis-msg-btns">{!editing?<>
+       <button type="button" onClick={startEdit} disabled={!sel}><Pencil size={14}/> Editar</button>
+       <button type="button" onClick={()=>void remove()} disabled={!sel||busy==='del'} aria-label="Eliminar modelo"><Trash2 size={14}/></button>
+      </>:<>
+       <button type="button" className="primary" onClick={()=>void save()} disabled={busy==='save'||name.trim().length<3||body.trim().length<3}><Save size={14}/> {busy==='save'?'A guardar…':'Guardar'}</button>
+       <button type="button" onClick={cancel}><X size={14}/> Cancelar</button>
+      </>}</div>
+     </div>
+     <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} readOnly={!editing} rows={sendMode?9:13} className={editing?'':'locked'} placeholder="Escreva a mensagem e insira campos como {Nome Completo}" aria-label="Texto do modelo"/>
+     {editing?<div className="cis-msg-tools">
+      <select value={field} onChange={e=>setField(e.target.value)} aria-label="Campo"><option value="">Inserir campo…</option>{fields.map(f=><option key={f} value={f}>{f}</option>)}</select>
+      <button type="button" onClick={()=>field&&insert(field)} disabled={!field}>Inserir</button>
+      <button type="button" onClick={()=>setShowEmoji(v=>!v)} aria-expanded={showEmoji}>😊 Emojis</button>
+      {showEmoji&&<div className="cis-msg-emojis">{EMOJIS.map(e=><button type="button" key={e} onClick={()=>insert(e)}>{e}</button>)}</div>}
+     </div>:<p className="cis-msg-muted">Carregue em <b>Editar</b> para alterar o modelo. Os campos entre chavetas são preenchidos com os dados de cada contrato.</p>}
+     <div className="cis-msg-image">
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
+      {image?<><img src={image.dataUrl} alt="Imagem a enviar"/><span><b>{image.name}</b><small>{wa.available?'Vai com cada mensagem, com o texto como legenda.':'Só segue automaticamente com a extensão.'}</small></span>
+       <button type="button" onClick={()=>setImage(null)}><X size={13}/> Remover</button></>
+      :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar imagem</button>}
+     </div>
+    </div>
+   </div>
+
+   <div className="cis-msg-side">
+    <div className="cis-msg-card">
+     <h3>Pré-visualização</h3>
+     <div className="cis-wa-screen">
+      <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Cliente'):'Cliente (exemplo)'}</b><small>{sendMode?(preview?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
+      <div className="cis-wa-chat"><div className="cis-wa-bubble">
+       {image&&<img src={image.dataUrl} alt=""/>}
+       <WaText text={sendMode?text:body} fields={!sendMode}/>
+       <span className="cis-wa-time">{new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'})} ✓✓</span>
+      </div></div>
+     </div>
+     {sendMode&&<>
+      <details className="cis-msg-adjust"><summary>Ajustar o texto só para este envio</summary>
+       <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/></details>
+      <div className="cis-msg-send-btns">
+       {wa.available&&<button type="button" className="primary big" onClick={sendWeb} disabled={!preview?.telefone||!text.trim()||sending}>{sending?<><Loader2 size={15} className="spin"/> A enviar…</>:<><Send size={15}/> Enviar pelo WhatsApp Web</>}</button>}
+       <div className="cis-msg-btns">
+        <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><ExternalLink size={14}/> Abrir no WhatsApp Web</button>
+        <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
+        <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
+       </div>
+       <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Cliente sem contacto registado.':''}</small>
+      </div>
+     </>}
+    </div>
+
+    {!sendMode&&<div className="cis-msg-card cis-msg-bulk">
+     <h3><Users size={16}/> Mandar para todos</h3>
+     <select value={group} onChange={e=>{setGroup(e.target.value as Group);setQueue(null);}} aria-label="Grupo"><option value="">Escolher destinatários…</option>{GROUPS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
+     {group&&<small>{GROUPS.find(g=>g.id===group)?.hint}</small>}
+     <button type="button" className="primary" onClick={()=>void loadQueue()} disabled={!group||(!selId&&!body.trim())||busy==='queue'}>{busy==='queue'?'A preparar…':'Preparar fila'}</button>
+    </div>}
+   </div>
+  </div>
+
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{error}</div>}
   {notice&&!error&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
+
+  {!sendMode&&queue&&<div className="cis-msg-card cis-msg-queue-card">
+   <div className="cis-msg-queue-head"><h3><Users size={16}/> Fila · {GROUPS.find(g=>g.id===group)?.label}</h3><span>{queueInfo} · {done} aberta(s)</span>
+    <div className="cis-msg-btns">
+     {wa.available&&<button type="button" className="primary" disabled={wa.running} onClick={sendQueueWeb}><Send size={14}/> {wa.running?`A enviar… (${wa.pendentes} na fila)`:'Enviar a fila pelo WhatsApp Web'}</button>}
+     {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar</button>}
+     <button type="button" className={wa.available?'':'primary'} disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button>
+    </div></div>
+   <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
+    <tbody>{queue.map((r,i)=><tr key={r.contrato+i} className={r.estado==='aberta'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{r.contacto??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td><td>{statusCell(r,i)}</td></tr>)}</tbody></table></div>
+  </div>}
+
+  <div className="cis-msg-card"><MessageLog token={token} contrato={contrato} refreshKey={logKey}/></div>
+
+  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez (intervalo de 8–18 s), e confirma o envio; os avisos aparecem no canto superior direito.':'Sem a extensão, o CIS abre cada mensagem já escrita no WhatsApp Web (sempre no mesmo separador) e o envio é confirmado por si.'} Imagens (JPG/PNG/WebP até 5 MB) seguem com a extensão, com o texto como legenda.</p>
  </section>;
+}
+
+/** Texto como o WhatsApp o mostra: *negrito*, _itálico_, ~riscado~, quebras de linha; campos {…} em destaque. */
+function WaText({text,fields}:{text:string;fields:boolean}){
+ const parts:React.ReactNode[]=[];
+ const re=/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|\{[^{}\n]{1,40}\})/g;let last=0;let m:RegExpExecArray|null;let k=0;
+ while((m=re.exec(text))){if(m.index>last)parts.push(text.slice(last,m.index));const t=m[0];
+  if(t.startsWith('{'))parts.push(fields?<span key={k++} className="cis-wa-field">{t.slice(1,-1)}</span>:t);
+  else if(t.startsWith('*'))parts.push(<strong key={k++}>{t.slice(1,-1)}</strong>);
+  else if(t.startsWith('_'))parts.push(<em key={k++}>{t.slice(1,-1)}</em>);
+  else parts.push(<s key={k++}>{t.slice(1,-1)}</s>);
+  last=m.index+t.length;}
+ if(last<text.length)parts.push(text.slice(last));
+ return <div className="cis-wa-text">{parts.length?parts:<span className="cis-msg-muted">Sem texto.</span>}</div>;
 }
