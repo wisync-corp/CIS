@@ -516,3 +516,51 @@ Artisan::command('cis:test-http-login {email}', function (string $email) {
         }
     }
 })->purpose('Testar login, perfil e logout Sanctum na rota HTTP, sem publicação pública');
+
+Artisan::command('cis:actualizar-contratos {--aplicar : Gravar o recálculo das prestações em aberto}', function () {
+    $apply = (bool) $this->option('aplicar');
+    if ($apply && !\App\Services\CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')) {
+        $this->error('A escrita de cobranças ainda não está autorizada.');
+        return 1;
+    }
+
+    $db = \Illuminate\Support\Facades\DB::connection($apply ? 'mysql_contract_writer' : 'mysql_legacy');
+    $today = now('Africa/Maputo')->toDateString();
+    $open = $db->table('Contractos')
+        ->whereNotIn('Estado do Contrato', ['Finalizado', 'Cancelado', 'Anulado'])
+        ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado']);
+    $movement = static function ($query) {
+        $query->selectRaw('1')->from('Extracto')
+            ->whereColumn('Extracto.Contracto', 'Contractos.Nr do Contracto')
+            ->whereColumn('Extracto.Parcela', 'Contractos.Nº da Parcela')
+            ->where('Extracto.Tipo de Movimento', 'Entradas');
+    };
+    $review = (clone $open)->whereExists($movement)->count();
+    $eligible = (clone $open)->whereNotExists($movement)
+        ->whereNull('Data de Pagamento')
+        ->where(fn ($query) => $query->whereNull('Valor Pago')->orWhere('Valor Pago', 0));
+    $this->line('Prestações em aberto com entradas no Extracto para reconciliar: '.$review);
+    $this->line('Prestações elegíveis para recálculo: '.(clone $eligible)->count());
+
+    if (!$apply) {
+        return 0;
+    }
+
+    $day = $db->getPdo()->quote($today);
+    $column = static fn (string $name): string => "`".$name."`";
+    $due = $column('Data de Cobrança');
+    $start = $column('Data de Inicio');
+    $rate = $column('% de Juro');
+    $capital = 'CASE WHEN COALESCE(Capital, 0) > 0 THEN Capital ELSE '.$column('Quantia Creditada').' END';
+    $variable = "TRIM(COALESCE(".$column('Tipo de Juro').", '')) LIKE 'Vari%' AND $start IS NOT NULL AND $rate IS NOT NULL AND ($capital) > 0";
+    $interest = "($capital) * ($rate / 100) * GREATEST(0, DATEDIFF($day, $start))";
+    $raw = static fn (string $sql) => $db->raw($sql);
+    $updated = $eligible->update([
+        'Dias' => $raw("DATEDIFF($due, $day)"),
+        'Estado' => $raw("CASE WHEN $due < $day AND Estado = 'Pendente' THEN 'Pagamento Atrasado' ELSE Estado END"),
+        'Valor de Juros' => $raw("CASE WHEN $variable THEN ROUND($interest, 2) ELSE ".$column('Valor de Juros').' END'),
+        'Valor a Pagar' => $raw("CASE WHEN $variable THEN ROUND(($capital) + ($interest), 2) ELSE ".$column('Valor a Pagar').' END'),
+    ]);
+    $this->info('Prestações actualizadas: '.$updated);
+    return 0;
+})->purpose('Recalcular prestações em aberto e identificar pagamentos a reconciliar com o Extracto');
