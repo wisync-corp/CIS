@@ -42,8 +42,8 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-table-controls input{color:var(--cis-text)}
 .cis-brand small{color:var(--cis-sidebar-muted)}
 .cis-settings-appearance{display:grid;gap:16px;margin-bottom:26px}
-.cis-settings-appearance h2{font:800 19px Manrope;margin:0;color:var(--cis-heading)}
-.cis-settings-appearance>p{color:var(--cis-text-muted);font-size:13px;line-height:1.7}
+.cis-settings-appearance h2{font:800 calc(19px * var(--cis-fs)) Manrope;margin:0;color:var(--cis-heading)}
+.cis-settings-appearance>p{color:var(--cis-text-muted);font-size:calc(13px * var(--cis-fs));line-height:1.7}
 .cis-theme-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
 .cis-theme-option{display:grid;grid-template-rows:auto auto auto 1fr;gap:10px;text-align:left;background:#fff;border:2px solid var(--cis-border);border-radius:13px;padding:15px;cursor:pointer;min-width:0;transition:border-color .12s,box-shadow .12s}
 .cis-theme-option:hover{border-color:var(--cis-input-border)}
@@ -55,11 +55,11 @@ button:focus-visible,input:focus-visible{outline-color:var(--cis-primary)}
 .cis-theme-preview-body i{display:block;height:8px;background:#fff;border-radius:3px}
 .cis-theme-preview-body i:first-child{width:62%}
 .cis-theme-preview-body i:last-child{width:78%;height:18px;border-left:5px solid}
-.cis-theme-option-title{display:flex;align-items:center;justify-content:space-between;gap:7px;color:var(--cis-heading);font-weight:800;font-size:14px}
+.cis-theme-option-title{display:flex;align-items:center;justify-content:space-between;gap:7px;color:var(--cis-heading);font-weight:800;font-size:calc(14px * var(--cis-fs))}
 .cis-theme-option-title svg{color:var(--cis-primary)}
-.cis-theme-option-sub{font-size:11px;color:var(--cis-text-muted)}
-.cis-theme-option-desc{font-size:12px;line-height:1.5;color:var(--cis-text-muted)}
-.cis-settings-status{display:flex;align-items:center;gap:8px;color:var(--cis-primary);font-size:12px;font-weight:700}
+.cis-theme-option-sub{font-size:calc(11px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-theme-option-desc{font-size:calc(12px * var(--cis-fs));line-height:1.5;color:var(--cis-text-muted)}
+.cis-settings-status{display:flex;align-items:center;gap:8px;color:var(--cis-primary);font-size:calc(12px * var(--cis-fs));font-weight:700}
 @media(max-width:1100px){.cis-theme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.cis-theme-grid{grid-template-columns:1fr}}
 
 /* Equilíbrio de cores — acentos da marca (10%) aplicados a estados, sem alterar a estrutura. */

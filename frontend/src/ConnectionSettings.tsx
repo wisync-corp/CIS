@@ -1,12 +1,13 @@
 import {useEffect,useState} from 'react';
 import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette} from 'lucide-react';
-import {themeOptions,type ThemeId} from './theme';
+import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
 import FinancialReferences from './FinancialReferences';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
 
 export default function ConnectionSettings({token,role,theme,onThemeChange}:{token:string;role:string;theme:ThemeId;onThemeChange:(value:ThemeId)=>void}){
+ const [fontSize,setFontSize]=useState<FontSizeId>(getFontSize);
  const [status,setStatus]=useState<Status|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[reload,setReload]=useState(0);
  useEffect(()=>{if(role!=='administrador'){setLoading(false);return;}const ctrl=new AbortController();setLoading(true);setError('');
  fetch(API+'/admin/connection-status',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
@@ -30,6 +31,12 @@ export default function ConnectionSettings({token,role,theme,onThemeChange}:{tok
    </div>
    <div className="cis-settings-status"><CheckCircle2 size={16}/>Tema {themeOptions.find(option=>option.id===theme)?.name} activo · Guardado neste navegador</div>
    <p>A escolha fica guardada apenas neste navegador. Em outro dispositivo, poderá seleccionar o tema novamente.</p>
+   <h3 className="cis-font-title">Tamanho do texto</h3>
+   <div className="cis-font-grid" role="radiogroup" aria-label="Tamanho do texto">
+    {fontSizeOptions.map(o=><button type="button" key={o.id} role="radio" aria-checked={fontSize===o.id} className={'cis-font-option'+(fontSize===o.id?' selected':'')} onClick={()=>{setFontSize(o.id);applyFontSize(o.id);}}>
+     <span className={'cis-font-sample '+o.id}>Aa</span><b>{o.name}</b><small>{o.hint}</small>
+    </button>)}
+   </div>
   </section>
   {role==='administrador'&&<FinancialReferences token={token}/>}
   {role==='administrador'&&<section className="cis-panel">

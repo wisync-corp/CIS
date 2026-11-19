@@ -3,7 +3,8 @@ import logoPrincipalClaro from './assets/brand/cis-principal-claro.svg';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import {ShieldCheck, ArrowRight, Eye, EyeOff, LockKeyhole} from 'lucide-react';
 import Dashboard from './Dashboard';
-import {applyTheme,getTheme,type ThemeId} from './theme';
+import {applyTheme,getTheme,applyFontSize,getFontSize,type ThemeId} from './theme';
+applyFontSize(getFontSize());
 
 type User={name:string;email:string;role:string};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';

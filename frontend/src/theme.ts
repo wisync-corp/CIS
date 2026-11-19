@@ -15,3 +15,20 @@ export function applyTheme(theme:ThemeId):void {
  document.documentElement.dataset.theme=theme;
  try{localStorage.setItem(STORAGE_KEY,theme);}catch{/* Browser pode impedir gravação local. */}
 }
+
+// Tamanho do texto (escala única aplicada a todas as letras do CIS; guardado neste navegador).
+export const fontSizeOptions=[
+ {id:'compacto',name:'Compacto',hint:'Mais informação no ecrã'},
+ {id:'normal',name:'Normal',hint:'Recomendado'},
+ {id:'grande',name:'Grande',hint:'Leitura mais confortável'},
+ {id:'muito-grande',name:'Muito grande',hint:'Para ecrãs distantes'},
+] as const;
+export type FontSizeId=(typeof fontSizeOptions)[number]['id'];
+const FONT_KEY='cis_ui_font_size_v1';
+export function getFontSize():FontSizeId{
+ try{const v=localStorage.getItem(FONT_KEY);return fontSizeOptions.some(o=>o.id===v)?v as FontSizeId:'normal';}catch{return 'normal';}
+}
+export function applyFontSize(v:FontSizeId):void{
+ document.documentElement.dataset.fontSize=v;
+ try{localStorage.setItem(FONT_KEY,v);}catch{/* Browser pode impedir gravação local. */}
+}
