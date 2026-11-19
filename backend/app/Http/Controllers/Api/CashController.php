@@ -94,14 +94,9 @@ final class CashController extends Controller
                 && filter_var(env('CIS_CASH_LEDGER_POSTING_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
                 && Schema::hasColumn('Extracto','operation_key'), // Nunca activar só com a coluna.
             'can_create_accounts' => filter_var(env('CIS_CASH_ACCOUNT_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            // Mesma regra de openingSetupAllowed(): com movimentações activas a abertura é recusada.
-            'can_submit_opening' => filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
-                && !filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            'can_validate_opening' => filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
-                && !filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
-            'opening_blocked_reason' => filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN)
-                ? 'Com as movimentações activas, o saldo inicial só pode ser preparado numa janela de abertura. Na VPS: bash deploy/open-cash-account-window.sh'
-                : null,
+            'can_submit_opening' => $this->openingSetupApproved(),
+            'can_validate_opening' => $this->openingValidationApproved(),
+            'opening_blocked_reason' => null,
             'single_admin_opening' => $this->singleAdminOpening(),
             'notice' => 'Fonte única de movimentos: Extracto; contas identificadas por account_id. A escrita real depende de autorização operacional adicional.'
         ])->header('Cache-Control', 'no-store, private');
@@ -197,12 +192,14 @@ final class CashController extends Controller
         return filter_var(env('CIS_CASH_SINGLE_ADMIN_APPROVED',false), FILTER_VALIDATE_BOOLEAN);
     }
 
-    private function openingSetupAllowed(): void
+    private function openingSetupApproved(): bool
     {
-        abort_unless(filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
-            'A preparação do saldo inicial ainda não foi autorizada.');
-        abort_unless(!filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
-            'Preparação de saldos requer as movimentações gerais bloqueadas.');
+        return filter_var(env('CIS_CASH_OPENING_SETUP_APPROVED', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function openingValidationApproved(): bool
+    {
+        return filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED', false), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -214,7 +211,10 @@ final class CashController extends Controller
     public function submitOpening(Request $request, int $id)
     {
         $this->access($request);
-        $this->openingSetupAllowed();
+        abort_unless($this->openingSetupApproved(), 503,
+            'A preparação do saldo inicial ainda não foi autorizada.');
+        $request->merge(['evidence_reference' => is_string($request->input('evidence_reference'))
+            ? trim($request->input('evidence_reference')) : $request->input('evidence_reference')]);
         $data=$request->validate([
             'opening_balance'=>['required','string','regex:/^(0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
             'cut_at'=>['required','date_format:Y-m-d H:i:s'],
@@ -254,8 +254,7 @@ final class CashController extends Controller
     public function activate(Request $request, int $id)
     {
         $this->access($request);
-        $this->openingSetupAllowed();
-        abort_unless(filter_var(env('CIS_CASH_OPENING_VALIDATE_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
+        abort_unless($this->openingValidationApproved(), 503,
             'Validação independente de saldos ainda não autorizada.');
         $request->validate([
             'confirmed_document'=>['required','accepted'],
@@ -277,8 +276,9 @@ final class CashController extends Controller
             'A proposta não possui saldo, data de corte e comprovativo completos.');
         abort_unless(!DB::table('Extracto')->where('account_id',$id)->exists(),409,
             'Há movimentos associados: bloqueada a validação de abertura.');
-        // O marcador é capturado no momento da validação; nenhuma escrituração
-        // vinculada a contas é permitida enquanto esta fase estiver activa.
+        // Os lançamentos exigem uma conta activa e bloqueiam a respectiva linha.
+        // Enquanto estiver pendente, esta conta não recebe movimentos pelo CIS.
+        // O marcador e a activação são gravados juntos na actualização condicional.
         $last=(int)(DB::table('Extracto')->max('Nr')??0);
         $changed=$writer->table('cis_cash_accounts')
             ->where('id',$id)->where('status','pendente_validacao')
@@ -293,8 +293,8 @@ final class CashController extends Controller
         return response()->json([
             'status'=>'activa','opening_extracto_nr'=>$last,
             'notice'=>$this->singleAdminOpening()
-                ?'Saldo inicial confirmado pelo administrador único com evidência documental. Não houve validação independente. Movimentações continuam bloqueadas.'
-                :'Saldo inicial validado por segundo responsável. Movimentações continuam bloqueadas.',
+                ?'Saldo inicial confirmado pelo administrador único com evidência documental. Não houve validação independente.'
+                :'Saldo inicial validado por segundo responsável.',
         ])->header('Cache-Control','no-store, private');
     }
 
