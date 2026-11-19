@@ -136,7 +136,7 @@ Acções:
 
 ## Centro de mensagens (menu «Mensagens», frmMessageCenter do VBA)
 
-- **Instalação na VPS (uma vez):** `bash deploy/install-message-center.sh`. Cria `cis_message_templates` (com 4 modelos iniciais) e `cis_message_log`.
+- **Instalação na VPS:** `bash deploy/install-message-center.sh`. Cria `cis_message_templates` e `cis_message_log`, com 4 modelos iniciais e os 5 modelos CAPTA (Cobrança Antecipada, Bom dia, Mensagem no próprio dia, Mensagem Vencida, Actualização de Dados). É idempotente e não substitui modelos editados.
 - **Modelos:** Novo / Editar / Guardar / Cancelar / Eliminar. Campos `{…}` com os nomes do VBA:
   - do contrato: `{Nome Completo}`, `{Nr do Contracto}`, `{Data de Cobrança}`, `{Valor a Pagar}`, `{Dias}`, `{-1*Dias}`, `{% de Juro}`, `{Quantia Creditada}`, `{Data de Inicio}`, `{Contacto}`, `{Nº de Cliente}`;
   - novos: `{Primeiro Nome}`, `{Valor em Dívida}`, `{Prestações Vencidas}`, `{Dias de Atraso}`, `{Data Final}`.

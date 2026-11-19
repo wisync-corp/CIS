@@ -19,7 +19,7 @@ final class MessageCenterController extends Controller
 {
     private const OPEN=['Pendente','Pagamento Atrasado'];
     private const FIELDS=[
-        'Nome Completo','Primeiro Nome','Nº de Cliente','Contacto','Nr do Contracto','Quantia Creditada','% de Juro',
+        'Nome Completo','Nome do Cliente','Primeiro Nome','Nº de Cliente','Contacto','Nr do Contracto','Quantia Creditada','% de Juro',
         'Data de Inicio','Data de Cobrança','Data Final','Valor a Pagar','Dias','-1*Dias','Valor em Dívida','Prestações Vencidas','Dias de Atraso',
     ];
     private const GROUPS=['todos','activos','inactivos','pendentes','atrasados'];
@@ -157,6 +157,7 @@ final class MessageCenterController extends Controller
         $owed=$open->sum(fn($r)=>(float)$r->{'Valor a Pagar'}+(float)($r->{'Valor de Multa'}??0));
         return [
             'Nome Completo'=>$name,
+            'Nome do Cliente'=>$name,
             'Primeiro Nome'=>explode(' ',$name)[0]??$name,
             'Nº de Cliente'=>(string)($client?->{'Numeração'}??$ref->{'Nº de Cliente'}),
             'Contacto'=>trim((string)($client?->Contacto??'')),
