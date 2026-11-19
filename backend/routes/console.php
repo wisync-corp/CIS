@@ -543,6 +543,22 @@ Artisan::command('cis:actualizar-contratos {--aplicar : Gravar o recálculo das 
     $this->line('Prestações elegíveis para recálculo: '.(clone $eligible)->count());
 
     if (!$apply) {
+        $rows = (clone $open)->join('Extracto', function ($join) {
+            $join->on('Extracto.Contracto', '=', 'Contractos.Nr do Contracto')
+                ->on('Extracto.Parcela', '=', 'Contractos.Nº da Parcela')
+                ->where('Extracto.Tipo de Movimento', 'Entradas');
+        })->orderByDesc('Extracto.Nr')->limit(50)->get([
+            'Extracto.Nr as movimento',
+            'Contractos.Nr do Contracto as contrato',
+            'Contractos.Nº da Parcela as parcela',
+            'Extracto.Data da Operação as data',
+            'Extracto.Valor as valor',
+            'Contractos.Valor a Pagar as previsto',
+        ]);
+        if ($rows->isNotEmpty()) {
+            $this->table(['Movimento', 'Contrato', 'Parcela', 'Data', 'Valor no Extracto', 'Valor na prestação'],
+                $rows->map(static fn ($row) => (array) $row)->all());
+        }
         return 0;
     }
 
@@ -564,3 +580,9 @@ Artisan::command('cis:actualizar-contratos {--aplicar : Gravar o recálculo das 
     $this->info('Prestações actualizadas: '.$updated);
     return 0;
 })->purpose('Recalcular prestações em aberto e identificar pagamentos a reconciliar com o Extracto');
+
+\Illuminate\Support\Facades\Schedule::command('cis:actualizar-contratos --aplicar')
+    ->dailyAt('00:10')
+    ->timezone('Africa/Maputo')
+    ->withoutOverlapping()
+    ->when(static fn () => \App\Services\CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED'));
