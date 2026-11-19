@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>CIS WhatsApp</title>
+<style>
+ body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#101828;margin:0;padding:18px;min-width:340px;max-width:560px}
+ h1{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:8px} h1 img{width:24px;height:24px}
+ p{margin:6px 0;color:#475467} label{display:block;font-weight:700;margin:14px 0 6px}
+ input{width:100%;box-sizing:border-box;font:inherit;padding:9px 10px;border:1px solid #d0d5dd;border-radius:8px}
+ button{margin-top:10px;font:inherit;font-weight:800;border:0;border-radius:8px;padding:9px 14px;background:#2e1a5e;color:#fff;cursor:pointer}
+ .ok{color:#0f7a3d;font-weight:700} .err{color:#b42318;font-weight:700} small{color:#667085}
+ ol{padding-left:18px;color:#475467;margin:8px 0}
+</style>
+</head>
+<body>
+ <h1><img src="icons/icon48.png" alt="">CIS WhatsApp</h1>
+ <p>Liga o CIS ao seu WhatsApp Web para enviar as mensagens preparadas no Centro de mensagens.</p>
+ <label for="origin">Endereço do CIS</label>
+ <input id="origin" placeholder="https://cis.exemplo.co.mz" autocomplete="url">
+ <small>O endereço que usa no navegador para abrir o CIS (sem caminho).</small><br>
+ <button id="save" type="button">Autorizar este endereço</button>
+ <p id="msg" role="status"></p>
+ <ol>
+  <li>Autorize o endereço do CIS (o navegador pede confirmação).</li>
+  <li>Recarregue a página do CIS (Ctrl+F5).</li>
+  <li>No Centro de mensagens aparece «Extensão CIS WhatsApp ligada».</li>
+ </ol>
+ <small>A extensão só actua no WhatsApp Web e no endereço do CIS autorizado. O envio usa a sessão do WhatsApp Web deste navegador.</small>
+ <script src="options.js"></script>
+</body>
+</html>

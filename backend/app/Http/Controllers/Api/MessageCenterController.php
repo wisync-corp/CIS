@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
  * - Modelos com marcadores {campo}; os nomes dos campos do VBA mantêm-se ({Nome Completo},
  *   {Nr do Contracto}, {Data de Cobrança}, {Valor a Pagar}, {Dias}…) e há campos novos calculados.
  * - O CIS NÃO envia mensagens: prepara o texto e o número; o operador abre o WhatsApp/SMS do
- *   seu dispositivo e confirma o envio. Cada abertura fica registada em cis_message_log.
+ *   seu dispositivo e confirma o envio, ou a extensão «CIS WhatsApp» envia pelo WhatsApp Web do
+ *   operador e devolve enviada/falhada. Tudo fica registado em cis_message_log.
  * - «Mandar para Todos»: grupos todos/activos/inactivos/pendentes/atrasados → fila de envio.
  */
 final class MessageCenterController extends Controller
@@ -275,7 +276,9 @@ final class MessageCenterController extends Controller
                 'contrato'=>['nullable','string','max:155'],
                 'cliente_id'=>['nullable','integer','min:1'],
                 'telefone'=>['nullable','string','max:40'],
-                'canal'=>['required','in:whatsapp,sms,copia'],
+                'canal'=>['required','in:whatsapp,whatsapp_web,sms,copia'],
+                'estado'=>['nullable','in:aberta,enviada,falhada'],
+                'detalhe'=>['nullable','string','max:255'],
                 'modelo_id'=>['nullable','integer','min:1'],
                 'grupo'=>['nullable','in:'.implode(',',self::GROUPS)],
                 'mensagem'=>['required','string','min:1','max:4000'],
@@ -283,6 +286,7 @@ final class MessageCenterController extends Controller
             $id=DB::table('cis_message_log')->insertGetId([
                 'contract_number'=>$d['contrato']??null,'client_id'=>$d['cliente_id']??null,
                 'phone'=>isset($d['telefone'])?self::phone($d['telefone']):null,'channel'=>$d['canal'],
+                'status'=>$d['estado']??($d['canal']==='copia'?null:'aberta'),'detail'=>$d['detalhe']??null,
                 'template_id'=>$d['modelo_id']??null,'group'=>$d['grupo']??null,'body'=>$d['mensagem'],
                 'sent_by'=>$request->user()->id,'created_at'=>now(),
             ]);
@@ -298,7 +302,7 @@ final class MessageCenterController extends Controller
             $n=trim((string)$request->validate(['contrato'=>['required','string','max:155']])['contrato']);
             $rows=DB::table('cis_message_log as l')->leftJoin('users as u','u.id','=','l.sent_by')
                 ->where('l.contract_number',$n)->orderByDesc('l.id')->limit(50)
-                ->get(['l.id','l.channel','l.phone','l.body','l.created_at','u.name as por']);
+                ->get(['l.id','l.channel','l.status','l.detail','l.phone','l.body','l.created_at','u.name as por']);
             return response()->json(['mensagens'=>$rows])->header('Cache-Control','no-store, private');
         });
     }
