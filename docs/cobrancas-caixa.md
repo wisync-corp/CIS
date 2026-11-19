@@ -191,3 +191,19 @@ A ponte activa-se em qualquer endereço específico autorizado, nunca em «todos
 - O envio só corre com o navegador aberto.
 - Os selectores do WhatsApp Web estão todos em `wa.js` (`SEL`); se o WhatsApp mudar a página, ajustam-se aí.
 - O WhatsApp não autoriza envio automatizado; o intervalo reduz o risco de bloqueio, mas não o elimina.
+
+**Imagens (extensão 1.2):**
+- Em Mensagens, «Anexar imagem» aceita JPG, PNG ou WebP até 5 MB.
+- A imagem vai com a mensagem ou com a fila toda, e o texto segue como legenda.
+- A extensão:
+  - cola a imagem na conversa e, se o WhatsApp não abrir a pré-visualização, larga-a sobre a conversa;
+  - preenche a legenda e carrega em Enviar no ecrã de pré-visualização;
+  - confirma quando a pré-visualização fecha e a imagem aparece na conversa.
+- A imagem não é guardada no servidor.
+
+**Registo de mensagens** (em Mensagens; e, no envio de um contrato, «Mensagens anteriores deste contrato»):
+- Filtros: datas (por defeito, hoje), estado (enviada, falhada ou aberta) e canal.
+- Totais por estado; o motivo das falhas; o texto aparece ao clicar na linha.
+- Actualiza-se sozinho quando a extensão devolve resultados.
+- Se um registo falhar, aparece um aviso no canto superior direito.
+- Se faltar a coluna de estado, o CIS avisa para correr `bash deploy/install-message-center.sh`.

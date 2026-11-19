@@ -78,6 +78,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('mensagens/preview',[\App\Http\Controllers\Api\MessageCenterController::class,'preview'])->middleware('throttle:120,1');
         Route::get('mensagens/destinatarios',[\App\Http\Controllers\Api\MessageCenterController::class,'destinatarios'])->middleware('throttle:20,1');
         Route::post('mensagens/registo',[\App\Http\Controllers\Api\MessageCenterController::class,'registo'])->middleware('throttle:240,1');
+        Route::get('mensagens/registos',[\App\Http\Controllers\Api\MessageCenterController::class,'registos'])->middleware('throttle:60,1');
         Route::get('mensagens/historico',[\App\Http\Controllers\Api\MessageCenterController::class,'historico'])->middleware('throttle:60,1');
         Route::get('extractos/evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'evidencia'])->middleware('throttle:20,1');
         Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');

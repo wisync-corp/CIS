@@ -283,14 +283,68 @@ final class MessageCenterController extends Controller
                 'grupo'=>['nullable','in:'.implode(',',self::GROUPS)],
                 'mensagem'=>['required','string','min:1','max:4000'],
             ]);
-            $id=DB::table('cis_message_log')->insertGetId([
+            $row=[
                 'contract_number'=>$d['contrato']??null,'client_id'=>$d['cliente_id']??null,
                 'phone'=>isset($d['telefone'])?self::phone($d['telefone']):null,'channel'=>$d['canal'],
-                'status'=>$d['estado']??($d['canal']==='copia'?null:'aberta'),'detail'=>$d['detalhe']??null,
                 'template_id'=>$d['modelo_id']??null,'group'=>$d['grupo']??null,'body'=>$d['mensagem'],
                 'sent_by'=>$request->user()->id,'created_at'=>now(),
+            ];
+            $hasStatus=\Illuminate\Support\Facades\Schema::hasColumn('cis_message_log','status');
+            if ($hasStatus) $row+=['status'=>$d['estado']??($d['canal']==='copia'?null:'aberta'),'detail'=>$d['detalhe']??null];
+            $id=DB::table('cis_message_log')->insertGetId($row);
+            return response()->json(['id'=>$id,'estado_registado'=>$hasStatus],201);
+        });
+    }
+
+    /** GET /cis/mensagens/registos : registo de mensagens (enviadas/falhadas/abertas) com filtros. */
+    public function registos(Request $request)
+    {
+        $this->admin($request);
+        return $this->guard(function () use ($request) {
+            $f=$request->validate([
+                'estado'=>['nullable','in:todos,enviada,falhada,aberta'],
+                'canal'=>['nullable','in:todos,whatsapp_web,whatsapp,sms,copia'],
+                'contrato'=>['nullable','string','max:155'],
+                'inicio'=>['nullable','date_format:Y-m-d'],
+                'fim'=>['nullable','date_format:Y-m-d'],
+                'page'=>['nullable','integer','min:1'],
             ]);
-            return response()->json(['id'=>$id],201);
+            $hasStatus=\Illuminate\Support\Facades\Schema::hasColumn('cis_message_log','status');
+            $q=DB::table('cis_message_log as l')->leftJoin('users as u','u.id','=','l.sent_by');
+            if (($f['estado']??'todos')!=='todos') {
+                abort_unless($hasStatus,503,'Falta actualizar o registo de mensagens: execute bash deploy/install-message-center.sh');
+                $q->where('l.status',$f['estado']);
+            }
+            if (($f['canal']??'todos')!=='todos') $q->where('l.channel',$f['canal']);
+            if (trim((string)($f['contrato']??''))!=='') $q->where('l.contract_number',trim($f['contrato']));
+            if ($f['inicio']??null) $q->where('l.created_at','>=',$f['inicio'].' 00:00:00');
+            if ($f['fim']??null) $q->where('l.created_at','<=',$f['fim'].' 23:59:59');
+            $tot=(clone $q)->selectRaw($hasStatus
+                ?"COUNT(*) n, SUM(l.status='enviada') enviadas, SUM(l.status='falhada') falhadas, SUM(l.status='aberta') abertas"
+                :"COUNT(*) n, 0 enviadas, 0 falhadas, COUNT(*) abertas")->first();
+            $page=max(1,(int)($f['page']??1));$per=30;
+            $cols=['l.id','l.contract_number','l.client_id','l.phone','l.channel','l.body','l.created_at','l.group','u.name as por'];
+            if ($hasStatus) { $cols[]='l.status'; $cols[]='l.detail'; }
+            $rows=$q->orderByDesc('l.id')->forPage($page,$per)->get($cols);
+            // Nome do cliente pelo contrato (legado, só leitura).
+            $names=[];
+            $nums=$rows->pluck('contract_number')->filter()->unique()->values()->all();
+            if ($nums) {
+                try {
+                    $names=DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$nums)
+                        ->selectRaw('`Nr do Contracto` AS n, MAX(`Nome do Cliente`) AS c')->groupBy('Nr do Contracto')->pluck('c','n')->all();
+                } catch (\Throwable $e) { report($e); }
+            }
+            return response()->json([
+                'linhas'=>$rows->map(fn($r)=>[
+                    'id'=>(int)$r->id,'data'=>(string)$r->created_at,'contrato'=>$r->contract_number,
+                    'cliente'=>$names[$r->contract_number]??null,'telefone'=>$r->phone,'canal'=>$r->channel,
+                    'estado'=>$r->status??'aberta','motivo'=>$r->detail??null,'grupo'=>$r->group,'por'=>$r->por,'mensagem'=>$r->body,
+                ])->values(),
+                'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>(int)$tot->n,
+                'totais'=>['enviadas'=>(int)$tot->enviadas,'falhadas'=>(int)$tot->falhadas,'abertas'=>(int)$tot->abertas],
+                'estado_disponivel'=>$hasStatus,
+            ])->header('Cache-Control','no-store, private');
         });
     }
 

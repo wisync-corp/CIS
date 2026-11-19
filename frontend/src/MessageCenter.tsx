@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff} from 'lucide-react';
-import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref} from './waBridge';
+import MessageLog from './MessageLog';
+import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref,type WaImage} from './waBridge';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Template={id:number;name:string;body:string;updated_at:string|null};
@@ -35,7 +36,8 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const ta=useRef<HTMLTextAreaElement>(null);
  const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
  const wa=waState();const [show,setShow]=useState(getShowPref());
- const [lastJob,setLastJob]=useState<string|null>(null);const [checking,setChecking]=useState(false);
+ const [lastJob,setLastJob]=useState<string|null>(null);
+ const [image,setImage]=useState<WaImage|null>(null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);
  const sendMode=!!contrato;
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
 
@@ -84,7 +86,8 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   catch(e){setError(e instanceof Error?e.message:'Não foi possível eliminar.');}finally{setBusy('');}
  }
  async function log(r:{contrato:string|null;cliente_id?:number|null;telefone:string|null;canal:'whatsapp'|'sms'|'copia';mensagem:string;grupo?:Group}){
-  try{await call('/cis/mensagens/registo',{method:'POST',body:JSON.stringify({...r,modelo_id:selId||null})});}catch{/* o registo não bloqueia o envio */}
+  try{await call('/cis/mensagens/registo',{method:'POST',body:JSON.stringify({...r,modelo_id:selId||null})});setLogKey(k=>k+1);}
+  catch(e){setError('A mensagem foi aberta, mas não ficou registada no CIS: '+(e instanceof Error?e.message:'erro'));}
  }
  async function sendOne(canal:'whatsapp'|'sms'|'copia'){
   if(!preview)return;setError('');
@@ -94,10 +97,16 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   await log({contrato:preview.contrato,telefone:preview.telefone,canal,mensagem:text});
   if(canal!=='copia')setNotice(canal==='whatsapp'?'Mensagem aberta no WhatsApp Web: carregue em Enviar nessa página.':'Mensagem aberta no SMS: confirme o envio.');
  }
+ function pickImage(f:File|undefined){
+  setError('');if(!f)return;
+  if(!/^image\/(jpeg|png|webp)$/.test(f.type)){setError('Imagem não suportada: use JPG, PNG ou WebP.');return;}
+  if(f.size>5*1024*1024){setError('Imagem demasiado grande (máximo 5 MB).');return;}
+  const rd=new FileReader();rd.onload=()=>setImage({name:f.name,type:f.type,dataUrl:String(rd.result)});rd.onerror=()=>setError('Não foi possível ler a imagem.');rd.readAsDataURL(f);
+ }
  function sendWeb(){
   if(!preview?.telefone||!text.trim())return;
   const id='c-'+preview.contrato+'-'+Date.now();setLastJob(id);setError('');
-  waSend([{id,phone:preview.telefone,text,meta:{contrato:preview.contrato,cliente:preview.cliente,modelo_id:selId||null}}],show);
+  waSend([{id,phone:preview.telefone,text,meta:{contrato:preview.contrato,cliente:preview.cliente,modelo_id:selId||null}}],show,image);
  }
  function sendQueueWeb(){
   if(!queue)return;const ts=Date.now();
@@ -105,7 +114,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   setQueue(next);
   const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:r.telefone!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:selId||null,grupo:group||null}}));
   if(!list.length){setNotice('Não há mensagens por enviar na fila.');return;}
-  waSend(list,show);
+  waSend(list,show,image);
  }
  async function loadQueue(){
   if(!group)return;setBusy('queue');setError('');setQueue(null);
@@ -153,6 +162,13 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
     <button type="button" className="check" onClick={()=>{setChecking(true);waCheck();setTimeout(()=>setChecking(false),1500);}} disabled={checking}>{checking?<><Loader2 size={13} className="spin"/> A verificar…</>:'Verificar novamente'}</button></>}
   </div>
 
+  <div className="cis-msg-image">
+   <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
+   {image?<><img src={image.dataUrl} alt="Imagem a enviar"/><span><b>{image.name}</b><small>{wa.available?'Vai com cada mensagem, com o texto como legenda.':'Só é enviada automaticamente com a extensão; sem ela, anexe-a no WhatsApp.'}</small></span>
+    <button type="button" onClick={()=>setImage(null)}><X size={13}/> Remover imagem</button></>
+   :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar imagem</button>}
+  </div>
+
   <label className="cis-msg-editor">{editing?'Texto do modelo':'Texto do modelo (clique em Editar para alterar)'}
    <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} readOnly={!editing} rows={6} className={editing?'':'locked'} placeholder="Escreva a mensagem e insira campos como {Nome Completo}"/></label>
   {editing&&<div className="cis-msg-tools">
@@ -197,7 +213,9 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    </>}
   </div>}
 
-  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'Sem a extensão, o CIS abre cada mensagem já escrita no WhatsApp Web (sempre no mesmo separador) e o envio é confirmado por si.'} Imagens não são enviadas automaticamente. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
+  <MessageLog token={token} contrato={contrato} refreshKey={logKey}/>
+
+  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'Sem a extensão, o CIS abre cada mensagem já escrita no WhatsApp Web (sempre no mesmo separador) e o envio é confirmado por si.'} Imagens (JPG/PNG/WebP até 5 MB) seguem com a extensão, com o texto como legenda. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{error}</div>}
   {notice&&!error&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
  </section>;

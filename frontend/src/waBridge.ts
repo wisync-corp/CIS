@@ -2,7 +2,8 @@
 // Vive fora dos ecrãs: o envio e os avisos continuam se o operador mudar de página.
 const API=import.meta.env.VITE_API_URL||'/api';
 
-export type WaJob={id:string;phone:string;text:string;meta:{contrato:string|null;cliente:string;cliente_id?:number|null;modelo_id?:number|''|null;grupo?:string|null}};
+export type WaJob={id:string;phone:string;text:string;meta:{contrato:string|null;cliente:string;cliente_id?:number|null;modelo_id?:number|''|null;grupo?:string|null;imagem?:string|null}};
+export type WaImage={name:string;type:string;dataUrl:string};
 export type WaResult={id:string;ok:boolean;detail:string|null;meta:WaJob['meta']|null};
 export type Toast={id:number;kind:'ok'|'erro'|'info'|'login';text:string;sticky?:boolean};
 type State={available:boolean;version:string|null;running:boolean;pendentes:number;aguardaLogin:boolean};
@@ -30,12 +31,16 @@ function post(msg:Record<string,unknown>){window.postMessage({...msg,source:'cis
 
 async function log(r:WaResult){
  if(!token||!r.meta)return;
- try{await fetch(API+'/cis/mensagens/registo',{method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+ try{const res=await fetch(API+'/cis/mensagens/registo',{method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
   body:JSON.stringify({contrato:r.meta.contrato,cliente_id:r.meta.cliente_id??null,telefone:jobs.get(r.id)?.phone??null,canal:'whatsapp_web',
-   estado:r.ok?'enviada':'falhada',detalhe:r.detail,modelo_id:r.meta.modelo_id||null,grupo:r.meta.grupo||null,mensagem:jobs.get(r.id)?.text??''})});}
- catch{/* o registo não bloqueia o envio */}
+   estado:r.ok?'enviada':'falhada',detalhe:r.detail,modelo_id:r.meta.modelo_id||null,grupo:r.meta.grupo||null,mensagem:jobs.get(r.id)?.text??''})});
+  if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error((j as {message?:string}).message||'HTTP '+res.status);}
+  const j=await res.json().catch(()=>({})) as {estado_registado?:boolean};
+  if(j.estado_registado===false&&!warnedStatus){warnedStatus=true;pushToast('erro','Registo sem estado enviada/falhada: na VPS execute bash deploy/install-message-center.sh',true);}}
+ catch(e){pushToast('erro',`Mensagem ${r.ok?'enviada':'não enviada'} para ${r.meta.cliente}, mas não ficou registada no CIS: ${e instanceof Error?e.message:'erro'}`,true);}
 }
 const jobs=new Map<string,WaJob>();
+let warnedStatus=false;
 let loginToast:number|null=null;
 
 if(typeof window!=='undefined'){
@@ -64,10 +69,10 @@ if(typeof window!=='undefined'){
  setTimeout(()=>post({type:'hello'}),300);
 }
 
-export function waSend(list:WaJob[],show:boolean){
- for(const j of list){jobs.set(j.id,j);results.set(j.id,'a_enviar');}
+export function waSend(list:WaJob[],show:boolean,image?:WaImage|null){
+ for(const j of list){jobs.set(j.id,{...j,meta:{...j.meta,imagem:image?.name??null}});results.set(j.id,'a_enviar');}
  emit();
- post({type:'send',show,minGap:8,maxGap:18,jobs:list.map(j=>({id:j.id,phone:j.phone,text:j.text,meta:j.meta}))});
+ post({type:'send',show,minGap:8,maxGap:18,image:image??null,jobs:list.map(j=>({id:j.id,phone:j.phone,text:j.text,meta:j.meta}))});
  if(!state.running)pushToast('info',list.length>1?`A enviar ${list.length} mensagens pelo WhatsApp Web…`:'A enviar pelo WhatsApp Web…');
 }
 export function waStop(){post({type:'stop'});}
