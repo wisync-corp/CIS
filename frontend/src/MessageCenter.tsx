@@ -16,7 +16,10 @@ const GROUPS:{id:Group;label:string;hint:string}[]=[
 ];
 const EMOJIS=['😊','🙏','👍','✅','⚠️','📅','💰','📞','📌','🔔','❗','🤝','👋','💳','🏦','📄'];
 const situ=(s:string)=>s==='atrasado'?'Pagamento atrasado':s==='pendente'?'Pendente':'Finalizado';
-const waUrl=(tel:string,msg:string)=>'https://wa.me/'+tel+'?text='+encodeURIComponent(msg);
+// Directo no WhatsApp Web: o wa.me passa pela página de partilha («Open app») e estraga alguns emojis.
+const waUrl=(tel:string,msg:string)=>'https://web.whatsapp.com/send?phone='+tel+'&text='+encodeURIComponent(msg);
+// Reutiliza sempre o mesmo separador do WhatsApp Web (evita «WhatsApp aberto noutra janela»).
+function openWa(url:string){const w=window.open(url,'cis-whatsapp-web');if(w){try{w.opener=null;}catch{/* já noutro domínio */}w.focus();}}
 const smsUrl=(tel:string,msg:string)=>'sms:+'+tel+'?body='+encodeURIComponent(msg);
 
 export default function MessageCenter({token,contrato,onClose}:{token:string;contrato?:string;onClose?:()=>void}){
@@ -87,9 +90,9 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   if(!preview)return;setError('');
   if(canal==='copia'){try{await navigator.clipboard.writeText(text);setNotice('Mensagem copiada.');}catch{setError('Não foi possível copiar automaticamente; seleccione o texto e copie.');return;}}
   else if(!preview.telefone){setError('Cliente sem contacto válido.');return;}
-  else window.open(canal==='whatsapp'?waUrl(preview.telefone,text):smsUrl(preview.telefone,text),'_blank','noopener');
+  else if(canal==='whatsapp')openWa(waUrl(preview.telefone,text));else window.open(smsUrl(preview.telefone,text),'_blank','noopener');
   await log({contrato:preview.contrato,telefone:preview.telefone,canal,mensagem:text});
-  if(canal!=='copia')setNotice('Mensagem aberta no '+(canal==='whatsapp'?'WhatsApp':'SMS')+'. Confirme o envio na aplicação.');
+  if(canal!=='copia')setNotice(canal==='whatsapp'?'Mensagem aberta no WhatsApp Web: carregue em Enviar nessa página.':'Mensagem aberta no SMS: confirme o envio.');
  }
  function sendWeb(){
   if(!preview?.telefone||!text.trim())return;
@@ -113,7 +116,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  }
  async function openRecipient(i:number){
   if(!queue)return;const r=queue[i];if(!r.telefone)return;
-  window.open(waUrl(r.telefone,r.mensagem),'_blank','noopener');
+  openWa(waUrl(r.telefone,r.mensagem));
   setQueue(q=>q&&q.map((x,k)=>k===i?{...x,estado:'aberta'}:x));
   await log({contrato:r.contrato,cliente_id:r.cliente_id,telefone:r.telefone,canal:'whatsapp',mensagem:r.mensagem,grupo:group||undefined});
  }
@@ -160,7 +163,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/>
    <div className="cis-msg-btns">
     {wa.available&&<button type="button" className="primary" onClick={sendWeb} disabled={!preview?.telefone||!text.trim()||(!!lastJob&&jobStatus(lastJob)==='a_enviar')}>{lastJob&&jobStatus(lastJob)==='a_enviar'?<><Loader2 size={14} className="spin"/> A enviar…</>:<><Send size={14}/> Enviar pelo WhatsApp Web</>}</button>}
-    <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><Send size={14}/> {wa.available?'Abrir no WhatsApp':'Enviar pelo WhatsApp'}</button>
+    <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><Send size={14}/> {wa.available?'Abrir no WhatsApp Web':'Abrir no WhatsApp Web'}</button>
     <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
     <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
     <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Cliente sem contacto registado.':''}</small>
@@ -191,7 +194,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
    </>}
   </div>}
 
-  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'O CIS prepara cada mensagem e abre-a no WhatsApp do seu dispositivo; o envio é confirmado por si.'} Imagens não são enviadas automaticamente. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
+  <p className="cis-msg-note"><ImageIcon size={14}/> {wa.available?'Com a extensão, o CIS envia pelo seu WhatsApp Web, uma mensagem de cada vez, com intervalo de 8–18 segundos, e confirma o visto de enviada; os avisos aparecem no canto superior direito.':'Sem a extensão, o CIS abre cada mensagem já escrita no WhatsApp Web (sempre no mesmo separador) e o envio é confirmado por si.'} Imagens não são enviadas automaticamente. Cada mensagem fica registada no CIS (enviada/falhada/aberta).</p>
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{error}</div>}
   {notice&&!error&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
  </section>;
