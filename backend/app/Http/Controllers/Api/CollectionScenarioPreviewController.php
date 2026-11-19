@@ -41,10 +41,14 @@ final class CollectionScenarioPreviewController extends Controller
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'Consulta financeira privada não autorizada.');
         $d=$request->validate([
-            'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato,prorrogar_15_30'],
+            'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato,prorrogar_15_30,mora_diaria'],
             'prazo_origem_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:15'],
             'prazo_destino_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:30'],
             'tratamento_juros'=>['nullable','in:manter,recalcular'],
+            'data_referencia'=>['required_if:operacao,mora_diaria','nullable','date_format:Y-m-d'],
+            'taxa_mora_diaria'=>['required_if:operacao,mora_diaria','nullable','numeric','min:0','max:100','regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
+            'carencia_dias'=>['required_if:operacao,mora_diaria','nullable','integer','min:0'],
+            'tecto_mora'=>['required_if:operacao,mora_diaria','nullable','string','max:15'],
             'valor_pago'=>['required_if:operacao,parcial','nullable','string','max:20'],
             'data_pagamento'=>['required_if:operacao,actualizar_data','nullable','date_format:Y-m-d'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
@@ -68,6 +72,42 @@ final class CollectionScenarioPreviewController extends Controller
             'movimento_registado'=>false,
         ];
         $supported=['Pendente','Pagamento Atrasado'];
+        if ($operation === 'mora_diaria') {
+            abort_unless(in_array($r->Estado, $supported, true)
+                && !in_array($r->{'Estado do Contrato'}, ['Finalizado', 'Cancelado', 'Anulado'], true),
+                409, 'A mora só pode ser simulada em prestações em aberto.');
+            $hasPayments = $db->table('Extracto')->where('Contracto', $numero)
+                ->where('Parcela', (string) $r->{'Nº da Parcela'})
+                ->where('Tipo de Movimento', 'Entradas')->exists();
+            abort_if($hasPayments || $r->{'Data de Pagamento'} !== null
+                || self::cents($r->{'Valor Pago'} ?? '0', 'valor_pago') > 0, 409,
+                'A prestação tem indícios de pagamento. É necessário identificar o capital em aberto por data.');
+            $due = (string) ($r->{'Data de Cobrança'} ?? '');
+            abort_unless(preg_match('/^\d{4}-\d{2}-\d{2}$/D', $due) === 1
+                && checkdate((int) substr($due, 5, 2), (int) substr($due, 8, 2), (int) substr($due, 0, 4)),
+                409, 'Vencimento inválido ou em falta.');
+            $reference = \Carbon\CarbonImmutable::parse($d['data_referencia'], 'Africa/Maputo');
+            $lateDays = max(0, (int) \Carbon\CarbonImmutable::parse($due, 'Africa/Maputo')->diffInDays($reference, false));
+            $chargeableDays = max(0, $lateDays - (int) $d['carencia_dias']);
+            $variable = in_array(trim((string) $r->{'Tipo de Juro'}), ['Variável', 'Variavel'], true);
+            $principal = self::cents(($variable ? $r->Capital : $r->{'Amortização'}) ?? '0', 'capital');
+            abort_unless($principal > 0, 409, 'A prestação não tem capital identificável para o cálculo.');
+            $cap = self::cents($d['tecto_mora'], 'tecto_mora');
+            $uncapped = round($principal * ((float) $d['taxa_mora_diaria'] / 100) * $chargeableDays);
+            $fine = (int) min($cap, $uncapped);
+            return response()->json($base + [
+                'data_referencia' => $d['data_referencia'],
+                'data_vencimento' => $due,
+                'capital_vencido' => self::fmt($lateDays > 0 ? $principal : 0),
+                'taxa_diaria_percentual' => (string) $d['taxa_mora_diaria'],
+                'dias_atraso' => $lateDays,
+                'carencia_dias' => (int) $d['carencia_dias'],
+                'dias_sujeitos_a_mora' => $chargeableDays,
+                'tecto_mora' => self::fmt($cap),
+                'mora' => self::fmt($fine),
+                'limitada_pelo_tecto' => $uncapped > $cap,
+            ])->header('Cache-Control', 'no-store, private');
+        }
         if ($operation==='prorrogar_15_30') {
             abort_unless(in_array($r->Estado,$supported,true),409,'Não é possível alterar o prazo de uma prestação liquidada.');
             $contractRows=$db->table('Contractos')->where('Nr do Contracto',$numero)->limit(501)->get();
