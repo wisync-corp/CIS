@@ -31,6 +31,10 @@
   }
 
   const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  // Texto sem formatação do WhatsApp, emojis e espaços, para comparar o enviado com o mostrado.
+  const plain = s => (s || '').normalize('NFC')
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0F\u200D\u20E3]/gu, '')
+    .replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
   async function run(job) {
     // 1) Sessão: esperar pela página principal ou pelo código QR.
@@ -53,26 +57,35 @@
     }
 
     // 3) Enviar.
-    const before = qa(SEL.outgoing).length;
+    const existing = new Set(qa(SEL.outgoing));
     const btn = await waitFor(() => { const b = q(SEL.send); return b ? (b.closest('button') || b) : null; }, 10000);
     if (!btn) return {status: 'error', detail: 'Botão Enviar não encontrado.'};
     btn.click();
 
-    // 4) Confirmar: nova mensagem enviada, com o início do texto, sem o relógio de pendente.
-    const probe = norm(job.text).slice(0, 25);
-    const sent = await waitFor(() => {
-      const outs = qa(SEL.outgoing);
-      if (outs.length <= before) return null;
-      const last = outs[outs.length - 1];
-      if (probe && !norm(last.textContent).includes(probe.slice(0, 15))) return null;
-      if (last.querySelector('span[data-icon="msg-time"]')) return null; // ainda a enviar
-      if (last.querySelector('span[data-icon^="msg-"]') || last.querySelector('[data-icon*="check"]')) return 'ok';
-      return null;
-    }, 45000);
-    if (sent) return {status: 'sent'};
-    return qa(SEL.outgoing).length > before
-      ? {status: 'sent', detail: 'Enviada; confirmação do visto ainda pendente.'}
-      : {status: 'error', detail: 'A mensagem não apareceu na conversa.'};
+    // 4) Confirmar. O WhatsApp mostra *negrito*/_itálico_ sem os símbolos e os emojis como imagens,
+    //    por isso compara-se só o texto «simples» (letras, números, pontuação básica).
+    const want = plain(job.text).slice(0, 40);
+    const findMine = () => {
+      const outs = qa(SEL.outgoing).slice(-6).reverse();
+      return outs.find(el => {
+        const got = plain(el.innerText || el.textContent);
+        return got && (got.includes(want.slice(0, 25)) || (!existing.has(el) && want.startsWith(got.slice(0, 25))));
+      }) || null;
+    };
+    const composeEmpty = () => { const c = q(SEL.compose); return !c || norm(c.textContent) === ''; };
+
+    // O WhatsApp aceitou o envio quando a caixa de escrita esvazia ou a mensagem aparece.
+    const accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 15000);
+    if (!accepted) return {status: 'error', detail: 'O texto ficou na caixa de escrita: a mensagem não saiu.'};
+
+    const mine = await waitFor(findMine, 15000);
+    if (!mine) return {status: 'sent', detail: 'Enviada (confirmação visual não encontrada na conversa).'};
+    const delivered = await waitFor(() => {
+      const el = findMine() || mine;
+      if (el.querySelector('span[data-icon="msg-time"], [data-icon*="clock" i]')) return null; // ainda a enviar
+      return true;
+    }, 30000);
+    return delivered ? {status: 'sent'} : {status: 'sent', detail: 'Enviada; a aguardar rede (relógio no WhatsApp).'};
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
