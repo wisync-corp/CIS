@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\CashAccountLedger;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -17,16 +18,33 @@ use Illuminate\Support\Facades\Schema;
  *    renovação no VBA não preenchem Capital/Amortização; esta regra serve VBA e CIS);
  *  - capital recuperado = Valor Pago − Juros − Multa (nunca negativo).
  * Caixa: saldo das contas activas com a MESMA regra da página Caixa.
- * Entradas/saídas do mês: Extracto, excluindo transferências internas entre contas.
+ * Entradas/saídas do período: Extracto, excluindo transferências internas entre contas.
+ *
+ * Período (query ?mes=1..12|todos&ano=AAAA|todos; por defeito mês e ano actuais):
+ * aplica-se aos recebimentos (Data de Pagamento) e aos movimentos da Caixa
+ * (Data da Operação). Carteira, vencidas e saldos são sempre a fotografia de hoje.
  */
 final class OverviewController extends Controller
 {
-    public function __invoke()
+    public function __invoke(Request $request)
     {
         $tz='Africa/Maputo';
         $today=now($tz)->toDateString();
-        $monthStart=now($tz)->startOfMonth()->toDateString();
+        $q=$request->validate([
+            'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
+            'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
+        ]);
+        $mes=$q['mes']??(string)now($tz)->month;
+        $ano=$q['ano']??(string)now($tz)->year;
         $legacy=DB::connection('mysql_legacy');
+        // Condição de período sobre uma coluna de data (parâmetros vinculados).
+        $period=function (string $col) use ($mes,$ano): array {
+            $sql=[];$b=[];
+            if ($ano!=='todos') { $sql[]="YEAR(`$col`) = ?"; $b[]=(int)$ano; }
+            if ($mes!=='todos') { $sql[]="MONTH(`$col`) = ?"; $b[]=(int)$mes; }
+            return [$sql?implode(' AND ',$sql):'1=1',$b];
+        };
+        [$pp,$pb]=$period('Data de Pagamento');
 
         $pending="`Estado` IN ('Pendente','Pagamento Atrasado')";
         $paid="`Estado` IN ('Pago','Pago em Atraso','Renovado')";
@@ -39,15 +57,16 @@ final class OverviewController extends Controller
             SUM(CASE WHEN $pending AND `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS vencidas,
             ROUND(SUM(CASE WHEN $pending AND `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS vencidas_valor,
             ROUND(SUM(CASE WHEN $paid THEN COALESCE(`Valor de Juros`,0) ELSE 0 END),2) AS juros,
-            ROUND(SUM(CASE WHEN $paid AND `Data de Pagamento` >= ? THEN COALESCE(`Valor de Juros`,0) ELSE 0 END),2) AS juros_mes,
+            ROUND(SUM(CASE WHEN $paid AND $pp THEN COALESCE(`Valor de Juros`,0) ELSE 0 END),2) AS juros_mes,
             ROUND(SUM(CASE WHEN $paid THEN COALESCE(`Valor de Multa`,0) ELSE 0 END),2) AS multas,
-            ROUND(SUM(CASE WHEN $paid AND `Data de Pagamento` >= ? THEN COALESCE(`Valor de Multa`,0) ELSE 0 END),2) AS multas_mes,
+            ROUND(SUM(CASE WHEN $paid AND $pp THEN COALESCE(`Valor de Multa`,0) ELSE 0 END),2) AS multas_mes,
             ROUND(SUM(CASE WHEN $paid THEN $recovered ELSE 0 END),2) AS capital_recuperado,
+            ROUND(SUM(CASE WHEN $paid AND $pp THEN $recovered ELSE 0 END),2) AS capital_recuperado_mes,
             ROUND(SUM(CASE WHEN $paid THEN COALESCE(`Valor Pago`,0) ELSE 0 END),2) AS recebido,
-            ROUND(SUM(CASE WHEN $paid AND `Data de Pagamento` >= ? THEN COALESCE(`Valor Pago`,0) ELSE 0 END),2) AS recebido_mes,
+            ROUND(SUM(CASE WHEN $paid AND $pp THEN COALESCE(`Valor Pago`,0) ELSE 0 END),2) AS recebido_mes,
             COUNT(DISTINCT CASE WHEN $pending THEN `Nr do Contracto` END) AS contratos_activos,
             COUNT(DISTINCT CASE WHEN $pending AND `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_em_atraso
-        ",[$today,$today,$monthStart,$monthStart,$monthStart,$today])->first();
+        ",array_merge([$today,$today],$pb,$pb,$pb,$pb,[$today]))->first();
 
         // Caixa: saldos das contas activas (mesma regra da página Caixa).
         $cash=['disponivel'=>false,'saldo_total'=>null,'contas'=>[],'entradas_mes'=>null,'saidas_mes'=>null,'desembolsos_mes'=>null];
@@ -70,7 +89,7 @@ final class OverviewController extends Controller
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' AND NOT $internal THEN Valor ELSE 0 END),2) AS entradas,
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Saídas' AND NOT $internal THEN Valor ELSE 0 END),2) AS saidas,
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Saídas' AND `Descrição` LIKE '%Desembolso%' THEN Valor ELSE 0 END),2) AS desembolsos
-            ")->where('Data da Operação','>=',$monthStart)->where('Data da Operação','<=',$today)->first();
+            ")->whereRaw($period('Data da Operação')[0],$period('Data da Operação')[1])->where('Data da Operação','<=',$today)->first();
             $cash['entradas_mes']=$this->money($m->entradas);
             $cash['saidas_mes']=$this->money($m->saidas);
             $cash['desembolsos_mes']=$this->money($m->desembolsos);
@@ -79,6 +98,7 @@ final class OverviewController extends Controller
         return response()->json([
             'actualizado_em'=>now($tz)->format('Y-m-d H:i'),
             'mes'=>now($tz)->format('Y-m'),
+            'periodo'=>['mes'=>$mes,'ano'=>$ano,'anos'=>$this->years($legacy)],
             'carteira'=>[
                 'capital_em_carteira'=>$this->money($p->capital_carteira),
                 'valor_a_receber'=>$this->money($p->a_receber),
@@ -92,11 +112,27 @@ final class OverviewController extends Controller
                 'juros'=>$this->money($p->juros),'juros_mes'=>$this->money($p->juros_mes),
                 'multas'=>$this->money($p->multas),'multas_mes'=>$this->money($p->multas_mes),
                 'capital_recuperado'=>$this->money($p->capital_recuperado),
+                'capital_recuperado_mes'=>$this->money($p->capital_recuperado_mes),
                 'total_recebido'=>$this->money($p->recebido),'recebido_mes'=>$this->money($p->recebido_mes),
             ],
             'caixa'=>$cash,
             'nota'=>'Valores do registo de prestações (Contractos) e do Extracto. Pagamentos parciais do VBA contam os juros da linha paga.',
         ])->header('Cache-Control','no-store, private');
+    }
+
+    /** Anos com pagamentos ou movimentos, mais o ano actual (para o filtro). */
+    private function years($legacy): array
+    {
+        $y=$legacy->table('Contractos')->whereNotNull('Data de Pagamento')
+            ->selectRaw('DISTINCT YEAR(`Data de Pagamento`) AS y')->pluck('y')->all();
+        try {
+            $y=array_merge($y,DB::table('Extracto')->whereNotNull('Data da Operação')
+                ->selectRaw('DISTINCT YEAR(`Data da Operação`) AS y')->pluck('y')->all());
+        } catch (\Throwable) {}
+        $y[]=(int)now('Africa/Maputo')->year;
+        $y=array_values(array_unique(array_filter(array_map('intval',$y),fn($v)=>$v>=1990&&$v<=2100)));
+        rsort($y);
+        return $y;
     }
 
     private function money(mixed $v): string

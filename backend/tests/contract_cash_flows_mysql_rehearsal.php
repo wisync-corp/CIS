@@ -210,7 +210,7 @@ $o2=data($open->store(req('/x',$base+['conta_id'=>$banco,'idempotency_key'=>$k],
 ok(($o2['repetido']??false)===true && $o2['numero']===$n && $snap()===$s,'repetição do desembolso: devolve o mesmo contrato, nada duplicado');
 
 echo "== Indicadores da Visão geral (SQL real)\n";
-$ov=data((new \App\Http\Controllers\Api\OverviewController())());
+$ov=data((new \App\Http\Controllers\Api\OverviewController())(Request::create('/x','GET')));
 // Pagas: C-0100 (1150,50; juros 150,50) e C-0101 (2880; juros 800; multa 80).
 ok($ov['recebimentos']['juros']==='950.50' && $ov['recebimentos']['multas']==='80.00','juros 950,50 e multas 80,00 recebidos');
 ok($ov['recebimentos']['total_recebido']==='4030.50' && $ov['recebimentos']['capital_recuperado']==='3000.00','recebido 4030,50 = capital 3000 + juros + multa');
@@ -220,7 +220,7 @@ ok((float)$ov['carteira']['capital_em_carteira']>=5000,'capital em carteira incl
 ok($ov['caixa']['disponivel']===true && $ov['caixa']['saldo_total']==='21130.50','saldo da Caixa = 1250,50 + 19880,00');
 ok($ov['caixa']['entradas_mes']==='4030.50' && $ov['caixa']['desembolsos_mes']==='3000.00','entradas 4030,50 e desembolsos 3000,00 no mês');
 $db->table('Contractos')->where('Ordem',$dupe)->update(['Data de Cobrança'=>now($tz)->subDays(3)->toDateString()]);
-$ov=data((new \App\Http\Controllers\Api\OverviewController())());
+$ov=data((new \App\Http\Controllers\Api\OverviewController())(Request::create('/x','GET')));
 ok($ov['carteira']['prestacoes_vencidas']===1 && $ov['carteira']['valor_vencido']==='1150.50' && $ov['carteira']['contratos_em_atraso']===1,'prestação com vencimento passado conta como vencida (1150,50)');
 
 echo "== Lista de contratos: capital, prestação a pagar e situação\n";
@@ -306,6 +306,21 @@ $pr=$db->table('Contractos')->where('Ordem',$bd)->first();
 $ex=$db->table('Extracto')->where('Nr',$r['extracto_nr'])->first();
 ok($pr->{'Data de Pagamento'}===now($tz)->subDays(2)->toDateString() && substr((string)$ex->{'Data da Operação'},0,10)===now($tz)->subDays(2)->toDateString()
     && $pr->Estado==='Pago','pagamento com data passada gravado nessa data (contrato e Extracto)');
+
+
+echo "== Visão geral: filtro de mês e ano\n";
+$ov=new \App\Http\Controllers\Api\OverviewController();
+$get=fn(array $q)=>data($ov(Request::create('/x','GET',$q)));
+$all=$get(['mes'=>'todos','ano'=>'todos']);
+ok($all['recebimentos']['recebido_mes']===$all['recebimentos']['total_recebido'] && $all['periodo']['mes']==='todos','Todos/Todos = total geral');
+$def=$get([]);
+ok($def['periodo']['mes']===(string)now($tz)->month && $def['periodo']['ano']===(string)now($tz)->year && in_array((int)now($tz)->year,$def['periodo']['anos'],true),'por defeito: mês e ano actuais');
+$expM=(float)$db->table('Contractos')->whereIn('Estado',['Pago','Pago em Atraso','Renovado'])
+    ->whereYear('Data de Pagamento',now($tz)->year)->whereMonth('Data de Pagamento',now($tz)->month)->sum('Valor Pago');
+ok(abs((float)$def['recebimentos']['recebido_mes']-$expM)<0.01,'recebido no mês actual confere com a base');
+$py=$get(['mes'=>'todos','ano'=>(string)now($tz)->year]);
+ok((float)$py['recebimentos']['recebido_mes']>=(float)$def['recebimentos']['recebido_mes'],'ano inteiro inclui o mês');
+ok($err(fn()=>$ov(Request::create('/x','GET',['mes'=>'13'])))===422,'mês inválido recusado');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
