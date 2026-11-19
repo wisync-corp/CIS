@@ -332,7 +332,7 @@ final class ExtractoController extends Controller
             return response()->json(['contratos'=>$list->values()]);
         }
         $term=trim((string)($d['termo']??''));
-        abort_if(mb_strlen($term)<2,422,'Escreva pelo menos 2 letras do nome do cliente.');
+        abort_if(mb_strlen($term)<2,422,'Escreva pelo menos 2 letras do nome do mutuário.');
         $names=$db->table('Contractos')->where('Nome do Cliente','like','%'.addcslashes($term,'%_\\').'%')
             ->selectRaw('`Nome do Cliente` AS nome, MAX(`Nº de Cliente`) AS id, COUNT(DISTINCT `Nr do Contracto`) AS contratos')
             ->groupBy('Nome do Cliente')->orderBy('Nome do Cliente')->limit(15)->get();
@@ -348,12 +348,12 @@ final class ExtractoController extends Controller
     private function evidenciaImpl(Request $request)
     {
         $f=$this->filters($request);
-        abort_if($f['cliente']==='' && $f['contrato']==='',422,'Escolha o cliente ou o contrato para gerar o extracto.');
+        abort_if($f['cliente']==='' && $f['contrato']==='',422,'Escolha o mutuário ou o contrato para gerar o extracto.');
         $db=DB::connection('mysql_legacy');
         $today=$this->today();
         // Evidência completa: todas as prestações (sem filtro de estado) no intervalo escolhido.
         [$rows,$tot]=$this->summarise($this->clientRows($db,$f),$today,'todos');
-        abort_if(!$rows,404,'Sem prestações para este cliente/contrato no período escolhido.');
+        abort_if(!$rows,404,'Sem prestações para este mutuário/contrato no período escolhido.');
 
         $names=array_values(array_unique(array_map(fn($r)=>$r['cliente'],$rows)));
         $ids=array_values(array_unique(array_filter(array_map(fn($r)=>$r['cliente_id'],$rows))));
@@ -402,7 +402,7 @@ final class ExtractoController extends Controller
 
         $user=$request->user();
         $doc=[
-            'titulo'=>'Extracto de conta do cliente',
+            'titulo'=>'Extracto de conta do mutuário',
             'emitido_em'=>now('Africa/Maputo')->format('Y-m-d H:i'),
             'emitido_por'=>$user?->name,
             'periodo'=>['inicio'=>$f['inicio']??null,'fim'=>$f['fim']??null],

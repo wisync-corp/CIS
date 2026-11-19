@@ -264,11 +264,11 @@ As Definições do administrador têm uma lista lateral (como nos Relatórios): 
 
 ## Glossário (linguagem de actuação)
 
-Os nomes que o utilizador vê seguem o glossário de microcrédito (ver `frontend/src/glossario.ts` e Definições › Glossário). Só muda o texto: as colunas e os valores gravados na base (ex.: `Valor de Multa`, `Pagamento Atrasado`) mantêm-se.
+Os nomes que o utilizador vê (ecrãs, documentos, relatórios e mensagens de erro da API) seguem o glossário de microcrédito (ver `frontend/src/glossario.ts` e Definições › Glossário). Só muda o texto: as colunas e os valores gravados na base (ex.: `Valor de Multa`, `Pagamento Atrasado`) mantêm-se.
 
 | Antes | Agora |
 |---|---|
-| Cliente (no contrato) | Mutuário |
+| Cliente / Clientes (menu, cadastro, contratos, relatórios, mensagens) | Mutuário / Mutuários |
 | Quantia creditada / Total creditado | Capital desembolsado |
 | Valor a pagar | Valor da prestação |
 | Parcela | Prestação |

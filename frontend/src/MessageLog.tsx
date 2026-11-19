@@ -41,7 +41,7 @@ export default function MessageLog({token,contrato,refreshKey=0}:{token:string;c
   {data&&!data.estado_disponivel&&<div className="cis-table-error" role="alert"><AlertCircle size={16}/> O registo ainda não guarda o estado (enviada/falhada). Na VPS execute: <code>bash deploy/install-message-center.sh</code></div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={16}/>{error}</div>}
   {data&&(data.total_linhas===0?<p className="cis-msg-log-empty">Sem mensagens registadas {contrato?'para este contrato':'no período escolhido'}.</p>:<>
-   <div className="cis-table-scroll"><table><thead><tr><th>Data</th><th>Cliente</th><th>Contrato</th><th>Número</th><th>Canal</th><th>Estado</th><th>Utilizador</th></tr></thead>
+   <div className="cis-table-scroll"><table><thead><tr><th>Data</th><th>Mutuário</th><th>Contrato</th><th>Número</th><th>Canal</th><th>Estado</th><th>Utilizador</th></tr></thead>
     <tbody>{data.linhas.map(r=><Fragment key={r.id}>
      <tr className="cis-extracto-row" tabIndex={0} onClick={()=>setOpen(o=>o===r.id?null:r.id)} onKeyDown={e=>{if(e.key==='Enter')setOpen(o=>o===r.id?null:r.id);}} title="Ver o texto da mensagem">
       <td>{dt(r.data)}</td><td>{r.cliente??'—'}</td><td>{r.contrato??'—'}</td><td>{r.telefone?'+'+r.telefone:'—'}</td><td>{CANAL[r.canal]??r.canal}</td>

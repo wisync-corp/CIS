@@ -53,7 +53,7 @@ export default function ClientSecondaryInfo({id,token,onClose}:{id:number;token:
  const hasThirdParty=Boolean(form.pessoa_referencia_nome.trim()||form.pessoa_referencia_contacto.trim());
  return <div className="cis-edit-backdrop" role="presentation">
   <section className="cis-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="cis-secondary-title">
-   <div className="cis-secondary-title"><h3 id="cis-secondary-title"><ShieldCheck size={20}/> Informações complementares · Cliente #{id}</h3><button type="button" onClick={onClose} aria-label="Fechar"><X size={19}/></button></div>
+   <div className="cis-secondary-title"><h3 id="cis-secondary-title"><ShieldCheck size={20}/> Informações complementares · Mutuário #{id}</h3><button type="button" onClick={onClose} aria-label="Fechar"><X size={19}/></button></div>
    <p>Dados adicionais de contacto e verificação. A morada, contacto principal, BI e outros dados existentes não são repetidos.</p>
    <form onSubmit={save}>
     {fields.map(([key,label])=><label key={key}>{label}<input

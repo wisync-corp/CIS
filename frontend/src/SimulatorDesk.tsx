@@ -48,9 +48,9 @@ export default function SimulatorDesk({token}:{token:string}){
   finally{setBusy(false);}
  }
  return <section className="cis-simulator">
-  <header className="cis-simulator-hero"><div><span><Calculator size={16}/> CAPTA · FERRAMENTAS</span><h2>Simulador financeiro</h2><p>Faça cálculos independentes de qualquer contrato, cliente ou prestação.</p></div>
+  <header className="cis-simulator-hero"><div><span><Calculator size={16}/> CAPTA · FERRAMENTAS</span><h2>Simulador financeiro</h2><p>Faça cálculos independentes de qualquer contrato, mutuário ou prestação.</p></div>
    <span className="cis-simulator-readonly"><ShieldCheck size={16}/> Apenas simulação</span></header>
-  <div className="cis-simulator-intro"><Info size={18}/><div><strong>Calculadora genérica</strong><p>Utiliza as faixas de juros do sistema e as regras de prazo identificadas no formulário Parcelas.frm. Nenhuma simulação cria um contrato, factura, prestação, cobrança ou lançamento financeiro.</p></div></div>
+  <div className="cis-simulator-intro"><Info size={18}/><div><strong>Calculadora genérica</strong><p>Utiliza as faixas de juros do sistema e as regras de prazo do sistema. Nenhuma simulação cria um contrato, factura, prestação, cobrança ou lançamento financeiro.</p></div></div>
   <div className="cis-simulator-layout">
    <form className="cis-simulator-form" onSubmit={e=>void calculate(e)}>
     <div className="cis-simulator-panel-title"><span>01</span><div><h3>Parâmetros do cálculo</h3><p>Introduza livremente os valores que pretende analisar.</p></div></div>

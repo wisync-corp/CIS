@@ -101,7 +101,7 @@ final class ContractCollectionController extends Controller
         }
         abort_unless($baseC>0,409,'Valor a pagar inválido nesta prestação.');
         $total=$baseC+$fineC;
-        $avisos[]='Liquidação total. Multa opcional sobre os juros (Parcelas.frm).';
+        $avisos[]='Liquidação total. Juros de mora opcionais sobre os juros (Parcelas.frm).';
         return [
             'parcela'=>(int)$row->{'Nº da Parcela'},
             'origem'=>$origem,
@@ -158,7 +158,7 @@ final class ContractCollectionController extends Controller
         abort_if($db->table('Extracto')->where('Contracto',$row->{'Nr do Contracto'})
             ->where('Parcela',(string)$row->{'Nº da Parcela'})
             ->where('Tipo de Movimento','Entradas')->exists(),409,
-            'Já existe uma entrada no Extracto para esta parcela; requer reconciliação antes de cobrar.');
+            'Já existe uma entrada no Extracto para esta prestação; requer reconciliação antes de cobrar.');
     }
 
     public function preview(Request $request, string $numero, int $ordem)
@@ -313,7 +313,7 @@ final class ContractCollectionController extends Controller
         abort_unless(in_array($row->Estado,['Pendente','Pagamento Atrasado'],true),409,'A prestação já não está pendente.');
         $open=$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})
             ->whereIn('Estado',['Pendente','Pagamento Atrasado'])->count();
-        abort_unless($open===1,409,'Só é possível renovar quando esta é a única prestação em aberto do contrato.');
+        abort_unless($open===1,409,'Só é possível renovar quando esta é a única prestação em curso do contrato.');
         $q=$this->quote($row,$date,$multa);
         $c=$q['_cents'];
         abort_unless($c['juros']>0,409,'Prestação sem juros a cobrar; renovação não aplicável.');
@@ -487,7 +487,7 @@ final class ContractCollectionController extends Controller
                 'installment_number'=>$plan['parcela'],'operation'=>'renovar_juros',
                 'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
                 'amount'=>CashAccountLedger::amount($c['total']),'evidence_reference'=>$ref,
-                'reason'=>'Renovação: juros pagos'.($c['multa']>0?' com multa':'').'; novo período de '.$np['prazo'].'.',
+                'reason'=>'Renovação: juros pagos'.($c['multa']>0?' com juros de mora':'').'; novo período de '.$np['prazo'].'.',
                 'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
             ContractHistory::record($db,[

@@ -59,7 +59,7 @@ final class ContractProfileController extends Controller
         // Um contrato nunca deve juntar mutuários diferentes no mesmo número.
         if (isset($available['Nº de Cliente'])) {
             $ids = $rows->pluck('Nº de Cliente')->filter(fn ($id) => $id !== null)->unique();
-            abort_if($ids->count() > 1, 409, 'Contrato com identificadores de cliente divergentes.');
+            abort_if($ids->count() > 1, 409, 'Contrato com identificadores de mutuário divergentes.');
         }
         // Em contratos antigos alguns campos gerais podem variar entre parcelas.
         // Não escolher silenciosamente um valor como se fosse único.

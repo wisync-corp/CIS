@@ -6,8 +6,8 @@ type Profile=Record<string,string|number|null>;
 type Tab='Identificação'|'Contactos'|'Morada'|'Actividade'|'Referências'|'Administração';
 const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[]}[]=[
  {name:'Identificação',icon:UserRound,fields:[
-  {key:'Numeração',label:'Número do cliente'}, {key:'Nome Completo',label:'Nome completo'},
-  {key:'tipo_cliente',label:'Tipo de cliente'}, {key:'genero',label:'Género'},
+  {key:'Numeração',label:'Número do mutuário'}, {key:'Nome Completo',label:'Nome completo'},
+  {key:'tipo_cliente',label:'Tipo de mutuário'}, {key:'genero',label:'Género'},
   {key:'tipo_documento',label:'Tipo de documento'}, {key:'Nº de BI',label:'N.º do BI (cadastro original)'},
   {key:'Data de Emissão',label:'Data de emissão do BI'},
   {key:'local_emissao_documento',label:'Local de emissão do documento'},
@@ -72,7 +72,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
    const res=await fetch(API+'/cis/clientes/'+id,{
     headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal
    });
-   if(!res.ok)throw new Error(res.status===409?'O identificador do cliente não é exclusivo.':'Não foi possível abrir a ficha do cliente.');
+   if(!res.ok)throw new Error(res.status===409?'O identificador do mutuário não é exclusivo.':'Não foi possível abrir a ficha do mutuário.');
    const base=await res.json() as Profile;
    // A leitura adicional é opcional e nunca interfere com os 18 campos antigos.
    let extras:Profile={};
@@ -114,10 +114,10 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
   const secondaryChanged=[...secondaryFields].some(k=>draft[k]!==formValue(k,profile[k]));
   const thirdParty=Boolean(draft.pessoa_referencia_nome?.trim()||draft.pessoa_referencia_contacto?.trim());
   if(secondaryChanged&&thirdParty&&!informed){
-   setError('Confirma que o cliente foi informado sobre a finalidade dos dados da pessoa de referência.');
+   setError('Confirma que o mutuário foi informado sobre a finalidade dos dados da pessoa de referência.');
    return;
   }
-  if(!window.confirm('Confirma a gravação directa dos campos alterados na ficha original deste cliente?'))return;
+  if(!window.confirm('Confirma a gravação directa dos campos alterados na ficha original deste mutuário?'))return;
   setSaving(true);setError('');setSuccess('');
   try{
    if(Object.keys(originalChanges).length){
@@ -139,14 +139,14 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  }
  const active=sections.find(s=>s.name===tab)!;
  return <section className="cis-profile-page">
-  <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos clientes</button><span>Cadastro / Ficha individual</span></div>
-  {loading&&!profile&&<div className="cis-panel">A carregar a ficha do cliente…</div>}
+  <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos mutuários</button><span>Cadastro / Ficha individual</span></div>
+  {loading&&!profile&&<div className="cis-panel">A carregar a ficha do mutuário…</div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
   {success&&<div className="cis-secondary-success" role="status"><CheckCircle2 size={18}/>{success}</div>}
   {profile&&<form onSubmit={e=>void save(e)}>
    <div className="cis-profile-hero">
     <div className="cis-profile-avatar"><UserRound size={34}/></div>
-    <div className="cis-profile-heading"><span>FICHA DE CLIENTE</span><h2>{normalized(profile['Nome Completo'])||'Cliente sem nome'}</h2><p>Cliente nº {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id}</p></div>
+    <div className="cis-profile-heading"><span>FICHA DO MUTUÁRIO</span><h2>{normalized(profile['Nome Completo'])||'Mutuário sem nome'}</h2><p>Mutuário n.º {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id}</p></div>
     <div className="cis-profile-hero-actions">
       {!editing?<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
        <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,formValue(k,v)])));setError('');}}>Cancelar</button>
@@ -159,7 +159,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
      {sections.map(({name,icon:Icon})=><button key={name} type="button" aria-current={tab===name?'page':undefined} className={tab===name?'selected':''} onClick={()=>setTab(name)}><Icon size={18}/>{name}</button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{active.name}</h3><p>Informação do cadastro do cliente, sem duplicação de campos.</p></div>{editing&&<span>Campos autorizados editáveis</span>}</header>
+     <header className="cis-profile-section-title"><div><h3>{active.name}</h3><p>Informação do cadastro do mutuário, sem duplicação de campos.</p></div>{editing&&<span>Campos autorizados editáveis</span>}</header>
      <div className="cis-profile-fields">{active.fields.map(({key,label})=>{
        const isExtra=secondaryFields.has(key);
        const enabled=editing&&canEdit(key);
@@ -170,7 +170,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
        </label>;
      })}</div>
      {tab==='Identificação'&&<p className="cis-profile-safety"><ShieldCheck size={16}/> O número do documento existente corresponde ao BI. Outros documentos não reutilizam esse campo sem revisão do cadastro legado.</p>}
-     {tab==='Referências'&&editing&&secondaryReady&&<label className="cis-secondary-confirm"><input type="checkbox" checked={informed} onChange={e=>setInformed(e.target.checked)}/> Confirmo que o cliente foi informado sobre a finalidade da recolha do contacto da pessoa de referência.</label>}
+     {tab==='Referências'&&editing&&secondaryReady&&<label className="cis-secondary-confirm"><input type="checkbox" checked={informed} onChange={e=>setInformed(e.target.checked)}/> Confirmo que o mutuário foi informado sobre a finalidade da recolha do contacto da pessoa de referência.</label>}
      {editing&&<p className="cis-profile-safety"><ShieldCheck size={16}/> Apenas os campos autorizados podem ser gravados. Outros dados permanecem protegidos até validação das permissões.</p>}
     </div>
    </div>

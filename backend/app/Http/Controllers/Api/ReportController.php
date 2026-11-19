@@ -33,16 +33,16 @@ final class ReportController extends Controller
     {
         return [
             ['id'=>'actividade','grupo'=>'Regulatórios','titulo'=>'Relatório periódico de actividade','periodo'=>'intervalo',
-             'descricao'=>'Desembolsos, carteira, carteira em risco, recebimentos, renovações, clientes e Caixa.',
+             'descricao'=>'Desembolsos, carteira, carteira em risco, recebimentos, renovações, mutuários e Caixa.',
              'base_legal'=>'Decreto n.º 50/2024 (arts. 165 e 167 d)): monitorização e comunicações obrigatórias definidas pelo Banco de Moçambique.'],
             ['id'=>'crc','grupo'=>'Regulatórios','titulo'=>'Central de Registo de Crédito','periodo'=>'data',
-             'descricao'=>'Uma linha por contrato com saldo ou movimento: identificação do cliente, montantes, saldo, atraso e situação.',
+             'descricao'=>'Uma linha por contrato com saldo ou movimento: identificação do mutuário, montantes, saldo, atraso e situação.',
              'base_legal'=>'Aviso n.º 12/GBM/2024 (Regulamento da Central de Registo de Crédito): reporte em 24 horas após cada operação; modelo por Circular.'],
             ['id'=>'branqueamento','grupo'=>'Regulatórios','titulo'=>'Prevenção do branqueamento de capitais (anual)','periodo'=>'ano',
-             'descricao'=>'Clientes acima do regime simplificado, maiores movimentos por cliente e clientes sem identificação completa.',
+             'descricao'=>'Mutuários acima do regime simplificado, maiores movimentos por mutuário e mutuários sem identificação completa.',
              'base_legal'=>'Aviso n.º 10/GBM/2024, Capítulo XIII (arts. 134–141) e art. 116 (dados anuais até 31 de Janeiro).'],
             ['id'=>'identificacao','grupo'=>'Regulatórios','titulo'=>'Qualidade dos dados de identificação','periodo'=>'nenhum',
-             'descricao'=>'Clientes com contratos e dados de identificação em falta (BI, NUIT, contacto, morada).',
+             'descricao'=>'Mutuários com contratos e dados de identificação em falta (BI, NUIT, contacto, morada).',
              'base_legal'=>'Aviso n.º 10/GBM/2024, art. 138 (identificação simplificada: nome, tipo e número do documento, NUIB).'],
             // ---- Gestão (uso interno) ----
             ['id'=>'agenda','grupo'=>'Gestão','titulo'=>'Folha de cobrança','periodo'=>'futuro',
@@ -237,7 +237,7 @@ final class ReportController extends Controller
                 ['titulo'=>'7. Caixa no período (sem transferências internas)','colunas'=>['Movimento','Valor (MT)'],'linhas'=>[
                     ['Entradas',self::m((float)($cx->e??0))],['Saídas',self::m((float)($cx->s??0))],['Saldo do período',self::m((float)($cx->e??0)-(float)($cx->s??0))],
                 ]],
-                ['titulo'=>'8. Maiores exposições (10 clientes)','colunas'=>['Mutuário','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
+                ['titulo'=>'8. Maiores exposições (10 mutuários)','colunas'=>['Mutuário','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
             ],
         ];
     }
@@ -307,15 +307,15 @@ final class ReportController extends Controller
             if ($row[9]==='Sim') $acima[]=$row;
         }
         usort($todos,fn($a,$b)=>(float)$b[7]<=>(float)$a[7]);usort($acima,fn($a,$b)=>(float)$b[7]<=>(float)$a[7]);
-        $cols=['Cliente','N.º cliente','BI','NUIT','Contratos no ano','Desembolsado (MT)','Recebido (MT)','Movimento total (MT)','Maior mês (MT)','Fora do regime simplificado','Identificação'];
+        $cols=['Mutuário','N.º mutuário','BI','NUIT','Contratos no ano','Desembolsado (MT)','Recebido (MT)','Movimento total (MT)','Maior mês (MT)','Fora do regime simplificado','Identificação'];
         return [
             'ano'=>$ano,
-            'nota'=>'Regime simplificado (Aviso 10/GBM/2024, art. 137): actividade até 30 000 MT por mês e 240 000 MT por ano. Clientes acima destes limites exigem identificação completa e acompanhamento reforçado. Os dados anuais (art. 116) entregam-se até 31 de Janeiro do ano seguinte, em Excel (Anexo V).',
-            'resumo'=>[['Clientes com movimento',(string)count($todos)],['Fora do regime simplificado',(string)count($acima)],['Sem BI registado',(string)$semId],
+            'nota'=>'Regime simplificado (Aviso 10/GBM/2024, art. 137): actividade até 30 000 MT por mês e 240 000 MT por ano. Mutuários acima destes limites exigem identificação completa e acompanhamento reforçado. Os dados anuais (art. 116) entregam-se até 31 de Janeiro do ano seguinte, em Excel (Anexo V).',
+            'resumo'=>[['Mutuários com movimento',(string)count($todos)],['Fora do regime simplificado',(string)count($acima)],['Sem BI registado',(string)$semId],
                 ['Movimento total',self::m(array_sum(array_map(fn($r)=>(float)$r[7],$todos))).' MT']],
             'seccoes'=>[
-                ['titulo'=>'1. Clientes fora do regime simplificado','colunas'=>$cols,'linhas'=>$acima],
-                ['titulo'=>'2. Maiores movimentos por cliente (20)','colunas'=>$cols,'linhas'=>array_slice($todos,0,20)],
+                ['titulo'=>'1. Mutuários fora do regime simplificado','colunas'=>$cols,'linhas'=>$acima],
+                ['titulo'=>'2. Maiores movimentos por mutuário (20)','colunas'=>$cols,'linhas'=>array_slice($todos,0,20)],
             ],
         ];
     }
@@ -334,13 +334,13 @@ final class ReportController extends Controller
             foreach (['BI'=>self::v($cli,'Nº de BI'),'NUIT'=>self::v($cli,'nuit'),'Contacto'=>self::v($cli,'Contacto'),'Morada'=>$morada] as $f=>$v) if ($v==='') { $falta[]=$f;$cnt[$f]++; }
             $val=self::v($cli,'validade_documento');
             if ($val!=='' && self::d($val)<$today) $falta[]='Documento caducado';
-            if ($falta) $lines[]=[(string)$g->first()->{'Nome do Cliente'},is_int($k)&&$k?(string)$k:'',$active?'Sim':'Não',(string)$g->pluck('Nr do Contracto')->unique()->count(),implode(', ',$falta),$cli?'':'Cliente não encontrado no cadastro'];
+            if ($falta) $lines[]=[(string)$g->first()->{'Nome do Cliente'},is_int($k)&&$k?(string)$k:'',$active?'Sim':'Não',(string)$g->pluck('Nr do Contracto')->unique()->count(),implode(', ',$falta),$cli?'':'Mutuário não encontrado no cadastro'];
         }
         usort($lines,fn($a,$b)=>[$b[2],$a[0]]<=>[$a[2],$b[0]]);
         return [
-            'nota'=>'Identificação mínima (Aviso 10/GBM/2024, art. 138): nome completo, tipo e número do documento e NUIB. O NUIB ainda não existe no cadastro do CIS. Clientes com contratos activos aparecem primeiro.',
-            'resumo'=>[['Clientes com contratos',(string)$total],['Com dados em falta',(string)count($lines)],['Sem BI',(string)$cnt['BI']],['Sem NUIT',(string)$cnt['NUIT']],['Sem contacto',(string)$cnt['Contacto']]],
-            'seccoes'=>[['titulo'=>'Clientes com dados de identificação em falta','colunas'=>['Mutuário','N.º mutuário','Contrato activo','Contratos','Em falta','Observação'],'linhas'=>$lines]],
+            'nota'=>'Identificação mínima (Aviso 10/GBM/2024, art. 138): nome completo, tipo e número do documento e NUIB. O NUIB ainda não existe no cadastro do CIS. Mutuários com contratos activos aparecem primeiro.',
+            'resumo'=>[['Mutuários com contratos',(string)$total],['Com dados em falta',(string)count($lines)],['Sem BI',(string)$cnt['BI']],['Sem NUIT',(string)$cnt['NUIT']],['Sem contacto',(string)$cnt['Contacto']]],
+            'seccoes'=>[['titulo'=>'Mutuários com dados de identificação em falta','colunas'=>['Mutuário','N.º mutuário','Contrato activo','Contratos','Em falta','Observação'],'linhas'=>$lines]],
         ];
     }
     // ================================================================== GESTÃO

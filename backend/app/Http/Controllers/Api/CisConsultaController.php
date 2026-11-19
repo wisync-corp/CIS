@@ -50,7 +50,7 @@ class CisConsultaController extends Controller
             'Rua', 'Naturalidade', 'usuario',
         ]);
         abort_if($rows->count() !== 1, $rows->isEmpty() ? 404 : 409,
-            'Cliente inexistente ou identificador duplicado.');
+            'Mutuário inexistente ou identificador duplicado.');
         return response()->json($rows->first())
             ->header('Cache-Control', 'no-store, private');
     }
