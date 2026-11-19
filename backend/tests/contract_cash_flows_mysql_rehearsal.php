@@ -450,6 +450,20 @@ ok(count($hi['mensagens'])===1 && $hi['mensagens'][0]['phone']==='258841234567' 
 ok($err(fn()=>$mc->modelos($jreq('GET',[],$gestor)))===403 && $err(fn()=>$mc->destinatarios($jreq('GET',['grupo'=>'todos','texto'=>'x'],$gestor)))===403,'centro de mensagens reservado ao administrador');
 data($mc->eliminarModelo($jreq('DELETE',[]),$new['id']));
 ok(count(data($mc->modelos($jreq('GET',[])))['modelos'])===4,'modelo eliminado');
+$seed=require __DIR__.'/../database/migrations/2026_11_19_000090_seed_capta_message_templates.php';
+$db->table('cis_message_templates')->insert(['name'=>'Bom dia','body'=>'EDITADO {Nome Completo}','created_at'=>now(),'updated_at'=>now()]);
+$seed->up(); $seed->up();
+$names=$db->table('cis_message_templates')->pluck('name')->all();
+ok(count($names)===9 && $db->table('cis_message_templates')->where('name','Bom dia')->value('body')==='EDITADO {Nome Completo}'
+    && count(array_intersect(['Cobrança Antecipada','Mensagem no próprio dia','Mensagem Vencida','Actualização de Dados'],$names))===4,'modelos CAPTA: idempotente e sem substituir edições');
+$vid=$db->table('cis_message_templates')->where('name','Mensagem Vencida')->value('id');
+$pid=$db->table('cis_message_templates')->where('name','Mensagem no próprio dia')->value('id');
+$late1=$late->first();
+if ($late1) {
+    $m1=data($mc->preview($jreq('GET',['contrato'=>$late1,'modelo_id'=>$vid])))['mensagem'];
+    $m2=data($mc->preview($jreq('GET',['contrato'=>$late1,'modelo_id'=>$pid])))['mensagem'];
+    ok(!preg_match('/\{[^{}]+\}/u',$m1) && !preg_match('/\{[^{}]+\}/u',$m2) && str_contains($m1,'*em atraso*') && str_contains($m1,'MT'),'modelos CAPTA sem campos por preencher (inclui {Nome do Cliente})');
+}
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
