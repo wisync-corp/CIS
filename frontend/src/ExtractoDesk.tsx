@@ -2,7 +2,7 @@ import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,ArrowUp,ArrowDown,SlidersHorizontal,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
+import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,SlidersHorizontal,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter from './MessageCenter';
 import {situacaoContrato} from './glossario';
@@ -228,15 +228,6 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    </div>}
 
    <div className="cis-extracto-toolbar">
-    <div className="cis-extracto-order" role="group" aria-label="Direcção da ordenação">
-     <span>{fields[mode].find(column=>column.key===sortField)?.label}</span>
-     <div className="cis-extracto-order-options">
-      {(['asc','desc'] as const).map(value=><button key={value} type="button" aria-pressed={direction===value}
-       onClick={()=>{setDirections(old=>({...old,[mode]:value}));setPage(1);}}>
-       {value==='asc'?<ArrowUp size={14}/>:<ArrowDown size={14}/>} {value==='asc'?'Crescente':'Decrescente'}
-      </button>)}
-     </div>
-    </div>
     <button type="button" className="cis-extracto-column-trigger" aria-expanded={columnsOpen}
      aria-controls="cis-extracto-column-panel" onClick={()=>setColumnsOpen(open=>!open)}>
      <SlidersHorizontal size={16}/> Colunas <span>{visible.length} de {fields[mode].length}</span><ChevronDown size={15}/>

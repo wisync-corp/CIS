@@ -1611,15 +1611,11 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
   margin-block: 1rem;
   border-block: 1px solid var(--cis-border);
 }
-.cis-extracto-order { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; }
-.cis-extracto-order > span { color: var(--cis-text-muted); font-weight: 700; font-size: 0.82em; }
-.cis-extracto-order-options { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--cis-border); border-radius: 9px; padding: 3px; gap: 2px; }
-.cis-extracto-order-options button, .cis-extracto-column-trigger, .cis-extracto-column-head button {
+.cis-extracto-column-trigger, .cis-extracto-column-head button {
   display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.65rem;
   font: inherit; font-size: 0.82em; font-weight: 700; color: var(--cis-heading);
   border: 0; border-radius: 6px; background: transparent; cursor: pointer;
 }
-.cis-extracto-order-options button[aria-pressed="true"] { background: var(--cis-primary); color: white; }
 .cis-extracto-column-trigger { border: 1px solid var(--cis-border); border-radius: 9px; }
 .cis-extracto-column-trigger span, .cis-extracto-column-panel p, .cis-extracto-export-hint { color: var(--cis-text-muted); font-size: 0.85em; }
 .cis-extracto-column-trigger[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
