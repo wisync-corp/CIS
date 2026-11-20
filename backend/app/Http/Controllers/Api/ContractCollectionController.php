@@ -574,51 +574,55 @@ final class ContractCollectionController extends Controller
             $q=$this->quote($row,$d['data_pagamento'],$op==='remanescente'&&!empty($d['cobrar_multa']));
             $c=$q['_cents'];
             if ($op==='parcial') {
-                // Juros a pagar: no primeiro parcial vêm da tabela de preços (capital e prazo da prestação)
-                // e podem ser alterados; depois do primeiro parcial ficam fixados na prestação.
-                $baseQ=$c['total'];$juros=$c['juros'];$principalQ=$baseQ-$juros;
-                $variable=in_array((string)($row->{'Tipo de Juro'}??''),['Variável','Variavel'],true);
-                $editable=$already===0&&!$variable&&$principalQ>0;
-                $tableRate=null;$rateUsed=(float)($row->{'% de Juro'}??0);$altered=false;
-                if ($editable) {
-                    $term=mb_strtolower(trim((string)($row->{'Prazo/Duração'}??'')));
-                    $period=preg_match('/^(?:15\s*dias?|2\s*semanas)$/u',$term)?15:30;
-                    try {
-                        $m=DB::table('cis_tabela_juros')->where('limite_inferior','<=',CashAccountLedger::amount($principalQ))
-                            ->where('limite_superior','>=',CashAccountLedger::amount($principalQ))->where('periodo_referencia',$period)->get(['taxa']);
-                        if ($m->count()===1) $tableRate=(float)$m[0]->taxa;
-                    } catch (\Throwable) {}
-                    $informed=isset($d['taxa_informada'])&&$d['taxa_informada']!==null&&$d['taxa_informada']!==''?round((float)$d['taxa_informada'],4):null;
-                    $rate=$informed??$tableRate;
-                    if ($rate!==null) {
-                        $rateUsed=$rate;
-                        $juros=$isCis?LegacyContractPricing::upwards($principalQ/100*$rate/100)*100:(int)round($principalQ*$rate/100);
-                        $altered=$informed!==null&&($tableRate===null||abs($informed-$tableRate)>0.00001);
-                    }
-                }
-                $baseC=$principalQ+$juros; // sem juros de mora
+                // Pagamento parcial = paga os juros da prestação e parte do capital; o CAPITAL QUE FICA
+                // + juros (taxa da tabela para esse capital, editável) passa a ser uma NOVA PRESTAÇÃO
+                // no mesmo contrato, com início escolhido e vencimento = início + mesmo prazo.
+                abort_unless($already===0,409,'Esta prestação tem pagamentos parciais antigos; liquide o saldo.');
+                $juros=$c['juros'];$baseC=$c['total'];
                 $raw=trim((string)($d['valor_recebido']??''));
                 $paid=$raw===''?null:CashAccountLedger::cents($raw,'valor_recebido');
                 if ($paid!==null) {
                     if ($isCis&&$paid%100!==0) throw ValidationException::withMessages(['valor_recebido'=>'Nos contratos do CIS os valores são em meticais inteiros.']);
-                    if ($paid<=0||$already+$paid>=$baseC||$already+$paid<$juros) {
+                    if ($paid<$juros||$paid>=$baseC) {
                         throw ValidationException::withMessages(['valor_recebido'=>
-                            'O pagamento parcial tem de cobrir pelo menos os juros ('.CashAccountLedger::amount(max(0,$juros-$already)).' MT em falta) e ser inferior ao saldo da prestação ('
-                            .CashAccountLedger::amount($baseC-$already).' MT). Para pagar tudo use a liquidação.']);
+                            'O pagamento parcial tem de cobrir pelo menos os juros ('.CashAccountLedger::amount($juros).' MT) e ser inferior ao valor da prestação ('
+                            .CashAccountLedger::amount($baseC).' MT). Para pagar tudo use a liquidação.']);
                     }
                 }
-                $p=$paid??0;
-                $interestNow=max(0,min($p,$juros-min($already,$juros)));
+                $p=$paid??$juros;
+                $remainingC=$baseC-$p; // capital que fica em dívida
+                $term=mb_strtolower(trim((string)($row->{'Prazo/Duração'}??'')));
+                $period=preg_match('/^(?:15\s*dias?|2\s*semanas)$/u',$term)?15:30;
+                $tableRate=null;
+                try {
+                    $m=DB::table('cis_tabela_juros')->where('limite_inferior','<=',CashAccountLedger::amount($remainingC))
+                        ->where('limite_superior','>=',CashAccountLedger::amount($remainingC))->where('periodo_referencia',$period)->get(['taxa']);
+                    if ($m->count()===1) $tableRate=(float)$m[0]->taxa;
+                } catch (\Throwable) {}
+                $informed=isset($d['taxa_informada'])&&$d['taxa_informada']!==null&&$d['taxa_informada']!==''?round((float)$d['taxa_informada'],4):null;
+                $rate=$informed??$tableRate??(float)($row->{'% de Juro'}??0);
+                $altered=$informed!==null&&($tableRate===null||abs($informed-$tableRate)>0.00001);
+                $newInterestC=$isCis?LegacyContractPricing::upwards($remainingC/100*$rate/100)*100:(int)round($remainingC*$rate/100);
+                $oldDue=self::date($row->{'Data de Cobrança'},'Data de cobrança');
+                $start=!empty($d['data_inicio'])?CarbonImmutable::createFromFormat('!Y-m-d',$d['data_inicio']):$oldDue;
+                $oldStart=self::date($row->{'Data de Inicio'},'Data de início');
+                abort_unless($start->greaterThan($oldStart),422,'O início da nova prestação tem de ser posterior ao início actual ('.$oldStart->format('d/m/Y').').');
+                [$unit,$n,$label]=$this->renewalTerm($db,$row);
+                $newDue=$unit==='months'?$start->addMonthsNoOverflow($n):$start->addDays($n);
+                $max=(int)$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})->max('Nº da Parcela');
                 $fmtR=fn($r)=>$r===null?null:rtrim(rtrim(number_format($r,4,'.',''),'0'),'.');
                 return ['operacao'=>$op,'parcela'=>$q['parcela'],'data_pagamento'=>$d['data_pagamento'],'dias_atraso'=>$q['dias_atraso'],
-                    'valor'=>$paid===null?null:CashAccountLedger::amount($paid),'ja_pago'=>CashAccountLedger::amount($already),
-                    'taxa_editavel'=>$editable,'taxa_tabela'=>$fmtR($tableRate),'taxa'=>$fmtR($rateUsed),'taxa_alterada'=>$altered,
-                    'juros'=>CashAccountLedger::amount($juros),'valor_prestacao'=>CashAccountLedger::amount($baseC),
-                    'juros_cobertos'=>$paid===null?null:CashAccountLedger::amount($interestNow),'amortizacao'=>$paid===null?null:CashAccountLedger::amount($p-$interestNow),
-                    'proximo_valor'=>CashAccountLedger::amount($baseC-$already-$p),'proximo_vencimento'=>substr((string)$row->{'Data de Cobrança'},0,10),
-                    'aviso'=>'Juros primeiro, depois capital. Fica a pagar o próximo valor indicado (prestação em «Pagamento parcial» até liquidar o saldo).'
-                        .($altered?' Juros calculados com a taxa indicada pelo operador.':''),
-                    '_cents'=>['valor'=>$paid,'juros'=>$juros,'base'=>$baseC,'pago_total'=>$already+$p],'_rate'=>$editable?$rateUsed:null];
+                    'valor'=>$paid===null?null:CashAccountLedger::amount($paid),'juros_cobertos'=>CashAccountLedger::amount($juros),
+                    'amortizacao'=>$paid===null?null:CashAccountLedger::amount($p-$juros),'valor_prestacao'=>CashAccountLedger::amount($baseC),
+                    'estado'=>$q['estado'],
+                    'nova_prestacao'=>['parcela'=>$max+1,'capital'=>CashAccountLedger::amount($remainingC),'taxa'=>$fmtR($rate),
+                        'juros'=>CashAccountLedger::amount($newInterestC),'valor_a_pagar'=>CashAccountLedger::amount($remainingC+$newInterestC),
+                        'data_inicio'=>$start->toDateString(),'data_vencimento'=>$newDue->toDateString(),'prazo'=>$label],
+                    'taxa_editavel'=>true,'taxa_tabela'=>$fmtR($tableRate),'taxa'=>$fmtR($rate),'taxa_alterada'=>$altered,
+                    'proximo_valor'=>CashAccountLedger::amount($remainingC+$newInterestC),'proximo_vencimento'=>$newDue->toDateString(),
+                    'aviso'=>'Juros primeiro, depois capital. O capital que fica ('.CashAccountLedger::amount($remainingC).' MT) mais os juros ('
+                        .$fmtR($rate).'%'.($altered?', taxa indicada':', taxa da tabela').') passa a ser a nova prestação P'.($max+1).'.',
+                    '_cents'=>['valor'=>$paid,'juros'=>$juros,'restante'=>$remainingC,'novo_juros'=>$newInterestC],'_rate'=>$rate];
             }
             abort_unless($already>0,409,'Esta prestação não tem pagamentos parciais; use a liquidação da prestação.');
             $remaining=$c['total']-$already;
@@ -704,6 +708,7 @@ final class ContractCollectionController extends Controller
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
             'taxa_informada'=>['nullable','numeric','gt:0','max:100','regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
             'tratamento_juros'=>['required_if:operacao,prorrogar_15_30','nullable','in:manter,recalcular'],
+            'data_inicio'=>['nullable','date_format:Y-m-d'],
         ]);
     }
 
@@ -772,7 +777,8 @@ final class ContractCollectionController extends Controller
             $m=fn(int $cents)=>self::money($row,$cents);
             $q=$db->table('Contractos')->where('Ordem',$ordem)->where('Nr do Contracto',$numero)->whereIn('Estado',['Pendente','Pagamento Atrasado']);
             $upd=match ($op) {
-                'parcial'=>['Valor de Juros'=>$m($c['juros']),'Valor a Pagar'=>$m($c['base']),'Valor Pago'=>$m($c['pago_total']),'Data de Pagamento'=>$plan['data_pagamento'],'Situação de Pagamento'=>'Pagamento Parcial'],
+                'parcial'=>['Valor de Juros'=>$m($c['juros']),'Valor de Multa'=>0,'Valor a Pagar'=>$m($c['valor']),'Valor Pago'=>$m($c['valor']),'Data de Pagamento'=>$plan['data_pagamento'],
+                    'Estado'=>$plan['estado'],'Dias'=>$plan['dias_atraso'],'Situação de Pagamento'=>'Pago parcialmente - saldo na P'.$plan['nova_prestacao']['parcela']],
                 'remanescente'=>['Valor de Juros'=>$m($c['juros']),'Valor de Multa'=>$m($c['multa']),'Valor a Pagar'=>$m($c['total']),'Valor Pago'=>$m($c['total']),
                     'Data de Pagamento'=>$plan['data_pagamento'],'Estado'=>$plan['estado'],'Dias'=>$plan['dias_atraso'],'Situação de Pagamento'=>'Pagamento Completo'],
                 'renovar_juros'=>['Valor de Juros'=>$m($c['juros']),'Valor a Pagar'=>$m($c['total']),'Data de Cobrança'=>$plan['novo_vencimento'],
@@ -785,7 +791,6 @@ final class ContractCollectionController extends Controller
                     'Data de Cobrança'=>$plan['novo_vencimento'],'Estado'=>self::stateFor($plan['_due']),'Dias'=>0,'Situação de Pagamento'=>'Prorrogado para 30 dias'],
             };
             // «% de Juro» é inteiro na tabela: só é actualizado com taxas inteiras (a taxa exacta fica no histórico).
-            if ($op==='parcial' && $plan['_rate']!==null && abs($plan['_rate']-round($plan['_rate']))<0.00001) $upd['% de Juro']=(int)round($plan['_rate']);
             if (in_array($op,['capitalizar','prorrogar_15_30'],true) && isset($plan['taxa']) && abs((float)$plan['taxa']-round((float)$plan['taxa']))<0.00001) $upd['% de Juro']=(int)round((float)$plan['taxa']);
             if (in_array($op,['renovar_juros','capitalizar','prorrogar_15_30'],true)) {
                 $finalDue=substr((string)($row->{'Data Final'}??''),0,10);
@@ -794,6 +799,25 @@ final class ContractCollectionController extends Controller
             abort_unless($q->update($upd)===1,409,'A prestação foi alterada por outra operação.');
             if ($op==='prorrogar_15_30') {
                 $db->table('Contractos')->where('Nr do Contracto',$numero)->update(['Prazo/Duração'=>'30 Dias']);
+            }
+            $newOrdem=null;
+            if ($op==='parcial') {
+                $np=$plan['nova_prestacao'];
+                $new=(array)$row; unset($new['Ordem']);
+                $capInt=(int)round($c['restante']/100);
+                $new=array_merge($new,[
+                    'Nº da Parcela'=>$np['parcela'],'Nº de Prestações'=>(int)($row->{'Nº de Prestações'}??1)+1,
+                    'Data de Inicio'=>$np['data_inicio'],'Data de Cobrança'=>$np['data_vencimento'],'Data Final'=>$np['data_vencimento'],
+                    'Capital'=>$capInt,'Amortização'=>$capInt,
+                    'Valor de Juros'=>$m($c['novo_juros']),'Valor a Pagar'=>$m($c['restante']+$c['novo_juros']),
+                    'Valor Pago'=>0,'Valor de Multa'=>0,'Data de Pagamento'=>null,'Estado'=>self::stateFor(CarbonImmutable::parse($np['data_vencimento'])),
+                    'Estado do Contrato'=>'Em Progresso','Situação de Pagamento'=>'Saldo transitado da P'.$plan['parcela'],'Dias'=>0,
+                    'usuario'=>mb_substr((string)$user->name,0,255),
+                ]);
+                if (abs($plan['_rate']-round($plan['_rate']))<0.00001) $new['% de Juro']=(int)round($plan['_rate']);
+                [$sql,$bindings]=\App\Services\LegacyContractInsert::statement($new);
+                $db->insert($sql,$bindings);
+                $newOrdem=(int)$db->getPdo()->lastInsertId();
             }
             $nr=null;
             if ($cash) {
@@ -805,7 +829,7 @@ final class ContractCollectionController extends Controller
                 ],'Nr');
             }
             $after=$db->table('Contractos')->where('Ordem',$ordem)->first();
-            $reasons=['parcial'=>'Pagamento parcial de '.($plan['valor']??'').' MT; juros '.($plan['juros']??'').' MT à taxa '.($plan['taxa']??'').'%'.(!empty($plan['taxa_alterada'])?' (alterada pelo operador)':'').'.','remanescente'=>'Liquidação do saldo após pagamentos parciais.',
+            $reasons=['parcial'=>'Pagamento parcial de '.($plan['valor']??'').' MT (juros '.($plan['juros_cobertos']??'').' MT); saldo na nova prestação P'.($plan['nova_prestacao']['parcela']??'').' à taxa '.($plan['taxa']??'').'%'.(!empty($plan['taxa_alterada'])?' (alterada pelo operador)':' (tabela)').'.','remanescente'=>'Liquidação do saldo após pagamentos parciais.',
                 'renovar_juros'=>'Renovação dos juros sem pagamento; novo vencimento '.($plan['novo_vencimento']??'').'.',
                 'capitalizar'=>'Capitalização dos juros; taxa '.($plan['taxa']??'').'%'.(!empty($plan['taxa_alterada'])?' (alterada pelo operador)':' (tabela)').'.',
                 'prorrogar_15_30'=>'Prorrogação de 15 para 30 dias ('.($d['tratamento_juros']??'').' juros).'];
@@ -815,13 +839,22 @@ final class ContractCollectionController extends Controller
                 'amount'=>$cash?$plan['valor']:($plan['valor_a_pagar']??null),'evidence_reference'=>$cash?$ref:null,
                 'reason'=>trim($reasons[$op].($motivo!==''?' Motivo: '.$motivo:'')),'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
+            if ($newOrdem) {
+                $newRow=$db->table('Contractos')->where('Ordem',$newOrdem)->first();
+                abort_unless($newRow&&(string)$newRow->{'Nr do Contracto'}===$numero,409,'Falha ao criar a nova prestação.');
+                ContractHistory::record($db,['contract_number'=>$numero,'installment_ordem'=>$newOrdem,'installment_number'=>$plan['nova_prestacao']['parcela'],
+                    'operation'=>'parcial_nova_prestacao','before'=>null,'after'=>$newRow,'extracto_nr'=>$nr,'account_id'=>$account?(int)$account->id:null,
+                    'amount'=>$plan['nova_prestacao']['valor_a_pagar'],'evidence_reference'=>$ref,
+                    'reason'=>'Saldo de capital '.$plan['nova_prestacao']['capital'].' MT + juros '.$plan['nova_prestacao']['juros'].' MT ('.$plan['nova_prestacao']['taxa'].'%) após pagamento parcial da P'.$plan['parcela'].'.',
+                    'operation_key'=>$key,'performed_by'=>(int)$user->id]);
+            }
             $finished=false;
             if ($op==='remanescente') {
                 $finished=$db->table('Contractos')->where('Nr do Contracto',$numero)->whereNotIn('Estado',['Pago','Pago em Atraso','Renovado'])->count()===0;
                 if ($finished) $db->table('Contractos')->where('Nr do Contracto',$numero)->update(['Estado do Contrato'=>'Finalizado']);
             }
             unset($plan['_cents'],$plan['_due'],$plan['_start'],$plan['_rate']);
-            return $plan+['registado'=>true,'repetido'=>false,'extracto_nr'=>$nr,'conta'=>$account?->code,
+            return $plan+['registado'=>true,'repetido'=>false,'extracto_nr'=>$nr,'nova_ordem'=>$newOrdem,'conta'=>$account?->code,
                 'saldo_conta_actual'=>$cash?CashAccountLedger::amount($before+$c['valor']):null,'contrato_finalizado'=>$finished,
                 'notice'=>$cash?'Recebimento registado na conta '.$account->code.' com histórico antes/depois.':'Alteração registada com histórico antes/depois (sem movimento de Caixa).'];
         },3);

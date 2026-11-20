@@ -827,21 +827,25 @@ $oA=$row(['Nr do Contracto'=>'OP-0001','Nº'=>9001]);
 ok($err(fn()=>$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'100','conta_id'=>$banco,'referencia'=>'REF-PA0','idempotency_key'=>'a0000000-0000-4000-8000-000000000001'],'OP-0001',$oA))===422,'parcial: tem de cobrir os juros');
 $pp=$opv(['operacao'=>'parcial','data_pagamento'=>$todayD],'OP-0001',$oA);
 ok($pp['taxa_editavel']===true && $pp['valor']===null && ($pp['taxa_tabela']===null || $pp['taxa']===$pp['taxa_tabela'])
-    && $pp['proximo_valor']===$pp['valor_prestacao'],'parcial: juros a pagar com a taxa da tabela por defeito, editável, próximo valor na prévia');
-$pa=$op(['operacao'=>'parcial','taxa_informada'=>'15.05','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
+    && is_array($pp['nova_prestacao']) && $pp['nova_prestacao']['capital']==='1000.00','parcial: prévia mostra a nova prestação (capital que fica + juros à taxa da tabela, editável)');
+$pq=$opv(['operacao'=>'parcial','taxa_informada'=>'15','data_pagamento'=>$todayD,'valor_recebido'=>'200'],'OP-0001',$oA);
+ok($pq['nova_prestacao']['capital']==='950.50' && $pq['nova_prestacao']['juros']==='142.58' && $pq['nova_prestacao']['valor_a_pagar']==='1093.08'
+    && $pq['amortizacao']==='49.50' && $pq['juros_cobertos']==='150.50','parcial: 200 = juros 150,50 + capital 49,50; nova prestação 950,50 + 142,58 = 1093,08');
+$pa=$op(['operacao'=>'parcial','taxa_informada'=>'15','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
 $rA=$db->table('Contractos')->where('Ordem',$oA)->first();
-ok($pa['registado'] && !$pa['repetido'] && $rA->{'Situação de Pagamento'}==='Pagamento Parcial' && abs((float)$rA->{'Valor Pago'}-200)<0.001 && $rA->Estado==='Pendente'
-    && $ext('OP-0001')->count()===1 && $pa['proximo_valor']==='950.50' && $pa['juros']==='150.50' && $pa['taxa_alterada']===($pa['taxa_tabela']!=='15.05'),'parcial: 200 MT na Caixa, juros 150,50 à taxa indicada, próximo valor 950,50');
-$pa2=$op(['operacao'=>'parcial','taxa_informada'=>'15.05','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
-ok($pa2['repetido'] && $ext('OP-0001')->count()===1,'parcial: chave repetida não duplica');
-ok($err(fn()=>$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'1000','conta_id'=>$banco,'referencia'=>'REF-PA2','idempotency_key'=>'a0000000-0000-4000-8000-000000000003'],'OP-0001',$oA))===422
-    && $err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'a0000000-0000-4000-8000-000000000004'],'OP-0001',$oA))===409,'parcial: não ultrapassa o saldo; com parciais não se alteram condições');
-$pv=$opv(['operacao'=>'remanescente','data_pagamento'=>$todayD,'cobrar_multa'=>false],'OP-0001',$oA);
-ok($pv['valor']==='950.50' && $pv['registo_activo']===true,'saldo: prévia 950,50 MT');
-$rm=$op(['operacao'=>'remanescente','data_pagamento'=>$todayD,'cobrar_multa'=>false,'valor_recebido'=>'950.50','conta_id'=>$banco,'referencia'=>'REF-PA3','idempotency_key'=>'a0000000-0000-4000-8000-000000000005'],'OP-0001',$oA);
-$rA=$db->table('Contractos')->where('Ordem',$oA)->first();
-ok($rm['contrato_finalizado'] && $rA->Estado==='Pago' && $rA->{'Situação de Pagamento'}==='Pagamento Completo' && abs((float)$rA->{'Valor Pago'}-1150.5)<0.001
-    && abs($ext('OP-0001')->sum(fn($e)=>(float)$e->Valor)-1150.5)<0.001 && $rA->{'Estado do Contrato'}==='Finalizado','saldo liquidado: prestação paga, Extracto = 1150,50, contrato liquidado');
+$nA=$db->table('Contractos')->where('Ordem',(int)$pa['nova_ordem'])->first();
+ok($pa['registado'] && !$pa['repetido'] && in_array($rA->Estado,['Pago','Pago em Atraso'],true) && abs((float)$rA->{'Valor Pago'}-200)<0.001 && abs((float)$rA->{'Valor a Pagar'}-200)<0.001
+    && $ext('OP-0001')->count()===1,'parcial: 200 MT na Caixa, prestação actual fechada com o valor pago');
+ok($nA && $nA->{'Nr do Contracto'}==='OP-0001' && $nA->Estado!=='Pago' && abs((float)$nA->{'Valor a Pagar'}-1093.08)<0.001 && abs((float)$nA->{'Valor de Juros'}-142.58)<0.001
+    && (int)$nA->{'Nº da Parcela'}===(int)$rA->{'Nº da Parcela'}+1 && (float)$nA->{'Valor Pago'}===0.0
+    && substr((string)$nA->{'Data de Cobrança'},0,10)===$pa['nova_prestacao']['data_vencimento'],'parcial: nova prestação criada no mesmo contrato (1093,08 MT)');
+$pa2=$op(['operacao'=>'parcial','taxa_informada'=>'15','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
+ok($pa2['repetido'] && $ext('OP-0001')->count()===1 && $db->table('Contractos')->where('Nr do Contracto','OP-0001')->count()===2,'parcial: chave repetida não duplica');
+ok($err(fn()=>$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'1150.50','conta_id'=>$banco,'referencia'=>'REF-PA2','idempotency_key'=>'a0000000-0000-4000-8000-000000000003'],'OP-0001',(int)$pa['nova_ordem']))===422
+    && $err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'a0000000-0000-4000-8000-000000000004'],'OP-0001',$oA))===409,'parcial: não chega ao valor total; prestação já paga não se altera');
+$rm=data($opc->collect(req('/x',['data_pagamento'=>$todayD,'cobrar_multa'=>false,'valor_recebido'=>'1093.08','conta_id'=>$banco,'referencia'=>'REF-PA3','idempotency_key'=>'a0000000-0000-4000-8000-000000000005','confirmacao_recebimento'=>true],$user),'OP-0001',(int)$pa['nova_ordem']));
+$nA=$db->table('Contractos')->where('Ordem',(int)$pa['nova_ordem'])->first();
+ok(in_array($nA->Estado,['Pago','Pago em Atraso'],true) && abs($ext('OP-0001')->sum(fn($e)=>(float)$e->Valor)-1293.08)<0.001,'nova prestação liquidada normalmente: Extracto = 200 + 1093,08');
 // B) renovação dos juros sem pagamento
 $oB=$row(['Nr do Contracto'=>'OP-0002','Nº'=>9002]);$dueB=(string)$db->table('Contractos')->where('Ordem',$oB)->value('Data de Cobrança');
 $rb=$op(['operacao'=>'renovar_juros','idempotency_key'=>'b0000000-0000-4000-8000-000000000001'],'OP-0002',$oB);
@@ -866,7 +870,7 @@ $rD=$db->table('Contractos')->where('Ordem',$oD)->first();
 ok(substr((string)$rD->{'Data de Cobrança'},0,10)===\Carbon\CarbonImmutable::parse($startD)->addDays(30)->toDateString() && $rD->{'Prazo/Duração'}==='30 Dias'
     && abs((float)$rD->{'Valor de Juros'}-150.5)<0.001,'prorrogação: vencimento = início + 30 dias, prazo 30 dias, juros mantidos');
 $hk=$db->table('cis_contractos_historico')->whereIn('operation',['pagamento_parcial','liquidacao_saldo','renovacao_juros_sem_pagamento','capitalizacao_juros','prorrogacao_15_30'])->pluck('operation')->countBy();
-ok(($hk['pagamento_parcial']??0)===1 && ($hk['liquidacao_saldo']??0)===1 && ($hk['renovacao_juros_sem_pagamento']??0)===1 && ($hk['capitalizacao_juros']??0)===1 && ($hk['prorrogacao_15_30']??0)===1,'histórico antes/depois de cada operação');
+ok(($hk['pagamento_parcial']??0)===1 && ($hk['liquidacao_saldo']??0)===0 && ($hk['renovacao_juros_sem_pagamento']??0)===1 && ($hk['capitalizacao_juros']??0)===1 && ($hk['prorrogacao_15_30']??0)===1,'histórico antes/depois de cada operação');
 ok($err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'e0000000-0000-4000-8000-000000000001'],'OP-0003',$oC,$gestor))===403,'operações: só o administrador');
 
 } catch (\Throwable $e) {

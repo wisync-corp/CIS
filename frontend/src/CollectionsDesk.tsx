@@ -29,14 +29,14 @@ type PaymentResult={registado:boolean;repetido:boolean;extracto_nr:number;conta?
 type Receipt={numero:string;origem:'extracto'|'prestacao';extracto_nr:number|null;data:string|null;prestacao:string|null;valor:string;capital:string|null;juros:string|null;juros_mora:string|null;vencimento:string|null;estado:string|null;forma_pagamento:string|null;conta:string|null;referencia:string|null;descricao:string};
 type ReceiptList={contrato:string;mutuario:{nome:string;numero:number|string|null};recibos:Receipt[];total_recebido:string;saldo_em_divida:string;emitido_em:string;emitido_por:string|null};
 type HistoryEvent={id:number;operacao:string;parcela:number|null;valor:string|null;extracto_nr:number|null;referencia:string|null;motivo:string|null;antes:Row|null;depois:Row|null;em:string};
-const historyLabels:Record<string,string>={cobranca_total:'Liquidação da prestação',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
+const historyLabels:Record<string,string>={cobranca_total:'Liquidação da prestação',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',parcial_nova_prestacao:'Nova prestação (saldo do parcial)',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
 const historyFields=['Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','% de Juro','Estado','Data de Pagamento','Situação de Pagamento'];
 const newKey=()=>typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(Number(c)^Math.random()*16>>Number(c)/4).toString(16));
 type Mode='total'|'renovar_emprestimo'|'parcial'|'renovar_juros'|'capitalizar'|'remanescente'|'renovar_credito'|'actualizar_data'|'finalizar_contrato'|'prorrogar_15_30';
 const statuses:Record<Mode,{name:string;details:string;group:string}>={
  total:{name:'Liquidação da prestação',details:'Pagamento completo da prestação, com eventuais juros de mora.',group:'Com pagamento'},
  renovar_emprestimo:{name:'Renovação',details:'O mutuário paga só os juros; o mesmo contrato recebe nova prestação com o mesmo capital e prazo.',group:'Com pagamento'},
- parcial:{name:'Pagamento parcial',details:'Registar montante inferior ao devido; juros antes da amortização.',group:'Com pagamento'},
+ parcial:{name:'Pagamento parcial',details:'Paga os juros e parte do capital; o capital que fica + novos juros passa a nova prestação.',group:'Com pagamento'},
  renovar_juros:{name:'Renovação dos juros',details:'Novo período de juros sobre o capital ainda devido, sem recebimento.',group:'Sem pagamento'},
  capitalizar:{name:'Capitalizar juros',details:'Incorporar juros no capital e apurar nova taxa pela tabela de faixas.',group:'Sem pagamento'},
  remanescente:{name:'Liquidar saldo em dívida',details:'Liquidação final após pagamento parcial, sujeita a controlo dos atrasos.',group:'Regularização'},
@@ -187,7 +187,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const installmentEligible=(row:Row|undefined)=>Boolean(row&&isPending(row)&&!contractClosed&&
   !/^(?:completo|liquidado|finalizado)$/i.test(String(row?.['Situação de Pagamento']??'').trim()));
  const eligibleModes:Mode[]=selectedInstallment&&installmentEligible(selectedInstallment)?(
-   paymentNature==='recebido'?(String(selectedInstallment['Situação de Pagamento']??'').toLowerCase().includes('parcial')?['remanescente','parcial']:['total',...(pending.length===1?['renovar_emprestimo' as Mode]:[]),'parcial']):
+   paymentNature==='recebido'?(String(selectedInstallment['Situação de Pagamento']??'').toLowerCase().includes('parcial')?['remanescente']:['total',...(pending.length===1?['renovar_emprestimo' as Mode]:[]),'parcial']):
    paymentNature==='nao_recebido'?['renovar_juros','capitalizar',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])]:[]
  ):[];
  const paidRows=rows.filter(r=>paid(r)||num(r['Valor Pago'])>0);
@@ -229,7 +229,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
+ function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo'||value==='parcial')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  useEffect(()=>{
   if(!selected){setReceipts(null);return;}
@@ -272,7 +272,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function opBody(){
   return {operacao:mode,
-   ...(mode==='parcial'?{data_pagamento:datePayment,...(partialValid?{valor_recebido:paymentAmount.trim().replace(',','.')}:{}),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
+   ...(mode==='parcial'?{data_pagamento:datePayment,...(/^\d{4}-\d{2}-\d{2}$/.test(renewStart)?{data_inicio:renewStart}:{}),...(partialValid?{valor_recebido:paymentAmount.trim().replace(',','.')}:{}),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='remanescente'?{data_pagamento:datePayment,cobrar_multa:penalty}:{}),
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='prorrogar_15_30'?{tratamento_juros:interestChoice}:{})};
@@ -511,12 +511,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
          {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
         </label>}
         {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>Os juros são cobertos primeiro; o valor tem de ser inferior ao saldo da prestação. Para pagar tudo use a liquidação.</small></label>}
-        {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===true&&<label>Juros a pagar (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>
+        {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===true&&<label>Juros da nova prestação (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>
          <span className="cis-collections-rate"><input inputMode="decimal" type="text" value={capitalRate} aria-invalid={capitalRateTouched&&!rateValid(capitalRate)} onChange={e=>{setCapitalRate(e.target.value);setCapitalRateTouched(true);}}/><em>%</em>
           {capitalRateTouched&&scenarioQuote.taxa_tabela!=null&&String(scenarioQuote.taxa_tabela)!==capitalRate.replace(',','.')&&<button type="button" onClick={()=>{setCapitalRate(String(scenarioQuote.taxa_tabela));setCapitalRateTouched(false);}}>Repor taxa da tabela ({String(scenarioQuote.taxa_tabela)}%)</button>}</span>
-         <small>{scenarioQuote.taxa_tabela!=null?<>Tabela de preços: <b>{String(scenarioQuote.taxa_tabela)}%</b>. </>:'Sem faixa na tabela de preços: é usada a taxa do contrato. '}Juros a pagar: <b>{fmt(scenarioQuote.juros)}</b> · Valor da prestação: <b>{fmt(scenarioQuote.valor_prestacao)}</b> · Próximo valor a pagar: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</small>
+         <small>{scenarioQuote.taxa_tabela!=null?<>Tabela de preços: <b>{String(scenarioQuote.taxa_tabela)}%</b>. </>:'Sem faixa na tabela de preços: é usada a taxa do contrato. '}Aplica-se ao capital que fica em dívida. Nova prestação: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</small>
          {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
         </label>}
+        {flowReceived&&mode==='parcial'&&<label>Data de início da nova prestação<input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setScenarioQuote(null);setConfirmReceipt(false);}}/><small>Por defeito começa no vencimento actual ({date(selectedInstallment?.['Data de Cobrança'])}); o vencimento é calculado: início + {currentTerm||'o mesmo prazo'}.</small></label>}
         {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===false&&<p className="cis-collections-mode-hint">Juros já fixados no primeiro pagamento parcial: {fmt(scenarioQuote.juros)}. Próximo valor a pagar: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</p>}
        </div>
        {(quoting||scenarioBusy)&&<p role="status">A calcular valores…</p>}
@@ -542,8 +543,12 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
           ['juros','Juros','m'],['juros_mora','Juros de mora','m'],['valor_prestacao','Valor da prestação','m'],['capital','Capital','m'],['capital_anterior','Capital anterior','m'],['juros_capitalizados','Juros capitalizados','m'],['capital_novo','Novo capital','m'],
           ['juros_anteriores','Juros anteriores','m'],['juros_periodo','Juros do novo período','m'],['taxa_tabela','Taxa da tabela (%)','t'],['taxa','Taxa aplicada (%)','t'],['juros_novos','Juros a cobrar','m'],['valor_a_pagar','Nova prestação','m'],
           ['vencimento_anterior','Vencimento anterior','d'],['novo_inicio','Novo início','d'],['novo_vencimento','Novo vencimento','d']] as const)
-          .filter(([k])=>(scenarioQuote as Record<string,unknown>)[k]!=null).map(([k,l,t])=>{const v=(scenarioQuote as Record<string,unknown>)[k];
+          .filter(([k])=>(scenarioQuote as Record<string,unknown>)[k]!=null&&!(mode==='parcial'&&['proximo_valor','proximo_vencimento','juros','taxa','taxa_tabela','valor_prestacao'].includes(k))).map(([k,l,t])=>{const v=(scenarioQuote as Record<string,unknown>)[k];
            return <div key={k} className={k==='valor'||k==='valor_a_pagar'||k==='proximo_valor'?'total':''}><dt>{l}</dt><dd>{t==='m'?fmt(v):t==='d'?date(String(v)):String(v)+(k==='taxa'&&(scenarioQuote as Record<string,unknown>).taxa_alterada?' (alterada)':'')}</dd></div>;})}</dl>
+        {mode==='parcial'&&(()=>{const n=(scenarioQuote as Record<string,unknown>).nova_prestacao as {parcela:number;data_inicio:string;data_vencimento:string;prazo:string;capital:string;juros:string;valor_a_pagar:string;taxa:string}|undefined;const sq=scenarioQuote as Record<string,unknown>;
+          return n?<><h4>Nova prestação no mesmo contrato</h4><dl><div><dt>Prestação</dt><dd>{n.parcela}</dd></div><div><dt>Início</dt><dd>{date(n.data_inicio)}</dd></div><div><dt>Vencimento (automático)</dt><dd>{date(n.data_vencimento)}</dd></div><div><dt>Prazo</dt><dd>{n.prazo}</dd></div>
+           <div><dt>Capital que fica</dt><dd>{fmt(n.capital)}</dd></div><div><dt>Juros ({n.taxa}%{sq.taxa_alterada?', alterada':', tabela'})</dt><dd>{fmt(n.juros)}</dd></div><div className="total"><dt>Nova prestação a pagar</dt><dd>{fmt(n.valor_a_pagar)}</dd></div></dl>
+           {sq.valor==null&&<p className="cis-collections-mode-hint">Indique o valor recebido para calcular o capital que fica e a nova prestação.</p>}</>:null;})()}
         {scenarioQuote.aviso&&<p className="cis-collections-mode-hint">{scenarioQuote.aviso}</p>}
         {!(scenarioQuote as Record<string,unknown>).registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real desligado no servidor: execute deploy/activate-collection-operations.sh na VPS.</span></div>}</div>}
        {opMode&&scenarioQuote&&<label className="cis-collections-check"><input type="checkbox" checked={confirmReceipt} onChange={e=>setConfirmReceipt(e.target.checked)}/> {opCash?`Confirmo que recebi ${fmt((scenarioQuote as Record<string,unknown>).valor)} na conta ${activeAccount?activeAccount.code:'seleccionada'}`:'Confirmo a alteração das condições desta prestação (fica no histórico)'}</label>}
