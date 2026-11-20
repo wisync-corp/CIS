@@ -596,6 +596,12 @@ $preview=fn(array $options=[])=>data($scenario->preview(req('/x',$options+$exten
 $both=$preview();
 ok($both['novo_vencimento']==='2026-02-19' && $both['tratamento_juros']===null
     && count($both['opcoes_juros'])===2,'vencimento original + 30 dias e duas opções sem selecção automática');
+$cap0=data($scenario->preview(req('/x',['operacao'=>'capitalizar','periodo_referencia'=>30],$user),'C-0270',$extension));
+$cap1=data($scenario->preview(req('/x',['operacao'=>'capitalizar','periodo_referencia'=>30,'taxa_informada'=>'12,5'],$user),'C-0270',$extension));
+ok(in_array($cap0['resultado'],['indicativo_sem_capitalizacao','sem_taxa'],true) && ($cap0['taxa_alterada']??null)===false
+    && ($cap0['resultado']==='sem_taxa'||$cap0['taxa']===$cap0['taxa_tabela']),'capitalização: juros a cobrar com a taxa da tabela por defeito');
+ok($cap1['taxa']==='12.5' && $cap1['taxa_alterada']===($cap0['taxa_tabela']!=='12.5') && $cap1['juros_novos']===number_format(round((float)$cap1['capital_novo']*100*12.5/100)/100,2,'.','')
+    && $err(fn()=>$scenario->preview(req('/x',['operacao'=>'capitalizar','periodo_referencia'=>30,'taxa_informada'=>'150'],$user),'C-0270',$extension))===422,'capitalização: outra taxa indicada pelo operador (e validada)');
 ok($preview(['tratamento_juros'=>'manter'])['resultado_escolhido']
     ===['juros'=>'50000.00','valor_a_pagar'=>'550000.00'],'manter preserva os valores actuais');
 ok($preview(['tratamento_juros'=>'recalcular'])['resultado_escolhido']

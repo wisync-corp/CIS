@@ -92,6 +92,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [scenarioBusy,setScenarioBusy]=useState(false);
  const [scenarioQuote,setScenarioQuote]=useState<ScenarioQuote|null>(null);
  const [capitalPeriod,setCapitalPeriod]=useState('');
+ // Juros a cobrar na capitalização: preenchido com a taxa da tabela, editável.
+ const [capitalRate,setCapitalRate]=useState(''),[capitalRateTouched,setCapitalRateTouched]=useState(false);
+ useEffect(()=>{setCapitalRate('');setCapitalRateTouched(false);},[mode,ord,selected]);
+ const rateValid=(v:string)=>/^\d{1,3}([.,]\d{1,4})?$/.test(v.trim())&&Number(v.trim().replace(',','.'))>0&&Number(v.trim().replace(',','.'))<=100;
  const [interestChoice,setInterestChoice]=useState('');
  const [fineRate,setFineRate]=useState('');
  const [fineGrace,setFineGrace]=useState('');
@@ -285,7 +289,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  useEffect(()=>{
   setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setQuoting(false);setScenarioBusy(false);
   if(view!=='tratamento'||!selected||!ord||!activeOrder||!modeAllowed||paymentDone)return;
-  if(live?!canQuote:(mode==='parcial'&&!partialValid)||(mode==='capitalizar'&&!capitalPeriod))return;
+  if(live?!canQuote:(mode==='parcial'&&!partialValid)||(mode==='capitalizar'&&(!capitalPeriod||(capitalRateTouched&&!rateValid(capitalRate)))))return;
   const ctrl=new AbortController();
   setMessage('');
   if(live)setQuoting(true);else setScenarioBusy(true);
@@ -293,7 +297,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   const body=live?{data_pagamento:datePayment,cobrar_multa:penalty,...(renewing?{data_inicio:renewStart}:{})}:{
    operacao:mode,
    ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
-   ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod)}:{}),
+   ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='prorrogar_15_30'?{prazo_origem_dias:15,prazo_destino_dias:30,tratamento_juros:interestChoice||null}:{}),
    ...(mode==='actualizar_data'?{data_pagamento:reviewDate}:{})
   };
@@ -305,12 +309,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     });
     const data=await response.json().catch(()=>({})) as {errors?:Record<string,string[]>;message?:string};
     if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular a operação.');
-    if(!ctrl.signal.aborted){if(live)setQuote(data as unknown as Quote);else setScenarioQuote(data as unknown as ScenarioQuote);}
+    if(!ctrl.signal.aborted){if(live)setQuote(data as unknown as Quote);else{setScenarioQuote(data as unknown as ScenarioQuote);
+     if(mode==='capitalizar'&&!capitalRateTouched&&(data as Record<string,unknown>).taxa_tabela!=null)setCapitalRate(String((data as Record<string,unknown>).taxa_tabela));}}
    }catch(err){if(!ctrl.signal.aborted)setMessage(err instanceof Error?err.message:'Falha no cálculo.');}
    finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
   },400);
   return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
+ },[selected,ord,view,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
 
  useEffect(()=>{
   setFinePreview(null);setFineError('');
@@ -402,7 +407,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {selectedInstallment&&<>
         <div className="cis-collections-focus-amount"><small>Valor previsto para esta prestação</small><strong>{fmt(selectedInstallment['Valor a Pagar'])}</strong><span>Vencimento: {date(selectedInstallment['Data de Cobrança'])}</span></div>
         <dl className="cis-collections-focus-lines">
-         <div><dt>Estado</dt><dd>{text(selectedInstallment.Estado)}</dd></div>
+         <div><dt>Estado</dt><dd>{estadoPrestacao(selectedInstallment.Estado)}</dd></div>
          <div><dt>Situação</dt><dd>{text(selectedInstallment['Situação de Pagamento'])}</dd></div>
          <div><dt>Valor já pago (registo)</dt><dd>{fmt(selectedInstallment['Valor Pago'])}</dd></div>
          <div><dt>Juros previstos</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div>
@@ -454,12 +459,20 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Normalmente começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}).</small></label>}
         {flowReceived&&live&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar juros de mora quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
-        {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
+        {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setCapitalRate('');setCapitalRateTouched(false);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
+        {mode==='capitalizar'&&capitalPeriod&&<label>Juros a cobrar (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote?.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>
+         <span className="cis-collections-rate"><input inputMode="decimal" type="text" value={capitalRate} placeholder={scenarioQuote?.resultado==='sem_taxa'?'Indique a taxa':'—'} aria-invalid={capitalRateTouched&&!rateValid(capitalRate)}
+           onChange={e=>{setCapitalRate(e.target.value);setCapitalRateTouched(true);}}/><em>%</em>
+          {capitalRateTouched&&scenarioQuote?.taxa_tabela!=null&&String(scenarioQuote.taxa_tabela)!==capitalRate.replace(',','.')&&<button type="button" onClick={()=>{setCapitalRate(String(scenarioQuote.taxa_tabela));setCapitalRateTouched(false);}}>Repor taxa da tabela ({String(scenarioQuote.taxa_tabela)}%)</button>}</span>
+         <small>{scenarioQuote?.taxa_tabela!=null?<>Tabela de preços: <b>{String(scenarioQuote.taxa_tabela)}%</b>{Array.isArray(scenarioQuote.faixa)?<> na faixa {(scenarioQuote.faixa as string[]).map(v=>fmt(v)).join(' – ')}</>:null}. Pode cobrar outra taxa.</>:scenarioQuote?.resultado==='sem_taxa'?'Sem faixa na tabela de preços para o novo capital: indique a taxa a cobrar.':'A taxa vem da tabela de preços; pode alterá-la.'}
+          {scenarioQuote?.juros_novos!=null&&<> Juros a cobrar: <b>{fmt(String(scenarioQuote.juros_novos))}</b> · Nova prestação: <b>{fmt(String(scenarioQuote.prestacao_nova))}</b>.</>}</small>
+         {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
+        </label>}
         {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>O VBA exige valor inferior à prestação e, como regra inicial, não inferior aos juros.</small></label>}
        </div>
        {(quoting||scenarioBusy)&&<p role="status">A calcular valores…</p>}
        {modeLocked&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span><strong>Operação não activada.</strong> O cenário foi identificado no VBA. O CAPTA pode apresentar uma prévia informativa, mas nenhuma alteração financeira será gravada.</span></div>}
-       {scenarioQuote&&modeLocked&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><ShieldCheck size={18}/><strong>Prévia informativa do servidor</strong></div><dl>{(['capital_historico','juros_historicos','valor_pago','juros_cobertos','amortizacao','diferenca_aritmetica','capital','juros_actual','juros_novo','prestacao_nova','capital_anterior','juros_anteriores','capital_novo','taxa','periodo_referencia','faixa','juros_novos','data_revisao','dias_atraso','estado_proposto','prestacoes_em_atraso','prestacoes_nao_liquidadas','elegivel_para_analise','prazo_origem_dias','prazo_destino_dias','taxa_destino'] as const).filter(key=>scenarioQuote[key]!==undefined).map(key=><div key={key}><dt>{({'capital_historico':'Capital histórico','juros_historicos':'Juros históricos','valor_pago':'Valor parcial','juros_cobertos':'Juros cobertos','amortizacao':'Amortização indicativa','diferenca_aritmetica':'Diferença aritmética','capital':'Capital','juros_actual':'Juros actuais','juros_novo':'Juros revistos','prestacao_nova':'Prestação indicativa','capital_anterior':'Capital anterior','juros_anteriores':'Juros anteriores','capital_novo':'Novo capital indicativo','taxa':'Taxa (%)','periodo_referencia':'Período (dias)','faixa':'Faixa de capital','juros_novos':'Juros novos','data_revisao':'Data revista','dias_atraso':'Dias em atraso','estado_proposto':'Estado proposto','prestacoes_em_atraso':'Prestações em atraso','prestacoes_nao_liquidadas':'Prestações não liquidadas','elegivel_para_analise':'Elegível para análise','prazo_origem_dias':'Prazo anterior (dias)','prazo_destino_dias':'Novo prazo (dias)','taxa_destino':'Taxa prevista na faixa 30 dias (%)'} as Record<string,string>)[key]}</dt><dd>{Array.isArray(scenarioQuote[key])?(scenarioQuote[key] as unknown[]).join(' – '):typeof scenarioQuote[key]==='boolean'?(scenarioQuote[key]?'Sim':'Não'):String(scenarioQuote[key])}</dd></div>)}</dl><div className="cis-collections-planned"><Info size={16}/><span>{scenarioQuote.aviso}</span></div></div>}
+       {scenarioQuote&&modeLocked&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><ShieldCheck size={18}/><strong>Prévia informativa do servidor</strong></div><dl>{(['capital_historico','juros_historicos','valor_pago','juros_cobertos','amortizacao','diferenca_aritmetica','capital','juros_actual','juros_novo','prestacao_nova','capital_anterior','juros_anteriores','capital_novo','taxa_tabela','taxa','taxa_alterada','periodo_referencia','faixa','juros_novos','data_revisao','dias_atraso','estado_proposto','prestacoes_em_atraso','prestacoes_nao_liquidadas','elegivel_para_analise','prazo_origem_dias','prazo_destino_dias','taxa_destino'] as const).filter(key=>scenarioQuote[key]!==undefined).map(key=><div key={key}><dt>{({'capital_historico':'Capital histórico','juros_historicos':'Juros históricos','valor_pago':'Valor parcial','juros_cobertos':'Juros cobertos','amortizacao':'Amortização indicativa','diferenca_aritmetica':'Diferença aritmética','capital':'Capital','juros_actual':'Juros actuais','juros_novo':'Juros revistos','prestacao_nova':'Prestação indicativa','capital_anterior':'Capital anterior','juros_anteriores':'Juros anteriores','capital_novo':'Novo capital indicativo','taxa':'Taxa aplicada (%)','taxa_tabela':'Taxa da tabela (%)','taxa_alterada':'Taxa alterada pelo operador','periodo_referencia':'Período (dias)','faixa':'Faixa de capital','juros_novos':'Juros a cobrar','data_revisao':'Data revista','dias_atraso':'Dias em atraso','estado_proposto':'Estado proposto','prestacoes_em_atraso':'Prestações em atraso','prestacoes_nao_liquidadas':'Prestações não liquidadas','elegivel_para_analise':'Elegível para análise','prazo_origem_dias':'Prazo anterior (dias)','prazo_destino_dias':'Novo prazo (dias)','taxa_destino':'Taxa prevista na faixa 30 dias (%)'} as Record<string,string>)[key]}</dt><dd>{Array.isArray(scenarioQuote[key])?(scenarioQuote[key] as unknown[]).join(' – '):typeof scenarioQuote[key]==='boolean'?(scenarioQuote[key]?'Sim':'Não'):String(scenarioQuote[key])}</dd></div>)}</dl><div className="cis-collections-planned"><Info size={16}/><span>{scenarioQuote.aviso}</span></div></div>}
        {mode==='parcial'&&paymentAmount&&<div className="cis-collections-breakdown">
         <h4>Verificação indicativa do pagamento parcial</h4>
         {!partialValid?<div className="cis-collections-risk"><AlertCircle size={16}/> Verifique o valor: deve ser positivo, inferior ao valor da prestação e não inferior aos juros, conforme o VBA. Não foi efectuado qualquer lançamento.</div>:
@@ -467,7 +480,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         <small>Não substitui a criação/recalendarização de uma nova prestação nem representa valor remanescente homologado.</small>
        </div>}
        {mode==='renovar_juros'&&<div className="cis-collections-planned"><Info size={17}/><span>Na rotina ActualizarFinanceiroCobranca, renovar juros preserva o capital e acrescenta mais um período de juros. Não é um pagamento nem deve criar entrada no Extracto.</span></div>}
-       {mode==='capitalizar'&&<div className="cis-collections-planned"><Info size={17}/><span>Capitalização exige recalcular a taxa e o intervalo aplicável a partir das faixas da Table4/Definições. Nunca aplicar taxa presumida nem alterar capital sem validação.</span></div>}
+       {mode==='capitalizar'&&<div className="cis-collections-planned"><Info size={17}/><span>Na capitalização, os juros em dívida passam a capital. Os juros a cobrar usam a taxa da tabela de preços para o novo capital e o período escolhido; pode indicar outra taxa, que fica identificada como alterada. Prévia indicativa: não altera o capital nem o contrato.</span></div>}
        {mode==='remanescente'&&<div className="cis-collections-planned"><Info size={17}/><span>Liquidar o remanescente exige verificar prestações em atraso, montante realmente devido e evidência de recebimento. O botão VBA não é suficiente para autorizar a operação.</span></div>}
        {mode==='prorrogar_15_30'&&<label>Tratamento dos juros<select value={interestChoice} onChange={e=>{setInterestChoice(e.target.value);setScenarioQuote(null);}}><option value="">Escolher tratamento</option><option value="manter">Manter juros actuais</option><option value="recalcular">Recalcular à taxa de 30 dias</option></select></label>}
        {mode==='prorrogar_15_30'&&scenarioQuote&&<p>Novo vencimento: {date(String(scenarioQuote.novo_vencimento??''))}{scenarioQuote.resultado_escolhido!=null&&' · Valor da prestação: '+fmt((scenarioQuote.resultado_escolhido as {valor_a_pagar:string}).valor_a_pagar)}</p>}
