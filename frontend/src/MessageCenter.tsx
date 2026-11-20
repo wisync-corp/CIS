@@ -25,6 +25,7 @@ const smsUrl=(tel:string,msg:string)=>'sms:+'+tel+'?body='+encodeURIComponent(ms
 
 /** Modelo sugerido ao abrir (criado automaticamente se ainda não existir), anexo e campos extra (ex.: dados do recibo). */
 export type MessagePreset={modelo?:{nome:string;corpo:string};anexo?:WaImage|null;extras?:Record<string,string>};
+const isPdf=(a:WaImage)=>a.type==='application/pdf';
 const applyExtras=(t:string,x?:Record<string,string>)=>x?t.replace(/\{([^{}]{1,40})\}/g,(m,k:string)=>k in x?x[k]:m):t;
 
 export default function MessageCenter({token,contrato,onClose,preset}:{token:string;contrato?:string;onClose?:()=>void;preset?:MessagePreset}){
@@ -123,9 +124,9 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  }
  function pickImage(f:File|undefined){
   setError('');if(!f)return;
-  if(!/^image\/(jpeg|png|webp)$/.test(f.type)){setError('Imagem não suportada: use JPG, PNG ou WebP.');return;}
+  if(!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(f.type)){setError('Anexo não suportado: use PDF, JPG, PNG ou WebP.');return;}
   if(f.size>5*1024*1024){setError('Imagem demasiado grande (máximo 5 MB).');return;}
-  const rd=new FileReader();rd.onload=()=>setImage({name:f.name,type:f.type,dataUrl:String(rd.result)});rd.onerror=()=>setError('Não foi possível ler a imagem.');rd.readAsDataURL(f);
+  const rd=new FileReader();rd.onload=()=>setImage({name:f.name,type:f.type,dataUrl:String(rd.result)});rd.onerror=()=>setError('Não foi possível ler o anexo.');rd.readAsDataURL(f);
  }
  function sendWeb(){
   if(!dest?.telefone||!text.trim())return;
@@ -213,11 +214,11 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
       {showEmoji&&<div className="cis-msg-emojis">{EMOJIS.map(e=><button type="button" key={e} onClick={()=>insert(e)}>{e}</button>)}</div>}
      </div>:<p className="cis-msg-muted">Carregue em <b>Editar</b> para alterar o modelo. Os campos entre chavetas são preenchidos com os dados de cada contrato.</p>}
      <div className="cis-msg-image">
-      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
-      {image?<><img src={image.dataUrl} alt="Imagem a enviar"/><span><b>{image.name}</b><small>{wa.available?'Vai com cada mensagem, com o texto como legenda.':'Só segue automaticamente com a extensão.'}</small></span>
+      <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
+      {image?<>{isPdf(image)?<span className="cis-msg-pdf" aria-hidden="true">PDF</span>:<img src={image.dataUrl} alt="Imagem a enviar"/>}<span><b>{image.name}</b><small>{wa.available?isPdf(image)?'Documento PDF; vai com a mensagem como legenda.':'Vai com cada mensagem, com o texto como legenda.':'Só segue automaticamente com a extensão.'}</small></span>
        {!wa.available&&<a className="cis-msg-download" href={image.dataUrl} download={image.name}>Descarregar para anexar</a>}
        <button type="button" onClick={()=>setImage(null)}><X size={13}/> Remover</button></>
-      :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar imagem</button>}
+      :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar PDF ou imagem</button>}
      </div>
     </div>
    </div>
@@ -228,7 +229,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
      <div className="cis-wa-screen">
       <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Mutuário'):'Mutuário (exemplo)'}</b><small>{sendMode?(dest?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
       <div className="cis-wa-chat"><div className="cis-wa-bubble">
-       {image&&<img src={image.dataUrl} alt=""/>}
+       {image&&(isPdf(image)?<div className="cis-wa-doc"><span>PDF</span><b>{image.name}</b></div>:<img src={image.dataUrl} alt=""/>)}
        <WaText text={sendMode?text:body} fields={!sendMode}/>
        <span className="cis-wa-time">{new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'})} ✓✓</span>
       </div></div>

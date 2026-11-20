@@ -146,7 +146,7 @@ chrome.runtime.onConnect.addListener(port => {
         maxGap: Math.max(5, Math.min(180, Number(msg.maxGap) || 18)),
       };
       // Imagem opcional (uma para todas as mensagens deste envio): data URL até ~5 MB.
-      const img = msg.image && /^data:image\/(jpeg|png|webp);base64,/.test(String(msg.image.dataUrl || '')) && String(msg.image.dataUrl).length < 7_500_000
+      const img = msg.image && /^data:(image\/(jpeg|png|webp)|application\/pdf);base64,/.test(String(msg.image.dataUrl || '')) && String(msg.image.dataUrl).length < 7_500_000
         ? {name: String(msg.image.name || 'imagem').slice(0, 120), type: String(msg.image.type || ''), dataUrl: String(msg.image.dataUrl)} : null;
       for (const j of msg.jobs) {
         const phone = String(j.phone || '').replace(/\D/g, '');

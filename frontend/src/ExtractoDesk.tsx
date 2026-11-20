@@ -5,7 +5,7 @@ import {createPortal} from 'react-dom';
 import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,SlidersHorizontal,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
 import MessageCenter,{type MessagePreset} from './MessageCenter';
-import {documentImage,fileName} from './docImage';
+import {documentPdf,fileName} from './docImage';
 import {pushToast} from './waBridge';
 import {situacaoContrato} from './glossario';
 
@@ -192,16 +192,16 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   if(!k){pushToast('erro','O extracto não tem contratos: não há para quem enviar.');return;}
   setSendBusy(true);
   try{
-   const dataUrl=await documentImage(el);
+   const dataUrl=await documentPdf(el,'Extracto '+evidence.cliente.nome);
    const periodo=evidence.periodo.inicio||evidence.periodo.fim?`${dt(evidence.periodo.inicio)} a ${dt(evidence.periodo.fim)}`:'todo o histórico';
    setMsgPreset({
-    anexo:{name:fileName('Extracto '+evidence.cliente.nome+' '+evidence.emitido_em.slice(0,10)),type:'image/jpeg',dataUrl},
+    anexo:{name:fileName('Extracto '+evidence.cliente.nome+' '+evidence.emitido_em.slice(0,10)),type:'application/pdf',dataUrl},
     modelo:{nome:'Envio de extracto',corpo:'Olá {Primeiro Nome}, 👋\nSegue em anexo o extracto da sua conta ({Período do Extracto}).\nTotal pago: *{Total Pago}*.\nSaldo em dívida: *{Saldo do Extracto}*.\nPróximo vencimento: {Data de Cobrança}.\n\nQualquer dúvida, estamos ao dispor. 🙏'},
     extras:{'Período do Extracto':periodo,'Total Pago':mt(evidence.totais.pago)+' MT','Saldo do Extracto':mt(Number(evidence.totais.aberto)+Number(evidence.totais.vencido))+' MT',
      'Valor Vencido':mt(evidence.totais.vencido)+' MT','Código do Extracto':evidence.codigo_verificacao},
    });
    setMsgContract(k.contrato);
-  }catch(e){pushToast('erro',e instanceof Error?e.message:'Não foi possível preparar a imagem do extracto.');}
+  }catch(e){pushToast('erro',e instanceof Error?e.message:'Não foi possível preparar o PDF do extracto.');}
   finally{setSendBusy(false);}
  }
 

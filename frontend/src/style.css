@@ -1710,3 +1710,10 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-msg-number label.on{border-color:var(--cis-primary);background:var(--cis-tint)}
 .cis-msg-number label.off{opacity:.55;cursor:not-allowed}
 .cis-msg-number span{display:flex;flex-direction:column;min-width:0;text-align:left}.cis-msg-number b{font-size:.95em}.cis-msg-number small{color:var(--cis-text-muted)}
+
+/* Anexo PDF no Centro de mensagens */
+.cis-msg-pdf{display:grid;place-items:center;width:46px;height:56px;border-radius:6px;background:#d92d20;color:#fff;font-weight:800;font-size:12px;flex-shrink:0}
+.cis-wa-doc{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.05);border-radius:8px;padding:10px;margin-bottom:6px}
+.cis-wa-doc span{display:grid;place-items:center;width:34px;height:40px;border-radius:5px;background:#d92d20;color:#fff;font-weight:800;font-size:11px}
+.cis-wa-doc b{font-size:.92em;word-break:break-all}
+.cis-msg-image .cis-msg-pdf{min-width:0!important;width:46px!important;max-width:46px;flex:0 0 46px!important;height:56px;padding:0;display:grid!important;place-items:center}
