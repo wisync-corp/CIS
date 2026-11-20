@@ -9,7 +9,8 @@
     ready: ['#pane-side', '[data-testid="chat-list"]', 'div[aria-label="Lista de conversas"]', 'div[aria-label="Chat list"]', '#side'],
     qr: ['canvas[aria-label*="QR" i]', '[data-testid="qrcode"]', 'div[data-ref] canvas', '[data-ref]'],
     compose: ['footer div[contenteditable="true"][role="textbox"]', 'footer div[contenteditable="true"]', 'div[contenteditable="true"][data-tab="10"]'],
-    send: ['button[aria-label="Enviar"]', 'button[aria-label="Send"]', 'span[data-icon="send"]', 'span[data-icon="wds-ic-send-filled"]', '[data-testid="send"]'],
+    send: ['button[aria-label="Enviar"]', 'button[aria-label="Send"]', '[role="button"][aria-label="Enviar"]', '[role="button"][aria-label="Send"]',
+      'span[data-icon="wds-ic-send-filled"]', 'span[data-icon="send"]', 'span[data-icon="send-light"]', '[data-testid="send"]', '[data-testid="compose-btn-send"]'],
     dialog: ['div[role="dialog"]', '[data-animate-modal-popup="true"]'],
     outgoing: ['div.message-out', '[data-testid="msg-container"] .message-out'],
     // Ecrã de pré-visualização de imagem (abre depois de colar a imagem na conversa).
@@ -20,6 +21,24 @@
   const q = (list, root = document) => { for (const s of list) { const el = root.querySelector(s); if (el) return el; } return null; };
   const qa = (list, root = document) => { for (const s of list) { const els = root.querySelectorAll(s); if (els.length) return [...els]; } return []; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // Elemento clicável do botão (o WhatsApp usa <button> ou <div role="button"> com um ícone dentro).
+  const clickable = el => el ? (el.closest('button,[role="button"]') || el) : null;
+  const disabled = el => !!el && (el.disabled || el.getAttribute('aria-disabled') === 'true');
+  // Clique «completo»: alguns botões do WhatsApp só reagem a pointer/mouse down+up, não a .click().
+  function press(el) {
+    const r = el.getBoundingClientRect();
+    const o = {bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0};
+    for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
+      const E = t.startsWith('pointer') && window.PointerEvent ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new E(t, {...o, pointerType: 'mouse', isPrimary: true}));
+    }
+    el.click();
+  }
+  // Enter no editor (o WhatsApp envia com Enter na caixa de escrita e na legenda da imagem).
+  function enter(el) {
+    el.focus();
+    for (const t of ['keydown', 'keypress', 'keyup']) el.dispatchEvent(new KeyboardEvent(t, {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true}));
+  }
 
   function state() {
     if (q(SEL.ready)) return 'ready';
@@ -63,9 +82,8 @@
 
     // 3) Enviar.
     const existing = new Set(qa(SEL.outgoing));
-    const btn = await waitFor(() => { const b = q(SEL.send); return b ? (b.closest('button') || b) : null; }, 10000);
-    if (!btn) return {status: 'error', detail: 'Botão Enviar não encontrado.'};
-    btn.click();
+    const btn = await waitFor(() => { const b = clickable(q(SEL.send, document.querySelector('footer') || document)); return b && !disabled(b) ? b : null; }, 10000);
+    if (btn) press(btn); else enter(res.compose);
 
     // 4) Confirmar. O WhatsApp mostra *negrito*/_itálico_ sem os símbolos e os emojis como imagens,
     //    por isso compara-se só o texto «simples» (letras, números, pontuação básica).
@@ -80,7 +98,8 @@
     const composeEmpty = () => { const c = q(SEL.compose); return !c || norm(c.textContent) === ''; };
 
     // O WhatsApp aceitou o envio quando a caixa de escrita esvazia ou a mensagem aparece.
-    const accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 15000);
+    let accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 4000);
+    if (!accepted) { const c = q(SEL.compose); if (c) enter(c); accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 12000); }
     if (!accepted) return {status: 'error', detail: 'O texto ficou na caixa de escrita: a mensagem não saiu.'};
 
     const mine = await waitFor(findMine, 15000);
@@ -112,8 +131,8 @@
   // Botão Enviar do ecrã de pré-visualização: o mais próximo da caixa de legenda.
   const previewSend = cap => {
     for (let el = cap; el && el !== document.body; el = el.parentElement) {
-      const b = q(SEL.send, el);
-      if (b && !b.closest('footer')) return b.closest('button') || b;
+      const b = clickable(q(SEL.send, el));
+      if (b && !b.closest('footer') && b.offsetParent !== null) return b;
     }
     return null;
   };
@@ -141,12 +160,15 @@
       document.execCommand('insertText', false, job.text);
       if (!plain(cap.textContent)) { cap.textContent = job.text; cap.dispatchEvent(new InputEvent('input', {bubbles: true})); }
     }
-    const btn = await waitFor(() => previewSend(cap), 8000);
-    if (!btn) return {status: 'error', detail: 'Botão Enviar da imagem não encontrado.'};
-    btn.click();
-
-    // Aceite quando a pré-visualização fecha; confirmado quando aparece uma mensagem nova com imagem.
-    const closed = await waitFor(() => (!cap.isConnected || cap.offsetParent === null) ? true : null, 20000);
+    // Espera que a imagem esteja pronta (botão activo) e envia; se a pré-visualização não fechar,
+    // tenta de novo com Enter na legenda e com um segundo clique.
+    await sleep(600);
+    const isClosed = () => (!cap.isConnected || cap.offsetParent === null) ? true : null;
+    const btn = await waitFor(() => { const b = previewSend(cap); return b && !disabled(b) ? b : null; }, 10000);
+    if (btn) press(btn); else enter(cap);
+    let closed = await waitFor(isClosed, 8000);
+    if (!closed && cap.isConnected) { enter(cap); closed = await waitFor(isClosed, 5000); }
+    if (!closed) { const b2 = previewSend(cap); if (b2) { press(b2); closed = await waitFor(isClosed, 10000); } }
     if (!closed) return {status: 'error', detail: 'A pré-visualização da imagem não fechou: a imagem não saiu.'};
     const mine = await waitFor(() => qa(SEL.outgoing).slice(-4).reverse().find(el => !before.has(el) && q(SEL.outImage, el)) || null, 20000);
     if (!mine) return {status: 'sent', detail: 'Imagem enviada (confirmação visual não encontrada).'};
