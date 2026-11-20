@@ -1,12 +1,16 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff,ExternalLink} from 'lucide-react';
 import MessageLog from './MessageLog';
-import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref,type WaImage} from './waBridge';
+import {onWa,waState,waSend,waStop,waCheck,jobStatus,jobDetail,failKind,getShowPref,setShowPref,type WaImage} from './waBridge';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Template={id:number;name:string;body:string;updated_at:string|null};
 type Preview={contrato:string;cliente:string;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;contacto_alternativo?:string|null;telefone_alternativo?:string|null};
-type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada';jobId?:string};
+type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;contacto_alternativo?:string|null;telefone_alternativo?:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada';jobId?:string};
+type RowState='por_enviar'|'a_enviar'|'enviada'|'falhada'|'sem_whatsapp'|'sem_contacto';
+type QueueFilter='todos'|RowState;
+const FILTERS:{id:QueueFilter;label:string}[]=[{id:'todos',label:'Todos'},{id:'por_enviar',label:'Por enviar'},{id:'a_enviar',label:'A enviar'},{id:'enviada',label:'Enviadas'},
+ {id:'falhada',label:'Falhadas'},{id:'sem_whatsapp',label:'Sem WhatsApp'},{id:'sem_contacto',label:'Sem contacto'}];
 type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados';
 const GROUPS:{id:Group;label:string;hint:string}[]=[
  {id:'todos',label:'Todos os contactos',hint:'Um por mutuário (contrato mais recente)'},
@@ -37,6 +41,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  const [field,setField]=useState('');const [showEmoji,setShowEmoji]=useState(false);
  const [preview,setPreview]=useState<Preview|null>(null);const [text,setText]=useState('');
  const [group,setGroup]=useState<Group|''>('');const [queue,setQueue]=useState<Recipient[]|null>(null);const [queueInfo,setQueueInfo]=useState('');
+ const [qFilter,setQFilter]=useState<QueueFilter>('todos');const [qNumero,setQNumero]=useState<'principal'|'alternativo'>('principal');const [qLabel,setQLabel]=useState('');
  const [busy,setBusy]=useState('');const [error,setError]=useState('');const [notice,setNotice]=useState('');
  const ta=useRef<HTMLTextAreaElement>(null);
  const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
@@ -133,36 +138,65 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   const id='c-'+dest.contrato+'-'+Date.now();setLastJob(id);setError('');
   waSend([{id,phone:dest.telefone,text,meta:{contrato:dest.contrato,cliente:dest.cliente,modelo_id:selId||null}}],show,image);
  }
+ // Número usado na fila (principal ou alternativo) e estado de cada destinatário.
+ const tel=(r:Recipient)=>qNumero==='alternativo'?(r.telefone_alternativo??null):r.telefone;
+ const contactoDe=(r:Recipient)=>qNumero==='alternativo'?(r.contacto_alternativo??null):r.contacto;
+ const rowState=(r:Recipient):RowState=>{
+  if(!tel(r))return 'sem_contacto';
+  const js=r.jobId?jobStatus(r.jobId):undefined;
+  if(js==='enviada'||r.estado==='aberta')return 'enviada';
+  if(js==='a_enviar')return 'a_enviar';
+  if(js==='falhada'){const k=failKind(jobDetail(r.jobId!));return k==='sem_whatsapp'?'sem_whatsapp':k==='parada'?'por_enviar':'falhada';}
+  return 'por_enviar';
+ };
+ // Enviar/continuar: só os por enviar e os que falharam; nunca repete os enviados nem os sem WhatsApp.
  function sendQueueWeb(){
   if(!queue)return;const ts=Date.now();
-  const next=queue.map((r,i)=>r.telefone&&!r.estado&&!(r.jobId&&jobStatus(r.jobId)==='enviada')?{...r,jobId:'q-'+i+'-'+ts}:r);
+  const next=queue.map((r,i)=>{const st=rowState(r);return st==='por_enviar'||st==='falhada'?{...r,jobId:'q-'+i+'-'+ts}:r;});
   setQueue(next);
-  const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:r.telefone!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:selId||null,grupo:group||null}}));
-  if(!list.length){setNotice('Não há mensagens por enviar na fila.');return;}
+  const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:tel(r)!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:selId||null,grupo:group||'todos'}}));
+  if(!list.length){setNotice('Não há mensagens por enviar nesta fila.');return;}
+  setQFilter('todos');
   waSend(list,show,image);
+ }
+ // Nova fila só com os destinatários do filtro actual (ex.: sem WhatsApp → número alternativo).
+ function newQueueFrom(f:RowState){
+  if(!queue)return;
+  const rows=queue.filter(r=>rowState(r)===f).map(r=>({...r,jobId:undefined,estado:undefined}));
+  if(!rows.length)return;
+  const hasAlt=rows.some(r=>r.telefone_alternativo);
+  setQueue(rows);setQFilter('todos');
+  setQLabel(FILTERS.find(x=>x.id===f)!.label);
+  setQNumero(f!=='falhada'&&hasAlt?'alternativo':'principal');
+  setQueueInfo(`${rows.length} destinatário(s) · ${rows.filter(r=>r.telefone_alternativo).length} com número alternativo`);
+  setNotice(`Nova fila com ${rows.length} destinatário(s) «${FILTERS.find(x=>x.id===f)!.label}».${hasAlt&&f!=='falhada'?' Usa o número alternativo; pode mudar para o principal.':''}`);
  }
  async function loadQueue(){
   if(!group)return;setBusy('queue');setError('');setQueue(null);
   try{const p=new URLSearchParams({grupo:group});if(editing)p.set('texto',body);else if(selId)p.set('modelo_id',String(selId));else p.set('texto',body);
    const j=await call<{total:number;com_contacto:number;destinatarios:Recipient[]}>('/cis/mensagens/destinatarios?'+p);
-   setQueue(j.destinatarios);setQueueInfo(`${j.total} destinatário(s) · ${j.com_contacto} com contacto`);}
+   setQueue(j.destinatarios);setQFilter('todos');setQNumero('principal');setQLabel('');setQueueInfo(`${j.total} destinatário(s) · ${j.com_contacto} com contacto`);}
   catch(e){setError(e instanceof Error?e.message:'Não foi possível preparar a fila.');}finally{setBusy('');}
  }
  async function openRecipient(i:number){
-  if(!queue)return;const r=queue[i];if(!r.telefone)return;
-  openWa(waUrl(r.telefone,r.mensagem));
+  if(!queue)return;const r=queue[i];const t=tel(r);if(!t)return;
+  openWa(waUrl(t,r.mensagem));
   setQueue(q=>q&&q.map((x,k)=>k===i?{...x,estado:'aberta'}:x));
-  await log({contrato:r.contrato,cliente_id:r.cliente_id,telefone:r.telefone,canal:'whatsapp',mensagem:r.mensagem,grupo:group||undefined});
+  await log({contrato:r.contrato,cliente_id:r.cliente_id,telefone:t,canal:'whatsapp',mensagem:r.mensagem,grupo:group||undefined});
  }
- const nextIdx=queue?queue.findIndex(r=>r.telefone&&!r.estado&&!(r.jobId&&jobStatus(r.jobId))):-1;
- const done=queue?queue.filter(r=>r.estado==='aberta').length:0;
+ const nextIdx=queue?queue.findIndex(r=>rowState(r)==='por_enviar'&&!r.estado):-1;
+ // Recalculado a cada actualização da extensão (resultados chegam pela ponte).
+ const counts:Record<QueueFilter,number>={todos:queue?.length??0,por_enviar:0,a_enviar:0,enviada:0,falhada:0,sem_whatsapp:0,sem_contacto:0};
+ for(const r of queue??[])counts[rowState(r)]++;
+ const visible=queue?queue.map((r,i)=>({r,i})).filter(({r})=>qFilter==='todos'||rowState(r)===qFilter):[];
+ const pending=counts.por_enviar+counts.falhada;
 
- const statusCell=(r:Recipient,i:number)=>{const js=r.jobId?jobStatus(r.jobId):undefined;
-  if(!r.telefone)return <small>Sem contacto</small>;
-  if(js==='enviada')return <span className="ok"><CheckCircle2 size={14}/> Enviada</span>;
-  if(js==='a_enviar')return <span className="wait"><Loader2 size={14} className="spin"/> Na fila</span>;
-  if(js==='falhada')return <span className="fail"><AlertCircle size={14}/> Falhou</span>;
-  if(r.estado==='aberta')return <span className="ok"><CheckCircle2 size={14}/> Aberta</span>;
+ const statusCell=(r:Recipient,i:number)=>{const st=rowState(r);const det=r.jobId?jobDetail(r.jobId):null;
+  if(st==='sem_contacto')return <small>{qNumero==='alternativo'?'Sem número alternativo':'Sem contacto'}</small>;
+  if(st==='enviada')return <span className="ok"><CheckCircle2 size={14}/> {r.estado==='aberta'?'Aberta':'Enviada'}</span>;
+  if(st==='a_enviar')return <span className="wait"><Loader2 size={14} className="spin"/> Na fila</span>;
+  if(st==='sem_whatsapp')return <span className="fail" title={det??''}><AlertCircle size={14}/> Sem WhatsApp</span>;
+  if(st==='falhada')return <span className="fail" title={det??''}><AlertCircle size={14}/> Falhou<small className="cis-msg-fail-detail">{det}</small><button type="button" onClick={()=>void openRecipient(i)}><Send size={12}/> Abrir</button></span>;
   return <button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>;};
  const sending=!!lastJob&&jobStatus(lastJob)==='a_enviar';
 
@@ -267,14 +301,27 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   {notice&&!error&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
 
   {!sendMode&&queue&&<div className="cis-msg-card cis-msg-queue-card">
-   <div className="cis-msg-queue-head"><h3><Users size={16}/> Fila · {GROUPS.find(g=>g.id===group)?.label}</h3><span>{queueInfo} · {done} aberta(s)</span>
+   <div className="cis-msg-queue-head"><h3><Users size={16}/> Fila · {qLabel||GROUPS.find(g=>g.id===group)?.label}</h3><span>{queueInfo}</span>
     <div className="cis-msg-btns">
-     {wa.available&&<button type="button" className="primary" disabled={wa.running} onClick={sendQueueWeb}><Send size={14}/> {wa.running?`A enviar… (${wa.pendentes} na fila)`:'Enviar a fila pelo WhatsApp Web'}</button>}
+     {wa.available&&<button type="button" className="primary" disabled={wa.running||pending===0} onClick={sendQueueWeb}><Send size={14}/> {wa.running?`A enviar… (${wa.pendentes} na fila)`:pending===0?'Nada por enviar':counts.enviada+counts.falhada>0?`Continuar (${pending} por enviar)`:`Enviar a fila pelo WhatsApp Web (${pending})`}</button>}
      {wa.running&&<button type="button" onClick={waStop}><Square size={13}/> Parar</button>}
      <button type="button" className={wa.available?'':'primary'} disabled={nextIdx<0} onClick={()=>void openRecipient(nextIdx)}><SkipForward size={14}/> {nextIdx<0?'Fila concluída':`Abrir próxima (${queue[nextIdx].cliente})`}</button>
     </div></div>
+   <div className="cis-msg-queue-bar">
+    <div className="cis-msg-queue-filters" role="tablist" aria-label="Filtrar a fila">{FILTERS.filter(f=>f.id==='todos'||counts[f.id]>0).map(f=>
+     <button key={f.id} type="button" role="tab" aria-selected={qFilter===f.id} className={'q-'+f.id+(qFilter===f.id?' on':'')} onClick={()=>setQFilter(f.id)}>{f.label} <b>{counts[f.id]}</b></button>)}</div>
+    <div className="cis-msg-queue-num" role="radiogroup" aria-label="Número usado na fila">
+     <span>Número:</span>
+     <label><input type="radio" name="cis-q-num" checked={qNumero==='principal'} disabled={wa.running} onChange={()=>setQNumero('principal')}/> Principal</label>
+     <label><input type="radio" name="cis-q-num" checked={qNumero==='alternativo'} disabled={wa.running} onChange={()=>setQNumero('alternativo')}/> Alternativo</label>
+    </div>
+   </div>
+   {(qFilter==='sem_whatsapp'||qFilter==='falhada'||qFilter==='sem_contacto')&&counts[qFilter]>0&&!wa.running&&<div className="cis-msg-queue-tip">
+    <span>{qFilter==='sem_whatsapp'?'Estes números não têm WhatsApp. Pode criar uma nova fila só com eles e enviar para o número alternativo.':qFilter==='sem_contacto'?'Sem número para este envio. Crie uma fila com eles e experimente o outro número.':'Falharam por outro motivo (veja o detalhe). «Continuar» volta a tentar só estes e os por enviar.'}</span>
+    <button type="button" onClick={()=>newQueueFrom(qFilter as RowState)}><Users size={13}/> Nova fila com estes ({counts[qFilter]})</button></div>}
    <div className="cis-table-scroll cis-msg-queue"><table><thead><tr><th>Mutuário</th><th>Contrato</th><th>Contacto</th><th>Situação</th><th>Mensagem</th><th></th></tr></thead>
-    <tbody>{queue.map((r,i)=><tr key={r.contrato+i} className={r.estado==='aberta'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{r.contacto??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td><td>{statusCell(r,i)}</td></tr>)}</tbody></table></div>
+    <tbody>{visible.map(({r,i})=><tr key={r.contrato+i} className={rowState(r)==='enviada'?'done':''}><td>{r.cliente}</td><td>{r.contrato}</td><td>{contactoDe(r)??'—'}</td><td>{situ(r.situacao)}</td><td className="msg">{r.mensagem}</td><td>{statusCell(r,i)}</td></tr>)}</tbody></table>
+    {!visible.length&&<p className="cis-msg-muted" style={{padding:'12px'}}>Nenhum destinatário neste filtro.</p>}</div>
   </div>}
 
   <div className="cis-msg-card"><MessageLog token={token} contrato={contrato} refreshKey={logKey}/></div>

@@ -11,6 +11,18 @@ type State={available:boolean;version:string|null;running:boolean;pendentes:numb
 let state:State={available:false,version:null,running:false,pendentes:0,aguardaLogin:false};
 let token='';
 const results=new Map<string,'a_enviar'|'enviada'|'falhada'>();
+const details=new Map<string,string|null>();
+/** Tipo de falha: sem WhatsApp (número inválido), parada pelo operador, ou outra falha. */
+export type FailKind='sem_whatsapp'|'parada'|'falhada';
+export function failKind(detail:string|null|undefined):FailKind{
+ const d=detail??'';
+ if(/inv[aá]lido|sem whatsapp|not on whatsapp/i.test(d))return 'sem_whatsapp';
+ if(/parado pelo operador/i.test(d))return 'parada';
+ return 'falhada';
+}
+// Envios em fila: um só aviso no fim (os detalhes ficam na própria fila).
+let batch={enviadas:0,sem_whatsapp:0,falhadas:0,paradas:0};
+const isQueueJob=(id:string,meta:WaJob['meta']|null)=>id.startsWith('q-')||!!meta?.grupo;
 const subs=new Set<()=>void>();
 const toastSubs=new Set<(t:Toast[])=>void>();
 let toasts:Toast[]=[];let toastSeq=1;
@@ -25,6 +37,7 @@ export function onToasts(f:(t:Toast[])=>void){toastSubs.add(f);f(toasts);return(
 export function onWa(f:()=>void){subs.add(f);return()=>{subs.delete(f);};}
 export const waState=()=>state;
 export const jobStatus=(id:string)=>results.get(id);
+export const jobDetail=(id:string)=>details.get(id)??null;
 export function setWaToken(t:string){token=t;}
 
 function post(msg:Record<string,unknown>){window.postMessage({...msg,source:'cis-app'},location.origin);}
@@ -58,11 +71,20 @@ if(typeof window!=='undefined'){
      pushToast(d.estado==='feito'?'ok':'erro',d.estado==='feito'?'Sessão do WhatsApp Web iniciada. A enviar…':'O login no WhatsApp Web não foi feito a tempo.');}
     break;
    case 'progress':results.set(String(d.id),'a_enviar');emit();break;
-   case 'result':{const r=d as unknown as WaResult;results.set(r.id,r.ok?'enviada':'falhada');emit();
+   case 'result':{const r=d as unknown as WaResult;results.set(r.id,r.ok?'enviada':'falhada');details.set(r.id,r.detail??null);emit();
     const nome=r.meta?.cliente||'cliente';
-    pushToast(r.ok?'ok':'erro',r.ok?`Mensagem enviada para ${nome}${r.detail?' · '+r.detail:''}`:`Não enviada para ${nome}: ${r.detail||'erro desconhecido'}`);
-    void log(r);break;}
-   case 'done':emit();break;
+    if(isQueueJob(r.id,r.meta)){
+     if(r.ok)batch.enviadas++;else{const k=failKind(r.detail);if(k==='sem_whatsapp')batch.sem_whatsapp++;else if(k==='parada')batch.paradas++;else batch.falhadas++;}
+    }else pushToast(r.ok?'ok':'erro',r.ok?`Mensagem enviada para ${nome}${r.detail?' · '+r.detail:''}`:`Não enviada para ${nome}: ${r.detail||'erro desconhecido'}`);
+    // Paradas pelo operador não chegaram a ser tentadas: não ficam no registo como falhadas.
+    if(r.ok||failKind(r.detail)!=='parada')void log(r);break;}
+   case 'done':{emit();
+    const b=batch;batch={enviadas:0,sem_whatsapp:0,falhadas:0,paradas:0};
+    if(b.enviadas+b.sem_whatsapp+b.falhadas+b.paradas>0){
+     const parts=[`${b.enviadas} enviada(s)`,b.sem_whatsapp?`${b.sem_whatsapp} sem WhatsApp`:'',b.falhadas?`${b.falhadas} falhada(s)`:'',b.paradas?`${b.paradas} por enviar (parada)`:''].filter(Boolean);
+     pushToast(b.falhadas||b.sem_whatsapp?'info':'ok',`Fila terminada: ${parts.join(' · ')}.${b.falhadas||b.sem_whatsapp||b.paradas?' Veja e continue na fila.':''}`,!!(b.falhadas||b.sem_whatsapp));
+    }
+    break;}
   }
  });
  // A ponte anuncia-se ao carregar; pedimos o estado caso a página tenha carregado antes.
