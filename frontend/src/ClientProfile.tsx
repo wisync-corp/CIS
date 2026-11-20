@@ -46,10 +46,18 @@ const originalFields=['Nome Completo','Bairro','Cidade','Provincia','Rua'];
 function normalized(value:string|number|null|undefined){return value===null||value===undefined?'':String(value);}
 const dateFields=new Set(['Data de Emissão','validade_documento']);
 const timeFields=new Set(['melhor_horario_contacto']);
+// Limites iguais aos do servidor (evita recusas ao guardar).
+const maxLen:Record<string,number>={ponto_referencia:255,contacto_alternativo:40,pessoa_referencia_contacto:40,tipo_cliente:60,genero:50,
+ tipo_documento:80,nuit:30,profissao:150,local_emissao_documento:150,grau_parentesco_referencia:100};
+async function serverError(res:Response,fallback:string){
+ const j=await res.json().catch(()=>({})) as {message?:string;errors?:Record<string,string[]>};
+ const first=j.errors?Object.values(j.errors).flat()[0]:undefined;
+ return first||j.message||fallback;
+}
 function formValue(key:string,value:string|number|null|undefined):string{
  const text=normalized(value);
- if(timeFields.has(key)&&/^\\d{2}:\\d{2}:\\d{2}$/.test(text))return text.slice(0,5);
- if(dateFields.has(key)&&/^\\d{4}-\\d{2}-\\d{2}/.test(text))return text.slice(0,10);
+ if(timeFields.has(key)&&/^\d{2}:\d{2}(:\d{2})?$/.test(text))return text.slice(0,5);
+ if(dateFields.has(key)&&/^\d{4}-\d{2}-\d{2}/.test(text))return text.slice(0,10);
  return text;
 }
 
@@ -131,7 +139,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     const res=await fetch(API+'/cis/clientes/'+id+'/complementares',{
      method:'PUT',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
      body:JSON.stringify({...values,referencia_contacto_informado:informed})});
-    if(!res.ok)throw new Error('Não foi possível guardar as informações complementares. Verifica-as antes de repetir.');
+    if(!res.ok)throw new Error('Informações complementares não guardadas: '+await serverError(res,'verifique os campos e repita.'));
    }
    await load();setEditing(false);setSuccess('Alterações guardadas. A ficha foi actualizada.');
   }catch(e){setError(e instanceof Error?e.message:'Erro ao guardar.');}
@@ -165,7 +173,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
        const enabled=editing&&canEdit(key);
        const display=isExtra&&!secondaryReady?'Ainda não activado':formValue(key,profile[key])||'Não informado';
        return <label className="cis-profile-field" key={key}><span>{label}</span>
-        {enabled?<input type={dateFields.has(key)?'date':timeFields.has(key)?'time':'text'} step={timeFields.has(key)?60:undefined} value={draft[key]??''} maxLength={key==='ponto_referencia'?255:key.includes('contacto')?40:180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
+        {enabled?<input type={dateFields.has(key)?'date':timeFields.has(key)?'time':'text'} step={timeFields.has(key)?60:undefined} value={draft[key]??''} maxLength={maxLen[key]??180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
         {editing&&!canEdit(key)&&<small><LockKeyhole size={12}/> Campo protegido{isExtra?' · necessita activação':''}</small>}
        </label>;
      })}</div>
