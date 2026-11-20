@@ -92,7 +92,7 @@
       return {status: 'error', detail: 'Número inválido ou sem WhatsApp.'};
     }
 
-    if (job.image) return sendImage(job, res.compose);
+    if (job.image) return sendImage(job, res.compose); // imagem ou documento PDF
 
     // 3) Enviar.
     const existing = new Set(qa(SEL.outgoing));
@@ -134,7 +134,7 @@
     const type = (head.match(/data:([^;]+)/) || [])[1] || img.type || 'image/jpeg';
     const bin = atob(b64); const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new File([bytes], img.name || 'imagem.jpg', {type});
+    return new File([bytes], img.name || (type === 'application/pdf' ? 'documento.pdf' : 'imagem.jpg'), {type});
   }
 
   // Caixa de legenda = editor que aparece depois de colar e que não é a caixa de escrita da conversa.
@@ -167,7 +167,7 @@
       for (const t of ['dragenter', 'dragover', 'drop']) target.dispatchEvent(new DragEvent(t, {dataTransfer: dt2, bubbles: true, cancelable: true}));
       cap = await waitFor(() => captionBox(compose), 8000);
     }
-    if (!cap) return {status: 'error', detail: 'O WhatsApp Web não abriu a pré-visualização da imagem.'};
+    if (!cap) return {status: 'error', detail: 'O WhatsApp Web não abriu a pré-visualização do anexo. ' + diag()};
 
     // Legenda = texto da mensagem (se o WhatsApp não a trouxe da caixa de escrita).
     if (plain(cap.textContent) !== plain(job.text)) {
@@ -188,13 +188,15 @@
     let how = btn ? 'clique' : 'enter';
     if (!closed && cap.isConnected) { cap.focus(); const r = await trusted({kind: 'enter'}); how = r.ok ? 'enter real' : 'enter real falhou (' + r.error + ')'; closed = await waitFor(isClosed, 8000); }
     if (!closed) { const b2 = previewSend(cap); if (b2) { const r = await trusted({kind: 'click', ...center(b2)}); how += r.ok ? ' + clique real' : ' + clique real falhou (' + r.error + ')'; closed = await waitFor(isClosed, 10000); } }
-    if (!closed) return {status: 'error', detail: 'A imagem ficou na pré-visualização sem sair (' + how + '). ' + diag()};
-    const mine = await waitFor(() => qa(SEL.outgoing).slice(-4).reverse().find(el => !before.has(el) && q(SEL.outImage, el)) || null, 20000);
-    if (!mine) return {status: 'sent', detail: 'Imagem enviada (confirmação visual não encontrada).'};
+    if (!closed) return {status: 'error', detail: 'O anexo ficou na pré-visualização sem sair (' + how + '). ' + diag()};
+    const isDoc = file.type === 'application/pdf';
+    const label = isDoc ? 'PDF' : 'imagem';
+    const mine = await waitFor(() => qa(SEL.outgoing).slice(-4).reverse().find(el => !before.has(el) && (isDoc || q(SEL.outImage, el))) || null, 20000);
+    if (!mine) return {status: 'sent', detail: (isDoc ? 'PDF enviado' : 'Imagem enviada') + ' (confirmação visual não encontrada).'};
     const delivered = await waitFor(() => (mine.isConnected && mine.querySelector('span[data-icon="msg-time"]')) ? null : true, 60000);
     // Limpa o texto que tenha ficado na caixa de escrita da conversa (o /send?text= preenche-a).
     const c = q(SEL.compose); if (c && plain(c.textContent) === plain(job.text)) { c.focus(); document.execCommand('selectAll', false); document.execCommand('delete', false); }
-    return delivered ? {status: 'sent', detail: 'Com imagem.'} : {status: 'sent', detail: 'Com imagem; a aguardar rede.'};
+    return delivered ? {status: 'sent', detail: 'Com ' + label + '.'} : {status: 'sent', detail: 'Com ' + label + '; a aguardar rede.'};
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
