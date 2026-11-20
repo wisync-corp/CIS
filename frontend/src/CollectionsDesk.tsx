@@ -3,7 +3,7 @@ import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
 import MessageCenter,{type MessagePreset} from './MessageCenter';
-import {toJpeg} from 'html-to-image';
+import {documentImage,fileName} from './docImage';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 import {
@@ -267,14 +267,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   const el=receiptRef.current;if(!receipt||!el||sendBusy)return;
   setSendBusy(true);
   try{
-   const dataUrl=await toJpeg(el,{quality:0.92,pixelRatio:2,backgroundColor:'#ffffff',cacheBust:true,width:el.offsetWidth,height:el.offsetHeight,style:{margin:'0',transform:'none',boxShadow:'none'}});
+   const dataUrl=await documentImage(el);
    const m=(v:string|null|undefined)=>v==null?'—':fmt(v);
    setMsgPreset({
-    anexo:{name:receipt.numero.replace(/[^\w.-]+/g,'_')+'.jpg',type:'image/jpeg',dataUrl},
+    anexo:{name:fileName(receipt.numero),type:'image/jpeg',dataUrl},
     modelo:{nome:'Envio de recibo',corpo:'Olá {Primeiro Nome}, 👋\nConfirmamos o recebimento de *{Valor Recebido}* em {Data do Pagamento}, referente ao contrato *{Nr do Contracto}* (prestação {Prestação Paga}).\nSegue em anexo o recibo n.º *{Nº do Recibo}*.\nSaldo em dívida: {Valor em Dívida}.\n\nObrigado pela confiança. 🙏'},
     extras:{'Nº do Recibo':receipt.numero,'Valor Recebido':m(receipt.valor),'Data do Pagamento':date(receipt.data),'Prestação Paga':receipt.prestacao??'—','Forma de Pagamento':text(receipt.forma_pagamento)},
    });
-  }catch{pushToast('erro','Não foi possível preparar a imagem do recibo.');}
+  }catch(e){pushToast('erro',e instanceof Error?e.message:'Não foi possível preparar a imagem do recibo.');}
   finally{setSendBusy(false);}
  }
 
