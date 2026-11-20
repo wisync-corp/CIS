@@ -843,11 +843,11 @@ ok($rm['contrato_finalizado'] && $rA->Estado==='Pago' && $rA->{'Situação de Pa
 $oB=$row(['Nr do Contracto'=>'OP-0002','Nº'=>9002]);$dueB=(string)$db->table('Contractos')->where('Ordem',$oB)->value('Data de Cobrança');
 $rb=$op(['operacao'=>'renovar_juros','idempotency_key'=>'b0000000-0000-4000-8000-000000000001'],'OP-0002',$oB);
 $rB=$db->table('Contractos')->where('Ordem',$oB)->first();
-ok(abs((float)$rB->{'Valor de Juros'}-301)<0.001 && abs((float)$rB->{'Valor a Pagar'}-1301)<0.001
+ok(abs((float)$rB->{'Valor de Juros'}-300.5)<0.001 && abs((float)$rB->{'Valor a Pagar'}-1300.5)<0.001
     && substr((string)$rB->{'Data de Cobrança'},0,10)===\Carbon\CarbonImmutable::parse($dueB)->addMonthsNoOverflow(1)->toDateString()
-    && $ext('OP-0002')->count()===0 && $rB->{'Situação de Pagamento'}==='Juros renovados','renovação dos juros: +1 período de juros, vencimento +1 mês, sem Caixa');
+    && $ext('OP-0002')->count()===0 && $rB->{'Situação de Pagamento'}==='Juros renovados','renovação dos juros: +1 período (15% × 1000 = 150), vencimento +1 mês, sem Caixa');
 $rb2=$op(['operacao'=>'renovar_juros','idempotency_key'=>'b0000000-0000-4000-8000-000000000001'],'OP-0002',$oB);
-ok($rb2['repetido'] && abs((float)$db->table('Contractos')->where('Ordem',$oB)->value('Valor de Juros')-301)<0.001,'renovação dos juros: chave repetida não duplica');
+ok($rb2['repetido'] && abs((float)$db->table('Contractos')->where('Ordem',$oB)->value('Valor de Juros')-300.5)<0.001,'renovação dos juros: chave repetida não duplica');
 // C) capitalização com taxa indicada
 $oC=$row(['Nr do Contracto'=>'OP-0003','Nº'=>9003]);$dueC=substr((string)$db->table('Contractos')->where('Ordem',$oC)->value('Data de Cobrança'),0,10);
 $cp=$op(['operacao'=>'capitalizar','periodo_referencia'=>30,'taxa_informada'=>'20','idempotency_key'=>'c0000000-0000-4000-8000-000000000001'],'OP-0003',$oC);
