@@ -314,7 +314,7 @@ Além da liquidação da prestação e da renovação, ficam activas (prévia `P
 
 | Operação | Caixa | O que grava |
 |---|---|---|
-| **Pagamento parcial** | Entrada na conta escolhida | `Valor Pago` acumulado, «Pagamento Parcial»; tem de cobrir os juros e ficar abaixo do saldo; pode repetir-se |
+| **Pagamento parcial** | Entrada na conta escolhida | `Valor Pago` acumulado, «Pagamento Parcial»; no 1.º parcial os **juros a pagar** vêm da taxa da tabela (capital e prazo da prestação) e podem ser alterados (gravados em `Valor de Juros`/`Valor a Pagar`); tem de cobrir os juros e ficar abaixo do saldo; a prévia mostra o **próximo valor a pagar**; pode repetir-se |
 | **Liquidar saldo em dívida** | Entrada do saldo (prestação + juros de mora opcionais − parciais) | Prestação paga; contrato liquidado se não houver mais nada |
 | **Renovação dos juros** | — | +1 período de juros (taxa do contrato sobre o capital), vencimento + mesmo prazo |
 | **Capitalizar juros** | — | Juros passam a capital (arredondado ao metical), novos juros à taxa da tabela ou indicada, início = vencimento anterior, vencimento + 15/30 dias |
