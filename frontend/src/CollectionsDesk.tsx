@@ -224,7 +224,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const activeOrder=ord&&rows.some(r=>String(r.Ordem)===ord&&installmentEligible(r));
  const canQuote=live&&flowReceived&&payDateOk&&(!renewing||/^\d{4}-\d{2}-\d{2}$/.test(renewStart))&&!!selectedInstallment&&installmentEligible(selectedInstallment);
  const refOk=evidenceRef.trim().length>=4;
- const canOpExecute=opMode&&!!scenarioQuote&&!!(scenarioQuote as Record<string,unknown>).registo_activo&&(opCash?(!!activeAccount&&refOk&&payDateOk):true)&&confirmReceipt&&!paying&&payWait===0;
+ const canOpExecute=opMode&&!!scenarioQuote&&(mode!=='parcial'||(scenarioQuote as Record<string,unknown>).valor!=null)&&!!(scenarioQuote as Record<string,unknown>).registo_activo&&(opCash?(!!activeAccount&&refOk&&payDateOk):true)&&confirmReceipt&&!paying&&payWait===0;
  const canExecute=live&&flowReceived&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
 
  function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
@@ -272,7 +272,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function opBody(){
   return {operacao:mode,
-   ...(mode==='parcial'?{data_pagamento:datePayment,valor_recebido:paymentAmount.trim().replace(',','.')}:{}),
+   ...(mode==='parcial'?{data_pagamento:datePayment,...(partialValid?{valor_recebido:paymentAmount.trim().replace(',','.')}:{}),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='remanescente'?{data_pagamento:datePayment,cobrar_multa:penalty}:{}),
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='prorrogar_15_30'?{tratamento_juros:interestChoice}:{})};
@@ -326,7 +326,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  useEffect(()=>{
   setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setQuoting(false);setScenarioBusy(false);
   if(view!=='tratamento'||!selected||!ord||!activeOrder||!modeAllowed||paymentDone)return;
-  if(live?!canQuote:(mode==='parcial'&&(!partialValid||!payDateOk))||(mode==='remanescente'&&!payDateOk)||(mode==='prorrogar_15_30'&&!interestChoice)||(mode==='capitalizar'&&(!capitalPeriod||(capitalRateTouched&&!rateValid(capitalRate)))))return;
+  if(live?!canQuote:(mode==='parcial'&&(!payDateOk||(capitalRateTouched&&!rateValid(capitalRate))))||(mode==='remanescente'&&!payDateOk)||(mode==='prorrogar_15_30'&&!interestChoice)||(mode==='capitalizar'&&(!capitalPeriod||(capitalRateTouched&&!rateValid(capitalRate)))))return;
   const ctrl=new AbortController();
   setMessage('');
   if(live)setQuoting(true);else setScenarioBusy(true);
@@ -347,7 +347,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     const data=await response.json().catch(()=>({})) as {errors?:Record<string,string[]>;message?:string};
     if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular a operação.');
     if(!ctrl.signal.aborted){if(live)setQuote(data as unknown as Quote);else{setScenarioQuote(data as unknown as ScenarioQuote);
-     if(mode==='capitalizar'&&!capitalRateTouched&&(data as Record<string,unknown>).taxa_tabela!=null)setCapitalRate(String((data as Record<string,unknown>).taxa_tabela));}}
+     if(mode==='capitalizar'&&!capitalRateTouched&&(data as Record<string,unknown>).taxa_tabela!=null)setCapitalRate(String((data as Record<string,unknown>).taxa_tabela));
+     if(mode==='parcial'&&!capitalRateTouched&&(data as Record<string,unknown>).taxa_editavel&&(data as Record<string,unknown>).taxa!=null)setCapitalRate(String((data as Record<string,unknown>).taxa));}}
    }catch(err){if(!ctrl.signal.aborted)setMessage(err instanceof Error?err.message:'Falha no cálculo.');}
    finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
   },400);
@@ -510,6 +511,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
          {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
         </label>}
         {flowReceived&&mode==='parcial'&&<label>Valor efectivamente recebido (MT)<input inputMode="decimal" type="text" value={paymentAmount} onChange={e=>{setPaymentAmount(e.target.value);setScenarioQuote(null);}} placeholder="0.00"/><small>Os juros são cobertos primeiro; o valor tem de ser inferior ao saldo da prestação. Para pagar tudo use a liquidação.</small></label>}
+        {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===true&&<label>Juros a pagar (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>
+         <span className="cis-collections-rate"><input inputMode="decimal" type="text" value={capitalRate} aria-invalid={capitalRateTouched&&!rateValid(capitalRate)} onChange={e=>{setCapitalRate(e.target.value);setCapitalRateTouched(true);}}/><em>%</em>
+          {capitalRateTouched&&scenarioQuote.taxa_tabela!=null&&String(scenarioQuote.taxa_tabela)!==capitalRate.replace(',','.')&&<button type="button" onClick={()=>{setCapitalRate(String(scenarioQuote.taxa_tabela));setCapitalRateTouched(false);}}>Repor taxa da tabela ({String(scenarioQuote.taxa_tabela)}%)</button>}</span>
+         <small>{scenarioQuote.taxa_tabela!=null?<>Tabela de preços: <b>{String(scenarioQuote.taxa_tabela)}%</b>. </>:'Sem faixa na tabela de preços: é usada a taxa do contrato. '}Juros a pagar: <b>{fmt(scenarioQuote.juros)}</b> · Valor da prestação: <b>{fmt(scenarioQuote.valor_prestacao)}</b> · Próximo valor a pagar: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</small>
+         {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
+        </label>}
+        {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===false&&<p className="cis-collections-mode-hint">Juros já fixados no primeiro pagamento parcial: {fmt(scenarioQuote.juros)}. Próximo valor a pagar: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</p>}
        </div>
        {(quoting||scenarioBusy)&&<p role="status">A calcular valores…</p>}
        {modeLocked&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span><strong>Operação não activada.</strong> O cenário foi identificado no VBA. O CAPTA pode apresentar uma prévia informativa, mas nenhuma alteração financeira será gravada.</span></div>}
@@ -530,12 +538,12 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {!quote.registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real ainda não activado neste servidor. A prévia está correcta, mas o pagamento não pode ser gravado.</span></div>}</div>}
        </>}
        {opMode&&scenarioQuote&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
-        <dl>{([['data_pagamento','Data','d'],['valor','Valor a receber agora','m'],['ja_pago','Já pago (parciais)','m'],['juros_cobertos','Juros cobertos','m'],['amortizacao','Amortização','m'],['saldo_depois','Saldo da prestação depois','m'],
+        <dl>{([['data_pagamento','Data','d'],['valor','Valor a receber agora','m'],['ja_pago','Já pago (parciais)','m'],['juros_cobertos','Juros cobertos','m'],['amortizacao','Amortização','m'],['proximo_valor','Próximo valor a pagar','m'],['proximo_vencimento','Vencimento','d'],
           ['juros','Juros','m'],['juros_mora','Juros de mora','m'],['valor_prestacao','Valor da prestação','m'],['capital','Capital','m'],['capital_anterior','Capital anterior','m'],['juros_capitalizados','Juros capitalizados','m'],['capital_novo','Novo capital','m'],
           ['juros_anteriores','Juros anteriores','m'],['juros_periodo','Juros do novo período','m'],['taxa_tabela','Taxa da tabela (%)','t'],['taxa','Taxa aplicada (%)','t'],['juros_novos','Juros a cobrar','m'],['valor_a_pagar','Nova prestação','m'],
           ['vencimento_anterior','Vencimento anterior','d'],['novo_inicio','Novo início','d'],['novo_vencimento','Novo vencimento','d']] as const)
           .filter(([k])=>(scenarioQuote as Record<string,unknown>)[k]!=null).map(([k,l,t])=>{const v=(scenarioQuote as Record<string,unknown>)[k];
-           return <div key={k} className={k==='valor'||k==='valor_a_pagar'?'total':''}><dt>{l}</dt><dd>{t==='m'?fmt(v):t==='d'?date(String(v)):String(v)+(k==='taxa'&&(scenarioQuote as Record<string,unknown>).taxa_alterada?' (alterada)':'')}</dd></div>;})}</dl>
+           return <div key={k} className={k==='valor'||k==='valor_a_pagar'||k==='proximo_valor'?'total':''}><dt>{l}</dt><dd>{t==='m'?fmt(v):t==='d'?date(String(v)):String(v)+(k==='taxa'&&(scenarioQuote as Record<string,unknown>).taxa_alterada?' (alterada)':'')}</dd></div>;})}</dl>
         {scenarioQuote.aviso&&<p className="cis-collections-mode-hint">{scenarioQuote.aviso}</p>}
         {!(scenarioQuote as Record<string,unknown>).registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real desligado no servidor: execute deploy/activate-collection-operations.sh na VPS.</span></div>}</div>}
        {opMode&&scenarioQuote&&<label className="cis-collections-check"><input type="checkbox" checked={confirmReceipt} onChange={e=>setConfirmReceipt(e.target.checked)}/> {opCash?`Confirmo que recebi ${fmt((scenarioQuote as Record<string,unknown>).valor)} na conta ${activeAccount?activeAccount.code:'seleccionada'}`:'Confirmo a alteração das condições desta prestação (fica no histórico)'}</label>}

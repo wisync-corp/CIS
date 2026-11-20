@@ -825,11 +825,14 @@ $todayD=now('Africa/Maputo')->toDateString();
 // A) pagamento parcial + liquidação do saldo
 $oA=$row(['Nr do Contracto'=>'OP-0001','Nº'=>9001]);
 ok($err(fn()=>$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'100','conta_id'=>$banco,'referencia'=>'REF-PA0','idempotency_key'=>'a0000000-0000-4000-8000-000000000001'],'OP-0001',$oA))===422,'parcial: tem de cobrir os juros');
-$pa=$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
+$pp=$opv(['operacao'=>'parcial','data_pagamento'=>$todayD],'OP-0001',$oA);
+ok($pp['taxa_editavel']===true && $pp['valor']===null && ($pp['taxa_tabela']===null || $pp['taxa']===$pp['taxa_tabela'])
+    && $pp['proximo_valor']===$pp['valor_prestacao'],'parcial: juros a pagar com a taxa da tabela por defeito, editável, próximo valor na prévia');
+$pa=$op(['operacao'=>'parcial','taxa_informada'=>'15.05','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
 $rA=$db->table('Contractos')->where('Ordem',$oA)->first();
 ok($pa['registado'] && !$pa['repetido'] && $rA->{'Situação de Pagamento'}==='Pagamento Parcial' && abs((float)$rA->{'Valor Pago'}-200)<0.001 && $rA->Estado==='Pendente'
-    && $ext('OP-0001')->count()===1 && $pa['saldo_depois']==='950.50','parcial: 200 MT na Caixa, prestação em «Pagamento parcial», saldo 950,50');
-$pa2=$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
+    && $ext('OP-0001')->count()===1 && $pa['proximo_valor']==='950.50' && $pa['juros']==='150.50' && $pa['taxa_alterada']===($pa['taxa_tabela']!=='15.05'),'parcial: 200 MT na Caixa, juros 150,50 à taxa indicada, próximo valor 950,50');
+$pa2=$op(['operacao'=>'parcial','taxa_informada'=>'15.05','data_pagamento'=>$todayD,'valor_recebido'=>'200','conta_id'=>$banco,'referencia'=>'REF-PA1','idempotency_key'=>'a0000000-0000-4000-8000-000000000002'],'OP-0001',$oA);
 ok($pa2['repetido'] && $ext('OP-0001')->count()===1,'parcial: chave repetida não duplica');
 ok($err(fn()=>$op(['operacao'=>'parcial','data_pagamento'=>$todayD,'valor_recebido'=>'1000','conta_id'=>$banco,'referencia'=>'REF-PA2','idempotency_key'=>'a0000000-0000-4000-8000-000000000003'],'OP-0001',$oA))===422
     && $err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'a0000000-0000-4000-8000-000000000004'],'OP-0001',$oA))===409,'parcial: não ultrapassa o saldo; com parciais não se alteram condições');
