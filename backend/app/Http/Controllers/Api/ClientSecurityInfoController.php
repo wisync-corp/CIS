@@ -96,13 +96,44 @@ final class ClientSecurityInfoController extends Controller
         if ($values['melhor_horario_contacto'] !== null) {
             $values['melhor_horario_contacto'] .= ':00';
         }
+        // Só se gravam os campos que mudaram (menos permissões necessárias e histórico mais limpo).
+        $current = DB::connection('mysql_legacy')->table('Clientes')->where('ID', $id)->limit(2)->get(self::FIELDS);
+        abort_if($current->count() !== 1, $current->isEmpty() ? 404 : 409);
+        $cur = (array)$current->first();
+        $norm = function (string $f, $v) {
+            if ($v === null) return null;
+            $v = trim((string)$v);
+            if ($v === '') return null;
+            if ($f === 'validade_documento') return substr($v, 0, 10);
+            if ($f === 'melhor_horario_contacto') return substr(strlen($v) === 5 ? $v . ':00' : $v, 0, 8);
+            return $v;
+        };
+        $changes = array_filter($values, fn($v, $f) => $norm($f, $v) !== $norm($f, $cur[$f] ?? null), ARRAY_FILTER_USE_BOTH);
+        if (!$changes) {
+            return response()->json(['message' => 'Sem alterações nas informações complementares.'])->header('Cache-Control', 'no-store, private');
+        }
         $db = DB::connection('mysql_editor');
-        $db->transaction(function () use ($db, $id, $values) {
-            $rows = $db->table('Clientes')->where('ID', $id)->lockForUpdate()
-                ->limit(2)->get(['ID']);
-            abort_if($rows->count() !== 1, $rows->isEmpty() ? 404 : 409);
-            $db->table('Clientes')->where('ID', $id)->update($values);
-        }, 3);
+        try {
+            $db->transaction(function () use ($db, $id, $changes) {
+                $rows = $db->table('Clientes')->where('ID', $id)->lockForUpdate()
+                    ->limit(2)->get(['ID']);
+                abort_if($rows->count() !== 1, $rows->isEmpty() ? 404 : 409);
+                $db->table('Clientes')->where('ID', $id)->update($changes);
+            }, 3);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            $code = (int)($e->errorInfo[1] ?? 0);
+            $fields = implode(', ', array_keys($changes));
+            $msg = match (true) {
+                in_array($code, [1142, 1143], true) => 'a conta de edição (cis_editor) não tem permissão para gravar estes campos ('.$fields.'). Na VPS execute: bash deploy/enable-secondary-editor.sh e depois bash deploy/refresh-private-preview.sh',
+                in_array($code, [1044, 1045], true) => 'a conta de edição (cis_editor) não consegue entrar no MySQL. Verifique CLIENT_EDITOR_DB_PASSWORD em deploy/.env e execute bash deploy/enable-secondary-editor.sh',
+                $code === 1054 => 'falta uma coluna complementar na tabela Clientes. Na VPS execute: bash deploy/activate-client-secondary-columns.sh',
+                $code === 1406 => 'um dos campos é maior do que a coluna permite ('.$fields.'). Encurte o texto.',
+                in_array($code, [1292, 1366], true) => 'valor inválido para a coluna (data ou hora). Verifique: '.$fields.'.',
+                default => 'erro MySQL '.$code.' ao gravar ('.$fields.').',
+            };
+            return response()->json(['message' => $msg, 'codigo_mysql' => $code], 503);
+        }
         return response()->json(['message' => 'Informações complementares actualizadas na ficha do mutuário.'])
             ->header('Cache-Control', 'no-store, private');
     }
