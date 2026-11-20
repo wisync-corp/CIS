@@ -1,3 +1,4 @@
+import {pushToast} from './waBridge';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
@@ -67,7 +68,7 @@ function modeIcon(mode:Mode){
  case'finalizar_contrato':return <ShieldCheck size={18}/>;case'prorrogar_15_30':return <CalendarDays size={18}/>;}
 }
 type EmbeddedProfile={contract:Row;installments:Row[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
-export default function CollectionsDesk({token,embeddedContract,embeddedProfile,initialOrder}:{token:string;embeddedContract?:string;embeddedProfile?:EmbeddedProfile;initialOrder?:string}){
+export default function CollectionsDesk({token,embeddedContract,embeddedProfile,initialOrder,onChanged}:{token:string;embeddedContract?:string;embeddedProfile?:EmbeddedProfile;initialOrder?:string;onChanged?:()=>void}){
  const [query,setQuery]=useState('');
  const [applied,setApplied]=useState('');
  const [page,setPage]=useState(1);
@@ -146,7 +147,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   return()=>ctrl.abort();
  },[selected,page,applied,refresh,token,embeddedContract]);
  useEffect(()=>{
-  if(!selected||embeddedContract)return;
+  if(!selected||(embeddedContract&&refresh===0))return;
   const ctrl=new AbortController();setLoading(true);setMessage('');
   fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/ficha',{
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal
@@ -276,6 +277,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='prorrogar_15_30'?{tratamento_juros:interestChoice}:{})};
  }
+ /** Depois de gravar: voltar às prestações já actualizadas, com o resultado e o recibo à vista. */
+ function finishOperation(data:PaymentResult){
+  setPaymentDone(data);setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setPayKey('');
+  setView('resumo');setRefresh(v=>v+1);onChanged?.();
+  pushToast('ok',data.repetido?'Operação já registada anteriormente.':'Operação registada. Prestações actualizadas.');
+  window.requestAnimationFrame(()=>document.querySelector('.cis-collections-done')?.scrollIntoView({behavior:'smooth',block:'center'}));
+ }
  async function runOperation(){
   if(!selected||!ord||!scenarioQuote||!canOpExecute)return;
   const key=payKey||newKey();setPayKey(key);setPaying(true);setMessage('');setPayError('');
@@ -290,7 +298,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     throw new Error('Limite de segurança: aguarde '+wait+' s e clique uma única vez. Nada foi duplicado.');}
    const data=await r.json().catch(()=>({})) as PaymentResult&{message?:string;errors?:Record<string,string[]>};
    if(!r.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'A operação não foi registada.');
-   setPaymentDone({...data,extracto_nr:Number(data.extracto_nr)||0});setScenarioQuote(null);setConfirmReceipt(false);setPayKey('');setRefresh(v=>v+1);
+   finishOperation({...data,extracto_nr:Number(data.extracto_nr)||0});
   }catch(err){setPayError(err instanceof Error?err.message:'Falha ao registar a operação.');}
   finally{setPaying(false);}
  }
@@ -310,7 +318,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    }
    const data=await r.json().catch(()=>({})) as PaymentResult&{message?:string;errors?:Record<string,string[]>};
    if(!r.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'O pagamento não foi registado.');
-   setPaymentDone(data);setQuote(null);setConfirmReceipt(false);setPayKey('');setRefresh(v=>v+1);
+   finishOperation(data);
   }catch(err){setPayError(err instanceof Error?err.message:'Falha ao registar o pagamento.');}
   finally{setPaying(false);}
  }
@@ -372,7 +380,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    <div className="cis-collections-hero-badges"><span><ShieldCheck size={14}/> Dados do Contractos</span><span><LockKeyhole size={14}/> Operações financeiras protegidas</span></div></div>
    <button type="button" onClick={()=>{setRefresh(v=>v+1);setQuote(null);}} disabled={listing||loading}><RefreshCw size={16}/> Actualizar</button>
   </div>}
-  <div className="cis-collections-protection"><Info size={18}/><div><strong>Cobrança ligada à Caixa</strong><p>A liquidação da prestação entra numa conta da Caixa e guarda o estado anterior da prestação no histórico. A renovação recebe os juros e cria nova prestação no mesmo contrato. Pagamento parcial e capitalização continuam apenas em simulação.</p></div></div>
+  <div className="cis-collections-protection"><Info size={18}/><div><strong>Cobrança ligada à Caixa</strong><p>A liquidação da prestação entra numa conta da Caixa e guarda o estado anterior da prestação no histórico. A renovação recebe os juros e cria nova prestação no mesmo contrato. Pagamentos parciais e liquidação do saldo também entram na Caixa; renovação dos juros, capitalização e prorrogação alteram as condições sem movimento de Caixa.</p></div></div>
   {message&&<div className="cis-cash-message error" role="alert"><AlertCircle size={17}/>{message}</div>}
   {!selected?<div className="cis-collections-panel">
     <div className="cis-collections-sectionhead"><div><h3>Seleccionar contrato</h3><p>Pesquise por número do contrato ou nome do mutuário.</p></div><span><BookOpen size={15}/> {list?.total??'—'} contrato(s)</span></div>
@@ -412,10 +420,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        :<p>Este contrato ainda não tem pagamentos registados.</p>}
      </div>
      {view==='resumo'?<div className="cis-collections-panel cis-collections-overview">
+      {paymentDone&&<div className="cis-collections-done" role="status"><CheckCircle2 size={18}/><span>{paymentDone.notice}{paymentDone.saldo_conta_actual?' Saldo actual da conta: '+fmt(paymentDone.saldo_conta_actual)+'.':''}{paymentDone.contrato_finalizado?' Contrato liquidado.':''}</span>
+       {paymentDone.extracto_nr>0&&<button type="button" disabled={receiptBusy} onClick={()=>void openReceipt(paymentDone.extracto_nr)}><ReceiptText size={15}/> {receiptBusy?'A preparar…':'Abrir recibo'}</button>}
+       <button type="button" className="close" aria-label="Fechar aviso" onClick={()=>setPaymentDone(null)}>×</button></div>}
+      {paymentDone&&receiptError&&<p role="alert">{receiptError}</p>}
       <div className="cis-collections-sectionhead"><div><h3>Prestações por receber</h3><p>Escolha a prestação que pretende tratar. O sistema verifica o estado do contrato e da prestação antes de abrir o formulário.</p></div><span>{pending.length} pendentes</span></div>
       {contractClosed&&<div className="cis-collections-risk"><LockKeyhole size={16}/> Contrato com estado «{situacaoContrato(contractStatus)}». Não é permitido iniciar nova cobrança nesta ficha.</div>}
       <div className="cis-collections-overview-list">{rows.map(row=><div className="cis-collections-overview-row" key={String(row.Ordem)}>
-       <div className="cis-collections-overview-id"><span>Prestação {text(row['Nº da Parcela'])}</span><strong>{fmt(row['Valor a Pagar'])}</strong></div>
+       <div className="cis-collections-overview-id"><span>Prestação {text(row['Nº da Parcela'])}</span><strong>{fmt(row['Valor a Pagar'])}</strong>{String(row['Situação de Pagamento']??'').toLowerCase().includes('parcial')&&<small className="cis-collections-partial">Pago {fmt(row['Valor Pago'])} · saldo {fmt(num(row['Valor a Pagar'])-num(row['Valor Pago']))}</small>}</div>
        <div className="cis-collections-overview-meta"><span>Vencimento: {date(row['Data de Cobrança'])}</span><span className={isPending(row)?'pending':'settled'}>{estadoPrestacao(row.Estado)} · {text(row['Situação de Pagamento'])}</span></div>
        <button type="button" disabled={!installmentEligible(row)} onClick={()=>{chooseOrd(String(row.Ordem));setView('tratamento');}}>
         {installmentEligible(row)?<>Efectuar pagamento <ArrowRight size={15}/></>:<><LockKeyhole size={14}/> Indisponível</>}
