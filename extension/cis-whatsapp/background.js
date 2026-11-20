@@ -81,6 +81,28 @@ async function sendOne(job) {
   const url = WA + 'send?phone=' + encodeURIComponent(job.phone) + '&text=' + encodeURIComponent(job.text);
   const tabId = await ensureTab(url);
   await waitComplete(tabId);
+  // Com imagem, o WhatsApp só prepara e envia a pré-visualização com a página visível
+  // (numa janela minimizada o navegador pára a página e o envio fica parado no botão Enviar).
+  const hide = job.image && !opts.show;
+  let prev = null;
+  if (hide) {
+    const t = await chrome.tabs.get(tabId);
+    const w = await chrome.windows.get(t.windowId).catch(() => null);
+    const [act] = await chrome.tabs.query({active: true, windowId: t.windowId});
+    prev = {windowId: t.windowId, state: w?.state, activeTab: act?.id};
+    await showForLogin(tabId);
+  }
+  try { return await runJob(tabId, url, job); }
+  finally {
+    // Repõe a janela como estava: minimizada volta a minimizar; senão, volta ao separador anterior.
+    if (prev) {
+      if (prev.state === 'minimized') await chrome.windows.update(prev.windowId, {state: 'minimized'}).catch(() => {});
+      else if (prev.activeTab && prev.activeTab !== tabId) await chrome.tabs.update(prev.activeTab, {active: true}).catch(() => {});
+    }
+  }
+}
+
+async function runJob(tabId, url, job) {
   let r = await tell(tabId, {type: 'cis-wa-run', job});
   if (r?.status === 'login_required') {
     if (!(await waitLogin(tabId))) return {status: 'error', detail: 'Sessão do WhatsApp Web não iniciada.'};
@@ -166,7 +188,34 @@ chrome.runtime.onInstalled.addListener(() => { syncBridges(); });
 chrome.runtime.onStartup.addListener(() => { syncBridges(); });
 chrome.permissions.onAdded.addListener(() => { syncBridges(); });
 chrome.permissions.onRemoved.addListener(() => { syncBridges(); });
-chrome.runtime.onMessage.addListener((msg, _s, reply) => {
+// Teclas/cliques REAIS (isTrusted) no separador do WhatsApp Web, pelo protocolo de depuração do Chrome.
+// Usado só quando o WhatsApp ignora o clique simulado no botão Enviar. Enquanto dura (~1 s) o
+// navegador mostra a barra «CIS WhatsApp está a depurar este navegador».
+async function trusted(tabId, action) {
+  const target = {tabId};
+  await chrome.debugger.attach(target, '1.3');
+  try {
+    const send = (m, p) => chrome.debugger.sendCommand(target, m, p);
+    if (action.kind === 'enter') {
+      const k = {key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13};
+      await send('Input.dispatchKeyEvent', {type: 'rawKeyDown', ...k});
+      await send('Input.dispatchKeyEvent', {type: 'char', text: '\r', ...k});
+      await send('Input.dispatchKeyEvent', {type: 'keyUp', ...k});
+    } else if (action.kind === 'click') {
+      const p = {x: action.x, y: action.y, button: 'left', clickCount: 1};
+      await send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: p.x, y: p.y});
+      await send('Input.dispatchMouseEvent', {type: 'mousePressed', ...p});
+      await send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...p});
+    }
+  } finally {
+    await chrome.debugger.detach(target).catch(() => {});
+  }
+}
+chrome.runtime.onMessage.addListener((msg, s, reply) => {
+  if (msg?.type === 'cis-wa-trusted' && s.tab?.id) {
+    trusted(s.tab.id, msg.action).then(() => reply({ok: true}), e => reply({ok: false, error: String(e?.message || e)}));
+    return true;
+  }
   if (msg?.type === 'cis-register') { syncBridges().then(p => reply({ok: true, patterns: p}), e => reply({ok: false, error: String(e)})); return true; }
   return false;
 });
