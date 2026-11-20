@@ -169,12 +169,13 @@ A ponte activa-se em qualquer endereço específico autorizado, nunca em «todos
 **Fluxo**: Mensagens → «Enviar pelo WhatsApp Web» (um cliente) ou «Enviar a fila pelo WhatsApp Web».
 1. A extensão usa o separador do WhatsApp Web, se já estiver aberto, ou abre-o:
    - visível, com «Mostrar o WhatsApp Web durante o envio» ligado;
-   - numa janela minimizada, com a opção desligada (é o padrão).
+   - num separador ao lado, sem roubar o foco, com a opção desligada (é o padrão). Nunca é minimizado:
+     minimizado, o navegador pára o WhatsApp Web e os envios com imagem não saem.
 2. Sem sessão iniciada:
    - mostra o separador para ler o código QR;
    - aparece o aviso «WhatsApp Web sem sessão…»;
    - espera até 10 minutos e continua depois do login;
-   - se o operador escolheu esconder, volta a minimizar.
+   - com imagem, a página fica visível durante o envio e depois volta ao separador anterior.
 3. Para cada mensagem:
    - abre `web.whatsapp.com/send?phone=…&text=…`;
    - espera pela caixa de escrita;

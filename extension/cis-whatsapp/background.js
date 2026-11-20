@@ -1,5 +1,5 @@
 // CIS WhatsApp — serviço da extensão.
-// Fila de mensagens vinda do CIS → separador do WhatsApp Web (visível ou janela minimizada)
+// Fila de mensagens vinda do CIS → separador do WhatsApp Web (nunca minimizado)
 // → espera pelo login → envia uma a uma com intervalo → devolve o resultado ao CIS.
 const WA = 'https://web.whatsapp.com/';
 const ports = new Set();
@@ -18,19 +18,20 @@ async function findWaTab() {
   return tabs[0] || null;
 }
 
+// Nunca minimiza: numa janela minimizada o navegador pára o WhatsApp Web e os envios
+// (sobretudo com imagem) ficam parados. Sem «Mostrar», o separador abre ao lado, sem roubar o foco.
 async function ensureTab(url) {
   let tab = await findWaTab();
   if (tab) {
+    const w = await chrome.windows.get(tab.windowId).catch(() => null);
+    if (w?.state === 'minimized') await chrome.windows.update(tab.windowId, {state: 'normal', ...(opts.show ? {focused: true} : {})}).catch(() => {});
     await chrome.tabs.update(tab.id, {url, ...(opts.show ? {active: true} : {})});
-    if (opts.show) await chrome.windows.update(tab.windowId, {focused: true, state: 'normal'}).catch(() => {});
+    if (opts.show) await chrome.windows.update(tab.windowId, {focused: true}).catch(() => {});
     return tab.id;
   }
-  if (opts.show) {
-    tab = await chrome.tabs.create({url, active: true});
-    return tab.id;
-  }
-  const w = await chrome.windows.create({url, state: 'minimized', focused: false});
-  return w.tabs[0].id;
+  const win = await chrome.windows.getLastFocused({windowTypes: ['normal']}).catch(() => null);
+  tab = await chrome.tabs.create({url, active: !!opts.show, ...(win && win.state !== 'minimized' ? {windowId: win.id} : {})});
+  return tab.id;
 }
 
 function waitComplete(tabId, ms = 60000) {
@@ -69,11 +70,6 @@ async function waitLogin(tabId) {
   }
   const ok = !stopFlag && Date.now() < end;
   waitingLogin = false; broadcast({type: 'login', estado: ok ? 'feito' : 'expirou'}); broadcast(status());
-  // Depois do login volta a esconder, se o operador escolheu não ver a página.
-  if (ok && !opts.show) {
-    const tab = await chrome.tabs.get(tabId);
-    await chrome.windows.update(tab.windowId, {state: 'minimized'}).catch(() => {});
-  }
   return ok;
 }
 
@@ -81,8 +77,8 @@ async function sendOne(job) {
   const url = WA + 'send?phone=' + encodeURIComponent(job.phone) + '&text=' + encodeURIComponent(job.text);
   const tabId = await ensureTab(url);
   await waitComplete(tabId);
-  // Com imagem, o WhatsApp só prepara e envia a pré-visualização com a página visível
-  // (numa janela minimizada o navegador pára a página e o envio fica parado no botão Enviar).
+  // Com imagem, o WhatsApp só prepara e envia a pré-visualização com a página visível:
+  // mostra-a durante o envio e depois volta ao separador onde o operador estava.
   const hide = job.image && !opts.show;
   let prev = null;
   if (hide) {
@@ -96,8 +92,7 @@ async function sendOne(job) {
   finally {
     // Repõe a janela como estava: minimizada volta a minimizar; senão, volta ao separador anterior.
     if (prev) {
-      if (prev.state === 'minimized') await chrome.windows.update(prev.windowId, {state: 'minimized'}).catch(() => {});
-      else if (prev.activeTab && prev.activeTab !== tabId) await chrome.tabs.update(prev.activeTab, {active: true}).catch(() => {});
+      if (prev.activeTab && prev.activeTab !== tabId) await chrome.tabs.update(prev.activeTab, {active: true}).catch(() => {});
     }
   }
 }
