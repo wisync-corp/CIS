@@ -23,7 +23,11 @@ const waUrl=(tel:string,msg:string)=>'https://web.whatsapp.com/send?phone='+tel+
 function openWa(url:string){const w=window.open(url,'cis-whatsapp-web');if(w){try{w.opener=null;}catch{/* já noutro domínio */}w.focus();}}
 const smsUrl=(tel:string,msg:string)=>'sms:+'+tel+'?body='+encodeURIComponent(msg);
 
-export default function MessageCenter({token,contrato,onClose}:{token:string;contrato?:string;onClose?:()=>void}){
+/** Modelo sugerido ao abrir (criado automaticamente se ainda não existir), anexo e campos extra (ex.: dados do recibo). */
+export type MessagePreset={modelo?:{nome:string;corpo:string};anexo?:WaImage|null;extras?:Record<string,string>};
+const applyExtras=(t:string,x?:Record<string,string>)=>x?t.replace(/\{([^{}]{1,40})\}/g,(m,k:string)=>k in x?x[k]:m):t;
+
+export default function MessageCenter({token,contrato,onClose,preset}:{token:string;contrato?:string;onClose?:()=>void;preset?:MessagePreset}){
  const headers={Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'};
  const [templates,setTemplates]=useState<Template[]>([]);const [fields,setFields]=useState<string[]>([]);
  const [selId,setSelId]=useState<number|''>('');
@@ -37,7 +41,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
  const [,tick]=useState(0);useEffect(()=>onWa(()=>tick(v=>v+1)),[]);
  const wa=waState();const [show,setShow]=useState(getShowPref());
  const [lastJob,setLastJob]=useState<string|null>(null);
- const [image,setImage]=useState<WaImage|null>(null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);const [help,setHelp]=useState(false);
+ const [image,setImage]=useState<WaImage|null>(preset?.anexo??null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);const [help,setHelp]=useState(false);
  const sendMode=!!contrato;
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
 
@@ -47,8 +51,19 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   return j as T;
  }
  async function load(keep?:number){
-  try{const j=await call<{modelos:Template[];campos:string[]}>('/cis/mensagens/modelos');setTemplates(j.modelos);setFields(j.campos);
-   if(keep)setSelId(keep);else if(!selId&&j.modelos.length)setSelId(j.modelos[0].id);}
+  try{const j=await call<{modelos:Template[];campos:string[]}>('/cis/mensagens/modelos');
+   const extra=Object.keys(preset?.extras??{}).map(k=>'{'+k+'}');
+   setFields([...j.campos,...extra.filter(f=>!j.campos.includes(f))]);
+   let list=j.modelos;
+   if(!keep&&!selId&&preset?.modelo){
+    const want=preset.modelo;let found=list.find(t=>t.name.trim().toLowerCase()===want.nome.toLowerCase());
+    if(!found){const c=await call<{id:number}>('/cis/mensagens/modelos',{method:'POST',body:JSON.stringify({name:want.nome,body:want.corpo})});
+     list=(await call<{modelos:Template[]}>('/cis/mensagens/modelos')).modelos;found=list.find(t=>t.id===c.id);
+     setNotice('Modelo «'+want.nome+'» criado. Pode editá-lo e fica disponível para os próximos envios.');}
+    setTemplates(list);if(found){setSelId(found.id);return;}
+   }
+   setTemplates(list);
+   if(keep)setSelId(keep);else if(!selId&&list.length)setSelId(list[0].id);}
   catch(e){setError(e instanceof Error?e.message:'Erro ao carregar os modelos.');}
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +75,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
   if(!sendMode||!body.trim())return;const c=new AbortController();
   const t=window.setTimeout(()=>{fetch(API+'/cis/mensagens/preview?'+new URLSearchParams({contrato:contrato!,texto:body}),{headers,signal:c.signal})
    .then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.message||'Pré-visualização indisponível.');return j as Preview;})
-   .then(p=>{setPreview(p);setText(p.mensagem);}).catch(e=>{if(e.name!=='AbortError')setError(e.message);});},editing?400:0);
+   .then(p=>{setPreview(p);setText(applyExtras(p.mensagem,preset?.extras));}).catch(e=>{if(e.name!=='AbortError')setError(e.message);});},editing?400:0);
   return()=>{c.abort();window.clearTimeout(t);};
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[body,contrato,sendMode]);
@@ -191,6 +206,7 @@ export default function MessageCenter({token,contrato,onClose}:{token:string;con
      <div className="cis-msg-image">
       <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
       {image?<><img src={image.dataUrl} alt="Imagem a enviar"/><span><b>{image.name}</b><small>{wa.available?'Vai com cada mensagem, com o texto como legenda.':'Só segue automaticamente com a extensão.'}</small></span>
+       {!wa.available&&<a className="cis-msg-download" href={image.dataUrl} download={image.name}>Descarregar para anexar</a>}
        <button type="button" onClick={()=>setImage(null)}><X size={13}/> Remover</button></>
       :<button type="button" onClick={()=>fileRef.current?.click()}><ImageIcon size={14}/> Anexar imagem</button>}
      </div>
