@@ -4,7 +4,9 @@ import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Search,Download,Printer,FileText,X,AlertCircle,Info,MessageSquare,Phone,ChevronLeft,ChevronRight,ArrowUpRight,ArrowDownRight,Wallet,CalendarDays,ShieldCheck,SlidersHorizontal,ChevronDown,ChevronUp,ArrowDownUp} from 'lucide-react';
 import type {ExtractoPreset} from './Overview';
-import MessageCenter from './MessageCenter';
+import MessageCenter,{type MessagePreset} from './MessageCenter';
+import {documentImage,fileName} from './docImage';
+import {pushToast} from './waBridge';
 import {situacaoContrato} from './glossario';
 
 const API=import.meta.env.VITE_API_URL||'/api';
@@ -101,7 +103,9 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const [exporting,setExporting]=useState(false);
  const [evidence,setEvidence]=useState<Evidence|null>(null);
  const [info,setInfo]=useState<Informacao|null>(null);const [infoBusy,setInfoBusy]=useState('');const [infoError,setInfoError]=useState('');
- const [msgContract,setMsgContract]=useState<string|null>(null);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
+ const [msgContract,setMsgContract]=useState<string|null>(null);
+ const evidenceRef=useRef<HTMLElement>(null);
+ const [msgPreset,setMsgPreset]=useState<MessagePreset|null>(null),[sendBusy,setSendBusy]=useState(false);const [geralDoc,setGeralDoc]=useState<GeralEvidence|null>(null);const [evidenceBusy,setEvidenceBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const suggestTimer=useRef<number|undefined>(undefined);
 
@@ -180,6 +184,27 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    setEvidence(await getJson<Evidence>('/cis/extractos/evidencia?'+p));}
   catch(e){setError(e instanceof Error?e.message:'Não foi possível gerar o extracto do mutuário.');}finally{setEvidenceBusy(false);}
  }
+ // Envio do extracto: abre a Mensagem ao mutuário com o contrato, o modelo «Envio de extracto»
+ // e a imagem do extracto em anexo.
+ async function sendEvidence(){
+  const el=evidenceRef.current;if(!evidence||!el||sendBusy)return;
+  const k=evidence.contratos.find(c=>/curso|atras|pendente/i.test(c.situacao))??[...evidence.contratos].sort((a,b)=>String(b.inicio).localeCompare(String(a.inicio)))[0];
+  if(!k){pushToast('erro','O extracto não tem contratos: não há para quem enviar.');return;}
+  setSendBusy(true);
+  try{
+   const dataUrl=await documentImage(el);
+   const periodo=evidence.periodo.inicio||evidence.periodo.fim?`${dt(evidence.periodo.inicio)} a ${dt(evidence.periodo.fim)}`:'todo o histórico';
+   setMsgPreset({
+    anexo:{name:fileName('Extracto '+evidence.cliente.nome+' '+evidence.emitido_em.slice(0,10)),type:'image/jpeg',dataUrl},
+    modelo:{nome:'Envio de extracto',corpo:'Olá {Primeiro Nome}, 👋\nSegue em anexo o extracto da sua conta ({Período do Extracto}).\nTotal pago: *{Total Pago}*.\nSaldo em dívida: *{Saldo do Extracto}*.\nPróximo vencimento: {Data de Cobrança}.\n\nQualquer dúvida, estamos ao dispor. 🙏'},
+    extras:{'Período do Extracto':periodo,'Total Pago':mt(evidence.totais.pago)+' MT','Saldo do Extracto':mt(Number(evidence.totais.aberto)+Number(evidence.totais.vencido))+' MT',
+     'Valor Vencido':mt(evidence.totais.vencido)+' MT','Código do Extracto':evidence.codigo_verificacao},
+   });
+   setMsgContract(k.contrato);
+  }catch(e){pushToast('erro',e instanceof Error?e.message:'Não foi possível preparar a imagem do extracto.');}
+  finally{setSendBusy(false);}
+ }
+
  function printEvidence(){
   const prev=document.title;document.title=geralDoc?`Extracto geral ${geralDoc.emitido_em.slice(0,10)}`:`Extracto ${evidence?.cliente.nome??''} ${evidence?.emitido_em.slice(0,10)??''}`.trim();
   document.body.classList.add('cis-printing-evidence');
@@ -279,8 +304,9 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   {evidence&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto de conta">
    <div className="cis-evidence-bar"><b>Pré-visualização do extracto do mutuário</b><span>Use «Imprimir / Guardar PDF» e escolha «Guardar como PDF» para enviar ao mutuário.</span>
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
+    <button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendEvidence()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>
     <button type="button" onClick={()=>setEvidence(null)} aria-label="Fechar"><X size={16}/></button></div>
-   <article className="cis-evidence">
+   <article ref={evidenceRef} className="cis-evidence">
     <header><CompanyBrand company={company}/><div><h1>{evidence.titulo}</h1><p>Emitido em {dt(evidence.emitido_em.slice(0,10))} às {evidence.emitido_em.slice(11)}{evidence.emitido_por?` por ${evidence.emitido_por}`:''}</p>
      <p>Período: {evidence.periodo.inicio||evidence.periodo.fim?`${dt(evidence.periodo.inicio)} a ${dt(evidence.periodo.fim)}`:'todo o histórico'}</p></div></header>
     <section className="cis-evidence-client"><h2>Mutuário</h2><dl>
@@ -338,8 +364,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    </aside>
   </div>,document.body)}
 
-  {msgContract&&createPortal(<div className="cis-msg-overlay" role="dialog" aria-modal="true" aria-label="Centro de mensagens" onClick={()=>setMsgContract(null)}>
-   <div onClick={ev=>ev.stopPropagation()}><MessageCenter token={token} contrato={msgContract} onClose={()=>setMsgContract(null)}/></div>
+  {msgContract&&createPortal(<div className="cis-msg-overlay" style={msgPreset?{zIndex:110}:undefined} role="dialog" aria-modal="true" aria-label="Centro de mensagens" onClick={()=>{setMsgContract(null);setMsgPreset(null);}}>
+   <div onClick={ev=>ev.stopPropagation()}><MessageCenter key={msgContract+(msgPreset?':p':'')} token={token} contrato={msgContract} preset={msgPreset??undefined} onClose={()=>{setMsgContract(null);setMsgPreset(null);}}/></div>
   </div>,document.body)}
 
   {geralDoc&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto geral">
