@@ -2,11 +2,12 @@ import {pushToast} from './waBridge';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
-import ReceiptSend from './ReceiptSend';
+import MessageCenter,{type MessagePreset} from './MessageCenter';
+import {toJpeg} from 'html-to-image';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 import {
-  ReceiptText,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
+  ReceiptText,MessageSquare,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
   ArrowRight,ArrowLeft,Wallet,Clock3,ShieldCheck,LockKeyhole,Landmark,
   Layers,ArrowDownLeft,RotateCcw,TrendingUp,Info,CreditCard,
   Filter,BookOpen,ChevronRight,Coins
@@ -123,6 +124,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [receiptBusy,setReceiptBusy]=useState(false);
  const [receiptError,setReceiptError]=useState('');
  const receiptRef=useRef<HTMLElement>(null);
+ const [msgPreset,setMsgPreset]=useState<MessagePreset|null>(null),[sendBusy,setSendBusy]=useState(false);
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
  const [historyError,setHistoryError]=useState(false);
  const [view,setView]=useState<'resumo'|'tratamento'|'historico'>(initialOrder?'tratamento':'resumo');
@@ -257,6 +259,23 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    setReceipt(found);
   }catch(error){setReceiptError(error instanceof Error?error.message:'Não foi possível consultar o recibo.');}
   finally{setReceiptBusy(false);}
+ }
+
+ // Envio do recibo: abre a Mensagem ao mutuário (Centro de mensagens) já com o contrato, o modelo
+ // «Envio de recibo» e a imagem do recibo em anexo.
+ async function sendReceipt(){
+  const el=receiptRef.current;if(!receipt||!el||sendBusy)return;
+  setSendBusy(true);
+  try{
+   const dataUrl=await toJpeg(el,{quality:0.92,pixelRatio:2,backgroundColor:'#ffffff',cacheBust:true,width:el.offsetWidth,height:el.offsetHeight,style:{margin:'0',transform:'none',boxShadow:'none'}});
+   const m=(v:string|null|undefined)=>v==null?'—':fmt(v);
+   setMsgPreset({
+    anexo:{name:receipt.numero.replace(/[^\w.-]+/g,'_')+'.jpg',type:'image/jpeg',dataUrl},
+    modelo:{nome:'Envio de recibo',corpo:'Olá {Primeiro Nome}, 👋\nConfirmamos o recebimento de *{Valor Recebido}* em {Data do Pagamento}, referente ao contrato *{Nr do Contracto}* (prestação {Prestação Paga}).\nSegue em anexo o recibo n.º *{Nº do Recibo}*.\nSaldo em dívida: {Valor em Dívida}.\n\nObrigado pela confiança. 🙏'},
+    extras:{'Nº do Recibo':receipt.numero,'Valor Recebido':m(receipt.valor),'Data do Pagamento':date(receipt.data),'Prestação Paga':receipt.prestacao??'—','Forma de Pagamento':text(receipt.forma_pagamento)},
+   });
+  }catch{pushToast('erro','Não foi possível preparar a imagem do recibo.');}
+  finally{setSendBusy(false);}
  }
 
  function printReceipt(){
@@ -586,10 +605,9 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   {receipt&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Recibo de pagamento">
    <div className="cis-evidence-bar"><b>Recibo de pagamento</b>
     <button type="button" className="primary" onClick={printReceipt}>Imprimir / Guardar PDF</button>
+    <button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendReceipt()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>
     <button type="button" onClick={()=>setReceipt(null)}>Fechar</button>
    </div>
-   <ReceiptSend token={token} target={receiptRef} numero={receipt.numero} contrato={receipts?.contrato??selected??''} valor={receipt.valor} data={receipt.data} prestacao={receipt.prestacao}
-    saldo={receipts?.saldo_em_divida??null} cliente={receipts?.mutuario??{nome:''}} empresa={company?.nome_empresa??''}/>
    <article ref={receiptRef} className="cis-evidence cis-receipt">
     <header><CompanyBrand company={company}/><div><h1>Recibo de pagamento</h1><p>N.º <b>{receipt.numero}</b></p><p>Emitido em {date(receipts?.emitido_em?.slice(0,10))}{receipts?.emitido_por?` por ${receipts.emitido_por}`:''}</p></div></header>
     <section className="cis-evidence-client"><h2>Mutuário</h2><dl>
@@ -612,6 +630,9 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     <div className="cis-receipt-sign"><span>O mutuário</span><span>Pela empresa</span></div>
     <footer><ShieldCheck size={14}/><span>{receipt.origem==='extracto'?`Recebimento registado no Extracto (movimento ${receipt.extracto_nr}).`:'Pagamento registado na prestação (sem movimento no Extracto).'} Valores em Meticais (MT).</span><PoweredBy/></footer>
    </article>
+  </div>,document.body)}
+  {msgPreset&&receipt&&createPortal(<div className="cis-msg-overlay" style={{zIndex:110}} role="dialog" aria-modal="true" aria-label="Enviar recibo ao mutuário" onClick={()=>setMsgPreset(null)}>
+   <div onClick={ev=>ev.stopPropagation()}><MessageCenter token={token} contrato={receipts?.contrato??selected??''} preset={msgPreset} onClose={()=>setMsgPreset(null)}/></div>
   </div>,document.body)}
   <div className="cis-collections-footer"><ShieldCheck size={16}/> Fonte única dos lançamentos: Extracto. A Tesouraria opcional terá reconciliação bancária, sem duplicar os movimentos da Caixa.</div>
  </section>;
