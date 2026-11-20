@@ -24,7 +24,7 @@ async function ensureTab(url) {
   let tab = await findWaTab();
   if (tab) {
     const w = await chrome.windows.get(tab.windowId).catch(() => null);
-    if (w?.state === 'minimized') await chrome.windows.update(tab.windowId, {state: 'normal', ...(opts.show ? {focused: true} : {})}).catch(() => {});
+    if (w?.state === 'minimized' && opts.show) await chrome.windows.update(tab.windowId, {state: 'normal', focused: true}).catch(() => {});
     await chrome.tabs.update(tab.id, {url, ...(opts.show ? {active: true} : {})});
     if (opts.show) await chrome.windows.update(tab.windowId, {focused: true}).catch(() => {});
     return tab.id;
@@ -77,24 +77,12 @@ async function sendOne(job) {
   const url = WA + 'send?phone=' + encodeURIComponent(job.phone) + '&text=' + encodeURIComponent(job.text);
   const tabId = await ensureTab(url);
   await waitComplete(tabId);
-  // Com imagem, o WhatsApp só prepara e envia a pré-visualização com a página visível:
-  // mostra-a durante o envio e depois volta ao separador onde o operador estava.
-  const hide = job.image && !opts.show;
-  let prev = null;
-  if (hide) {
-    const t = await chrome.tabs.get(tabId);
-    const w = await chrome.windows.get(t.windowId).catch(() => null);
-    const [act] = await chrome.tabs.query({active: true, windowId: t.windowId});
-    prev = {windowId: t.windowId, state: w?.state, activeTab: act?.id};
-    await showForLogin(tabId);
-  }
+  // «Mostrar» desligado = o WhatsApp Web NUNCA vem para a frente. Com anexo, o separador de
+  // fundo trabalha com foco emulado (barra «a depurar» do navegador durante o envio).
+  const bg = job.image && !opts.show;
+  if (bg) await background(tabId, true).catch(() => {});
   try { return await runJob(tabId, url, job); }
-  finally {
-    // Repõe a janela como estava: minimizada volta a minimizar; senão, volta ao separador anterior.
-    if (prev) {
-      if (prev.activeTab && prev.activeTab !== tabId) await chrome.tabs.update(prev.activeTab, {active: true}).catch(() => {});
-    }
-  }
+  finally { if (bg) await background(tabId, false); }
 }
 
 async function runJob(tabId, url, job) {
@@ -186,11 +174,36 @@ chrome.permissions.onRemoved.addListener(() => { syncBridges(); });
 // Teclas/cliques REAIS (isTrusted) no separador do WhatsApp Web, pelo protocolo de depuração do Chrome.
 // Usado só quando o WhatsApp ignora o clique simulado no botão Enviar. Enquanto dura (~1 s) o
 // navegador mostra a barra «CIS WhatsApp está a depurar este navegador».
+// Sessões de depuração abertas (separadores em envio «em segundo plano»).
+const attached = new Set();
+async function attach(tabId) {
+  if (attached.has(tabId)) return;
+  await chrome.debugger.attach({tabId}, '1.3');
+  attached.add(tabId);
+}
+async function detach(tabId) {
+  if (!attached.has(tabId)) return;
+  attached.delete(tabId);
+  await chrome.debugger.detach({tabId}).catch(() => {});
+}
+chrome.debugger.onDetach.addListener(src => { if (src.tabId) attached.delete(src.tabId); });
+
+// Separador escondido a trabalhar como se estivesse à vista: foco emulado e página activa
+// (sem isto o navegador abranda/congela separadores de fundo e a imagem/PDF não sai).
+async function background(tabId, on) {
+  if (!on) { await detach(tabId); return; }
+  await attach(tabId);
+  const send = (m, p) => chrome.debugger.sendCommand({tabId}, m, p).catch(() => {});
+  await send('Emulation.setFocusEmulationEnabled', {enabled: true});
+  await send('Page.enable');
+  await send('Page.setWebLifecycleState', {state: 'active'});
+}
+
 async function trusted(tabId, action) {
-  const target = {tabId};
-  await chrome.debugger.attach(target, '1.3');
+  const keep = attached.has(tabId);
+  await attach(tabId);
   try {
-    const send = (m, p) => chrome.debugger.sendCommand(target, m, p);
+    const send = (m, p) => chrome.debugger.sendCommand({tabId}, m, p);
     if (action.kind === 'enter') {
       const k = {key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13};
       await send('Input.dispatchKeyEvent', {type: 'rawKeyDown', ...k});
@@ -203,7 +216,7 @@ async function trusted(tabId, action) {
       await send('Input.dispatchMouseEvent', {type: 'mouseReleased', ...p});
     }
   } finally {
-    await chrome.debugger.detach(target).catch(() => {});
+    if (!keep) await detach(tabId);
   }
 }
 chrome.runtime.onMessage.addListener((msg, s, reply) => {
