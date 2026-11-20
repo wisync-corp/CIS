@@ -81,6 +81,7 @@ jobs:
 
       - run: bash -n ../deploy/postflight-cash-direct-account.sh
       - run: bash -n ../deploy/inspect-cash-migration-mismatch.sh
+      - run: php -l app/Http/Middleware/CisThrottle.php && php tests/throttle_smoke.php
       - run: php tests/cash_smoke.php
       - run: php tests/cash_opening_preview_smoke.php
       - run: php tests/cash_operation_preview_smoke.php

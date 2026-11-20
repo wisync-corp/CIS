@@ -11,6 +11,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Override Laravel's default route('login') callback: API-only CIS has no web login route.
         // The exception renderer below returns JSON 401 for all /api/* requests.
         $middleware->redirectGuestsTo('/api/auth/login');
+        // Limite por utilizador E por rota (ver App\Http\Middleware\CisThrottle).
+        $middleware->alias(['throttle' => \App\Http\Middleware\CisThrottle::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // A API é stateless e não tem uma rota web chamada "login".
@@ -21,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json(['message' => 'Não autenticado.'], 401);
             }
             return null;
+        });
+        $exceptions->render(function (\Illuminate\Http\Exceptions\ThrottleRequestsException $e, Request $request) {
+            if (!$request->is('api/*')) return null;
+            $wait = (int)($e->getHeaders()['Retry-After'] ?? 60);
+            return response()->json(['message' => 'Demasiados pedidos seguidos neste ecrã. Aguarde '.$wait.' s e tente de novo.', 'aguardar_segundos' => $wait], 429, $e->getHeaders());
         });
     })
     ->create();
