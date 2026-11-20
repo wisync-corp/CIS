@@ -1103,7 +1103,7 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
  body.cis-printing-evidence>*:not(.cis-evidence-overlay){display:none!important}
  html:has(body.cis-printing-evidence),body.cis-printing-evidence{background:#fff!important}
  body.cis-printing-evidence .cis-evidence-overlay{position:static;background:none;padding:0;overflow:visible}
- body.cis-printing-evidence .cis-evidence-bar{display:none}
+ body.cis-printing-evidence .cis-evidence-bar,body.cis-printing-evidence .cis-receipt-send{display:none}
  body.cis-printing-evidence .cis-evidence{width:100%;max-width:none;padding:0;border-radius:0;font-size:calc(10.5px * var(--cis-fs))}
  body.cis-printing-evidence .cis-evidence tr{break-inside:avoid}
  body.cis-printing-evidence .cis-evidence th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -1699,3 +1699,20 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-collections-done button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:calc(12.5px * var(--cis-fs));font-weight:800;border:1px solid #abefc6;background:#fff;color:#067647;border-radius:9px;padding:6px 10px;cursor:pointer}
 .cis-collections-done button.close{border:0;background:transparent;font-size:18px;line-height:1;padding:2px 6px}
 .cis-collections-partial{display:block;margin-top:2px;color:#b54708;font-weight:700;font-size:calc(12px * var(--cis-fs))}
+
+/* Envio do recibo ao mutuário */
+.cis-receipt-send{max-width:900px;margin:0 auto 16px;padding:16px 18px;background:#fff;border-radius:12px;border:1px solid #e4e7ec;box-shadow:0 6px 20px rgba(0,0,0,.12);font-size:calc(13px * var(--cis-fs));color:#101828}
+.cis-receipt-send-head{display:flex;gap:10px;align-items:center;margin-bottom:12px;color:var(--cis-primary,#4b2c83)}
+.cis-receipt-send-head div{display:flex;flex-direction:column}.cis-receipt-send-head strong{color:#101828;font-size:1.08em}.cis-receipt-send-head small{color:#667085}
+.cis-receipt-send-grid{display:grid;grid-template-columns:minmax(200px,1fr) 2fr;gap:14px}
+.cis-receipt-send label{display:flex;flex-direction:column;gap:6px;font-weight:700}
+.cis-receipt-send input,.cis-receipt-send textarea{font:inherit;font-weight:500;border:1px solid #d0d5dd;border-radius:8px;padding:9px 11px;resize:vertical}
+.cis-receipt-send input[aria-invalid=true]{border-color:#d92d20}
+.cis-receipt-send label small{font-weight:500;color:#667085}
+.cis-receipt-send-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.cis-receipt-send-actions button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:800;border:1px solid #d0d5dd;background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;color:#101828}
+.cis-receipt-send-actions button.primary{background:#128c4a;border-color:#128c4a;color:#fff}
+.cis-receipt-send-actions button:disabled{opacity:.55;cursor:not-allowed}
+.cis-receipt-send p{display:flex;gap:6px;align-items:center;margin:10px 0 0}
+.cis-receipt-send p.ok{color:#067647}.cis-receipt-send p.err{color:#b42318}.cis-receipt-send p.hint{color:#667085;font-size:.95em}
+@media (max-width:700px){.cis-receipt-send-grid{grid-template-columns:1fr}}
