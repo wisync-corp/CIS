@@ -34,6 +34,20 @@
     }
     el.click();
   }
+  // Acção real (isTrusted) pedida ao serviço da extensão.
+  const trusted = action => new Promise(res => {
+    try { chrome.runtime.sendMessage({type: 'cis-wa-trusted', action}, r => res(r || {ok: false, error: chrome.runtime.lastError?.message})); }
+    catch (e) { res({ok: false, error: String(e)}); }
+  });
+  const center = el => { const r = el.getBoundingClientRect(); return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)}; };
+  // Diagnóstico curto do ecrã (botões e ícones visíveis) para quando o envio falha.
+  function diag() {
+    const vis = el => el.offsetParent !== null;
+    const btns = [...document.querySelectorAll('button[aria-label],[role="button"][aria-label]')].filter(vis).map(b => b.getAttribute('aria-label')).filter(Boolean);
+    const icons = [...document.querySelectorAll('span[data-icon]')].filter(vis).map(s => s.getAttribute('data-icon'));
+    const uniq = a => [...new Set(a)].slice(-12).join(', ');
+    return `botões: ${uniq(btns)} | ícones: ${uniq(icons)}`;
+  }
   // Enter no editor (o WhatsApp envia com Enter na caixa de escrita e na legenda da imagem).
   function enter(el) {
     el.focus();
@@ -99,8 +113,10 @@
 
     // O WhatsApp aceitou o envio quando a caixa de escrita esvazia ou a mensagem aparece.
     let accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 4000);
-    if (!accepted) { const c = q(SEL.compose); if (c) enter(c); accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 12000); }
-    if (!accepted) return {status: 'error', detail: 'O texto ficou na caixa de escrita: a mensagem não saiu.'};
+    if (!accepted) { const c = q(SEL.compose); if (c) enter(c); accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 6000); }
+    if (!accepted) { const c = q(SEL.compose); if (c) { c.focus(); await trusted({kind: 'enter'}); } accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 8000); }
+    if (!accepted) { const b = clickable(q(SEL.send, document.querySelector('footer') || document)); if (b) { await trusted({kind: 'click', ...center(b)}); accepted = await waitFor(() => (composeEmpty() || findMine()) ? true : null, 8000); } }
+    if (!accepted) return {status: 'error', detail: 'O texto ficou na caixa de escrita: a mensagem não saiu. ' + diag()};
 
     const mine = await waitFor(findMine, 15000);
     if (!mine) return {status: 'sent', detail: 'Enviada (confirmação visual não encontrada na conversa).'};
@@ -125,7 +141,7 @@
   const captionBox = compose => {
     const byLabel = q(SEL.caption);
     if (byLabel && byLabel !== compose) return byLabel;
-    const all = [...document.querySelectorAll('div[contenteditable="true"]')].filter(el => el !== compose && !el.closest('footer') && el.offsetParent !== null);
+    const all = [...document.querySelectorAll('div[contenteditable="true"]')].filter(el => el !== compose && !el.closest('footer') && !el.closest('#side') && el.offsetParent !== null);
     return all.length ? all[all.length - 1] : null;
   };
   // Botão Enviar do ecrã de pré-visualização: o mais próximo da caixa de legenda.
@@ -168,8 +184,11 @@
     if (btn) press(btn); else enter(cap);
     let closed = await waitFor(isClosed, 8000);
     if (!closed && cap.isConnected) { enter(cap); closed = await waitFor(isClosed, 5000); }
-    if (!closed) { const b2 = previewSend(cap); if (b2) { press(b2); closed = await waitFor(isClosed, 10000); } }
-    if (!closed) return {status: 'error', detail: 'A pré-visualização da imagem não fechou: a imagem não saiu.'};
+    // O WhatsApp pode ignorar eventos simulados: Enter real na legenda e, por fim, clique real no botão.
+    let how = btn ? 'clique' : 'enter';
+    if (!closed && cap.isConnected) { cap.focus(); const r = await trusted({kind: 'enter'}); how = r.ok ? 'enter real' : 'enter real falhou (' + r.error + ')'; closed = await waitFor(isClosed, 8000); }
+    if (!closed) { const b2 = previewSend(cap); if (b2) { const r = await trusted({kind: 'click', ...center(b2)}); how += r.ok ? ' + clique real' : ' + clique real falhou (' + r.error + ')'; closed = await waitFor(isClosed, 10000); } }
+    if (!closed) return {status: 'error', detail: 'A imagem ficou na pré-visualização sem sair (' + how + '). ' + diag()};
     const mine = await waitFor(() => qa(SEL.outgoing).slice(-4).reverse().find(el => !before.has(el) && q(SEL.outImage, el)) || null, 20000);
     if (!mine) return {status: 'sent', detail: 'Imagem enviada (confirmação visual não encontrada).'};
     const delivered = await waitFor(() => (mine.isConnected && mine.querySelector('span[data-icon="msg-time"]')) ? null : true, 60000);
