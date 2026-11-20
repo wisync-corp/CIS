@@ -176,6 +176,7 @@ final class MessageCenterController extends Controller
             'Dias de Atraso'=>(string)$daysLate,
             '_situacao'=>$late->isNotEmpty()?'atrasado':($open->isNotEmpty()?'pendente':'finalizado'),
             '_cliente_id'=>(int)$ref->{'Nº de Cliente'},
+            '_alternativo'=>trim((string)($client?->contacto_alternativo??'')),
         ];
     }
 
@@ -259,6 +260,7 @@ final class MessageCenterController extends Controller
             $list=$picked->values()->map(fn($i)=>[
                 'contrato'=>$i['contrato'],'cliente'=>$i['v']['Nome Completo'],'cliente_id'=>$i['v']['_cliente_id']?:null,
                 'contacto'=>$i['v']['Contacto']?:null,'telefone'=>self::phone($i['v']['Contacto']),
+                'contacto_alternativo'=>$i['v']['_alternativo']?:null,'telefone_alternativo'=>self::phone($i['v']['_alternativo']),
                 'situacao'=>$i['v']['_situacao'],'mensagem'=>self::render($body,$i['v']),
             ])->sortBy('cliente')->values();
             abort_if($list->count()>2000,422,'Grupo demasiado grande ('.$list->count().'); a fila aceita até 2000 destinatários.');

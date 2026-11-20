@@ -1717,3 +1717,18 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-wa-doc span{display:grid;place-items:center;width:34px;height:40px;border-radius:5px;background:#d92d20;color:#fff;font-weight:800;font-size:11px}
 .cis-wa-doc b{font-size:.92em;word-break:break-all}
 .cis-msg-image .cis-msg-pdf{min-width:0!important;width:46px!important;max-width:46px;flex:0 0 46px!important;height:56px;padding:0;display:grid!important;place-items:center}
+
+/* Fila: filtros por estado, número usado e nova fila */
+.cis-msg-queue-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:10px 0}
+.cis-msg-queue-filters{display:flex;flex-wrap:wrap;gap:6px}
+.cis-msg-queue-filters button{font:inherit;font-size:calc(12px * var(--cis-fs));font-weight:700;border:1px solid var(--cis-border);background:#fff;border-radius:99px;padding:6px 11px;cursor:pointer;color:var(--cis-heading)}
+.cis-msg-queue-filters button b{margin-left:4px;font-weight:800}
+.cis-msg-queue-filters button.on{background:var(--cis-primary);border-color:var(--cis-primary);color:#fff}
+.cis-msg-queue-filters button.q-enviada:not(.on) b{color:#067647}
+.cis-msg-queue-filters button.q-falhada:not(.on) b,.cis-msg-queue-filters button.q-sem_whatsapp:not(.on) b{color:#b42318}
+.cis-msg-queue-num{display:flex;align-items:center;gap:10px;font-size:calc(12px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-msg .cis-msg-queue-num input{min-width:0;min-height:0;width:auto;padding:0;margin:0 4px 0 0}
+.cis-msg-queue-num label{display:inline-flex;align-items:center;font-weight:700;color:var(--cis-heading);cursor:pointer}
+.cis-msg-queue-tip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:calc(12px * var(--cis-fs))}
+.cis-msg-queue-tip button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:800;border:1px solid #fedf89;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:#93370d}
+.cis-msg-fail-detail{display:block;font-weight:500;color:#b42318;max-width:260px;white-space:normal}
