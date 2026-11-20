@@ -52,6 +52,13 @@ final class ClientSecurityInfoController extends Controller
         $this->allowed($request);
         abort_unless(filter_var(env('CIS_CLIENTES_EDIT_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
             503, 'Edição directa não activada.');
+        // Aceita os formatos que a própria ficha devolve (HH:MM:SS e data com hora).
+        $t = trim((string)$request->input('melhor_horario_contacto', ''));
+        $dv = trim((string)$request->input('validade_documento', ''));
+        $request->merge([
+            'melhor_horario_contacto' => preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $t, $mt) ? sprintf('%02d:%s', $mt[1], $mt[2]) : ($t === '' ? null : $t),
+            'validade_documento' => preg_match('/^\d{4}-\d{2}-\d{2}/', $dv) ? substr($dv, 0, 10) : ($dv === '' ? null : $dv),
+        ]);
         $validated = $request->validate([
             'ponto_referencia' => ['nullable', 'string', 'max:255'],
             'local_trabalho_actividade' => ['nullable', 'string', 'max:180'],
@@ -74,10 +81,9 @@ final class ClientSecurityInfoController extends Controller
         ]);
         $hasThirdParty = trim((string)($validated['pessoa_referencia_nome'] ?? '')) !== ''
             || trim((string)($validated['pessoa_referencia_contacto'] ?? '')) !== '';
-        if ($hasThirdParty && (!$validated['referencia_contacto_informado']
-            || trim((string)($validated['pessoa_referencia_nome'] ?? '')) === ''
-            || trim((string)($validated['pessoa_referencia_contacto'] ?? '')) === '')) {
-            return response()->json(['message' => 'Preencha nome e contacto da pessoa de referência e confirme que o mutuário foi informado.'], 422);
+        // Nenhum campo complementar é obrigatório; com dados de terceiros só se exige a confirmação.
+        if ($hasThirdParty && !$validated['referencia_contacto_informado']) {
+            return response()->json(['message' => 'Confirme (no separador Referências) que o mutuário foi informado sobre a finalidade dos dados da pessoa de referência.'], 422);
         }
 
         // O utilizador mysql_editor dispõe de UPDATE apenas sobre os campos autorizados.
