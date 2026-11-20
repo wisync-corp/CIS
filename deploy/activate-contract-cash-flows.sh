@@ -68,7 +68,8 @@ GRANT SELECT, INSERT ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';
 GRANT SELECT, INSERT ON \`cis\`.\`Extracto\` TO 'cis_contract_writer'@'%';
 GRANT UPDATE (\`Valor de Juros\`,\`Valor de Multa\`,\`Valor a Pagar\`,\`Valor Pago\`,
  \`Data de Pagamento\`,\`Estado\`,\`Dias\`,\`Situação de Pagamento\`,
- \`Estado do Contrato\`) ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';"
+ \`Estado do Contrato\`,
+ \`Data de Cobrança\`,\`Data de Inicio\`,\`Data Final\`,\`Capital\`,\`Amortização\`,\`% de Juro\`,\`Prazo/Duração\`) ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';"
 grants="$(sql "SHOW GRANTS FOR 'cis_contract_writer'@'%';")"
 [[ "$grants" != *'ALL PRIVILEGES'* ]] || { echo 'BLOQUEADO: ALL PRIVILEGES no escritor.' >&2; exit 1; }
 grantee="CONCAT(CHAR(39),'cis_contract_writer',CHAR(39),'@',CHAR(39),'%',CHAR(39))"
