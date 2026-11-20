@@ -40,6 +40,7 @@ final class CollectionScenarioPreviewController extends Controller
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN)
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503,
             'Consulta financeira privada não autorizada.');
+        if (is_string($request->input('taxa_informada'))) $request->merge(['taxa_informada'=>str_replace(',','.',trim($request->input('taxa_informada')))]);
         $d=$request->validate([
             'operacao'=>['required','in:parcial,renovar_juros,capitalizar,remanescente,renovar_credito,actualizar_data,finalizar_contrato,prorrogar_15_30,mora_diaria'],
             'prazo_origem_dias'=>['required_if:operacao,prorrogar_15_30','nullable','integer','in:15'],
@@ -53,7 +54,7 @@ final class CollectionScenarioPreviewController extends Controller
             'data_pagamento'=>['required_if:operacao,actualizar_data','nullable','date_format:Y-m-d'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
             // Juros a cobrar na capitalização: por defeito a taxa da tabela; o operador pode indicar outra.
-            'taxa_informada'=>['nullable','numeric','gt:0','max:100','regex:/^\d{1,3}(?:[.,]\d{1,4})?$/'],
+            'taxa_informada'=>['nullable','numeric','gt:0','max:100','regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
         ]);
         abort_if(trim($numero)==='' || mb_strlen($numero)>155,422,'Identificador de contrato inválido.');
         $db=DB::connection('mysql_legacy');
