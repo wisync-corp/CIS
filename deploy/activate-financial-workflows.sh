@@ -90,7 +90,8 @@ GRANT SELECT, INSERT ON \`cis\`.\`Extracto\` TO 'cis_contract_writer'@'%';
 GRANT SELECT, INSERT ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';
 GRANT UPDATE (\`Valor de Juros\`,\`Valor de Multa\`,\`Valor a Pagar\`,\`Valor Pago\`,
  \`Data de Pagamento\`,\`Estado\`,\`Dias\`,\`Situação de Pagamento\`,
- \`Estado do Contrato\`) ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';"
+ \`Estado do Contrato\`,
+ \`Data de Cobrança\`,\`Data de Inicio\`,\`Data Final\`,\`Capital\`,\`Amortização\`,\`% de Juro\`,\`Prazo/Duração\`) ON \`cis\`.\`Contractos\` TO 'cis_contract_writer'@'%';"
 upsert_flag(){
  local name="$1"
  if grep -q "^$name=" deploy/.env; then

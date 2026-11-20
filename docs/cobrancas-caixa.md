@@ -307,3 +307,17 @@ Recibos `PREFIXO-ANO-SEQUÊNCIA` (ex.: `REC-2026-0001`), a recomeçar em 1 em ca
 Definições › Parametrização › **Modelos de contrato**: editor de texto com barra de formatação (`# título`, `## cláusula`, `### (subtítulo)`, `**negrito**`, `a)` alíneas, `[[campo a preencher à mão]]`, `{Plano de Pagamentos}`, `{Assinaturas}`), lista de variáveis por grupo (Empresa, Contrato, Mutuário, Documento) e pré-visualização com os dados de um contrato real. Vários modelos, um padrão. Tabela `cis_contract_templates`; o modelo inicial («Contrato de empréstimo», a partir do Book1.xlsx) está em `backend/resources/contratos/modelo-emprestimo.txt`.
 
 Na ficha do contrato, separador **Documento do contrato**: escolher o modelo, ver os dados em falta e «Gerar contrato» → Imprimir / Guardar PDF (cabeçalho da empresa, plano de pagamentos, assinaturas, «Powered by WiSync»). Valores em `GET /cis/contractos/{n}/variaveis-contrato` (inclui o capital por extenso). Novos campos da empresa: «Conta para reembolsos» e «Foro judicial».
+
+## Operações de cobrança activadas
+
+Além da liquidação da prestação e da renovação, ficam activas (prévia `POST …/simular-operacao`, gravação `POST …/operacao` com `idempotency_key` e `confirmacao`; só administrador; histórico antes/depois):
+
+| Operação | Caixa | O que grava |
+|---|---|---|
+| **Pagamento parcial** | Entrada na conta escolhida | `Valor Pago` acumulado, «Pagamento Parcial»; tem de cobrir os juros e ficar abaixo do saldo; pode repetir-se |
+| **Liquidar saldo em dívida** | Entrada do saldo (prestação + juros de mora opcionais − parciais) | Prestação paga; contrato liquidado se não houver mais nada |
+| **Renovação dos juros** | — | +1 período de juros (taxa do contrato sobre o capital), vencimento + mesmo prazo |
+| **Capitalizar juros** | — | Juros passam a capital (arredondado ao metical), novos juros à taxa da tabela ou indicada, início = vencimento anterior, vencimento + 15/30 dias |
+| **Prorrogação 15 → 30 dias** | — | Vencimento = início + 30 dias, prazo «30 Dias» no contrato, juros mantidos ou recalculados à taxa de 30 dias |
+
+Com pagamentos parciais registados, a prestação só aceita novo parcial ou a liquidação do saldo. `% de Juro` (inteiro na tabela) só é actualizado com taxas inteiras; a taxa exacta fica no histórico. Permissões: `bash deploy/activate-collection-operations.sh` (UPDATE nas colunas de datas, capital, taxa e prazo).

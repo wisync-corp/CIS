@@ -107,6 +107,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('contractos/{numero}/prestacoes/{ordem}/simular-parcelas',[ParcelasQuoteController::class,'preview'])->whereNumber('ordem')->middleware('throttle:15,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/cobrar',[ContractCollectionController::class,'collect'])->whereNumber('ordem')->middleware('throttle:3,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/simular-renovacao',[ContractCollectionController::class,'previewRenewal'])->whereNumber('ordem')->middleware('throttle:15,1');
+        Route::post('contractos/{numero}/prestacoes/{ordem}/simular-operacao',[ContractCollectionController::class,'previewOperation'])->whereNumber('ordem')->middleware('throttle:30,1');
+        Route::post('contractos/{numero}/prestacoes/{ordem}/operacao',[ContractCollectionController::class,'operate'])->whereNumber('ordem')->middleware('throttle:6,1');
         Route::post('contractos/{numero}/prestacoes/{ordem}/renovar',[ContractCollectionController::class,'renew'])->whereNumber('ordem')->middleware('throttle:3,1');
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
         Route::get('contractos/{numero}/recibos',[\App\Http\Controllers\Api\ContractReceiptController::class,'index'])->middleware('throttle:30,1');
