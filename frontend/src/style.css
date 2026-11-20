@@ -1702,3 +1702,11 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 
 .cis-evidence-bar button.cis-receipt-send-btn{background:#128c4a;border-color:#128c4a;color:#fff}
 .cis-msg-download{font-weight:700;color:var(--cis-primary);text-decoration:underline;white-space:nowrap}
+
+/* Escolha do número de destino (principal / alternativo) */
+.cis-msg-number{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:4px 0 8px;width:100%}
+.cis-msg .cis-msg-number input[type=radio]{width:16px!important;min-width:0;min-height:0;height:16px;margin:2px 0 0;flex:0 0 auto;padding:0;border:0}
+.cis-msg-number label{min-width:0;font-weight:500;display:flex;gap:8px;align-items:flex-start;border:1px solid var(--cis-border);border-radius:9px;padding:8px 10px;cursor:pointer;background:#fff}
+.cis-msg-number label.on{border-color:var(--cis-primary);background:var(--cis-tint)}
+.cis-msg-number label.off{opacity:.55;cursor:not-allowed}
+.cis-msg-number span{display:flex;flex-direction:column;min-width:0;text-align:left}.cis-msg-number b{font-size:.95em}.cis-msg-number small{color:var(--cis-text-muted)}

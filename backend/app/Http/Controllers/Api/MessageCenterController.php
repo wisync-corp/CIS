@@ -129,7 +129,7 @@ final class MessageCenterController extends Controller
         $ids=array_values(array_unique(array_filter(array_map('intval',$ids))));
         if (!$ids) return [];
         $have=array_flip($db->getSchemaBuilder()->getColumnListing('Clientes'));
-        $cols=array_values(array_filter(['ID','Numeração','Nome Completo','Contacto'],fn($c)=>isset($have[$c])));
+        $cols=array_values(array_filter(['ID','Numeração','Nome Completo','Contacto','contacto_alternativo'],fn($c)=>isset($have[$c])));
         $out=[];
         foreach (array_chunk($ids,500) as $chunk) {
             foreach ($db->table('Clientes')->whereIn('ID',$chunk)->get($cols) as $c) $out[(int)$c->ID]=$c;
@@ -216,10 +216,13 @@ final class MessageCenterController extends Controller
             $rows=$this->contractRows($db)->where('Nr do Contracto',$numero)->get();
             abort_if($rows->isEmpty(),404,'Contrato não encontrado.');
             $cid=(int)$rows->first()->{'Nº de Cliente'};
-            $v=$this->values($rows,$this->clients($db,[$cid])[$cid]??null,now('Africa/Maputo')->toDateString());
+            $client=$this->clients($db,[$cid])[$cid]??null;
+            $v=$this->values($rows,$client,now('Africa/Maputo')->toDateString());
+            $alt=trim((string)($client?->contacto_alternativo??''));
             return response()->json([
                 'contrato'=>$numero,'cliente'=>$v['Nome Completo'],'contacto'=>$v['Contacto']?:null,
                 'telefone'=>self::phone($v['Contacto']),'situacao'=>$v['_situacao'],
+                'contacto_alternativo'=>$alt!==''?$alt:null,'telefone_alternativo'=>self::phone($alt),
                 'mensagem'=>self::render($body,$v),
                 'valores'=>array_filter($v,fn($k)=>!str_starts_with($k,'_'),ARRAY_FILTER_USE_KEY),
             ])->header('Cache-Control','no-store, private');

@@ -5,7 +5,7 @@ import {onWa,waState,waSend,waStop,waCheck,jobStatus,getShowPref,setShowPref,typ
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Template={id:number;name:string;body:string;updated_at:string|null};
-type Preview={contrato:string;cliente:string;contacto:string|null;telefone:string|null;situacao:string;mensagem:string};
+type Preview={contrato:string;cliente:string;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;contacto_alternativo?:string|null;telefone_alternativo?:string|null};
 type Recipient={contrato:string;cliente:string;cliente_id:number|null;contacto:string|null;telefone:string|null;situacao:string;mensagem:string;estado?:'aberta'|'saltada';jobId?:string};
 type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados';
 const GROUPS:{id:Group;label:string;hint:string}[]=[
@@ -43,7 +43,16 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  const [lastJob,setLastJob]=useState<string|null>(null);
  const [image,setImage]=useState<WaImage|null>(preset?.anexo??null);const [logKey,setLogKey]=useState(0);const fileRef=useRef<HTMLInputElement>(null);const [checking,setChecking]=useState(false);const [help,setHelp]=useState(false);
  const sendMode=!!contrato;
+ const [numero,setNumero]=useState<'principal'|'alternativo'>('principal');
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
+ // Sem número principal válido, usa o alternativo automaticamente.
+ useEffect(()=>{if(preview&&!preview.telefone&&preview.telefone_alternativo)setNumero('alternativo');},[preview]);
+ // Número de destino escolhido (principal ou alternativo da ficha do mutuário).
+ const dest=useMemo(()=>{
+  if(!preview)return null;
+  const alt=numero==='alternativo'&&!!preview.telefone_alternativo;
+  return {...preview,telefone:alt?preview.telefone_alternativo??null:preview.telefone,contacto:alt?preview.contacto_alternativo??null:preview.contacto};
+ },[preview,numero]);
 
  async function call<T>(path:string,init?:RequestInit):Promise<T>{
   const r=await fetch(API+path,{...init,headers});const j=await r.json().catch(()=>({}));
@@ -105,11 +114,11 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   catch(e){setError('A mensagem foi aberta, mas não ficou registada no CIS: '+(e instanceof Error?e.message:'erro'));}
  }
  async function sendOne(canal:'whatsapp'|'sms'|'copia'){
-  if(!preview)return;setError('');
+  if(!dest)return;setError('');
   if(canal==='copia'){try{await navigator.clipboard.writeText(text);setNotice('Mensagem copiada.');}catch{setError('Não foi possível copiar automaticamente; seleccione o texto e copie.');return;}}
-  else if(!preview.telefone){setError('Mutuário sem contacto válido.');return;}
-  else if(canal==='whatsapp')openWa(waUrl(preview.telefone,text));else window.open(smsUrl(preview.telefone,text),'_blank','noopener');
-  await log({contrato:preview.contrato,telefone:preview.telefone,canal,mensagem:text});
+  else if(!dest.telefone){setError('Mutuário sem contacto válido.');return;}
+  else if(canal==='whatsapp')openWa(waUrl(dest.telefone,text));else window.open(smsUrl(dest.telefone,text),'_blank','noopener');
+  await log({contrato:dest.contrato,telefone:dest.telefone,canal,mensagem:text});
   if(canal!=='copia')setNotice(canal==='whatsapp'?'Mensagem aberta no WhatsApp Web: carregue em Enviar nessa página.':'Mensagem aberta no SMS: confirme o envio.');
  }
  function pickImage(f:File|undefined){
@@ -119,9 +128,9 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   const rd=new FileReader();rd.onload=()=>setImage({name:f.name,type:f.type,dataUrl:String(rd.result)});rd.onerror=()=>setError('Não foi possível ler a imagem.');rd.readAsDataURL(f);
  }
  function sendWeb(){
-  if(!preview?.telefone||!text.trim())return;
-  const id='c-'+preview.contrato+'-'+Date.now();setLastJob(id);setError('');
-  waSend([{id,phone:preview.telefone,text,meta:{contrato:preview.contrato,cliente:preview.cliente,modelo_id:selId||null}}],show,image);
+  if(!dest?.telefone||!text.trim())return;
+  const id='c-'+dest.contrato+'-'+Date.now();setLastJob(id);setError('');
+  waSend([{id,phone:dest.telefone,text,meta:{contrato:dest.contrato,cliente:dest.cliente,modelo_id:selId||null}}],show,image);
  }
  function sendQueueWeb(){
   if(!queue)return;const ts=Date.now();
@@ -217,7 +226,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
     <div className="cis-msg-card">
      <h3>Pré-visualização</h3>
      <div className="cis-wa-screen">
-      <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Mutuário'):'Mutuário (exemplo)'}</b><small>{sendMode?(preview?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
+      <div className="cis-wa-top"><span className="cis-wa-avatar">{(preview?.cliente??'C').charAt(0)}</span><span><b>{sendMode?(preview?.cliente??'Mutuário'):'Mutuário (exemplo)'}</b><small>{sendMode?(dest?.contacto??'sem contacto'):'campos mostrados entre chavetas'}</small></span></div>
       <div className="cis-wa-chat"><div className="cis-wa-bubble">
        {image&&<img src={image.dataUrl} alt=""/>}
        <WaText text={sendMode?text:body} fields={!sendMode}/>
@@ -228,13 +237,18 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
       <details className="cis-msg-adjust"><summary>Ajustar o texto só para este envio</summary>
        <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/></details>
       <div className="cis-msg-send-btns">
-       {wa.available&&<button type="button" className="primary big" onClick={sendWeb} disabled={!preview?.telefone||!text.trim()||sending}>{sending?<><Loader2 size={15} className="spin"/> A enviar…</>:<><Send size={15}/> Enviar pelo WhatsApp Web</>}</button>}
+       {preview&&<div className="cis-msg-number" role="radiogroup" aria-label="Número de destino">
+        <label className={numero==='principal'?'on':''}><input type="radio" name="cis-msg-numero" checked={numero==='principal'} onChange={()=>setNumero('principal')}/><span><b>Principal</b><small>{preview.contacto??'sem contacto'}</small></span></label>
+        <label className={(numero==='alternativo'?'on':'')+(preview.telefone_alternativo?'':' off')}><input type="radio" name="cis-msg-numero" disabled={!preview.telefone_alternativo} checked={numero==='alternativo'} onChange={()=>setNumero('alternativo')}/><span><b>Alternativo</b><small>{preview.contacto_alternativo??'não registado'}</small></span></label>
+       </div>}
+       {wa.available&&<button type="button" className="primary big" onClick={sendWeb} disabled={!dest?.telefone||!text.trim()||sending}>{sending?<><Loader2 size={15} className="spin"/> A enviar…</>:<><Send size={15}/> Enviar pelo WhatsApp Web</>}</button>}
        <div className="cis-msg-btns">
-        <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!preview?.telefone||!text.trim()}><ExternalLink size={14}/> Abrir no WhatsApp Web</button>
-        <button type="button" onClick={()=>void sendOne('sms')} disabled={!preview?.telefone||!text.trim()}>SMS</button>
+        <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!dest?.telefone||!text.trim()}><ExternalLink size={14}/> Abrir no WhatsApp Web</button>
+        <button type="button" onClick={()=>void sendOne('sms')} disabled={!dest?.telefone||!text.trim()}>SMS</button>
         <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
        </div>
-       <small>{preview?.contacto?`Para ${preview.contacto}`:preview?'Mutuário sem contacto registado.':''}</small>
+       
+       <small>{dest?.contacto?`Para ${dest.contacto}`:preview?'Mutuário sem contacto registado neste número.':''}</small>
       </div>
      </>}
     </div>
