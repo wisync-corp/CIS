@@ -2,7 +2,8 @@ import {pushToast} from './waBridge';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
-import {useEffect,useMemo,useState} from 'react';
+import ReceiptSend from './ReceiptSend';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 import {
   ReceiptText,Search,RefreshCw,FileText,CalendarDays,CheckCircle2,AlertCircle,
@@ -27,7 +28,7 @@ type Quote={
 };
 type PaymentResult={registado:boolean;repetido:boolean;extracto_nr:number;conta?:string;saldo_conta_actual?:string;contrato_finalizado?:boolean;notice:string;total_texto?:string;valor?:string};
 type Receipt={numero:string;origem:'extracto'|'prestacao';extracto_nr:number|null;data:string|null;prestacao:string|null;valor:string;capital:string|null;juros:string|null;juros_mora:string|null;vencimento:string|null;estado:string|null;forma_pagamento:string|null;conta:string|null;referencia:string|null;descricao:string};
-type ReceiptList={contrato:string;mutuario:{nome:string;numero:number|string|null};recibos:Receipt[];total_recebido:string;saldo_em_divida:string;emitido_em:string;emitido_por:string|null};
+type ReceiptList={contrato:string;mutuario:{nome:string;numero:number|string|null;cliente_id?:number|null;telefone?:string|null;email?:string|null};recibos:Receipt[];total_recebido:string;saldo_em_divida:string;emitido_em:string;emitido_por:string|null};
 type HistoryEvent={id:number;operacao:string;parcela:number|null;valor:string|null;extracto_nr:number|null;referencia:string|null;motivo:string|null;antes:Row|null;depois:Row|null;em:string};
 const historyLabels:Record<string,string>={cobranca_total:'Liquidação da prestação',desembolso:'Desembolso / abertura',renovar_juros:'Renovação de juros',capitalizar:'Capitalização de juros',actualizar_data:'Revisão de data',prorrogar_15_30:'Prorrogação 15→30 dias',pagamento_parcial:'Pagamento parcial',parcial_nova_prestacao:'Nova prestação (saldo do parcial)',finalizar_contrato:'Finalização',renovacao_nova_prestacao:'Nova prestação (renovação)'};
 const historyFields=['Capital','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','% de Juro','Estado','Data de Pagamento','Situação de Pagamento'];
@@ -121,6 +122,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [receipts,setReceipts]=useState<ReceiptList|null>(null),[receiptsError,setReceiptsError]=useState('');
  const [receiptBusy,setReceiptBusy]=useState(false);
  const [receiptError,setReceiptError]=useState('');
+ const receiptRef=useRef<HTMLElement>(null);
  const [events,setEvents]=useState<HistoryEvent[]|null>(null);
  const [historyError,setHistoryError]=useState(false);
  const [view,setView]=useState<'resumo'|'tratamento'|'historico'>(initialOrder?'tratamento':'resumo');
@@ -586,7 +588,9 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
     <button type="button" className="primary" onClick={printReceipt}>Imprimir / Guardar PDF</button>
     <button type="button" onClick={()=>setReceipt(null)}>Fechar</button>
    </div>
-   <article className="cis-evidence cis-receipt">
+   <ReceiptSend token={token} target={receiptRef} numero={receipt.numero} contrato={receipts?.contrato??selected??''} valor={receipt.valor} data={receipt.data} prestacao={receipt.prestacao}
+    saldo={receipts?.saldo_em_divida??null} cliente={receipts?.mutuario??{nome:''}} empresa={company?.nome_empresa??''}/>
+   <article ref={receiptRef} className="cis-evidence cis-receipt">
     <header><CompanyBrand company={company}/><div><h1>Recibo de pagamento</h1><p>N.º <b>{receipt.numero}</b></p><p>Emitido em {date(receipts?.emitido_em?.slice(0,10))}{receipts?.emitido_por?` por ${receipts.emitido_por}`:''}</p></div></header>
     <section className="cis-evidence-client"><h2>Mutuário</h2><dl>
      <div><dt>Nome</dt><dd>{text(receipts?.mutuario.nome)}</dd></div>

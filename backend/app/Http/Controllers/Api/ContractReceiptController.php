@@ -85,9 +85,27 @@ class ContractReceiptController
         usort($out, fn($a, $b) => [$a['data'] ?? '', $a['numero']] <=> [$b['data'] ?? '', $b['numero']]);
         $total = array_sum(array_map(fn($r) => (float)$r['valor'], $out));
         $owed = $rows->filter(fn($r) => in_array($r->Estado, ['Pendente', 'Pagamento Atrasado'], true))->sum(fn($r) => (float)($r->{'Valor a Pagar'} ?? 0) + (float)($r->{'Valor de Multa'} ?? 0));
+        // Contacto do mutuário para enviar o recibo (WhatsApp/SMS/e-mail): Clientes.ID = Nº de Cliente, ou Numeração.
+        $phone = null; $email = null; $clientId = null;
+        try {
+            $have = array_flip($db->getSchemaBuilder()->getColumnListing('Clientes'));
+            $cols = array_values(array_filter(['ID', 'Contacto', 'Email'], fn($c) => isset($have[$c])));
+            $nc = $first->{'Nº de Cliente'} ?? null;
+            if ($nc !== null && $nc !== '' && isset($have['ID'])) {
+                $cl = $db->table('Clientes')->where('ID', (int)$nc)->first($cols)
+                    ?? (isset($have['Numeração']) ? $db->table('Clientes')->where('Numeração', (string)$nc)->first($cols) : null);
+                if ($cl) {
+                    $clientId = (int)$cl->ID;
+                    $phone = \App\Http\Controllers\Api\MessageCenterController::phone($cl->Contacto ?? null);
+                    $e = trim((string)($cl->Email ?? ''));
+                    $email = filter_var($e, FILTER_VALIDATE_EMAIL) ? $e : null;
+                }
+            }
+        } catch (\Throwable) {}
         return response()->json([
             'contrato' => $numero,
-            'mutuario' => ['nome' => (string)($first->{'Nome do Cliente'} ?? ''), 'numero' => $first->{'Nº de Cliente'} ?? null],
+            'mutuario' => ['nome' => (string)($first->{'Nome do Cliente'} ?? ''), 'numero' => $first->{'Nº de Cliente'} ?? null,
+                'cliente_id' => $clientId, 'telefone' => $phone, 'email' => $email],
             'recibos' => $out, 'total_recebido' => $m($total), 'saldo_em_divida' => $m($owed),
             'emitido_em' => now('Africa/Maputo')->format('Y-m-d H:i'), 'emitido_por' => $u->name ?? null,
         ])->header('Cache-Control', 'no-store, private');
