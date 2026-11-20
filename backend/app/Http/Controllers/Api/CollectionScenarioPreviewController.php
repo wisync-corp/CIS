@@ -52,6 +52,8 @@ final class CollectionScenarioPreviewController extends Controller
             'valor_pago'=>['required_if:operacao,parcial','nullable','string','max:20'],
             'data_pagamento'=>['required_if:operacao,actualizar_data','nullable','date_format:Y-m-d'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
+            // Juros a cobrar na capitalização: por defeito a taxa da tabela; o operador pode indicar outra.
+            'taxa_informada'=>['nullable','numeric','gt:0','max:100','regex:/^\d{1,3}(?:[.,]\d{1,4})?$/'],
         ]);
         abort_if(trim($numero)==='' || mb_strlen($numero)>155,422,'Identificador de contrato inválido.');
         $db=DB::connection('mysql_legacy');
@@ -219,22 +221,39 @@ final class CollectionScenarioPreviewController extends Controller
                 ->where('limite_superior','>=',self::fmt($newCapital))
                 ->where('periodo_referencia',$period)
                 ->get(['taxa','limite_inferior','limite_superior']);
-            abort_unless($matches->count()===1,409,
-                'Capitalização sem faixa única para o período seleccionado: requer revisão da tabela de taxas.');
-            $selected=$matches->first();
-            $newInterest=(int)round($newCapital*(float)$selected->taxa/100);
-            return response()->json($base+[
-                'resultado'=>'indicativo_sem_capitalizacao',
+            $selected=$matches->count()===1?$matches->first():null;
+            $tableRate=$selected?(float)$selected->taxa:null;
+            $informed=isset($d['taxa_informada'])&&$d['taxa_informada']!==null&&$d['taxa_informada']!==''
+                ? round((float)str_replace(',','.',(string)$d['taxa_informada']),4) : null;
+            $rate=$informed??$tableRate;
+            $altered=$informed!==null&&($tableRate===null||abs($informed-$tableRate)>0.00001);
+            $common=[
                 'capital_anterior'=>self::fmt($capital),
                 'juros_anteriores'=>self::fmt($interest),
                 'capital_novo'=>self::fmt($newCapital),
                 'amortizacao'=>'0.00',
-                'taxa'=>(string)$selected->taxa,
                 'periodo_referencia'=>$period,
-                'faixa'=>[(string)$selected->limite_inferior,(string)$selected->limite_superior],
+                'taxa_tabela'=>$tableRate===null?null:rtrim(rtrim(number_format($tableRate,4,'.',''),'0'),'.'),
+                'faixa'=>$selected?[(string)$selected->limite_inferior,(string)$selected->limite_superior]:null,
+            ];
+            if ($rate===null) {
+                return response()->json($base+$common+[
+                    'resultado'=>'sem_taxa',
+                    'taxa'=>null,'taxa_aplicada'=>null,'taxa_alterada'=>false,'juros_novos'=>null,'prestacao_nova'=>null,
+                    'aviso'=>'Sem faixa única na tabela de preços para '.self::fmt($newCapital).' MT a '.$period.' dias. Indique a taxa de juros a cobrar.',
+                ])->header('Cache-Control','no-store, private');
+            }
+            $newInterest=(int)round($newCapital*$rate/100);
+            return response()->json($base+$common+[
+                'resultado'=>'indicativo_sem_capitalizacao',
+                'taxa'=>rtrim(rtrim(number_format($rate,4,'.',''),'0'),'.'),
+                'taxa_aplicada'=>rtrim(rtrim(number_format($rate,4,'.',''),'0'),'.'),
+                'taxa_alterada'=>$altered,
                 'juros_novos'=>self::fmt($newInterest),
                 'prestacao_nova'=>self::fmt($newCapital+$newInterest),
-                'aviso'=>'Taxa consultada na cis_tabela_juros por faixa e período explícito. Prévia indicativa, sem alteração de capital ou contrato.',
+                'aviso'=>$altered
+                    ? 'Juros calculados com a taxa indicada pelo operador ('.rtrim(rtrim(number_format($rate,4,'.',''),'0'),'.').'%)'.($tableRate!==null?'; a tabela indica '.rtrim(rtrim(number_format($tableRate,4,'.',''),'0'),'.').'%.':'.').' Prévia indicativa, sem alteração de capital ou contrato.'
+                    : 'Taxa da tabela de preços (faixa e período). Prévia indicativa, sem alteração de capital ou contrato.',
             ])->header('Cache-Control','no-store, private');
         }
         if ($operation==='actualizar_data') {

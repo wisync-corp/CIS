@@ -1686,3 +1686,10 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-ct-print .cis-ct-doc{max-width:none;font-size:12.5px}
 @media print{.cis-ct-print .cis-ct-clause{break-after:avoid}.cis-ct-print .cis-ct-sign{break-inside:avoid}.cis-ct-print .cis-ct-plan{break-inside:auto}}
 @media(max-width:1200px){.cis-ct-editor{grid-template-columns:1fr}.cis-ct-vars{position:static;max-height:320px}.cis-ct-paper{padding:24px}}
+
+.cis-collections-rate{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cis-collections-rate input{width:130px!important;flex:0 0 130px;text-align:right;font-variant-numeric:tabular-nums}
+.cis-collections-rate em{font-style:normal;font-weight:800;color:#475467}
+.cis-collections-rate button{font:inherit;font-size:calc(12.5px * var(--cis-fs));font-weight:800;border:1px solid var(--cis-border);background:#fff;color:var(--cis-primary);border-radius:8px;padding:6px 10px;cursor:pointer}
+.cis-collections-rate input[aria-invalid="true"]{border-color:#f04438}
+.cis-collections-field-error{color:#b42318!important;font-weight:700}
