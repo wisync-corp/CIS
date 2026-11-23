@@ -985,6 +985,15 @@ $creditChanges=new \App\Http\Controllers\Api\ContractCollectionController();
 $change=fn(array $fields)=>data($creditChanges->creditChange(req('/x',$fields,$user),'C-4200'));
 $reinforce=['operacao'=>'reforco','ordem'=>$creditOrder,'valor'=>'200.00','taxa'=>15];
 $preview=$change($reinforce);
+$automaticRate=$change(array_diff_key($reinforce,['taxa'=>true]));
+$editedRate=$change(array_replace($reinforce,['taxa'=>20]));
+ok((float)($creditProfile['installments'][0]['% de Juro']??-1)===15.0
+    && $automaticRate['taxa']===15 && $automaticRate['capital']==='1200.00'
+    && $automaticRate['juros']==='180.00' && $automaticRate['valor_a_pagar']==='1380.00',
+    'prévia usa automaticamente a taxa da prestação e discrimina capital, juros e prestação');
+ok($editedRate['taxa']===20 && $editedRate['juros']==='240.00' && $editedRate['valor_a_pagar']==='1440.00',
+    'alterar a taxa recalcula os juros e o valor da prestação');
+
 ok($preview['valor_a_pagar']==='1380.00' && $preview['vencimento']===$creditBefore->{'Data de Cobrança'},'reforço mantém vencimento e recalcula juros');
 $confirm=['confirmar'=>true,'motivo'=>'Autorizado no ensaio','referencia'=>'DOC-CI','conta_id'=>$changeAccount];
 $reinforce+=['idempotency_key'=>'a0000000-0000-4000-8000-000000004200','valor_confirmado'=>'1380.00']+$confirm;

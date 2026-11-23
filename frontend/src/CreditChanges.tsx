@@ -3,7 +3,7 @@ import {ArrowUpRight,Archive,RotateCcw,ChevronRight} from 'lucide-react';
 
 type Row=Record<string,string|number|null>;
 type Operation='reforco'|'abate'|'recuperacao';
-type Result={valor:string;valor_a_pagar?:string;saldo_recuperavel?:string;saldo_apos_operacao?:string;vencimento?:string;taxa?:number;prestacoes?:number;notice:string};
+type Result={valor:string;capital?:string;juros?:string;valor_a_pagar?:string;saldo_recuperavel?:string;saldo_apos_operacao?:string;vencimento?:string;taxa?:number;prestacoes?:number;notice:string};
 type Account={id:number;code:string;name:string;status:string};
 const api=import.meta.env.VITE_API_URL||'/api';
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -16,6 +16,7 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
  const [order,setOrder]=useState('');
  const [amount,setAmount]=useState('');
  const [rate,setRate]=useState('');
+ const selectedRate=fixed.find(row=>String(row.Ordem)===order)?.['% de Juro'];
  const [accounts,setAccounts]=useState<Account[]>([]);
  const [account,setAccount]=useState('');
  const [reference,setReference]=useState('');
@@ -94,11 +95,11 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
    <legend>{operation==='reforco'?'Reforço de crédito':operation==='abate'?'Abate do contrato':'Recuperação de crédito abatido'}</legend>
    <div className="cis-collections-fields">
     {cash&&<>
-     <label>Prestação<select value={order} onChange={e=>{resetPreview();setOrder(e.target.value);}}><option value="">Seleccione</option>
+     <label>Prestação<select value={order} onChange={e=>{resetPreview();setOrder(e.target.value);setRate('');}}><option value="">Seleccione</option>
       {choices.map(row=><option key={String(row.Ordem)} value={String(row.Ordem)}>Prestação {row['Nº da Parcela']}</option>)}
      </select></label>
      <label>Montante (MT)<input inputMode="decimal" value={amount} onChange={e=>{resetPreview();setAmount(e.target.value);}}/></label>
-     {operation==='reforco'&&<label>Taxa de juro (%), opcional<input type="number" min="0" max="100" step="1" value={rate} placeholder="Manter taxa actual" onChange={e=>{resetPreview();setRate(e.target.value);}}/></label>}
+     {operation==='reforco'&&<label>Taxa de juro (%)<input type="number" min="0" max="100" step="1" value={rate||String(selectedRate??'')} disabled={!order} onChange={e=>{resetPreview();setRate(e.target.value);}}/><small>Preenchida com a taxa da prestação. Pode alterá-la antes de confirmar.</small></label>}
      <label>{operation==='reforco'?'Conta de origem':'Conta receptora'}<select value={account} onChange={e=>{setAccount(e.target.value);setRequestKey('');}}>
       <option value="">Seleccione uma conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}
      </select></label>
@@ -107,10 +108,12 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
     <label>Motivo<input value={reason} maxLength={180} onChange={e=>setReason(e.target.value)}/></label>
    </div>
    {error&&<p role="alert">{error}</p>}
-   {preview&&<div className="cis-collections-quote"><p>{preview.notice}</p><dl>
+   {preview&&<div className="cis-collections-quote"><h4>Prévia da operação</h4><dl>
     <div><dt>{operation==='abate'?'Saldo a abater':'Montante da operação'}</dt><dd>{money.format(Number(preview.valor))} MT</dd></div>
     {preview.prestacoes!==undefined&&<div><dt>Prestações afectadas</dt><dd>{preview.prestacoes}</dd></div>}
-    {preview.valor_a_pagar&&<div><dt>Novo valor a pagar</dt><dd>{money.format(Number(preview.valor_a_pagar))} MT</dd></div>}
+    {preview.capital!=null&&<div><dt>Capital após o reforço</dt><dd>{money.format(Number(preview.capital))} MT</dd></div>}
+    {preview.juros!=null&&<div><dt>Valor dos juros</dt><dd>{money.format(Number(preview.juros))} MT</dd></div>}
+    {preview.valor_a_pagar&&<div><dt>Valor da prestação</dt><dd>{money.format(Number(preview.valor_a_pagar))} MT</dd></div>}
     {preview.vencimento&&<div><dt>Vencimento mantido</dt><dd>{preview.vencimento.split('-').reverse().join('/')}</dd></div>}
     {preview.taxa!==undefined&&<div><dt>Taxa de juro</dt><dd>{preview.taxa}%</dd></div>}
     {preview.saldo_apos_operacao&&<div><dt>Saldo recuperável após operação</dt><dd>{money.format(Number(preview.saldo_apos_operacao))} MT</dd></div>}
