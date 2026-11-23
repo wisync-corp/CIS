@@ -153,7 +153,8 @@ final class CollectionContactController extends Controller
         $open = $q->get(['Nr do Contracto', 'Nome do Cliente', 'Nº de Cliente', 'Nº da Parcela', 'Data de Cobrança', 'Valor a Pagar', 'Valor de Multa', 'Valor Pago']);
         $byC = $open->groupBy('Nr do Contracto');
         $nums = $byC->keys()->map(fn ($k) => (string) $k)->all();
-        $phones = $db->table('Clientes')->whereIn('ID', $open->pluck('Nº de Cliente')->unique()->filter()->values()->all() ?: [0])->pluck('Contacto', 'ID')->all();
+        $phones = $db->getSchemaBuilder()->hasColumn('Clientes', 'Contacto')
+            ? $db->table('Clientes')->whereIn('ID', $open->pluck('Nº de Cliente')->unique()->filter()->values()->all() ?: [0])->pluck('Contacto', 'ID')->all() : [];
         $contract = function (string $n) use ($byC, $phones, $today) {
             $rows = $byC[$n] ?? collect();
             $late = $rows->filter(fn ($x) => substr((string) $x->{'Data de Cobrança'}, 0, 10) < $today);
