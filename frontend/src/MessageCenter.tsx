@@ -201,7 +201,9 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   setNotice(`Nova fila com ${rows.length} destinatário(s) «${FILTERS.find(x=>x.id===f)!.label}».${hasAlt&&f!=='falhada'?' Usa o número alternativo; pode mudar para o principal.':''}`);
  }
  async function loadQueue(){
-  if(!group)return;setBusy('queue');setError('');setQueue(null);
+  if(!group)return;
+  const unknown=fieldsIn(editing?body:(sel?.body??body)).map(f=>'{'+f+'}').filter(f=>!fields.includes(f));
+  if(unknown.length){setError('Este modelo usa campos que só existem ao enviar a partir de um recibo ou extracto ('+unknown.join(', ')+'); não pode ser usado numa fila. Escolha outro modelo ou retire esses campos.');return;}setBusy('queue');setError('');setQueue(null);
   try{const p=new URLSearchParams({grupo:group});if(editing)p.set('texto',body);else if(selId)p.set('modelo_id',String(selId));else p.set('texto',body);
    const j=await call<{total:number;com_contacto:number;destinatarios:Recipient[]}>('/cis/mensagens/destinatarios?'+p);
    setQueue(j.destinatarios);setQFilter('todos');setQNumero('principal');setQLabel('');setQueueInfo(`${j.total} destinatário(s) · ${j.com_contacto} com contacto`);}
@@ -228,6 +230,8 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   if(st==='falhada')return <span className="fail" title={det??''}><AlertCircle size={14}/> Falhou<small className="cis-msg-fail-detail">{det}</small><button type="button" onClick={()=>void openRecipient(i)}><Send size={12}/> Abrir</button></span>;
   return <button type="button" onClick={()=>void openRecipient(i)}><Send size={13}/> WhatsApp</button>;};
  const sending=!!lastJob&&jobStatus(lastJob)==='a_enviar';
+ // Campos que ficaram por preencher (ex.: modelo de recibo usado fora do recibo): não se envia assim.
+ const unresolved=sendMode?fieldsIn(text):[];
 
  return <section className={'cis-panel cis-msg'+(sendMode?' cis-msg-send':'')}>
   <header className="cis-msg-head">
@@ -318,15 +322,16 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
      {sendMode&&<>
       <details className="cis-msg-adjust"><summary>Ajustar o texto só para este envio</summary>
        <textarea value={text} onChange={e=>setText(e.target.value)} rows={7} aria-label="Mensagem a enviar"/></details>
+      {unresolved.length>0&&<div className="cis-table-error" role="alert"><AlertCircle size={16}/>Campos por preencher: {unresolved.map(f=>'{'+f+'}').join(', ')}. Escolha outro modelo ou ajuste o texto antes de enviar.</div>}
       <div className="cis-msg-send-btns">
        {preview&&<div className="cis-msg-number" role="radiogroup" aria-label="Número de destino">
         <label className={numero==='principal'?'on':''}><input type="radio" name="cis-msg-numero" checked={numero==='principal'} onChange={()=>setNumero('principal')}/><span><b>Principal</b><small>{preview.contacto??'sem contacto'}</small></span></label>
         <label className={(numero==='alternativo'?'on':'')+(preview.telefone_alternativo?'':' off')}><input type="radio" name="cis-msg-numero" disabled={!preview.telefone_alternativo} checked={numero==='alternativo'} onChange={()=>setNumero('alternativo')}/><span><b>Alternativo</b><small>{preview.contacto_alternativo??'não registado'}</small></span></label>
        </div>}
-       {wa.available&&<button type="button" className="primary big" onClick={sendWeb} disabled={!dest?.telefone||!text.trim()||sending}>{sending?<><Loader2 size={15} className="spin"/> A enviar…</>:<><Send size={15}/> Enviar pelo WhatsApp Web</>}</button>}
+       {wa.available&&<button type="button" className="primary big" onClick={sendWeb} disabled={!dest?.telefone||!text.trim()||sending||unresolved.length>0}>{sending?<><Loader2 size={15} className="spin"/> A enviar…</>:<><Send size={15}/> Enviar pelo WhatsApp Web</>}</button>}
        <div className="cis-msg-btns">
-        <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!dest?.telefone||!text.trim()}><ExternalLink size={14}/> Abrir no WhatsApp Web</button>
-        <button type="button" onClick={()=>void sendOne('sms')} disabled={!dest?.telefone||!text.trim()}>SMS</button>
+        <button type="button" className={wa.available?'':'primary'} onClick={()=>void sendOne('whatsapp')} disabled={!dest?.telefone||!text.trim()||unresolved.length>0}><ExternalLink size={14}/> Abrir no WhatsApp Web</button>
+        <button type="button" onClick={()=>void sendOne('sms')} disabled={!dest?.telefone||!text.trim()||unresolved.length>0}>SMS</button>
         <button type="button" onClick={()=>void sendOne('copia')} disabled={!text.trim()}><Copy size={14}/> Copiar</button>
        </div>
        
