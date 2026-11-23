@@ -91,6 +91,7 @@ function ContractBranch({numero,token}:{numero:string;token:string}){
 const BR_API=import.meta.env.VITE_API_URL||'/api';
 
 export default function ContractProfile({numero,token,onBack,justCreated=false}:{numero:string;token:string;onBack:()=>void;justCreated?:boolean}){
+ const can=useCan();
  const [tab,setTab]=useState<Tab>('Contrato');
  const [data,setData]=useState<Payload|null>(null);
  const [loading,setLoading]=useState(true);
