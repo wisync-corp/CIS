@@ -604,7 +604,9 @@ final class ContractCollectionController extends Controller
                 $altered=$informed!==null&&($tableRate===null||abs($informed-$tableRate)>0.00001);
                 $newInterestC=$isCis?LegacyContractPricing::upwards($remainingC/100*$rate/100)*100:(int)round($remainingC*$rate/100);
                 $oldDue=self::date($row->{'Data de Cobrança'},'Data de cobrança');
-                $start=!empty($d['data_inicio'])?CarbonImmutable::createFromFormat('!Y-m-d',$d['data_inicio']):$oldDue;
+                // Sem data indicada: vencimento actual ou, se já passou, a data do pagamento.
+                $payD=CarbonImmutable::createFromFormat('!Y-m-d',$d['data_pagamento']);
+                $start=!empty($d['data_inicio'])?CarbonImmutable::createFromFormat('!Y-m-d',$d['data_inicio']):($oldDue->greaterThanOrEqualTo($payD)?$oldDue:$payD);
                 $oldStart=self::date($row->{'Data de Inicio'},'Data de início');
                 abort_unless($start->greaterThan($oldStart),422,'O início da nova prestação tem de ser posterior ao início actual ('.$oldStart->format('d/m/Y').').');
                 [$unit,$n,$label]=$this->renewalTerm($db,$row);

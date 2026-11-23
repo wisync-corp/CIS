@@ -195,13 +195,16 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    paymentNature==='nao_recebido'?['renovar_juros','capitalizar',...(isFifteenDayTerm?['prorrogar_15_30' as Mode]:[])]:[]
  ):[];
  const paidRows=rows.filter(r=>paid(r)||num(r['Valor Pago'])>0);
+ // No cadastro antigo, prestações por pagar trazem às vezes «Valor Pago» igual ao valor devido (não é
+ // pagamento: o Extracto não o tem). Só conta como pago o que está liquidado ou é pagamento parcial.
+ const paidValue=(r:Row)=>!isPending(r)||/parcial/i.test(text(r['Situação de Pagamento']))?num(r['Valor Pago']):0;
  const totals=useMemo(()=>{
   const sum=(key:string,filter:(r:Row)=>boolean=()=>true)=>rows.filter(filter).reduce((s,r)=>s+num(r[key]),0);
   return {
    pending:sum('Valor a Pagar',isPending),
-   paid:sum('Valor Pago'),
+   paid:rows.reduce((s,r)=>s+paidValue(r),0),
    added:paidRows.reduce((s,r)=>s+num(r['Valor de Juros'])+num(r['Valor de Multa']),0),
-   gross:sum('Valor a Pagar',isPending)+sum('Valor Pago'),
+   gross:sum('Valor a Pagar',isPending)+rows.reduce((s,r)=>s+paidValue(r),0),
    late:rows.filter(r=>text(r.Estado)==='Pagamento Atrasado').length,
    next:[...pending].filter(r=>text(r['Data de Cobrança']).slice(0,10)>=today()).sort((a,b)=>text(a['Data de Cobrança']).localeCompare(text(b['Data de Cobrança'])))[0]
   };
@@ -233,7 +236,10 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
- function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo'||value==='parcial')setRenewStart(text(selectedInstallment?.['Data de Cobrança']).slice(0,10));setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
+ // Início do novo período: o vencimento actual; se já passou (prestação em atraso), a data do pagamento,
+ // para a nova prestação não nascer já vencida.
+ function defaultStart(){const due=text(selectedInstallment?.['Data de Cobrança']).slice(0,10);const pay=/^\d{4}-\d{2}-\d{2}$/.test(datePayment)?datePayment:today();return due&&due>=pay?due:pay;}
+ function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo'||value==='parcial')setRenewStart(defaultStart());setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
  function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  useEffect(()=>{
   if(!selected){setReceipts(null);return;}
@@ -472,7 +478,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         <dl className="cis-collections-focus-lines">
          <div><dt>Estado</dt><dd>{estadoPrestacao(selectedInstallment.Estado)}</dd></div>
          <div><dt>Situação</dt><dd>{text(selectedInstallment['Situação de Pagamento'])}</dd></div>
-         <div><dt>Valor já pago (registo)</dt><dd>{fmt(selectedInstallment['Valor Pago'])}</dd></div>
+         <div><dt>Valor já pago</dt><dd>{fmt(String(paidValue(selectedInstallment)))}</dd></div>
          <div><dt>Juros previstos</dt><dd>{fmt(selectedInstallment['Valor de Juros'])}</dd></div>
         </dl>
         <details className="cis-collections-technical"><summary>Ver composição financeira e taxas</summary>
@@ -519,7 +525,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {flowReceived&&<label>Forma de pagamento confirmada <small>Forma prevista no contrato: {text(profile.contract['Forma de Pagamento'])}</small><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Seleccionar forma de recebimento</option><option value="numerario">Numerário</option><option value="banco">Transferência / depósito bancário</option><option value="movel">Transferência móvel</option></select><small>A forma de pagamento contratual e o canal efectivamente utilizado podem ser diferentes; registar a divergência no processo.</small></label>}
         {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória</span><select value={accountId} onChange={e=>{setAccountId(e.target.value);setConfirmReceipt(false);}}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+fmt(a.saldo_disponivel):''}</option>)}</select><small>{activeAccount?'O valor recebido entra no saldo desta conta.':'Escolha a conta onde o dinheiro foi efectivamente recebido.'}</small></label>}
         {flowReceived&&<label>Referência do comprovativo / operação <span className="cis-collections-required">Obrigatória</span><input type="text" maxLength={60} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>Fica gravada no Extracto e no histórico da prestação.</small></label>}
-        {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Normalmente começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}).</small></label>}
+        {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Por defeito começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}) ou, se este já passou, na data do pagamento.</small></label>}
         {flowReceived&&(live||mode==='remanescente')&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar juros de mora quando aplicável</label>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setCapitalRate('');setCapitalRateTouched(false);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
@@ -538,7 +544,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
          <small>{scenarioQuote.taxa_tabela!=null?<>Tabela de preços: <b>{String(scenarioQuote.taxa_tabela)}%</b>. </>:'Sem faixa na tabela de preços: é usada a taxa do contrato. '}Aplica-se ao capital que fica em dívida. Nova prestação: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</small>
          {capitalRateTouched&&!rateValid(capitalRate)&&<small className="cis-collections-field-error">Taxa entre 0 e 100%, até 4 casas decimais.</small>}
         </label>}
-        {flowReceived&&mode==='parcial'&&<label>Data de início da nova prestação<input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setScenarioQuote(null);setConfirmReceipt(false);}}/><small>Por defeito começa no vencimento actual ({date(selectedInstallment?.['Data de Cobrança'])}); o vencimento é calculado: início + {currentTerm||'o mesmo prazo'}.</small></label>}
+        {flowReceived&&mode==='parcial'&&<label>Data de início da nova prestação<input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setScenarioQuote(null);setConfirmReceipt(false);}}/><small>Por defeito começa no vencimento actual ({date(selectedInstallment?.['Data de Cobrança'])}) ou, se este já passou, na data do pagamento; o vencimento é calculado: início + {currentTerm||'o mesmo prazo'}.</small></label>}
         {flowReceived&&mode==='parcial'&&scenarioQuote&&(scenarioQuote as Record<string,unknown>).taxa_editavel===false&&<p className="cis-collections-mode-hint">Juros já fixados no primeiro pagamento parcial: {fmt(scenarioQuote.juros)}. Próximo valor a pagar: <b>{fmt(scenarioQuote.proximo_valor)}</b>.</p>}
        </div>
        {(quoting||scenarioBusy)&&<p role="status">A calcular valores…</p>}

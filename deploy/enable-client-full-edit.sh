@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 grep -q '^CLIENT_EDITOR_DB_USERNAME=cis_editor$' deploy/.env || { echo "A conta cis_editor não está configurada: execute primeiro deploy/activate-client-edit.sh" >&2; exit 1; }
 COMPOSE=(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml)
 dbsql() {
- "${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$1"
+ "${COMPOSE[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot -N -B "$MYSQL_DATABASE" -e "$1"' _ "$1"
 }
 [[ "$(dbsql "SELECT COUNT(*) FROM mysql.user WHERE user='cis_editor' AND host='%';")" == "1" ]] || { echo "A conta cis_editor não existe no MySQL." >&2; exit 1; }
 WANT=("Nome Completo" "Bairro" "Cidade" "Provincia" "Rua" "Contacto" "Email" "Nº de BI" "Data de Emissão" "Nacionalidade" "Naturalidade" "Estado Civil" "Nº da Casa" "Nº de Quarterão" "Conduta")
