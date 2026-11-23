@@ -20,6 +20,24 @@ else
   echo 'ERRO: interface não respondeu em 127.0.0.1:8080.' >&2
   exit 1
 fi
+echo 'A verificar o serviço Streamlit e a protecção do Dashboard...'
+"${COMPOSE[@]}" exec -T streamlit-preview python - <<'PY'
+from time import sleep
+from urllib.request import urlopen
+from urllib.error import URLError
+
+for attempt in range(25):
+    try:
+        with urlopen('http://127.0.0.1:8501/dashboard/_stcore/health', timeout=1) as response:
+            if response.status == 200:
+                break
+    except (URLError, TimeoutError):
+        if attempt == 24:
+            raise
+    sleep(1)
+PY
+status=$(curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/dashboard/)
+[[ "$status" == 401 ]] || { echo "ERRO: Dashboard sem sessão devia devolver 401 (recebido $status)." >&2; exit 1; }
 echo 'PREVIEW PRONTA. Este script NÃO activa abertura, desembolso ou cobranças reais.'
 echo 'No PowerShell do computador: ssh -N -L 8080:127.0.0.1:8080 cisadmin@racknerd-da21365'
 echo 'Depois abrir http://localhost:8080 no navegador.'

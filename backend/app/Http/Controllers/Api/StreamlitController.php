@@ -52,7 +52,7 @@ final class StreamlitController extends Controller
             $method = in_array('M. Pagamento', $contractColumns, true) ? 'M. Pagamento' : 'Forma de Pagamento';
             $contracts->select($fields);
             if (in_array($method, $contractColumns, true)) {
-                $contracts->addSelect($method.' as M. Pagamento');
+                $contracts->selectRaw("`{$method}` AS `M. Pagamento`");
             } else {
                 $contracts->selectRaw("NULL AS `M. Pagamento`");
             }
@@ -85,6 +85,7 @@ final class StreamlitController extends Controller
         $user = Auth::guard('sanctum')->user();
         abort_unless($user, 401);
         Permissions::require($user, 'relatorios');
+        $request->setUserResolver(fn () => $user);
         return $user;
     }
 }
