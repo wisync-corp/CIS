@@ -23,7 +23,7 @@ final class MessageCenterController extends Controller
         'Nome Completo','Nome do Cliente','Primeiro Nome','Nº de Cliente','Contacto','Nr do Contracto','Quantia Creditada','% de Juro',
         'Data de Inicio','Data de Cobrança','Data Final','Valor a Pagar','Dias','-1*Dias','Valor em Dívida','Prestações Vencidas','Dias de Atraso',
     ];
-    private const GROUPS=['todos','activos','inactivos','pendentes','atrasados'];
+    private const GROUPS=['todos','activos','inactivos','pendentes','atrasados','lembretes'];
 
     private function admin(Request $r): void
     {
@@ -231,12 +231,68 @@ final class MessageCenterController extends Controller
         });
     }
 
+    /**
+     * Lembretes automáticos de hoje (modelo Loandisk): um por contrato, pela regra mais urgente:
+     *  promessa que vence hoje > atraso de N dias (lista em Definições) > vence hoje > vence daqui a N dias.
+     * Cada regra usa o seu modelo («Lembrete de promessa», «Pagamento atrasado», «Lembrete de vencimento»).
+     * Contratos já lembrados hoje (registo do grupo «lembretes») ficam de fora.
+     */
+    public function lembretesLista(Request $request): array
+    {
+        $tz='Africa/Maputo';$today=now($tz)->toDateString();
+        $tpl=DB::table('cis_message_templates')->whereIn('name',['Lembrete de vencimento','Pagamento atrasado','Lembrete de promessa'])->pluck('body','name')->all();
+        $before=(int)\App\Support\CompanySettings::num('lembrete_dias_antes');
+        $onDay=\App\Support\CompanySettings::get('lembrete_no_dia')!=='0';
+        $lateDays=array_values(array_filter(array_map('intval',preg_split('/[^0-9]+/',(string)\App\Support\CompanySettings::get('lembretes_atraso_dias'))),fn($n)=>$n>0));
+        $db=DB::connection('mysql_legacy');
+        $cq=$this->contractRows($db)->whereIn('Estado',self::OPEN);\App\Support\Branches::restrict($cq,$request->user(),$request->query('agencia'));
+        $byContract=$cq->orderBy('Ordem')->get()->groupBy('Nr do Contracto');
+        $promises=[];
+        if (CollectionContactController::ready()) {
+            CollectionContactController::evaluate($byContract->keys()->map(fn($k)=>(string)$k)->all());
+            $promises=DB::table('cis_collection_contacts')->where('promessa_estado','pendente')->where('promessa_data',$today)
+                ->get(['contract_number','promessa_valor','promessa_data'])->keyBy('contract_number')->all();
+        }
+        $sent=DB::table('cis_message_log')->where('group','lembretes')->where('created_at','>=',$today.' 00:00:00')
+            ->whereNotNull('contract_number')->pluck('contract_number')->flip()->all();
+        $clients=$this->clients($db,$byContract->map(fn($r)=>$r->first()->{'Nº de Cliente'})->values()->all());
+        $soon=$before>0?now($tz)->addDays($before)->toDateString():null;
+        $labels=['promessa'=>'Promessa de pagamento para hoje','atraso'=>'Em atraso','hoje'=>'Vence hoje','antes'=>'Vence em '.$before.' dia(s)'];
+        $out=[];
+        foreach ($byContract as $numero=>$rows) {
+            $numero=(string)$numero;
+            if (isset($sent[$numero])) continue;
+            $dues=$rows->map(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10));
+            $oldestLate=$dues->filter(fn($d)=>$d<$today)->min();
+            $daysLate=$oldestLate?(int)floor((strtotime($today)-strtotime($oldestLate))/86400):0;
+            $rule=isset($promises[$numero])?'promessa':($oldestLate&&in_array($daysLate,$lateDays,true)?'atraso'
+                :(!$oldestLate&&$onDay&&$dues->contains($today)?'hoje':(!$oldestLate&&$soon&&$dues->contains($soon)?'antes':null)));
+            $name=['promessa'=>'Lembrete de promessa','atraso'=>'Pagamento atrasado','hoje'=>'Lembrete de vencimento','antes'=>'Lembrete de vencimento'][$rule]??null;
+            if (!$rule||!isset($tpl[$name])) continue;
+            $cid=(int)$rows->first()->{'Nº de Cliente'};
+            $v=$this->values($rows,$clients[$cid]??null,$today);
+            if ($rule==='promessa') $v+=['Valor Prometido'=>self::money($promises[$numero]->promessa_valor),'Data da Promessa'=>self::date($promises[$numero]->promessa_data)];
+            $out[]=['contrato'=>$numero,'cliente'=>$v['Nome Completo'],'cliente_id'=>$v['_cliente_id']?:null,
+                'contacto'=>$v['Contacto']?:null,'telefone'=>self::phone($v['Contacto']),
+                'contacto_alternativo'=>$v['_alternativo']?:null,'telefone_alternativo'=>self::phone($v['_alternativo']),
+                'situacao'=>$v['_situacao'],'regra'=>$rule,'regra_label'=>$labels[$rule],'mensagem'=>self::render($tpl[$name],$v)];
+        }
+        $order=['promessa'=>0,'atraso'=>1,'hoje'=>2,'antes'=>3];
+        usort($out,fn($a,$b)=>[$order[$a['regra']],$a['cliente']]<=>[$order[$b['regra']],$b['cliente']]);
+        return $out;
+    }
+
     /** GET /cis/mensagens/destinatarios?grupo=&modelo_id=|texto= : fila de «Mandar para Todos». */
     public function destinatarios(Request $request)
     {
         $this->admin($request);
         return $this->guard(function () use ($request) {
             $g=$request->validate(['grupo'=>['required','in:'.implode(',',self::GROUPS)]])['grupo'];
+            if ($g==='lembretes') {
+                $list=collect($this->lembretesLista($request));
+                return response()->json(['grupo'=>$g,'total'=>$list->count(),'com_contacto'=>$list->whereNotNull('telefone')->count(),
+                    'por_regra'=>$list->countBy('regra')->all(),'destinatarios'=>$list->values()])->header('Cache-Control','no-store, private');
+            }
             [$body]=$this->body($request);
             $db=DB::connection('mysql_legacy');
             $today=now('Africa/Maputo')->toDateString();

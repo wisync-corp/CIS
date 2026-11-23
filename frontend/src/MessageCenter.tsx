@@ -11,8 +11,9 @@ type RowState='por_enviar'|'a_enviar'|'enviada'|'falhada'|'sem_whatsapp'|'sem_co
 type QueueFilter='todos'|RowState;
 const FILTERS:{id:QueueFilter;label:string}[]=[{id:'todos',label:'Todos'},{id:'por_enviar',label:'Por enviar'},{id:'a_enviar',label:'A enviar'},{id:'enviada',label:'Enviadas'},
  {id:'falhada',label:'Falhadas'},{id:'sem_whatsapp',label:'Sem WhatsApp'},{id:'sem_contacto',label:'Sem contacto'}];
-type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados';
+type Group='todos'|'activos'|'inactivos'|'pendentes'|'atrasados'|'lembretes';
 const GROUPS:{id:Group;label:string;hint:string}[]=[
+ {id:'lembretes',label:'Lembretes de hoje (automático)',hint:'Promessas para hoje, atrasos nos dias definidos e vencimentos próximos; cada lembrete usa o seu modelo. Contratos já lembrados hoje ficam de fora.'},
  {id:'todos',label:'Todos os contactos',hint:'Um por mutuário (contrato mais recente)'},
  {id:'activos',label:'Contactos activos',hint:'Mutuários com contrato em curso'},
  {id:'inactivos',label:'Contactos inactivos',hint:'Mutuários sem contratos em curso'},
@@ -52,7 +53,7 @@ export type MessagePreset={modelo?:{nome:string;corpo:string};anexo?:WaImage|nul
 const isPdf=(a:WaImage)=>a.type==='application/pdf';
 const applyExtras=(t:string,x?:Record<string,string>)=>x?t.replace(/\{([^{}]{1,40})\}/g,(m,k:string)=>k in x?x[k]:m):t;
 
-export default function MessageCenter({token,contrato,onClose,preset}:{token:string;contrato?:string;onClose?:()=>void;preset?:MessagePreset}){
+export default function MessageCenter({token,contrato,onClose,preset,autoReminders}:{token:string;contrato?:string;onClose?:()=>void;preset?:MessagePreset;autoReminders?:boolean}){
  const headers={Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'};
  const [templates,setTemplates]=useState<Template[]>([]);const [fields,setFields]=useState<string[]>([]);
  const [selId,setSelId]=useState<number|''>('');
@@ -106,6 +107,10 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps
  useEffect(()=>{void load();},[token]);
+ // Vindo da Agenda de cobrança: prepara logo a fila dos lembretes de hoje.
+ useEffect(()=>{if(autoReminders){setGroup('lembretes');void loadQueue('lembretes');}
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[autoReminders]);
  useEffect(()=>{if(!editing)setBody(sel?.body??'');},[sel,editing]);
 
  // Pré-visualização para o contrato (modo envio), com o texto do modelo/edição.
@@ -183,7 +188,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   if(!queue)return;const ts=Date.now();
   const next=queue.map((r,i)=>{const st=rowState(r);return st==='por_enviar'||st==='falhada'?{...r,jobId:'q-'+i+'-'+ts}:r;});
   setQueue(next);
-  const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:tel(r)!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:selId||null,grupo:group||'todos'}}));
+  const list=next.filter(r=>r.jobId?.endsWith('-'+ts)).map(r=>({id:r.jobId!,phone:tel(r)!,text:r.mensagem,meta:{contrato:r.contrato,cliente:r.cliente,cliente_id:r.cliente_id,modelo_id:group==='lembretes'?null:selId||null,grupo:group||'todos'}}));
   if(!list.length){setNotice('Não há mensagens por enviar nesta fila.');return;}
   setQFilter('todos');
   waSend(list,show,image);
@@ -200,8 +205,15 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   setQueueInfo(`${rows.length} destinatário(s) · ${rows.filter(r=>r.telefone_alternativo).length} com número alternativo`);
   setNotice(`Nova fila com ${rows.length} destinatário(s) «${FILTERS.find(x=>x.id===f)!.label}».${hasAlt&&f!=='falhada'?' Usa o número alternativo; pode mudar para o principal.':''}`);
  }
- async function loadQueue(){
-  if(!group)return;
+ async function loadQueue(g:Group|''=group){
+  if(!g)return;
+  if(g==='lembretes'){setBusy('queue');setError('');setQueue(null);
+   try{const j=await call<{total:number;com_contacto:number;por_regra:Record<string,number>;destinatarios:Recipient[]}>('/cis/mensagens/destinatarios?grupo=lembretes');
+    const r=j.por_regra??{};
+    setQueue(j.destinatarios);setQFilter('todos');setQNumero('principal');setQLabel('Lembretes de hoje');
+    setQueueInfo(`${j.total} lembrete(s) · ${j.com_contacto} com contacto · promessas ${r.promessa??0} · atrasos ${r.atraso??0} · vencem hoje ${r.hoje??0} · próximos ${r.antes??0}`);}
+   catch(e){setError(e instanceof Error?e.message:'Não foi possível preparar os lembretes.');}finally{setBusy('');}
+   return;}
   const unknown=fieldsIn(editing?body:(sel?.body??body)).map(f=>'{'+f+'}').filter(f=>!fields.includes(f));
   if(unknown.length){setError('Este modelo usa campos que só existem ao enviar a partir de um recibo ou extracto ('+unknown.join(', ')+'); não pode ser usado numa fila. Escolha outro modelo ou retire esses campos.');return;}setBusy('queue');setError('');setQueue(null);
   try{const p=new URLSearchParams({grupo:group});if(editing)p.set('texto',body);else if(selId)p.set('modelo_id',String(selId));else p.set('texto',body);
@@ -344,7 +356,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
      <h3><Users size={16}/> Mandar para todos</h3>
      <select value={group} onChange={e=>{setGroup(e.target.value as Group);setQueue(null);}} aria-label="Grupo"><option value="">Escolher destinatários…</option>{GROUPS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
      {group&&<small>{GROUPS.find(g=>g.id===group)?.hint}</small>}
-     <button type="button" className="primary" onClick={()=>void loadQueue()} disabled={!group||(!selId&&!body.trim())||busy==='queue'}>{busy==='queue'?'A preparar…':'Preparar fila'}</button>
+     <button type="button" className="primary" onClick={()=>void loadQueue()} disabled={!group||(group!=='lembretes'&&!selId&&!body.trim())||busy==='queue'}>{busy==='queue'?'A preparar…':'Preparar fila'}</button>
     </div>}
    </div>
   </div>

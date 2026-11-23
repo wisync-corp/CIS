@@ -1984,3 +1984,21 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-prop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
 .cis-prop-timeline{margin:0;padding-left:18px;display:grid;gap:8px}.cis-prop-timeline small{display:block;color:#64748b}.cis-prop-timeline p{margin:2px 0 0}
 .cis-prop-pick{border:2px solid #c4b5fd}
+
+/* Contactos, promessas e agenda de cobrança */
+.cis-contact-form{border:1px solid var(--cis-line,#e3e8ef);border-radius:14px;padding:14px 16px;background:var(--cis-surface,#fff)}
+.cis-contact-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.cis-contact-list li{border:1px solid var(--cis-line,#e3e8ef);border-radius:12px;padding:10px 14px;background:var(--cis-surface,#fff)}
+.cis-contact-line{display:flex;justify-content:space-between;gap:10px}.cis-contact-line small{color:#64748b}
+.cis-contact-list p{margin:6px 0 0}
+.cis-contact-promise,.cis-contact-next{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cis-agenda .cis-users-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.cis-agenda-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
+.cis-agenda-card{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;border:1px solid var(--cis-line,#e3e8ef);border-radius:14px;padding:12px 14px;text-decoration:none;color:inherit;background:var(--cis-surface,#fff)}
+.cis-agenda-card svg{grid-row:1/3}.cis-agenda-card b{font-size:22px;line-height:1}.cis-agenda-card span{font-size:13px;color:#475569}
+.cis-agenda-card.bad svg{color:#b91c1c}.cis-agenda-card.info svg{color:#1d4ed8}.cis-agenda-card.warn svg{color:#b45309}.cis-agenda-card.muted svg{color:#64748b}
+.cis-agenda-section{margin-top:18px}.cis-agenda-section h4{display:flex;align-items:center;gap:7px;margin:0 0 8px}.cis-agenda-section h4 small{font-weight:500;color:#64748b}
+.cis-agenda-section td small{display:block;color:#64748b;font-size:12px}
+.cis-agenda-actions{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.cis-agenda-actions a,.cis-agenda-actions button{display:inline-flex;align-items:center;gap:5px}
+.cis-agenda-actions{white-space:nowrap}

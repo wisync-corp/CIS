@@ -525,7 +525,7 @@ ok(!isset($pg['valores']) && $pg['perfil']['nome_empresa']==='CAPTA Microcrédit
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
-ok(count(data($rc->index($rq([])))['relatorios'])===13,'catálogo com 13 relatórios (4 regulatórios + 6 de gestão + 3 de desempenho)');
+ok(count(data($rc->index($rq([])))['relatorios'])===14,'catálogo com 14 relatórios (4 regulatórios + 7 de gestão + 3 de desempenho)');
 $mStart=now($tz)->startOfMonth()->toDateString();
 $ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
 $ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
@@ -1099,6 +1099,39 @@ ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p3['id']))===403
 ok($err(fn()=>$PC->show(req('/x',[],$gmu),$p3['id']))===404,'gestora de outra agência não vê a proposta');
 $ev=$db->table('cis_credit_proposal_events')->where('proposal_id',$p1['id'])->pluck('accao')->all();
 ok($ev===['criada','submetida','aprovada','desembolsada'],'histórico da proposta: '.implode(' → ',$ev));
+
+echo "== Contactos, promessas e lembretes\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000220_cis_collection_contacts.php','--force'=>true]);
+$CC=new \App\Http\Controllers\Api\CollectionContactController();
+$cn=(string)$op['numero'];
+ok(\App\Http\Controllers\Api\CollectionContactController::ready() && $db->table('cis_message_templates')->where('name','Lembrete de promessa')->exists(),'tabela de contactos e modelo «Lembrete de promessa» instalados');
+ok(status(fn()=>$CC->store(req('/x',['canal'=>'chamada','resultado'=>'prometeu_pagar'],$admin),$cn))===422,'promessa exige valor e data');
+$c1=data($CC->store(req('/x',['canal'=>'chamada','resultado'=>'prometeu_pagar','promessa_valor'=>'100','promessa_data'=>$today,'notas'=>'Paga ao fim do dia'],$admin),$cn));
+ok(($c1['promessa']['estado']??null)==='pendente','contacto com promessa registado');
+$ag=data($CC->agenda(req('/x',[],$admin)));
+ok(collect($ag['promessas_hoje'])->pluck('contrato')->contains($cn),'agenda: promessa para hoje');
+$mcc=new \App\Http\Controllers\Api\MessageCenterController();
+$lem=collect($mcc->lembretesLista(req('/x',[],$admin)));
+$mine=$lem->firstWhere('contrato',$cn);
+ok($mine && $mine['regra']==='promessa' && str_contains($mine['mensagem'],'100'),'lembrete automático da promessa com o valor prometido');
+$mcc->registo(req('/x',['contrato'=>$cn,'canal'=>'whatsapp_web','estado'=>'enviada','grupo'=>'lembretes','mensagem'=>$mine['mensagem']],$admin));
+ok(!collect($mcc->lembretesLista(req('/x',[],$admin)))->pluck('contrato')->contains($cn),'contrato já lembrado hoje sai da lista');
+$db->table('Extracto')->insert(['Contracto'=>$cn,'Cliente'=>'Cliente Novo','Parcela'=>'1','Data da Operação'=>$today,'Valor'=>100,'Tipo de Movimento'=>'Entradas',
+    'Descrição'=>'[CAIXA:COBRANCA] Pagamento parcial ensaio','usuario'=>'ensaio','account_id'=>$banco,'operation_key'=>'ci:promessa:1']);
+\App\Http\Controllers\Api\CollectionContactController::evaluate([$cn]);
+ok($db->table('cis_collection_contacts')->where('id',$c1['id'])->value('promessa_estado')==='cumprida','pagamento até à data prometida: promessa cumprida');
+$c2=data($CC->store(req('/x',['canal'=>'visita','resultado'=>'prometeu_pagar','promessa_valor'=>'200','promessa_data'=>$today],$admin),$cn));
+$db->table('cis_collection_contacts')->where('id',$c2['id'])->update(['promessa_data'=>now($tz)->subDay()->toDateString(),'created_at'=>now($tz)->subDays(2)]);
+$ag=data($CC->agenda(req('/x',[],$admin)));
+ok($db->table('cis_collection_contacts')->where('id',$c2['id'])->value('promessa_estado')==='falhada' && collect($ag['promessas_falhadas'])->pluck('contrato')->contains($cn),
+    'data passada sem pagamento suficiente: promessa falhada e na agenda');
+$c3=data($CC->store(req('/x',['canal'=>'chamada','resultado'=>'sem_resposta','proximo_contacto'=>$today],$admin),$cn));
+$ag=data($CC->agenda(req('/x',[],$admin)));
+ok(collect($ag['seguimentos'])->pluck('contrato')->contains($cn) && !collect($ag['promessas_falhadas'])->pluck('contrato')->contains($cn),'novo contacto com seguimento substitui o alerta da promessa falhada');
+$pr=data((new \App\Http\Controllers\Api\ReportController())->show(req('/x',['inicio'=>now($tz)->subDays(5)->toDateString(),'fim'=>$today],$admin),'promessas'));
+ok(collect($pr['resumo'])->firstWhere(0,'Taxa de cumprimento')[1]==='50.0 %' && count($pr['seccoes'][1]['linhas'])===1,'relatório de promessas: 1 cumprida, 1 falhada (50%)');
+$hist=data($CC->index(req('/x',[],$admin),$cn));
+ok(count($hist['data'])===3 && $hist['data'][0]['resultado']==='sem_resposta','histórico de contactos do contrato');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
