@@ -24,7 +24,7 @@ class ParametrizacaoController
 
     private static function admin(Request $r): void
     {
-        abort_unless($r->user()?->role === 'administrador', 403, 'Só o administrador altera a parametrização.');
+        \App\Support\Permissions::require($r->user(),'definicoes');
     }
 
     private static function ready(): void

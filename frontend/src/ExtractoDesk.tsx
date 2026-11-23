@@ -1,4 +1,5 @@
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
+import {useCan} from './perms';
 import {useCompanyProfile} from './company';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
@@ -72,6 +73,7 @@ function fieldValue(row:object,column:Field,csv=false){
 
 export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenContracts}:{token:string;role:string;preset?:ExtractoPreset|null;onClearPreset?:()=>void;onOpenContracts:(numero?:string)=>void}){
  const company=useCompanyProfile(token);
+ const can=useCan();
  const isAdmin=role==='administrador';
  const [mode,setMode]=useState<Mode>(preset?'clientes':isAdmin?'geral':'clientes');
  const [period,setPeriod]=useState<ExtractoPreset|null>(preset??null);
@@ -304,7 +306,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
   {evidence&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Extracto de conta">
    <div className="cis-evidence-bar"><b>Pré-visualização do extracto do mutuário</b><span>Use «Imprimir / Guardar PDF» e escolha «Guardar como PDF» para enviar ao mutuário.</span>
     <button type="button" className="primary" onClick={printEvidence}><Printer size={15}/> Imprimir / Guardar PDF</button>
-    <button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendEvidence()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>
+    {can('mensagens')&&<button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendEvidence()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>}
     <button type="button" onClick={()=>setEvidence(null)} aria-label="Fechar"><X size={16}/></button></div>
    <article ref={evidenceRef} className="cis-evidence">
     <header><CompanyBrand company={company}/><div><h1>{evidence.titulo}</h1><p>Emitido em {dt(evidence.emitido_em.slice(0,10))} às {evidence.emitido_em.slice(11)}{evidence.emitido_por?` por ${evidence.emitido_por}`:''}</p>
@@ -358,7 +360,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     {infoError&&<div className="cis-table-error" role="alert"><AlertCircle size={17}/>{infoError}</div>}
     <div className="cis-info-actions">
      <button type="button" onClick={()=>onOpenContracts(info.contrato)}><FileText size={15}/> Abrir contrato e prestações</button>
-     <button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao mutuário</button>
+     {can('mensagens')&&<button type="button" className="primary" onClick={()=>setMsgContract(info.contrato)}><MessageSquare size={15}/> Mensagem ao mutuário</button>}
      <button type="button" onClick={()=>void infoEvidence(info.contrato)} disabled={evidenceBusy}><FileText size={15}/> {evidenceBusy?'A preparar…':'Extracto de conta (PDF)'}</button>
     </div>
    </aside>

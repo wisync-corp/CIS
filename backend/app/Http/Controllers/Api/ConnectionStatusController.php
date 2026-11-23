@@ -9,7 +9,7 @@ class ConnectionStatusController extends Controller
     public function __invoke(Request $request)
     {
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'definicoes');
         $database = (string) env('LEGACY_DB_DATABASE', '');
         $approved = filter_var(env('CIS_FINANCIAL_TEST_APPROVED', false), FILTER_VALIDATE_BOOLEAN);
         $testName = preg_match('/(?:test|teste|staging|sandbox|replica)/i', $database)

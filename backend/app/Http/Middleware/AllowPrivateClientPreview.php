@@ -19,9 +19,7 @@ final class AllowPrivateClientPreview
         if (!$approved || !$preview) {
             abort(503, 'Consulta de mutuários ainda não autorizada neste ambiente.');
         }
-        if (!$user || !$user->active || $user->role !== 'administrador') {
-            abort(403, 'Consulta de mutuários permitida apenas ao administrador autorizado.');
-        }
+        \App\Support\Permissions::require($user, 'ver');
         $response = $next($request);
         $response->headers->set('Cache-Control', 'no-store, private');
         $response->headers->set('Pragma', 'no-cache');

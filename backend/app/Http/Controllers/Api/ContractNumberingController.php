@@ -13,7 +13,7 @@ class ContractNumberingController
 {
     public function show(Request $request): JsonResponse
     {
-        abort_unless($request->user()?->role === 'administrador', 403, 'Reservado ao administrador.');
+        \App\Support\Permissions::require($request->user(),'definicoes');
         $p = strtoupper(trim((string)$request->query('prefixo', CN::prefix())));
         $d = (int)$request->query('digitos', CN::digits());
         abort_unless(preg_match('/^[A-Z0-9]{1,10}$/', $p) && $d >= 3 && $d <= 6, 422, 'Prefixo (1 a 10 letras/números) ou dígitos (3 a 6) inválidos.');

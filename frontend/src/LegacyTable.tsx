@@ -1,4 +1,6 @@
 import {useEffect,useState} from 'react';
+import {useCan} from './perms';
+import {useBranches} from './branches';
 import {Search,RefreshCw,ChevronLeft,ChevronRight,LockKeyhole,Database,AlertCircle,ArrowUpRight,ArrowDownUp,ChevronUp,ChevronDown,Filter} from 'lucide-react';
 import ClientProfile from './ClientProfile';
 import ContractProfile from './ContractProfile';
@@ -19,6 +21,10 @@ const fields:Record<string,{key:string;label:string}[]>={
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const monetary=new Set(['capital','prestacao_a_pagar','Valor','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago']);
 export default function LegacyTable({module,token,onProfileChange}:Props){
+ const can=useCan();
+ const branches=useBranches(token);
+ const [branchFilter,setBranchFilter]=useState('');
+ const bq=branchFilter?'?agencia='+branchFilter:'';
  const endpoint=module==='Mutuários'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
  const [selected,setSelected]=useState<number|null>(null);
  const [selectedContract,setSelectedContract]=useState<string|null>(null);
@@ -47,16 +53,16 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
   if(endpoint!=='contractos')return;
   const controller=new AbortController();
   setContractSummary(null);setSummaryError('');
-  fetch(API+'/cis/contractos/resumo',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
+  fetch(API+'/cis/contractos/resumo'+bq,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
    .then(async res=>{if(!res.ok)throw new Error('Não foi possível carregar o resumo de contratos.');return res.json() as Promise<ContractSummary>;})
    .then(result=>{if(!controller.signal.aborted)setContractSummary(result);})
    .catch(e=>{if(e.name!=='AbortError')setSummaryError(e.message);});
   return ()=>controller.abort();
- },[endpoint,token,refresh]);
+ },[endpoint,token,refresh,bq]);
  useEffect(()=>{
   if(endpoint!=='contractos')return;
   const controller=new AbortController();setStateError('');
-  fetch(API+'/cis/contractos/estados',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
+  fetch(API+'/cis/contractos/estados'+bq,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
    .then(async response=>{if(!response.ok)throw new Error('Não foi possível carregar os estados registados no MySQL.');return response.json() as Promise<{states:string[]}>;})
    .then(body=>setContractStates(Array.isArray(body.states)?body.states:[]))
    .catch(e=>{if(e.name!=='AbortError')setStateError(e.message);});
@@ -75,7 +81,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
   const query=new URLSearchParams({page:String(page)});
   if(term.trim())query.set(endpoint==='extracto'?'contracto':'q',term.trim());
   if(endpoint==='extracto'){if(appliedDates.inicio)query.set('inicio',appliedDates.inicio);if(appliedDates.fim)query.set('fim',appliedDates.fim);}
-  if(endpoint==='contractos'){if(stateFilter)query.set('estado',stateFilter);if(situationFilter)query.set('situacao',situationFilter);query.set('sort',contractSort);query.set('direction',sortDirection);}
+  if(endpoint==='contractos'){if(stateFilter)query.set('estado',stateFilter);if(situationFilter)query.set('situacao',situationFilter);query.set('sort',contractSort);if(branchFilter)query.set('agencia',branchFilter);query.set('direction',sortDirection);}
   fetch(API+'/cis/'+endpoint+'?'+query.toString(),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
    .then(async response=>{
     if(response.status===403)throw new Error('O seu perfil não tem acesso a estes dados.');
@@ -86,13 +92,13 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
    .then((result:Paged)=>setData(result)).catch(e=>{if(e.name!=='AbortError'){setData(null);setError(e.message);}})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return ()=>controller.abort();
- },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,situationFilter,contractSort,sortDirection]);
+ },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,situationFilter,contractSort,sortDirection,branchFilter]);
  if(endpoint==='clientes'&&selected!==null)return <ClientProfile id={selected} token={token} onBack={()=>{setSelected(null);setRefresh(v=>v+1);}}/>;
  if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft token={token} onBack={()=>setContractDraftOpen(false)} onContractCreated={numero=>{setNewlyCreatedContract(numero);setContractDraftOpen(false);setSelectedContract(numero);setRefresh(v=>v+1);window.scrollTo({top:0,behavior:'smooth'});}}/>;
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} justCreated={newlyCreatedContract===selectedContract} onBack={()=>{setSelectedContract(null);setNewlyCreatedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">
-  <div className="cis-panel-head"><div><h2>{module==='Mutuários'?'Cadastro de mutuários':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
+  <div className="cis-panel-head"><div><h2>{module==='Mutuários'?'Cadastro de mutuários':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&can('contratos.abrir')&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
   {endpoint==='contractos'&&contractSummary&&<div className="cis-contract-summary" aria-label="Resumo dos contratos por estado">
    <button type="button" className={'cis-contract-summary-card '+(situationFilter===''?'selected':'')} aria-pressed={situationFilter===''} onClick={()=>{setSituationFilter('');setPage(1);}}>
     <span>Todos os contratos</span><strong>{contractSummary.total.toLocaleString('pt-MZ')}</strong><small>Contratos distintos</small>
@@ -111,6 +117,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
     <option value="">Todos os estados</option>
     {contractStates.map(state=><option key={state} value={state}>{state}</option>)}
    </select>
+   {branches.minha===null&&branches.agencias.length>1&&<><label htmlFor="cis-contract-branch">Agência</label><select id="cis-contract-branch" value={branchFilter} onChange={e=>{setBranchFilter(e.target.value);setPage(1);}} aria-label="Filtrar por agência"><option value="">Todas as agências</option>{branches.agencias.map(b=><option key={b.id} value={b.id}>{b.nome}</option>)}</select></>}
    {(stateFilter||situationFilter||term)&&<button className="cis-clear-contract-filters" type="button" onClick={()=>{setStateFilter('');setSituationFilter('');setSearch('');setTerm('');setPage(1);}}>Limpar filtros</button>}
    <span className="cis-contract-filters-note">Estados originais do MySQL · ordenação aplicada a todos os resultados</span>
   </div>}

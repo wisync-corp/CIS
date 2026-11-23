@@ -36,7 +36,7 @@ final class ContractCollectionController extends Controller
     private function admin(Request $request): void
     {
         $u=$request->user();
-        abort_unless($u && $u->active && $u->role==='administrador',403);
+        \App\Support\Permissions::require($u,'cobrancas');
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CONTRACTS_READ_APPROVED'] as $flag) {
             abort_unless(filter_var(env($flag,false),FILTER_VALIDATE_BOOLEAN),503);
         }
@@ -124,8 +124,8 @@ final class ContractCollectionController extends Controller
         $today=now('Africa/Maputo')->toDateString();
         abort_if($date>$today,422,'A data de pagamento não pode ser futura.');
         // Só o administrador pode registar um recebimento com data diferente de hoje.
-        abort_if($date!==$today && !($u && $u->role==='administrador'),403,
-            'Apenas o administrador pode alterar a data de pagamento; os restantes utilizadores registam com a data de hoje.');
+        abort_if($date!==$today && !\App\Support\Permissions::can($u,'cobrancas.data'),403,
+            'Sem permissão para registar pagamentos com data passada; registe com a data de hoje ou peça ao gestor.');
         // Pagamento antecipado (antes do início, p. ex. após renovação) é permitido.
     }
 
@@ -871,7 +871,7 @@ final class ContractCollectionController extends Controller
     /** Histórico imutável da prestação/contrato (leitura). */
     public function history(Request $request, string $numero)
     {
-        $this->admin($request);
+        \App\Support\Permissions::require($request->user(),'ver');
         try {
             $db=DB::connection('mysql_legacy');
             $rows=$db->getSchemaBuilder()->hasTable('cis_contractos_historico')

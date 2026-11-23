@@ -180,7 +180,7 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate
       - run: php -l app/Services/CashAccountLedger.php && php -l app/Services/ContractHistory.php
       - run: php tests/contract_cash_flows_mysql_rehearsal.php
-      - run: bash -n ../deploy/install-contract-history.sh && bash -n ../deploy/install-company-settings.sh && bash -n ../deploy/renumber-contracts.sh && bash -n ../deploy/activate-collection-operations.sh
+      - run: bash -n ../deploy/install-contract-history.sh && bash -n ../deploy/install-company-settings.sh && bash -n ../deploy/install-user-management.sh && bash -n ../deploy/enable-client-full-edit.sh && bash -n ../deploy/renumber-contracts.sh && bash -n ../deploy/activate-collection-operations.sh
       - run: bash -n ../deploy/activate-contract-cash-flows.sh
       - run: bash -n ../deploy/disable-contract-cash-flows.sh
       - run: bash -n ../deploy/verify-contract-cash-flows.sh

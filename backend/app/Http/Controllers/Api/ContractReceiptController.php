@@ -20,7 +20,7 @@ class ContractReceiptController
     public function index(Request $request, string $numero): JsonResponse
     {
         $u = $request->user();
-        abort_unless($u && $u->active && $u->role === 'administrador', 403);
+        \App\Support\Permissions::require($u,['cobrancas','extractos']);
         abort_if(trim($numero) === '' || mb_strlen($numero) > 155, 422, 'Número de contrato inválido.');
         $numero = ContractNumbering::resolveIfMissing(trim($numero));
         $db = DB::connection('mysql_legacy');

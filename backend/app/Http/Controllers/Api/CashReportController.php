@@ -31,7 +31,7 @@ final class CashReportController extends Controller
     public function index(Request $request)
     {
         $user=$request->user();
-        abort_unless($user && $user->active && $user->role==='administrador',403);
+        \App\Support\Permissions::require($user,'caixa');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503);
         abort_unless(Schema::hasTable('cis_cash_accounts')
             && Schema::hasColumn('Extracto','account_id'),503);

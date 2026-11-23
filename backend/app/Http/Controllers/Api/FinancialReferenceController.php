@@ -12,7 +12,7 @@ final class FinancialReferenceController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'ver');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN),
             503, 'Parametrizações disponíveis apenas na pré-visualização privada.');
 
@@ -35,7 +35,7 @@ final class FinancialReferenceController extends Controller
     public function quote(Request $request)
     {
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'ver');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN),
             503, 'Consulta de tabela de juros disponível apenas na pré-visualização privada.');
         if (!Schema::hasTable('cis_tabela_juros')) {

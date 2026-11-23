@@ -10,11 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 final class CashController extends Controller
 {
-    private function access(Request $request, bool $write = false): void
+    private function access(Request $request, bool $write = false, array $perms = ['caixa']): void
     {
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403,
-            'Nesta fase, a Caixa está reservada ao administrador até activar a matriz de permissões.');
+        \App\Support\Permissions::require($user, $perms);
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN), 503);
         abort_unless(Schema::hasTable('cis_cash_accounts') && Schema::hasTable('Extracto') && Schema::hasColumn('Extracto','account_id'),
             503, 'O esquema da Caixa ainda não foi instalado.');
@@ -86,8 +85,13 @@ final class CashController extends Controller
 
     public function index(Request $request)
     {
-        $this->access($request);
+        // Lista de contas também para quem recebe pagamentos, abre contratos ou vê extractos.
+        $this->access($request, false, ['caixa','cobrancas','contratos.abrir','extractos']);
         $accounts = $this->accountRows((int)$request->user()->id);
+        // Agências: quem está numa agência só vê as contas dela e as partilhadas.
+        if (\App\Support\Branches::userBranch($request->user()) !== null) {
+            $accounts = collect($accounts)->filter(fn ($a) => \App\Support\Branches::accountVisible($request->user(), (int) (is_array($a) ? $a['id'] : $a->id)))->values();
+        }
         return response()->json([
             'accounts' => $accounts,
             'can_write' => filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN)

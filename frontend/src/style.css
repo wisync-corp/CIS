@@ -1803,3 +1803,87 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
  .cis-msg-side{position:static}
  .cis-msg-list li{flex-basis:220px}
 }
+
+/* Palavra-passe (troca obrigatória e voluntária) */
+.cis-pw-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--cis-bg,#f6f5fb)}
+.cis-pw{width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;padding:22px 24px!important}
+.cis-pw-head{display:flex;gap:12px;align-items:flex-start}
+.cis-pw-head h2{margin:0 0 4px;font-size:calc(18px * var(--cis-fs))}.cis-pw-head p{margin:0;color:var(--cis-text-muted);font-size:calc(13px * var(--cis-fs))}
+.cis-pw-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:11px;background:var(--cis-tint,#f4f0ff);color:var(--cis-primary);flex:0 0 40px}
+.cis-pw label{display:flex;flex-direction:column;gap:5px;font-weight:700;font-size:calc(13px * var(--cis-fs))}
+.cis-pw input{font:inherit;font-weight:500;border:1px solid var(--cis-border);border-radius:9px;padding:10px 12px;width:100%}
+.cis-pw-field{position:relative;display:block}.cis-pw-field button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;cursor:pointer;color:var(--cis-text-muted)}
+.cis-pw-rules{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:calc(12px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-pw-rules li{display:flex;align-items:center;gap:5px}.cis-pw-rules li.ok{color:#067647;font-weight:700}
+.cis-pw-error{display:flex;gap:6px;align-items:center;color:#b42318;margin:0}.cis-pw-ok{display:flex;gap:6px;align-items:center;color:#067647;margin:0}
+.cis-pw-actions{display:flex;gap:8px;flex-wrap:wrap}
+.cis-pw-actions button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:800;border:1px solid var(--cis-border);background:#fff;border-radius:9px;padding:9px 14px;cursor:pointer;color:var(--cis-heading)}
+.cis-pw-actions button.primary{background:var(--cis-primary);border-color:var(--cis-primary);color:#fff}
+.cis-pw-actions button:disabled{opacity:.55;cursor:not-allowed}
+.cis-profile .cis-profile-key{display:grid;place-items:center;padding:6px!important;min-width:0}
+
+/* Definições › Utilizadores */
+.cis-users{display:flex;flex-direction:column;gap:12px}
+.cis-users-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.cis-users-head h3{display:flex;align-items:center;gap:7px;margin:0 0 4px}.cis-users-head p{margin:0;color:var(--cis-text-muted);font-size:calc(13px * var(--cis-fs));max-width:680px}
+.cis-users button{font:inherit}
+.cis-users-head button.primary,.cis-users-actions button,.cis-users-secret button{display:inline-flex;align-items:center;gap:6px;font-weight:800;border:1px solid var(--cis-border);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;color:var(--cis-heading)}
+.cis-users-head button.primary{background:var(--cis-primary);border-color:var(--cis-primary);color:#fff}
+.cis-users-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.cis-users-bar .cis-msg-search{margin:0;min-width:260px;flex:0 1 320px}
+.cis-users-bar .cis-msg-search input{border:0;outline:0;padding:8px 0;width:100%;font:inherit;background:transparent}
+.cis-users button.link{border:0;background:transparent;color:var(--cis-primary);font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px}
+.cis-users-table td{vertical-align:middle}
+.cis-users-table tr.off td{opacity:.6}
+.cis-users-who{display:flex;align-items:center;gap:10px}.cis-users-who div{display:flex;flex-direction:column}.cis-users-who small{color:var(--cis-text-muted)}
+.cis-users-role{display:inline-block;border-radius:99px;padding:3px 10px;font-weight:800;font-size:calc(11.5px * var(--cis-fs));background:#f2f4f7;color:#344054}
+.cis-users-role.r-administrador{background:var(--cis-tint,#f4f0ff);color:var(--cis-primary)}.cis-users-role.r-gestor{background:#eff8ff;color:#175cd3}
+.cis-users-role.r-financeiro{background:#ecfdf3;color:#067647}.cis-users-role.r-cobrador{background:#fffaeb;color:#b54708}.cis-users-role.r-agente{background:#fdf2fa;color:#c11574}
+.cis-users-state{font-weight:800;font-size:calc(12px * var(--cis-fs))}.cis-users-state.on{color:#067647}.cis-users-state.off{color:#667085}.cis-users-state.wait{color:#b54708}
+.cis-users-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.cis-users-actions button{padding:6px 9px;font-size:calc(12px * var(--cis-fs))}
+.cis-users-actions button.danger:hover{color:#b42318;border-color:#fda29b;background:#fef3f2}
+.cis-users-secret{display:flex;flex-wrap:wrap;align-items:center;gap:12px;border:1px solid #abefc6;background:#ecfdf3;border-radius:12px;padding:12px 14px}
+.cis-users-secret>div{display:flex;flex-direction:column;flex:1;min-width:240px}.cis-users-secret small{color:#05603a}
+.cis-users-secret code{font-size:calc(18px * var(--cis-fs));font-weight:800;letter-spacing:.06em;background:#fff;border:1px dashed #47cd89;border-radius:8px;padding:6px 12px}
+.cis-users-matrix td.c,.cis-users-matrix th{text-align:center}.cis-users-matrix td:first-child{text-align:left}
+.cis-users-matrix .yes{color:#067647}.cis-users-matrix .no{color:#d0d5dd}
+.cis-users-audit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:calc(12.5px * var(--cis-fs))}
+.cis-users-audit li{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;border-bottom:1px solid var(--cis-border);padding-bottom:6px}
+.cis-users-audit li span{color:var(--cis-text-muted);min-width:130px}.cis-users-audit li small{color:var(--cis-text-muted);margin-left:auto}
+.cis-users-form{width:100%;max-width:620px;display:flex;flex-direction:column;gap:12px;padding:20px 22px!important;max-height:92vh;overflow:auto}
+.cis-users-form-head{display:flex;justify-content:space-between;align-items:center}.cis-users-form-head h3{margin:0}.cis-users-form-head button{border:0;background:transparent;cursor:pointer}
+.cis-users-form label{display:flex;flex-direction:column;gap:5px;font-weight:700;font-size:calc(13px * var(--cis-fs))}
+.cis-users-form input,.cis-users-form select{font:inherit;font-weight:500;border:1px solid var(--cis-border);border-radius:9px;padding:9px 11px}
+.cis-users-form-row{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.cis-users-roles{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.cis-users-roles legend{font-weight:800;font-size:calc(13px * var(--cis-fs));margin-bottom:6px}
+.cis-users-roles label{flex-direction:row!important;align-items:flex-start;gap:9px!important;border:1px solid var(--cis-border);border-radius:10px;padding:9px 11px;cursor:pointer;font-weight:500!important}
+.cis-users-roles label.on{border-color:var(--cis-primary);background:var(--cis-tint,#f4f0ff)}
+.cis-users-roles input{width:auto!important;margin-top:3px}
+.cis-users-roles span{display:flex;flex-direction:column}.cis-users-roles small{color:var(--cis-text-muted)}
+.cis-users-hint{display:flex;gap:6px;align-items:center;margin:0;color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
+@media(max-width:700px){.cis-users-form-row{grid-template-columns:1fr}}
+
+/* Definições › Agências */
+.cis-users-branch{display:block;color:var(--cis-text-muted);font-size:calc(11.5px * var(--cis-fs));margin-top:3px}
+.cis-branch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cis-branch-card{border:1px solid var(--cis-border);border-radius:14px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:8px}
+.cis-branch-card.off{opacity:.6}.cis-branch-card.all{background:#fcfcfd;border-style:dashed}
+.cis-branch-card header{display:flex;gap:6px;align-items:center}
+.cis-branch-code{font-weight:800;font-size:calc(11px * var(--cis-fs));letter-spacing:.06em;background:var(--cis-tint,#f4f0ff);color:var(--cis-primary);border-radius:6px;padding:2px 7px}
+.cis-branch-main{display:inline-flex;align-items:center;gap:3px;font-weight:800;font-size:calc(11px * var(--cis-fs));color:#b54708;background:#fffaeb;border-radius:6px;padding:2px 7px}
+.cis-branch-off{font-weight:800;font-size:calc(11px * var(--cis-fs));color:#667085;background:#f2f4f7;border-radius:6px;padding:2px 7px}
+.cis-branch-card h4{margin:0;font-size:calc(16px * var(--cis-fs))}
+.cis-branch-where{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin:0;font-size:calc(12.5px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-branch-card dl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 0}
+.cis-branch-card dl div{background:#f9fafb;border-radius:9px;padding:7px 8px}
+.cis-branch-card dt{display:flex;align-items:center;gap:4px;font-size:calc(11px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-branch-card dd{margin:2px 0 0;font-weight:800;font-size:calc(17px * var(--cis-fs))}
+.cis-branch-card footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.cis-branch-card footer button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:800;font-size:calc(12px * var(--cis-fs));border:1px solid var(--cis-border);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--cis-heading)}
+.cis-branch-accounts h4{display:flex;align-items:center;gap:6px;margin:6px 0 2px}
+.cis-branch-accounts select{font:inherit;border:1px solid var(--cis-border);border-radius:8px;padding:6px 8px}
+.cis-branch-active{flex-direction:row!important;align-items:center;gap:8px!important}.cis-branch-active input{width:auto!important}
+.cis-contract-branch select{font:inherit;font-weight:800;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;border-radius:7px;padding:2px 6px}
+.cis-contract-branch select option{color:#101828}

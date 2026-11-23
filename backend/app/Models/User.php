@@ -5,7 +5,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable {
     use HasApiTokens, Notifiable;
-    protected $fillable=['name','email','password','role','active','legacy_username'];
+    protected $fillable=['name','email','password','role','active','legacy_username','telefone'];
     protected $hidden=['password','remember_token'];
-    protected function casts(): array { return ['password'=>'hashed','active'=>'boolean']; }
+    protected function casts(): array { return ['password'=>'hashed','active'=>'boolean','must_change_password'=>'boolean','last_login_at'=>'datetime']; }
 }

@@ -19,9 +19,10 @@ final class AllowPrivateContractsPreview
             abort(503, 'Consulta de contratos desactivada até autorização no ambiente privado.');
         }
         $user = $request->user();
-        if (!$user || !$user->active || $user->role !== 'administrador') {
-            abort(403, 'Consulta privada reservada ao administrador.');
-        }
+        \App\Support\Permissions::require($user, 'ver');
+        // Contratos de outra agência ficam fora do alcance de quem está numa agência.
+        $numero = $request->route('numero');
+        if (is_string($numero) && $numero !== '') \App\Support\Branches::requireContract($user, $numero);
         $response = $next($request);
         $response->headers->set('Cache-Control', 'no-store, private');
         $response->headers->set('Pragma', 'no-cache');

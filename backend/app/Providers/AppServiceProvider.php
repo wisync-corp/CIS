@@ -20,10 +20,10 @@ class AppServiceProvider extends ServiceProvider {
     }
     public function boot(): void {
         Gate::define('cis.consultar', function ($user) {
-            return in_array($user->role, ['administrador','gestor','agente','cobrador'], true) && $user->active;
+            return \App\Support\Permissions::can($user, 'ver');
         });
         Gate::define('cis.consultar.todos', function ($user) {
-            return in_array($user->role, ['administrador','gestor'], true) && $user->active;
+            return \App\Support\Permissions::can($user, 'ver');
         });
     }
 }

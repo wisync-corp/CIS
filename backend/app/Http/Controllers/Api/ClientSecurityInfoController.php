@@ -34,7 +34,7 @@ final class ClientSecurityInfoController extends Controller
             && filter_var(env('CIS_CLIENTES_SECONDARY_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
             503, 'Campos complementares ainda não activados.');
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'ver');
     }
 
     public function show(Request $request, int $id)
@@ -50,6 +50,7 @@ final class ClientSecurityInfoController extends Controller
     public function update(Request $request, int $id)
     {
         $this->allowed($request);
+        \App\Support\Permissions::require($request->user(), 'mutuarios.editar');
         abort_unless(filter_var(env('CIS_CLIENTES_EDIT_APPROVED', false), FILTER_VALIDATE_BOOLEAN),
             503, 'Edição directa não activada.');
         // Aceita os formatos que a própria ficha devolve (HH:MM:SS e data com hora).

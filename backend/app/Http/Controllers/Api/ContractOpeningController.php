@@ -27,7 +27,7 @@ final class ContractOpeningController extends Controller
         // saldo da conta (não o agregado do Extracto), account_id, chave idempotente
         // e histórico imutável de cada prestação criada, na mesma transacção.
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'contratos.abrir');
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CLIENTES_PREVIEW_APPROVED',
             'CIS_CONTRACTS_READ_APPROVED','CIS_NEW_CONTRACTS_APPROVED'] as $flag) {
             abort_unless(filter_var(env($flag,false), FILTER_VALIDATE_BOOLEAN), 503,
@@ -301,6 +301,15 @@ final class ContractOpeningController extends Controller
         } finally {
             $db->select('SELECT RELEASE_LOCK(?)', ['cis_open_new_contract']);
         }
+        // Agência do contrato: a do utilizador; quem vê todas pode indicar «agencia_id»; senão, a principal.
+        try {
+            if (\App\Support\Branches::ready() && empty($result['repetido']) && !empty($result['numero'])) {
+                $branch = \App\Support\Branches::userBranch($user)
+                    ?? (is_numeric($request->input('agencia_id')) && \Illuminate\Support\Facades\DB::table('cis_branches')->where('id', (int) $request->input('agencia_id'))->exists() ? (int) $request->input('agencia_id') : null)
+                    ?? \App\Support\Branches::principalId();
+                if ($branch) \App\Support\Branches::assignContract((string) $result['numero'], $branch, (int) $user->id);
+            }
+        } catch (\Throwable $e) { report($e); }
         return response()->json($result,201)->header('Cache-Control','no-store, private');
     }
 }

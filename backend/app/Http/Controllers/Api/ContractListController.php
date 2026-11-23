@@ -19,6 +19,7 @@ final class ContractListController extends Controller
         $pending = DB::connection('mysql_legacy')->table('Contractos')
             ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado'])
             ->whereNotIn('Estado do Contrato', ['Finalizado', 'Liquidado', 'Cancelado', 'Anulado']);
+        \App\Support\Branches::applyToContracts($pending, \App\Support\Branches::scope($request->user(), $request->query('agencia')));
         $late = (clone $pending)->where($due, '<', $today->toDateString());
         $upcoming = (clone $pending)->where($due, '>=', $today->toDateString())
             ->where($due, '<', $today->copy()->addDays($days + 1)->toDateString());
@@ -54,7 +55,7 @@ final class ContractListController extends Controller
     //  Finalizado         — não há prestações por pagar.
     public const SITUATIONS = ['Pendente','Pagamento Atrasado','Finalizado'];
 
-    private function groupedContracts()
+    private function groupedContracts(?int $branch = null)
     {
         $today = now('Africa/Maputo')->toDateString();
         $open = "`Estado` IN ('Pendente','Pagamento Atrasado')";
@@ -62,7 +63,9 @@ final class ContractListController extends Controller
         // A agregação só afirma um estado quando TODAS as prestações do
         // contrato partilham o mesmo Estado do Contrato, incluindo nulos.
         // Valores divergentes são mostrados e não classificados arbitrariamente.
-        return DB::connection('mysql_legacy')->table('Contractos')
+        $q = DB::connection('mysql_legacy')->table('Contractos');
+        \App\Support\Branches::applyToContracts($q, $branch);
+        return $q
             ->selectRaw('`Nr do Contracto` AS numero')
             ->selectRaw('MIN(`Nome do Cliente`) AS cliente')
             ->selectRaw('MIN(`Nº de Cliente`) AS cliente_id')
@@ -85,19 +88,20 @@ final class ContractListController extends Controller
             ->groupBy('Nr do Contracto');
     }
 
-    public function summary()
+    public function summary(?Request $request = null)
     {
+        $branch = $request ? \App\Support\Branches::scope($request->user(), $request->query('agencia')) : null;
         // Reutiliza EXACTAMENTE a mesma regra de estado da listagem.
         // Conta contratos distintos, e nunca as 679 linhas de prestações.
         $rows = DB::connection('mysql_legacy')->query()
-            ->fromSub($this->groupedContracts(), 'contratos')
+            ->fromSub($this->groupedContracts($branch), 'contratos')
             ->select('estado')
             ->selectRaw('COUNT(*) AS total')
             ->groupBy('estado')
             ->orderBy('estado')
             ->get();
         $situations = DB::connection('mysql_legacy')->query()
-            ->fromSub($this->groupedContracts(), 'contratos')
+            ->fromSub($this->groupedContracts($branch), 'contratos')
             ->select('situacao')->selectRaw('COUNT(*) AS total')
             ->groupBy('situacao')->pluck('total','situacao');
 
@@ -115,11 +119,11 @@ final class ContractListController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
-    public function states()
+    public function states(?Request $request = null)
     {
         // Estados de contrato agregados (não estados individuais de parcelas).
         $rows = DB::connection('mysql_legacy')
-            ->query()->fromSub($this->groupedContracts(), 'contratos')
+            ->query()->fromSub($this->groupedContracts($request ? \App\Support\Branches::scope($request->user(), $request->query('agencia')) : null), 'contratos')
             ->select('estado')->distinct()->orderBy('estado')->pluck('estado');
 
         return response()->json(['states' => $rows])
@@ -140,7 +144,7 @@ final class ContractListController extends Controller
         $state = trim($filters['estado'] ?? '');
         $sort = self::SORT_COLUMNS[$filters['sort'] ?? 'numero'];
         $direction = $filters['direction'] ?? 'asc';
-        $builder = $this->groupedContracts();
+        $builder = $this->groupedContracts(\App\Support\Branches::scope($request->user(), $request->query('agencia')));
 
         if ($q !== '') {
             $like = '%'.addcslashes($q, '%_\\').'%';

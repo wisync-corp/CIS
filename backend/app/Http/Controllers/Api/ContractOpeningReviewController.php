@@ -18,7 +18,7 @@ final class ContractOpeningReviewController extends Controller
     public function cashBalance(Request $request)
     {
         $user=$request->user();
-        abort_unless($user && $user->active && $user->role==='administrador',403);
+        \App\Support\Permissions::require($user,'contratos.abrir');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN)
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),503);
         $rows=DB::connection('mysql_legacy')->table('Extracto')
@@ -42,7 +42,7 @@ final class ContractOpeningReviewController extends Controller
     public function suggestedNumber(Request $request)
     {
         $user=$request->user();
-        abort_unless($user && $user->active && $user->role==='administrador',403);
+        \App\Support\Permissions::require($user,'contratos.abrir');
         abort_unless(
             filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN)
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false),FILTER_VALIDATE_BOOLEAN),
@@ -68,7 +68,7 @@ final class ContractOpeningReviewController extends Controller
     public function validateDraft(Request $request)
     {
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'contratos.abrir');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW', false), FILTER_VALIDATE_BOOLEAN), 503);
         abort_unless(filter_var(env('CIS_CLIENTES_PREVIEW_APPROVED', false), FILTER_VALIDATE_BOOLEAN), 503);
         abort_unless(filter_var(env('CIS_CONTRACTS_READ_APPROVED', false), FILTER_VALIDATE_BOOLEAN), 503);

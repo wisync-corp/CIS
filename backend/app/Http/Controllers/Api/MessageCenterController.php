@@ -27,7 +27,7 @@ final class MessageCenterController extends Controller
 
     private function admin(Request $r): void
     {
-        abort_unless($r->user()?->role==='administrador',403,'O centro de mensagens é reservado ao administrador.');
+        \App\Support\Permissions::require($r->user(),'mensagens');
     }
 
     private function guard(callable $f)
@@ -214,6 +214,7 @@ final class MessageCenterController extends Controller
             $numero=trim((string)$request->validate(['contrato'=>['required','string','max:155']])['contrato']);
             [$body]=$this->body($request);
             $db=DB::connection('mysql_legacy');
+            \App\Support\Branches::requireContract($request->user(),(string)$numero);
             $rows=$this->contractRows($db)->where('Nr do Contracto',$numero)->get();
             abort_if($rows->isEmpty(),404,'Contrato não encontrado.');
             $cid=(int)$rows->first()->{'Nº de Cliente'};
@@ -239,7 +240,8 @@ final class MessageCenterController extends Controller
             [$body]=$this->body($request);
             $db=DB::connection('mysql_legacy');
             $today=now('Africa/Maputo')->toDateString();
-            $byContract=$this->contractRows($db)->orderBy('Ordem')->get()->groupBy('Nr do Contracto');
+            $cq=$this->contractRows($db);\App\Support\Branches::applyToContracts($cq,\App\Support\Branches::scope($request->user(),$request->query('agencia')));
+            $byContract=$cq->orderBy('Ordem')->get()->groupBy('Nr do Contracto');
             $clients=$this->clients($db,$byContract->map(fn($r)=>$r->first()->{'Nº de Cliente'})->values()->all());
             $items=[];
             foreach ($byContract as $numero=>$rows) {

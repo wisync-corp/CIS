@@ -1,4 +1,6 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
+import {useCan} from './perms';
+import {useBranches} from './branches';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
 import ContractDocument from './ContractDocument';
@@ -73,6 +75,19 @@ function format(item:Item,name:string,kind?:'date'|'money'|'percent'){
  if(kind==='percent')return String(raw)+'%';
  return String(raw);
 }
+// Agência do contrato (etiqueta; quem tem Definições pode mudar).
+function ContractBranch({numero,token}:{numero:string;token:string}){
+ const can=useCan();const branches=useBranches(token);
+ const [cur,setCur]=useState<{id:number;nome:string}|null>(null),[msg,setMsg]=useState('');
+ useEffect(()=>{const c=new AbortController();fetch(BR_API+'/cis/agencias/contratos/'+encodeURIComponent(numero),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+  .then(r=>r.ok?r.json():null).then(j=>{if(j)setCur(j.agencia);}).catch(()=>{});return()=>c.abort();},[numero,token]);
+ if(!branches.agencias.length||!cur)return null;
+ async function change(v:string){setMsg('');try{const r=await fetch(BR_API+'/cis/agencias/contratos/'+encodeURIComponent(numero),{method:'PUT',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({branch_id:Number(v)})});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Falhou.');setCur(j.agencia);setMsg('Agência alterada.');}catch(e){setMsg(e instanceof Error?e.message:'Falhou.');}}
+ return <span className="cis-contract-branch" title={msg||undefined}>Agência: {can('definicoes')&&branches.minha===null?<select value={cur.id} onChange={e=>void change(e.target.value)} aria-label="Agência do contrato">{branches.agencias.map(b=><option key={b.id} value={b.id}>{b.nome}</option>)}</select>:<b>{cur.nome}</b>}</span>;
+}
+const BR_API=import.meta.env.VITE_API_URL||'/api';
+
 export default function ContractProfile({numero,token,onBack,justCreated=false}:{numero:string;token:string;onBack:()=>void;justCreated?:boolean}){
  const [tab,setTab]=useState<Tab>('Contrato');
  const [data,setData]=useState<Payload|null>(null);
@@ -126,7 +141,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <div className="cis-profile-heading">
      <span>FICHA DE CRÉDITO · {numero}</span>
      <h2>{format(contract,'Nome do Cliente')}</h2>
-     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><ContractBranch numero={numero} token={token}/><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
     </div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>
