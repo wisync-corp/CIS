@@ -3,6 +3,7 @@ import {useCan} from './perms';
 import {useBranches} from './branches';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
+import CreditChanges from './CreditChanges';
 import PortfolioOwner from './PortfolioOwner';
 import ContractDocument from './ContractDocument';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
@@ -90,6 +91,7 @@ function ContractBranch({numero,token}:{numero:string;token:string}){
 const BR_API=import.meta.env.VITE_API_URL||'/api';
 
 export default function ContractProfile({numero,token,onBack,justCreated=false}:{numero:string;token:string;onBack:()=>void;justCreated?:boolean}){
+ const can=useCan();
  const [tab,setTab]=useState<Tab>('Contrato');
  const [data,setData]=useState<Payload|null>(null);
  const [loading,setLoading]=useState(true);
@@ -178,7 +180,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de pagamentos'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':tab==='Documento do contrato'?'Contrato gerado a partir do modelo das Definições, com os dados deste contrato.':'Informações essenciais do contrato.'}</p></div></header>
-     {tab==='Pagamentos'?<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/>:tab==='Documento do contrato'?<section className="cis-contract-operation">
+     {tab==='Pagamentos'?<>{can('cobrancas')&&can('definicoes')&&<CreditChanges key={numero} token={token} numero={numero} installments={data.installments} onChanged={()=>void load()}/>}<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/></>:tab==='Documento do contrato'?<section className="cis-contract-operation">
       <ContractDocument token={token} numero={String(contract?.['Nr do Contracto']??numero)}/>
       <h4 style={{marginTop:24}}>Documento original (sistema antigo)</h4>
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
