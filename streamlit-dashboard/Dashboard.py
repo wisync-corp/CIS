@@ -53,6 +53,14 @@ if df.empty:
 
 for field in ("Quantia Creditada", "Valor Pago", "Valor a Pagar", "Valor de Juros"):
     df[field] = pd.to_numeric(df[field], errors="coerce").fillna(0)
+# Preserva a classificação legada e usa as faixas do CIS onde não há classificação.
+faixas = pd.cut(df["Quantia Creditada"], [-float("inf"), 5000, 25000, 100000, float("inf")],
+               labels=["Até 5 000", "5 001 - 25 000", "25 001 - 100 000", "Acima de 100 000"]).astype("string")
+if "Intervalo" in df:
+    df["Intervalo"] = df["Intervalo"].astype("string").str.strip().replace("", pd.NA).fillna(faixas)
+else:
+    df["Intervalo"] = faixas
+
 for field in ("Estado", "Estado do Contrato", "M. Pagamento", "Prazo/Duração", "Nome do Cliente"):
     df[field] = df[field].fillna("Não indicado")
 
@@ -443,6 +451,9 @@ if choice == "Desempenho do Portfólio de Microcrédito":
         st.title(":bar_chart: Desempenho do Portfólio de Microcrédito")
         st.markdown("##")
         ano , mes, target_year, target_month, df, df2, mn, an= filtro(df)
+        if df2.empty:
+            st.info("Sem contratos para os filtros seleccionados.")
+            st.stop()
         # Meses Anteriores
         if ano == "Todos" and mes == "Todos":
             # Apply conditions if both 'ano' and 'mes' are "Todos"
@@ -951,6 +962,9 @@ elif choice == "Análise de Clientes":
     st.title(":bar_chart: Eficiência Operacional e Clientes")
     st.markdown("##")
     ano , mes, target_year, target_month, df, df2, mn, an= filtro(df)
+    if df2.empty:
+        st.info("Sem contratos para os filtros seleccionados.")
+        st.stop()
     
     if ano == "Todos" and mes == "Todos":
         # Apply conditions if both 'ano' and 'mes' are "Todos"
@@ -1018,6 +1032,10 @@ elif choice == "Análise de Clientes":
         
     
     
+    if ano == "Todos" or mes == "Todos":
+        filtered_dates2 = df2 if ano == "Todos" else df2[df2['Data de Inicio'].dt.year == target_year]
+    x = int(ano == "Todos" or mes == "Todos")
+
     no_duplicates = filtered_dates["Nome do Cliente"]
     
     no_duplicates1 = filtered_dates1["Nome do Cliente"]
@@ -1042,11 +1060,10 @@ elif choice == "Análise de Clientes":
         if (mes == "Todos") | (ano == "Todos"):
             media_taxas, media_taxas1= calcular_media_taxas_retencao(filtered_dates2)
             t_ret = media_taxas
-            x = 1
+
         else:
             t_ret = common_values1/nr * 100
-            x = 0
-            
+
     if nr1 == 0:
         t_aqu = 0
     else:
@@ -1054,12 +1071,10 @@ elif choice == "Análise de Clientes":
             media_taxas, media_taxas1 = calcular_media_taxas_retencao(filtered_dates2)
             t_aqu = media_taxas1
             nr1 = len(filtered_dates2["Nome do Cliente"].drop_duplicates())
-            x = 1
+
         else:
             t_aqu = unique_values_filtered_dates1 / nr1 * 100
-            x = 0
-        
-    
+
     font_size = "20px"
     st.markdown("####")
     st.write(f'<span style="font-size: {font_size};">:clock1: :chart_with_upwards_trend: {f}</span>', unsafe_allow_html=True)
@@ -1229,6 +1244,9 @@ elif choice == "Desempenho Financeiro e Crescimento":
     st.title(":bar_chart: Desempenho Financeiro e Crescimento")
     st.markdown("##")
     ano , mes, target_year, target_month, df, df2, mn, an= filtro(df)
+    if df2.empty:
+        st.info("Sem contratos para os filtros seleccionados.")
+        st.stop()
     
     if ano == "Todos" and mes == "Todos":
         # Apply conditions if both 'ano' and 'mes' are "Todos"
