@@ -24,7 +24,7 @@ final class ContractProfileController extends Controller
         'Ordem', 'Nº', 'Nº da Parcela', 'Data de Cobrança',
         'Data de Pagamento', 'Capital', 'Amortização', 'Valor a Pagar',
         'Valor de Juros', 'Valor de Multa', 'Valor Pago', 'Estado',
-        'Dias', 'Intervalo', 'Situação de Pagamento', 'Column1'
+        'Dias', 'Intervalo', 'Situação de Pagamento', 'Column1', 'Tipo de Juro'
     ];
 
     public function show(Request $request, string $numero)
