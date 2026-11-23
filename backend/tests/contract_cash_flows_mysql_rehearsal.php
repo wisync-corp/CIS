@@ -902,6 +902,37 @@ $li=data($uc->index($ureq('GET',[],$admin)));
 ok(count($li['utilizadores'])>=2 && count($li['auditoria'])>=4,'lista de utilizadores e auditoria');
 ok($err(fn()=>$col->collect(req('/x',$bp([]),$gestor),'C-0120',$bd))===403,'agente continua sem cobranças');
 
+echo "== Agências\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000180_cis_branches.php','--force'=>true]);
+\App\Support\Branches::reset();
+$bc=new \App\Http\Controllers\Api\BranchController();
+$sede=\App\Support\Branches::principalId();
+ok($sede!==null && $db->table('cis_branches')->where('codigo','SEDE')->exists(),'agência principal (Sede) criada');
+$mat=(int)data($bc->store($ureq('POST',['codigo'=>'mat-01','nome'=>'Matola','cidade'=>'Matola'],$admin)))['id'];
+ok($db->table('cis_branches')->where('id',$mat)->value('codigo')==='MAT-01','agência criada (código em maiúsculas)');
+ok($err(fn()=>$bc->store($ureq('POST',['codigo'=>'MAT-01','nome'=>'Outra'],$admin)))===422 && $err(fn()=>$bc->store($ureq('POST',['codigo'=>'X1','nome'=>'Y'],$gestor)))===403,'código repetido recusado; só quem tem Definições cria');
+data($bc->assignContract($ureq('PUT',['branch_id'=>$mat],$admin),'OP-0001'));
+$gm=data($uc->store($ureq('POST',['name'=>'Gestora Matola','email'=>'gm@ci.test','role'=>'gestor','branch_id'=>$mat],$admin)));
+$gmu=User::query()->where('email','gm@ci.test')->firstOrFail();$gmu->forceFill(['must_change_password'=>false])->save();
+ok($gm['utilizador']['agencia']==='Matola' && $gmu->branch_id===$mat,'utilizador ligado à agência Matola');
+$lc=new \App\Http\Controllers\Api\ContractListController();
+$lreq=function(array $q,$u){$r=Request::create('/x','GET',$q);$r->setUserResolver(static fn()=>$u);return $r;};
+$mine=collect($lc->index($lreq([],$gmu))->toArray()['data'])->pluck('numero')->all();
+$all=collect($lc->index($lreq([],$admin))->toArray()['data'])->pluck('numero');
+$filtered=collect($lc->index($lreq(['agencia'=>$mat],$admin))->toArray()['data'])->pluck('numero')->all();
+ok($mine===['OP-0001'] && $filtered===['OP-0001'] && $all->count()>1 && $all->contains('OP-0001'),'agência: a gestora só vê os contratos da Matola; o administrador vê todos e pode filtrar');
+\App\Support\Branches::reset();
+$e1=null;try{\App\Support\Branches::requireContract($gmu,'OP-0002');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $x){$e1=$x->getStatusCode();}
+$e2=null;try{\App\Support\Branches::requireContract($gmu,'OP-0001');\App\Support\Branches::requireContract($admin,'OP-0002');}catch(\Throwable $x){$e2='erro';}
+ok($e1===403 && $e2===null,'contrato de outra agência recusado (403); da própria agência e administrador permitidos');
+data($bc->assignAccount($ureq('PUT',['branch_id'=>$mat],$admin),$banco));
+ok(\App\Support\Branches::accountVisible($gmu,$banco) && \App\Support\Branches::accountVisible($gmu,$numerario),'contas: a da agência e as partilhadas visíveis');
+data($bc->assignAccount($ureq('PUT',['branch_id'=>$sede],$admin),$numerario));
+ok(!\App\Support\Branches::accountVisible($gmu,$numerario),'conta de outra agência escondida');
+$bi=data($bc->index($ureq('GET',[],$admin)));
+ok(count($bi['agencias'])===2 && collect($bi['agencias'])->firstWhere('id',$mat)['contratos']===1 && collect($bi['agencias'])->firstWhere('id',$mat)['utilizadores']===1,'resumo por agência (contratos e utilizadores)');
+ok($err(fn()=>$bc->update($ureq('PUT',['codigo'=>'SEDE','nome'=>'Sede','activo'=>false],$admin),$sede))===422,'a agência principal não pode ser desactivada');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

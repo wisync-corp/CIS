@@ -47,7 +47,9 @@ final class UserController extends Controller
             'role_label' => Permissions::ROLES[$u->role]['label'] ?? $u->role, 'active' => (bool) $u->active,
             'must_change_password' => (bool) $u->must_change_password,
             'last_login_at' => $u->last_login_at ? (string) $u->last_login_at : null, 'created_at' => $u->created_at ? (string) $u->created_at : null,
-            'sessoes' => $u->tokens()->count()];
+            'sessoes' => $u->tokens()->count(),
+            'branch_id' => isset($u->branch_id) && $u->branch_id !== null ? (int) $u->branch_id : null,
+            'agencia' => isset($u->branch_id) && $u->branch_id !== null ? \App\Support\Branches::label((int) $u->branch_id) : null];
     }
 
     /** Pelo menos um administrador activo tem de existir sempre. */
@@ -85,12 +87,14 @@ final class UserController extends Controller
             'email' => ['required', 'email', 'max:190', Rule::unique('users', 'email')],
             'telefone' => ['nullable', 'string', 'max:30'],
             'role' => ['required', Rule::in(Permissions::roleKeys())],
+            'branch_id' => ['nullable', 'integer', Rule::exists('cis_branches', 'id')],
         ], ['email.unique' => 'Já existe um utilizador com este email.']);
         $temp = self::temporaryPassword();
         $u = DB::transaction(function () use ($d, $temp, $r) {
             $u = User::create(['name' => trim($d['name']), 'email' => strtolower(trim($d['email'])), 'password' => $temp,
                 'role' => $d['role'], 'active' => true]);
-            $u->forceFill(['telefone' => $d['telefone'] ?? null, 'must_change_password' => true, 'created_by' => $r->user()->id])->save();
+            $u->forceFill(['telefone' => $d['telefone'] ?? null, 'must_change_password' => true, 'created_by' => $r->user()->id]
+                + (\App\Support\Branches::ready() ? ['branch_id' => $d['branch_id'] ?? null] : []))->save();
             self::audit($r->user()->id, $u->id, 'criado', 'Função: '.(Permissions::ROLES[$d['role']]['label'] ?? $d['role']));
             return $u;
         });
@@ -108,6 +112,7 @@ final class UserController extends Controller
             'telefone' => ['sometimes', 'nullable', 'string', 'max:30'],
             'role' => ['sometimes', Rule::in(Permissions::roleKeys())],
             'active' => ['sometimes', 'boolean'],
+            'branch_id' => ['sometimes', 'nullable', 'integer', Rule::exists('cis_branches', 'id')],
         ], ['email.unique' => 'Já existe um utilizador com este email.']);
         $me = $r->user();
         $role = $d['role'] ?? $u->role;
@@ -121,14 +126,17 @@ final class UserController extends Controller
         foreach (['name' => 'nome', 'email' => 'email', 'telefone' => 'telefone'] as $k => $label) {
             if (array_key_exists($k, $d) && (string) $d[$k] !== (string) $u->{$k}) $changes[] = $label;
         }
+        $branchChanged = \App\Support\Branches::ready() && array_key_exists('branch_id', $d) && (int) ($d['branch_id'] ?? 0) !== (int) ($u->branch_id ?? 0);
+        if ($branchChanged) $changes[] = 'agência: '.(\App\Support\Branches::label($d['branch_id'] ?? null) ?? 'todas');
         if ($role !== $u->role) $changes[] = 'função: '.(Permissions::ROLES[$u->role]['label'] ?? $u->role).' → '.(Permissions::ROLES[$role]['label'] ?? $role);
         if ($active !== (bool) $u->active) $changes[] = $active ? 'activado' : 'desactivado';
         if (!$changes) return response()->json(['utilizador' => self::present($u), 'notice' => 'Sem alterações.']);
-        $roleChanged = $role !== $u->role;
-        DB::transaction(function () use ($u, $d, $role, $active, $me, $changes, $roleChanged) {
+        $roleChanged = $role !== $u->role || $branchChanged;
+        DB::transaction(function () use ($u, $d, $role, $active, $me, $changes, $roleChanged, $branchChanged) {
             $u->forceFill(array_filter([
                 'name' => isset($d['name']) ? trim($d['name']) : null, 'email' => isset($d['email']) ? strtolower(trim($d['email'])) : null,
-            ], fn ($v) => $v !== null) + ['role' => $role, 'active' => $active] + (array_key_exists('telefone', $d) ? ['telefone' => $d['telefone']] : []))->save();
+            ], fn ($v) => $v !== null) + ['role' => $role, 'active' => $active] + (array_key_exists('telefone', $d) ? ['telefone' => $d['telefone']] : [])
+                + ($branchChanged ? ['branch_id' => $d['branch_id'] ?? null] : []))->save();
             // Mudança de função ou desactivação termina as sessões abertas.
             if (!$active || $roleChanged) $u->tokens()->delete();
             self::audit($me->id, $u->id, 'alterado', implode('; ', $changes));

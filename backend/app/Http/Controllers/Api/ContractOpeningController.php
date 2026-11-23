@@ -301,6 +301,15 @@ final class ContractOpeningController extends Controller
         } finally {
             $db->select('SELECT RELEASE_LOCK(?)', ['cis_open_new_contract']);
         }
+        // Agência do contrato: a do utilizador; quem vê todas pode indicar «agencia_id»; senão, a principal.
+        try {
+            if (\App\Support\Branches::ready() && empty($result['repetido']) && !empty($result['numero'])) {
+                $branch = \App\Support\Branches::userBranch($user)
+                    ?? (is_numeric($request->input('agencia_id')) && \Illuminate\Support\Facades\DB::table('cis_branches')->where('id', (int) $request->input('agencia_id'))->exists() ? (int) $request->input('agencia_id') : null)
+                    ?? \App\Support\Branches::principalId();
+                if ($branch) \App\Support\Branches::assignContract((string) $result['numero'], $branch, (int) $user->id);
+            }
+        } catch (\Throwable $e) { report($e); }
         return response()->json($result,201)->header('Cache-Control','no-store, private');
     }
 }

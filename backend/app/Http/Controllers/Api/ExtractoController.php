@@ -390,6 +390,7 @@ final class ExtractoController extends Controller
     public function evidencia(Request $request)
     {
         \App\Support\Permissions::require($request->user(),'extractos');
+        if (is_string($request->query('contrato')) && $request->query('contrato')!=='') \App\Support\Branches::requireContract($request->user(),$request->query('contrato'));
         return $this->guard(fn()=>$this->evidenciaImpl($request));
     }
 
@@ -469,6 +470,7 @@ final class ExtractoController extends Controller
     public function informacao(Request $request)
     {
         \App\Support\Permissions::require($request->user(),'extractos');
+        if (is_string($request->query('contrato')) && $request->query('contrato')!=='') \App\Support\Branches::requireContract($request->user(),$request->query('contrato'));
         return $this->guard(fn()=>$this->informacaoImpl($request));
     }
 

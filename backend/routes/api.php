@@ -38,6 +38,15 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::patch('cis/utilizadores/{id}',[\App\Http\Controllers\Api\UserController::class,'update'])->whereNumber('id')->middleware('throttle:30,1');
     Route::post('cis/utilizadores/{id}/repor-palavra-passe',[\App\Http\Controllers\Api\UserController::class,'resetPassword'])->whereNumber('id')->middleware('throttle:10,1');
     Route::post('cis/utilizadores/{id}/terminar-sessoes',[\App\Http\Controllers\Api\UserController::class,'endSessions'])->whereNumber('id')->middleware('throttle:10,1');
+    // Agências (branches).
+    Route::get('cis/agencias/lista',[\App\Http\Controllers\Api\BranchController::class,'list'])->middleware('throttle:60,1');
+    Route::get('cis/agencias',[\App\Http\Controllers\Api\BranchController::class,'index'])->middleware('throttle:30,1');
+    Route::post('cis/agencias',[\App\Http\Controllers\Api\BranchController::class,'store'])->middleware('throttle:20,1');
+    Route::put('cis/agencias/{id}',[\App\Http\Controllers\Api\BranchController::class,'update'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::post('cis/agencias/{id}/atribuir-cidade',[\App\Http\Controllers\Api\BranchController::class,'assignCity'])->whereNumber('id')->middleware('throttle:10,1');
+    Route::put('cis/agencias/contas/{accountId}',[\App\Http\Controllers\Api\BranchController::class,'assignAccount'])->whereNumber('accountId')->middleware('throttle:30,1');
+    Route::get('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'contractBranch'])->middleware('throttle:60,1');
+    Route::put('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'assignContract'])->middleware('throttle:30,1');
     // Caixa Geral: cadastro e consulta separados de movimentos financeiros.
     Route::prefix('cis/caixa')->group(function() {
         Route::get('contas',[CashController::class,'index'])->middleware('throttle:30,1');

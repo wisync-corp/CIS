@@ -88,6 +88,10 @@ final class CashController extends Controller
         // Lista de contas também para quem recebe pagamentos, abre contratos ou vê extractos.
         $this->access($request, false, ['caixa','cobrancas','contratos.abrir','extractos']);
         $accounts = $this->accountRows((int)$request->user()->id);
+        // Agências: quem está numa agência só vê as contas dela e as partilhadas.
+        if (\App\Support\Branches::userBranch($request->user()) !== null) {
+            $accounts = collect($accounts)->filter(fn ($a) => \App\Support\Branches::accountVisible($request->user(), (int) (is_array($a) ? $a['id'] : $a->id)))->values();
+        }
         return response()->json([
             'accounts' => $accounts,
             'can_write' => filter_var(env('CIS_CASH_WRITES_APPROVED',false),FILTER_VALIDATE_BOOLEAN)

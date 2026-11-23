@@ -14,7 +14,8 @@ class AuthController extends Controller {
         return ['name'=>$user->name,'email'=>$user->email,'role'=>$user->role,
             'role_label'=>Permissions::ROLES[$user->role]['label']??$user->role,
             'permissions'=>Permissions::of($user),
-            'must_change_password'=>(bool)($user->must_change_password??false)];
+            'must_change_password'=>(bool)($user->must_change_password??false),
+            'agencia'=>($b=\App\Support\Branches::userBranch($user))!==null?['id'=>$b,'nome'=>\App\Support\Branches::label($b)]:null];
     }
     public function login(Request $request, LegacyUserVerifier $legacyVerifier) {
         $credentials=$request->validate(['email'=>['required','email'],'password'=>['required','string']]);
