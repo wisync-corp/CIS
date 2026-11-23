@@ -525,7 +525,7 @@ ok(!isset($pg['valores']) && $pg['perfil']['nome_empresa']==='CAPTA Microcrédit
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
-ok(count(data($rc->index($rq([])))['relatorios'])===10,'catálogo com 10 relatórios (4 regulatórios + 6 de gestão)');
+ok(count(data($rc->index($rq([])))['relatorios'])===12,'catálogo com 12 relatórios (4 regulatórios + 5 de gestão + 3 de desempenho)');
 $mStart=now($tz)->startOfMonth()->toDateString();
 $ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
 $ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
