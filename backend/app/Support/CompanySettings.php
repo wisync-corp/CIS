@@ -40,6 +40,9 @@ final class CompanySettings
         'fim_de_semana'           => ['cobranca','lista',['permitir','adiar','antecipar'],'permitir'],
         'modalidade_calendario'   => ['cobranca','lista',['dias_corridos','mesmo_dia_mes'],'dias_corridos'],
         'lembrete_dias_antes'     => ['cobranca','inteiro',[0,30],'2'],
+        'lembrete_no_dia'         => ['cobranca','booleano',null,'1'],
+        'lembretes_atraso_dias'   => ['cobranca','texto',40,'1,7,15,30'],
+        'dias_sem_contacto'       => ['cobranca','inteiro',[1,90],'7'],
         'canal_notificacao'       => ['cobranca','lista',['whatsapp_web','whatsapp','nenhum'],'whatsapp_web'],
         // Credit scoring
         'score_minimo'            => ['scoring','inteiro',[0,100],'60'],

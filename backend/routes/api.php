@@ -144,6 +144,10 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('contractos/{numero}/ficha',[ContractProfileController::class,'show'])->middleware('throttle:20,1');
         Route::get('contractos/{numero}/recibos',[\App\Http\Controllers\Api\ContractReceiptController::class,'index'])->middleware('throttle:30,1');
         Route::post('contractos/{numero}/alteracao-credito',[ContractCollectionController::class,'creditChange'])->middleware('throttle:20,1');
+        Route::get('contractos/{numero}/contactos',[\App\Http\Controllers\Api\CollectionContactController::class,'index'])->middleware('throttle:60,1');
+        Route::post('contractos/{numero}/contactos',[\App\Http\Controllers\Api\CollectionContactController::class,'store'])->middleware('throttle:60,1');
+        Route::post('contactos/{id}/cancelar-promessa',[\App\Http\Controllers\Api\CollectionContactController::class,'cancelPromise'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::get('cobranca/agenda',[\App\Http\Controllers\Api\CollectionContactController::class,'agenda'])->middleware('throttle:60,1');
         Route::get('contractos/{numero}/historico-alteracoes',[ContractCollectionController::class,'history'])->middleware('throttle:30,1');
     });
     Route::prefix('cis')->middleware(\App\Http\Middleware\RequireTestDataApproval::class)->group(function(){

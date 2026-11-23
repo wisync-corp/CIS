@@ -51,6 +51,9 @@ final class ReportController extends Controller
             ['id'=>'atrasos','grupo'=>'Gestão','titulo'=>'Antiguidade dos atrasos','periodo'=>'data',
              'descricao'=>'Valor vencido por escalões de dias e lista por contrato, com contacto e último pagamento.',
              'base_legal'=>'Relatório de gestão interna (acompanhamento do risco de crédito).'],
+            ['id'=>'promessas','grupo'=>'Gestão','titulo'=>'Contactos e promessas de pagamento','periodo'=>'intervalo',
+             'descricao'=>'Contactos de cobrança registados no período e promessas de pagamento: cumpridas, falhadas e pendentes, por quem registou.',
+             'base_legal'=>'Gestão da cobrança: acompanhamento dos contactos e do cumprimento das promessas dos mutuários.'],
             ['id'=>'abates','grupo'=>'Gestão','titulo'=>'Créditos abatidos e recuperações','periodo'=>'intervalo',
              'descricao'=>'Contratos abatidos (write-off) no período, valor abatido, quanto já foi recuperado e saldo; recuperações recebidas no período.',
              'base_legal'=>'Gestão do risco de crédito: registo dos créditos considerados incobráveis e das recuperações posteriores.'],
@@ -140,6 +143,7 @@ final class ReportController extends Controller
                 'operadores'=>$this->operadores($ini,$fim),
                 'carteira'=>$this->carteira($ini,$fim),
                 'abates'=>$this->abates($ini,$fim),
+                'promessas'=>$this->promessas($ini,$fim),
                 'agentes'=>$this->agentes($ini,$fim),
                 'evolucao'=>$this->evolucao((int)($p['ano']??now('Africa/Maputo')->year)),
                 'caixa'=>$this->caixa($ini,$fim),
@@ -501,6 +505,45 @@ final class ReportController extends Controller
         return $this->extracto()->where('Tipo de Movimento','Saídas')->where('Descrição','like','%Aumento de Crédito%')
             ->whereBetween('Data da Operação',[$ini,$fim])->get(['Contracto','Valor','usuario','Data da Operação as d'])
             ->map(fn($m)=>['c'=>(string)$m->Contracto,'v'=>(float)$m->Valor,'u'=>trim((string)$m->usuario),'d'=>self::d($m->d)]);
+    }
+
+    /** Contactos de cobrança e promessas de pagamento. */
+    private function promessas(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        abort_unless(\App\Http\Controllers\Api\CollectionContactController::ready(),503,'Contactos e promessas ainda não instalados.');
+        $nums=$this->rows()->pluck('Nr do Contracto')->unique()->map(fn($n)=>(string)$n)->values()->all();
+        \App\Http\Controllers\Api\CollectionContactController::evaluate($nums);
+        $c=DB::table('cis_collection_contacts')->whereIn('contract_number',$nums?:['__none__'])
+            ->whereBetween('created_at',[$ini.' 00:00:00',$fim.' 23:59:59'])->get();
+        $names=self::userNames();$per=[];
+        foreach ($c as $x) {
+            $k=$names[(int)$x->user_id]??'—';
+            $per[$k]??=['n'=>0,'p'=>0,'ok'=>0,'ko'=>0,'pend'=>0,'v'=>0.0,'pago'=>0.0];
+            $per[$k]['n']++;
+            if ($x->promessa_estado) {
+                $per[$k]['p']++;$per[$k]['v']+=(float)$x->promessa_valor;$per[$k]['pago']+=(float)($x->promessa_pago??0);
+                if ($x->promessa_estado==='cumprida') $per[$k]['ok']++;
+                elseif ($x->promessa_estado==='falhada') $per[$k]['ko']++;
+                elseif ($x->promessa_estado==='pendente') $per[$k]['pend']++;
+            }
+        }
+        $lines=[];foreach ($per as $k=>$x) $lines[]=[$k,(string)$x['n'],(string)$x['p'],(string)$x['ok'],(string)$x['ko'],(string)$x['pend'],self::pct($x['ok'],$x['ok']+$x['ko']),self::m($x['v']),self::m($x['pago'])];
+        usort($lines,fn($a,$b)=>(int)$b[1]<=>(int)$a[1]);
+        $client=$this->rows()->groupBy('Nr do Contracto')->map(fn($g)=>(string)$g->first()->{'Nome do Cliente'});
+        $failed=$c->where('promessa_estado','falhada')->sortByDesc('promessa_data')->map(fn($x)=>[self::d($x->promessa_data),(string)$x->contract_number,$client[$x->contract_number]??'',
+            self::m((float)$x->promessa_valor),self::m((float)($x->promessa_pago??0)),$names[(int)$x->user_id]??'—'])->values()->all();
+        $ok=$c->where('promessa_estado','cumprida')->count();$ko=$c->where('promessa_estado','falhada')->count();
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Promessa cumprida = entradas no Extracto do contrato, desde o contacto até à data prometida, iguais ou superiores ao valor prometido. Taxa de cumprimento = cumpridas ÷ (cumpridas + falhadas).',
+            'resumo'=>[['Contactos registados',(string)$c->count()],['Promessas',(string)$c->whereNotNull('promessa_estado')->count()],['Cumpridas',(string)$ok],['Falhadas',(string)$ko],
+                ['Taxa de cumprimento',self::pct($ok,$ok+$ko).' %']],
+            'seccoes'=>[
+                ['titulo'=>'Por quem registou','colunas'=>['Utilizador','Contactos','Promessas','Cumpridas','Falhadas','Pendentes','Cumprimento (%)','Prometido (MT)','Recebido (MT)'],'linhas'=>$lines],
+                ['titulo'=>'Promessas falhadas','colunas'=>['Data prometida','Contrato','Mutuário','Prometido (MT)','Recebido (MT)','Registado por'],'linhas'=>$failed],
+            ],
+        ];
     }
 
     /** Abates de crédito (histórico imutável) e recuperações. */

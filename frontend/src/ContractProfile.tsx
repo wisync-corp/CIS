@@ -1,16 +1,17 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {useCan} from './perms';
 import {useBranches} from './branches';
-import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
+import {PhoneCall,ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
 import CreditChanges from './CreditChanges';
+import ContractContacts from './ContractContacts';
 import PortfolioOwner from './PortfolioOwner';
 import ContractDocument from './ContractDocument';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 
 type Item=Record<string,string|number|null>;
 type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[];desembolso?:{nr:number;valor:string|number;data:string;conta_id:number|null;conta:string|null;referencia:string|null}|null;reforcos?:{nr:number;valor:string;data:string}[];abate?:{valor:string;recuperado:string;saldo:string;data:string;motivo:string}|null};
-type Tab='Contrato'|'Plano de pagamentos'|'Condições financeiras'|'Pagamentos'|'Documento do contrato';
+type Tab='Contrato'|'Plano de pagamentos'|'Condições financeiras'|'Pagamentos'|'Contactos'|'Documento do contrato';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
  {tab:'Contrato',icon:FileText,fields:[
@@ -176,13 +177,14 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
       {name:'Condições financeiras' as Tab,icon:Wallet,detail:'Termos do crédito'},
       {name:'Plano de pagamentos' as Tab,icon:CalendarDays,detail:'Vencimentos'},
       {name:'Pagamentos' as Tab,icon:ReceiptText,detail:'Recebimentos'},
+      {name:'Contactos' as Tab,icon:PhoneCall,detail:'Contactos e promessas'},
       {name:'Documento do contrato' as Tab,icon:Eye,detail:'Gerar e imprimir'}
      ]).map(({name,icon:Icon,detail})=><button type="button" key={name} className={tab===name?'selected':''} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}>
       <Icon size={19}/><span>{name}<small>{detail}</small></span><ChevronRight className="cis-credit-nav-chevron" size={15}/></button>)}
     </nav>
     <div className="cis-profile-content">
-     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de pagamentos'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':tab==='Documento do contrato'?'Contrato gerado a partir do modelo das Definições, com os dados deste contrato.':'Informações essenciais do contrato.'}</p></div></header>
-     {tab==='Pagamentos'?<>{can('contratos.alterar')&&<CreditChanges key={numero} token={token} numero={numero} installments={data.installments} onChanged={()=>void load()}/>}<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/></>:tab==='Documento do contrato'?<section className="cis-contract-operation">
+     <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de pagamentos'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':tab==='Contactos'?'Contactos de cobrança com o mutuário, promessas de pagamento e próximos contactos.':tab==='Documento do contrato'?'Contrato gerado a partir do modelo das Definições, com os dados deste contrato.':'Informações essenciais do contrato.'}</p></div></header>
+     {tab==='Contactos'?<ContractContacts token={token} numero={numero} suggested={financialSnapshot.nextDue?String(financialSnapshot.nextDue['Valor a Pagar']??''):undefined}/>:tab==='Pagamentos'?<>{can('contratos.alterar')&&<CreditChanges key={numero} token={token} numero={numero} installments={data.installments} onChanged={()=>void load()}/>}<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/></>:tab==='Documento do contrato'?<section className="cis-contract-operation">
       <ContractDocument token={token} numero={String(contract?.['Nr do Contracto']??numero)}/>
       <h4 style={{marginTop:24}}>Documento original (sistema antigo)</h4>
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>
