@@ -8,9 +8,9 @@ COMPOSE=(sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f
 echo 'A validar sintaxe do controlador financeiro...'
 bash -n deploy/activate-financial-workflows.sh
 echo 'A reconstruir a API e a interface privada com os ficheiros do GitHub...'
-"${COMPOSE[@]}" up -d --no-deps --build api-preview web-preview
+"${COMPOSE[@]}" up -d --no-deps --build api-preview streamlit-preview web-preview
 echo 'Estado dos serviços:'
-"${COMPOSE[@]}" ps api-preview web-preview
+"${COMPOSE[@]}" ps api-preview streamlit-preview web-preview
 echo 'A verificar rotas de contractos (sem criação de contrato)...'
 "${COMPOSE[@]}" exec -T api-preview php artisan route:list --path=api/cis/contractos
 echo 'A verificar resposta HTTP local do frontend (apenas loopback)...'

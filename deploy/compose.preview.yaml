@@ -70,11 +70,15 @@ services:
       SESSION_DRIVER: file
     networks: [private]
     # API não exposta directamente.
+  streamlit-preview:
+    build: ../streamlit-dashboard
+    restart: unless-stopped
+    networks: [private]
   web-preview:
     build:
       context: ../frontend
       dockerfile: Dockerfile.preview
-    depends_on: [api-preview]
+    depends_on: [api-preview, streamlit-preview]
     ports:
       - "127.0.0.1:8080:8080"
     networks: [private, preview_public]

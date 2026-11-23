@@ -5,6 +5,14 @@
     handle /api/* {
         reverse_proxy api-preview:8000
     }
+    @dashboard path /dashboard /dashboard/*
+    handle @dashboard {
+        forward_auth api-preview:8000 {
+            uri /api/streamlit/verificar
+            header_up Accept application/json
+        }
+        reverse_proxy streamlit-preview:8501
+    }
     handle /up {
         reverse_proxy api-preview:8000
     }
@@ -21,10 +29,12 @@
         try_files {path} /index.html
         file_server
     }
+    header @dashboard X-Frame-Options SAMEORIGIN
+    @outsideDashboard not path /dashboard /dashboard/*
+    header @outsideDashboard X-Frame-Options DENY
     header {
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
-        X-Frame-Options DENY
         Cache-Control "no-store"
     }
 }
