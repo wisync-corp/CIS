@@ -3,7 +3,7 @@ import {ArrowUpRight,Archive,RotateCcw,ChevronRight} from 'lucide-react';
 
 type Row=Record<string,string|number|null>;
 type Operation='reforco'|'abate'|'recuperacao';
-type Result={valor:string;capital?:string;juros?:string;valor_a_pagar?:string;saldo_recuperavel?:string;saldo_apos_operacao?:string;vencimento?:string;taxa?:number;prestacoes?:number;notice:string};
+type Result={valor:string;capital?:string;juros?:string;prazo?:string;periodo_referencia?:number|null;origem_taxa?:'manual'|'tabela'|'prestacao';valor_a_pagar?:string;saldo_recuperavel?:string;saldo_apos_operacao?:string;vencimento?:string;taxa?:number;prestacoes?:number;notice:string};
 type Account={id:number;code:string;name:string;status:string};
 const api=import.meta.env.VITE_API_URL||'/api';
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -16,7 +16,6 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
  const [order,setOrder]=useState('');
  const [amount,setAmount]=useState('');
  const [rate,setRate]=useState<string|null>(null);
- const selectedRate=fixed.find(row=>String(row.Ordem)===order)?.['% de Juro'];
  const [accounts,setAccounts]=useState<Account[]>([]);
  const [account,setAccount]=useState('');
  const [reference,setReference]=useState('');
@@ -99,7 +98,7 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
       {choices.map(row=><option key={String(row.Ordem)} value={String(row.Ordem)}>Prestação {row['Nº da Parcela']}</option>)}
      </select></label>
      <label>Montante (MT)<input inputMode="decimal" value={amount} onChange={e=>{resetPreview();setAmount(e.target.value);}}/></label>
-     {operation==='reforco'&&<label>Taxa de juro (%)<input type="number" min="0" max="100" step="1" value={rate??String(selectedRate??'')} disabled={!order} onBlur={()=>{if(rate==='')setRate(null);}} onChange={e=>{resetPreview();setRate(e.target.value);}}/><small>Preenchida com a taxa da prestação. Pode alterá-la antes de confirmar.</small></label>}
+     {operation==='reforco'&&<label>Taxa de juro (%)<input type="number" min="0" max="100" step="1" value={rate??String(preview?.taxa??'')} placeholder="Calculada ao digitar" disabled={!order} onBlur={()=>{if(rate==='')setRate(null);}} onChange={e=>{resetPreview();setRate(e.target.value);}}/><small>Sugerida pela faixa do capital após o reforço e pelo prazo em vigor. Pode alterá-la antes de confirmar.</small></label>}
      <label>{operation==='reforco'?'Conta de origem':'Conta receptora'}<select value={account} onChange={e=>{setAccount(e.target.value);setRequestKey('');}}>
       <option value="">Seleccione uma conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}
      </select></label>
@@ -114,8 +113,9 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
     {preview.capital!=null&&<div><dt>Capital após o reforço</dt><dd>{money.format(Number(preview.capital))} MT</dd></div>}
     {preview.juros!=null&&<div><dt>Valor dos juros</dt><dd>{money.format(Number(preview.juros))} MT</dd></div>}
     {preview.valor_a_pagar&&<div><dt>Valor da prestação</dt><dd>{money.format(Number(preview.valor_a_pagar))} MT</dd></div>}
+    {preview.prazo&&<div><dt>Prazo em vigor</dt><dd>{preview.prazo}</dd></div>}
     {preview.vencimento&&<div><dt>Vencimento mantido</dt><dd>{preview.vencimento.split('-').reverse().join('/')}</dd></div>}
-    {preview.taxa!==undefined&&<div><dt>Taxa de juro</dt><dd>{preview.taxa}%</dd></div>}
+    {preview.taxa!==undefined&&<div><dt>Taxa de juro</dt><dd>{preview.taxa}%{preview.origem_taxa==='tabela'?' · Tabela de '+preview.periodo_referencia+' dias':preview.origem_taxa==='manual'?' · Taxa indicada':' · Taxa actual da prestação'}</dd></div>}
     {preview.saldo_apos_operacao&&<div><dt>Saldo recuperável após operação</dt><dd>{money.format(Number(preview.saldo_apos_operacao))} MT</dd></div>}
    </dl></div>}
    <button type="button" className="cis-collections-primary" disabled={saving||!preview||reason.trim().length<5||(cash&&(!account||reference.trim().length<4))}

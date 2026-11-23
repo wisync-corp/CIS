@@ -976,7 +976,11 @@ ok(collect($ex['linhas'])->every(fn($l)=>in_array((string)($l['contrato']??$l['C
 
 echo "== Reforço, abate e recuperação de crédito\n";
 $changeAccount=$acc('CREDITO-TESTE','5000.00');
-$creditOrder=$row(['Nr do Contracto'=>'C-4200','Nº'=>4200,'Valor Pago'=>0,'Valor de Juros'=>150,'Valor a Pagar'=>1150]);
+$db->table('cis_tabela_juros')->insert([
+    ['limite_inferior'=>1001,'limite_superior'=>1250,'taxa'=>25,'periodo_referencia'=>15],
+    ['limite_inferior'=>1251,'limite_superior'=>1500,'taxa'=>30,'periodo_referencia'=>15],
+]);
+$creditOrder=$row(['Nr do Contracto'=>'C-4200','Nº'=>4200,'Prazo/Duração'=>'15 Dias','Valor Pago'=>0,'Valor de Juros'=>150,'Valor a Pagar'=>1150]);
 $creditBefore=$db->table('Contractos')->where('Ordem',$creditOrder)->first();
 $creditProfile=data((new \App\Http\Controllers\Api\ContractProfileController())->show(req('/x',[],$user),'C-4200'));
 ok(($creditProfile['installments'][0]['Tipo de Juro']??null)==='Fixo','a ficha expõe o tipo de juro de cada prestação para o reforço');
@@ -988,9 +992,11 @@ $preview=$change($reinforce);
 $automaticRate=$change(array_diff_key($reinforce,['taxa'=>true]));
 $editedRate=$change(array_replace($reinforce,['taxa'=>20]));
 ok((float)($creditProfile['installments'][0]['% de Juro']??-1)===15.0
-    && $automaticRate['taxa']===15 && $automaticRate['capital']==='1200.00'
-    && $automaticRate['juros']==='180.00' && $automaticRate['valor_a_pagar']==='1380.00',
-    'prévia usa automaticamente a taxa da prestação e discrimina capital, juros e prestação');
+    && $automaticRate['taxa']===25 && $automaticRate['periodo_referencia']===15 && $automaticRate['origem_taxa']==='tabela' && $automaticRate['capital']==='1200.00'
+    && $automaticRate['juros']==='300.00' && $automaticRate['valor_a_pagar']==='1500.00',
+    'prévia usa a tabela do prazo em vigor e discrimina capital, juros e prestação');
+$anotherBand=$change(array_replace(array_diff_key($reinforce,['taxa'=>true]),['valor'=>'300.00']));
+ok($anotherBand['taxa']===30 && $anotherBand['capital']==='1300.00','alterar o montante actualiza a faixa e a taxa sugerida');
 ok($editedRate['taxa']===20 && $editedRate['juros']==='240.00' && $editedRate['valor_a_pagar']==='1440.00',
     'alterar a taxa recalcula os juros e o valor da prestação');
 

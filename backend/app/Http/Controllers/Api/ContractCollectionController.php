@@ -976,11 +976,27 @@ final class ContractCollectionController extends Controller
                 $capital = (int)$row->Capital;
                 $principal = (int)$row->{'Amortização'};
                 abort_unless($capital>0 && $principal>0 && $principal<=$capital,409,'Capital ou amortização da prestação não identificável.');
-                $rate = (int)($d['taxa'] ?? $row->{'% de Juro'});
-                abort_unless($rate>=0 && $rate<=100,409,'Taxa inválida.');
                 $increment = intdiv($amount,100);
                 abort_unless($capital+$increment<=2147483647,422,'O capital ultrapassa o limite do contrato.');
                 $newPrincipal = $principal+$increment;
+                [$unit,$length,$term] = $this->renewalTerm($db,$row);
+                $period = match (true) {
+                    $unit==='days' && in_array($length,[14,15],true) => 15,
+                    ($unit==='months' && $length===1) || ($unit==='days' && $length===30) => 30,
+                    default => null,
+                };
+                $tableRate = null;
+                if ($period !== null) {
+                    $rates = DB::table('cis_tabela_juros')->where('periodo_referencia',$period)
+                        ->where('limite_inferior','<=',$newPrincipal)->where('limite_superior','>=',$newPrincipal)
+                        ->limit(2)->pluck('taxa');
+                    if ($rates->count()===1 && is_numeric($rates[0]) && floor((float)$rates[0])===(float)$rates[0]) {
+                        $tableRate = (int)$rates[0];
+                    }
+                }
+                $rate = $d['taxa'] ?? $tableRate ?? $row->{'% de Juro'};
+                abort_unless(is_numeric($rate) && (float)$rate>=0 && (float)$rate<=100,409,'Indique uma taxa de juro válida.');
+                $rate = (int)$rate;
                 $interest = self::isCisContract($row)
                     ? LegacyContractPricing::upwards($newPrincipal*$rate/100)*100
                     : (int) round($newPrincipal*$rate);
@@ -990,6 +1006,8 @@ final class ContractCollectionController extends Controller
                     'Valor de Juros'=>self::money($row,$interest),'Valor a Pagar'=>self::money($row,$total),'Valor Pago'=>0];
                 $details = ['capital'=>CashAccountLedger::amount($newPrincipal*100),'juros'=>CashAccountLedger::amount($interest),
                     'valor_a_pagar'=>CashAccountLedger::amount($total),'taxa'=>$rate,
+                    'taxa_tabela'=>$tableRate,'periodo_referencia'=>$period,'prazo'=>$term,
+                    'origem_taxa'=>isset($d['taxa'])?'manual':($tableRate!==null?'tabela':'prestacao'),
                     'vencimento'=>self::date($row->{'Data de Cobrança'},'Data de vencimento')->toDateString()];
                 if ($commit) {
                     [, $available] = CashAccountLedger::availableOn($db,$account,$date);
