@@ -7,7 +7,7 @@ import ContractDocument from './ContractDocument';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 
 type Item=Record<string,string|number|null>;
-type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[]};
+type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[];desembolso?:{nr:number;valor:string|number;data:string;conta_id:number|null;conta:string|null;referencia:string|null}|null};
 type Tab='Contrato'|'Plano de pagamentos'|'Condições financeiras'|'Pagamentos'|'Documento do contrato';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
@@ -141,7 +141,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <div className="cis-profile-heading">
      <span>FICHA DE CRÉDITO · {numero}</span>
      <h2>{format(contract,'Nome do Cliente')}</h2>
-     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><ContractBranch numero={numero} token={token}/><span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><ContractBranch numero={numero} token={token}/>{data.desembolso&&<span title={'Desembolso de '+Number(data.desembolso.valor).toLocaleString('pt-MZ')+' MT · Extracto n.º '+data.desembolso.nr+(data.desembolso.referencia?' · Ref. '+data.desembolso.referencia:'')}><Wallet size={14}/> Conta: {data.desembolso.conta??'sem conta da Caixa'}</span>}<span>Início: {format(contract,'Data de Inicio','date')}</span></div>
     </div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>

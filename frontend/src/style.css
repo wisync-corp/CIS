@@ -1915,3 +1915,8 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-newclient-dup ul{margin:0 0 8px;padding-left:18px}
 .cis-newclient-dup li{display:flex;align-items:center;gap:10px;margin:3px 0}
 .cis-newclient-dup label{display:flex;align-items:center;gap:8px;font-weight:600}
+
+/* Abertura de contrato: conta de saída escolhida no formulário */
+.cis-contract-chosen-account{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--cis-line,#e3e8ef);border-radius:12px;background:#f8fafc}
+.cis-contract-chosen-account span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+.cis-contract-chosen-account small{color:#475569}
