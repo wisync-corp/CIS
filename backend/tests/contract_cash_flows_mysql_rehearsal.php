@@ -1194,7 +1194,7 @@ ok($e6===null,'mutuário atribuído à agência passa a ser visível nela');
 $ag2=new User();$ag2->forceFill(['name'=>'Beatriz Agente','email'=>'beatriz@ci.test','password'=>bcrypt('x'),'role'=>'agente','active'=>1,'must_change_password'=>false])->save();
 $bk=data($pc->assignClientsBulk($ureq('POST',['user_id'=>$ag2->id,'agencia'=>$sede,'so_sem_agente'=>true],$admin)));
 ok($bk['atribuidos']>=1 && $db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',9901)->exists() && !$db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',7)->exists(),'atribuição em massa de mutuários sem agente a um agente');
-ok($err(fn()=>$pc->assignClientsBulk($ureq('POST',['user_id'=>$c1->id,'agencia'=>$mat],$admin)))===422,'atribuição de mutuários só a agentes');
+ok($err(fn()=>$pc->assignClientsBulk($ureq('POST',['user_id'=>(int)User::query()->where('email','carla@ci.test')->value('id'),'agencia'=>$mat],$admin)))===422,'atribuição de mutuários só a agentes');
 \App\Support\Portfolio::reset();
 // Dossier
 $DC=new \App\Http\Controllers\Api\CreditDossierController();
