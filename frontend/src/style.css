@@ -1887,3 +1887,19 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-branch-active{flex-direction:row!important;align-items:center;gap:8px!important}.cis-branch-active input{width:auto!important}
 .cis-contract-branch select{font:inherit;font-weight:800;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;border-radius:7px;padding:2px 6px}
 .cis-contract-branch select option{color:#101828}
+
+/* Glossário: separadores e funções */
+.cis-glossary-tabs{display:flex;gap:6px;border-bottom:1px solid var(--cis-border);margin:4px 0 12px}
+.cis-glossary-tabs button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:800;border:0;border-bottom:3px solid transparent;background:transparent;padding:9px 12px;cursor:pointer;color:var(--cis-text-muted)}
+.cis-glossary-tabs button b{background:#f2f4f7;border-radius:99px;padding:0 7px;font-size:calc(11px * var(--cis-fs));color:var(--cis-heading)}
+.cis-glossary-tabs button.on{color:var(--cis-primary);border-bottom-color:var(--cis-primary)}
+.cis-glossary-roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.cis-glossary-roles>p{grid-column:1/-1;margin:0}
+.cis-glossary-role{border:1px solid var(--cis-border);border-radius:14px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:8px}
+.cis-glossary-role p{margin:0;font-size:calc(13px * var(--cis-fs))}
+.cis-glossary-role .cis-users-role{font-size:calc(13px * var(--cis-fs));padding:4px 12px}
+.cis-glossary-role-cols{display:grid;grid-template-columns:1fr;gap:8px}
+.cis-glossary-role h5{margin:4px 0;font-size:calc(11px * var(--cis-fs));text-transform:uppercase;letter-spacing:.05em;color:var(--cis-text-muted)}
+.cis-glossary-role ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:calc(12.5px * var(--cis-fs))}
+.cis-glossary-role li{display:flex;gap:6px;align-items:flex-start}.cis-glossary-role li svg{flex:0 0 auto;margin-top:2px}
+.cis-glossary-role li.yes svg{color:#067647}.cis-glossary-role li.no{color:var(--cis-text-muted)}.cis-glossary-role li.no svg{color:#d92d20}

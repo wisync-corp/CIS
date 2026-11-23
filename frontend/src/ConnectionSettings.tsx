@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2} from 'lucide-react';
+import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2,XCircle} from 'lucide-react';
 import {useCan} from './perms';
 import UsersAdmin from './UsersAdmin';
 import BranchesAdmin from './BranchesAdmin';
@@ -7,7 +7,7 @@ import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type
 import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
 import {PriceTable,MovementTypes} from './Parametrizacao';
 import ContractTemplates from './ContractTemplates';
-import {GLOSSARIO} from './glossario';
+import {GLOSSARIO,FUNCOES} from './glossario';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 type Status={backend:string;legacy_connection_configured:boolean;tls_ca_configured:boolean;test_data_gate_open:boolean;records_access:string;note:string};
@@ -31,7 +31,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
   {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'agencias',title:'Agências',icon:Building2},{id:'conta',title:'A minha conta',icon:KeyRound}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
  const nav=NAV.map(g=>({...g,items:g.items.filter(i=>i.id==='utilizadores'?manageUsers:i.id==='agencias'?admin:i.id==='conta'||i.id==='aparencia'||i.id==='glossario'?true:admin)})).filter(g=>g.items.length);
- const [gq,setGq]=useState('');
+ const [gq,setGq]=useState('');const [gTab,setGTab]=useState<'termos'|'funcoes'>('termos');
  const isCompany=COMPANY_SECTIONS.some(s=>s.id===tab);
  return <div className="cis-settings-page cis-settings-layout">
   {<nav className="cis-settings-nav" aria-label="Secções das definições">{nav.map(g=><div key={g.grupo}><span>{g.grupo}</span>
@@ -68,10 +68,21 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
    </div>
   </section>}
   {tab==='glossario'&&<section className="cis-panel cis-co-section cis-glossary">
-   <div className="cis-co-section-head"><div><h3>Glossário</h3><p>Termos usados no CIS, nos contratos, extractos e relatórios, para toda a equipa falar a mesma linguagem.</p></div>
-    <label className="cis-rep-search"><input value={gq} onChange={e=>setGq(e.target.value)} placeholder="Pesquisar termo…" aria-label="Pesquisar no glossário"/></label></div>
-   <table className="cis-glossary-table"><thead><tr><th>Termo</th><th>Significado</th></tr></thead>
+   <div className="cis-co-section-head"><div><h3>Glossário</h3><p>Termos usados no CIS e definição das funções da equipa, para todos falarem a mesma linguagem.</p></div>
+    {gTab==='termos'&&<label className="cis-rep-search"><input value={gq} onChange={e=>setGq(e.target.value)} placeholder="Pesquisar termo…" aria-label="Pesquisar no glossário"/></label>}</div>
+   <div className="cis-glossary-tabs" role="tablist" aria-label="Separadores do glossário">
+    <button type="button" role="tab" aria-selected={gTab==='termos'} className={gTab==='termos'?'on':''} onClick={()=>setGTab('termos')}><BookA size={15}/> Termos <b>{GLOSSARIO.length}</b></button>
+    <button type="button" role="tab" aria-selected={gTab==='funcoes'} className={gTab==='funcoes'?'on':''} onClick={()=>setGTab('funcoes')}><UsersRound size={15}/> Funções <b>{FUNCOES.length}</b></button>
+   </div>
+   {gTab==='termos'?<table className="cis-glossary-table"><thead><tr><th>Termo</th><th>Significado</th></tr></thead>
     <tbody>{GLOSSARIO.filter(g=>!gq.trim()||(g.termo+' '+g.significado).toLowerCase().includes(gq.trim().toLowerCase())).map(g=><tr key={g.termo}><td><b>{g.termo}</b></td><td>{g.significado}</td></tr>)}</tbody></table>
+   :<div className="cis-glossary-roles">{FUNCOES.map(f=><article key={f.id} className={'cis-glossary-role r-'+f.id}>
+     <header><span className={'cis-users-role r-'+f.id}>{f.nome}</span></header>
+     <p>{f.definicao}</p>
+     <div className="cis-glossary-role-cols"><div><h5>Pode</h5><ul>{f.pode.map(x=><li key={x} className="yes"><CheckCircle2 size={14}/> {x}</li>)}</ul></div>
+      {f.naoPode.length>0&&<div><h5>Não pode</h5><ul>{f.naoPode.map(x=><li key={x} className="no"><XCircle size={14}/> {x}</li>)}</ul></div>}</div>
+    </article>)}
+    <p className="cis-msg-muted">Cada utilizador pode ainda estar numa agência (vê só os contratos e contas dessa agência) ou em todas. As funções são atribuídas em Definições › Utilizadores.</p></div>}
   </section>}
   {admin&&tab==='ligacao'&&<section className="cis-panel">
    <div className="cis-panel-head"><div><h2>Estado da ligação MySQL</h2><p>Verificação de configuração, sem exposição de credenciais.</p></div><button type="button" className="cis-client-edit" onClick={()=>setReload(x=>x+1)} aria-label="Actualizar estado"><RefreshCw size={18}/></button></div>
