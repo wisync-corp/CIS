@@ -51,6 +51,9 @@ final class StreamlitController extends Controller
             $contractColumns = $schema->getColumnListing('Contractos');
             $method = in_array('M. Pagamento', $contractColumns, true) ? 'M. Pagamento' : 'Forma de Pagamento';
             $contracts->select($fields);
+            if (in_array('Intervalo', $contractColumns, true)) {
+                $contracts->addSelect('Intervalo');
+            }
             if (in_array($method, $contractColumns, true)) {
                 $contracts->selectRaw("`{$method}` AS `M. Pagamento`");
             } else {
