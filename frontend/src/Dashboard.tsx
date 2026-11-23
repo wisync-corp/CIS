@@ -10,7 +10,8 @@ import MessageCenter from './MessageCenter';
 import ReportsDesk from './ReportsDesk';
 import Toaster from './Toaster';
 import {setWaToken} from './waBridge';
-import AnalyticsDashboard from './AnalyticsDashboard';
+import AnalyticsDashboard,{type BootProgress} from './AnalyticsDashboard';
+import BootScreen,{type BootStep} from './BootScreen';
 import Overview,{type ExtractoPreset} from './Overview';
 import SimulatorDesk from './SimulatorDesk';
 import ConnectionSettings from './ConnectionSettings';
@@ -27,7 +28,7 @@ type NoticeData={atraso:number;cobranca:number;antecedencia:number;paginas:numbe
 const noticeMoney=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const nav:{label:string;icon:typeof Users;perm?:Perm}[]=[
- {label:'Visão geral',icon:LayoutDashboard,perm:'ver'},{label:'Dashboard',icon:BarChart3,perm:'relatorios'},{label:'Mutuários',icon:Users,perm:'ver'},
+ {label:'Visão geral',icon:LayoutDashboard,perm:'ver'},{label:'Mutuários',icon:Users,perm:'ver'},
  {label:'Propostas',icon:ClipboardCheck,perm:'propostas.criar'},{label:'Agenda de cobrança',icon:CalendarCheck,perm:'cobrancas'},{label:'Contratos e prestações',icon:FileText,perm:'ver'},{label:'Simulador',icon:CalendarDays,perm:'ver'},
  {label:'Extractos',icon:ReceiptText,perm:'extractos'},{label:'Mensagens',icon:MessageSquare,perm:'mensagens'},{label:'Caixa',icon:Landmark,perm:'caixa'},{label:'Relatórios',icon:BarChart3,perm:'relatorios'},
  {label:'Definições',icon:Settings}
@@ -38,6 +39,22 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const [active,setActiveRaw]=useState(()=>allowedNav[0]?.label??'Definições'),[open,setOpen]=useState(false);
  const setActive=(label:string)=>{if(allowedNav.some(n=>n.label===label))setActiveRaw(label);};
  const [pwOpen,setPwOpen]=useState(false);
+ // Visão geral e Dashboard num só separador; o ecrã de entrada prepara os dois antes de mostrar o sistema.
+ const hasDash=can('relatorios'),hasOverview=can('ver');
+ const [homeTab,setHomeTab]=useState<'resumo'|'dashboard'>('resumo');
+ const [ovReady,setOvReady]=useState(!hasOverview);
+ const [dash,setDash]=useState<BootProgress>({pct:hasDash?5:100,text:'A aguardar'});
+ const [dashDone,setDashDone]=useState<null|{ok:boolean;msg?:string}>(hasDash?null:{ok:true});
+ const [booted,setBooted]=useState(false);
+ useEffect(()=>{if(!booted&&ovReady&&dashDone){const t=window.setTimeout(()=>setBooted(true),dashDone.ok?450:1400);return()=>window.clearTimeout(t);}},[booted,ovReady,dashDone]);
+ useEffect(()=>{const t=window.setTimeout(()=>setOvReady(true),30000);return()=>window.clearTimeout(t);},[]);
+ const bootPct=Math.round(10+(ovReady?(hasDash?20:90):0)+(hasDash?Math.min(100,dash.pct)*0.7:0));
+ const bootSteps:BootStep[]=[
+  {key:'sessao',label:'Sessão e permissões validadas',detail:role,state:'done'},
+  ...(hasOverview?[{key:'visao',label:'Visão geral da carteira',detail:ovReady?'Indicadores do mês calculados':'A calcular carteira, recebimentos e Caixa',state:ovReady?'done':'now'} as BootStep]:[]),
+  ...(hasDash?[{key:'dash',label:'Dashboard de análise',detail:dashDone?(dashDone.ok?'Pronto':dashDone.msg):dash.text,state:dashDone?(dashDone.ok?'done':'warn'):'now'} as BootStep]:[]),
+ ];
+ const bootCurrent=!ovReady?'A calcular a visão geral da carteira':!dashDone?dash.text:dashDone.ok?'Tudo pronto. A entrar…':'A entrar (o Dashboard abre quando estiver pronto)';
  setWaToken(token);
  const [clientProfileOpen,setClientProfileOpen]=useState(false);
  const [extractoContract,setExtractoContract]=useState<string|null>(null);
@@ -78,7 +95,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
    .finally(()=>{if(!ctrl.signal.aborted){setNoticeBusy(false);setNoticeReady(true);}});
   return()=>ctrl.abort();
  },[token,role,noticeKind,noticePage,noticeRefresh]);
- return <PermsContext.Provider value={permissions}><div className="cis-layout">
+ return <PermsContext.Provider value={permissions}>{!booted&&<BootScreen name={name} pct={booted?100:bootPct} current={bootCurrent} steps={bootSteps} onSkip={()=>setBooted(true)}/>}<div className="cis-layout" aria-hidden={!booted}>
   <aside className={'cis-side '+(open?'visible':'')}>
    <div className="cis-brand"><img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
@@ -97,8 +114,13 @@ export default function Dashboard({token, name, role, permissions, agency, theme
      {notices.paginas>1&&<div className="cis-collections-pagination"><button type="button" disabled={noticePage<=1} onClick={()=>setNoticePage(p=>p-1)}>Anterior</button><span>{noticePage} / {notices.paginas}</span><button type="button" disabled={noticePage>=notices.paginas} onClick={()=>setNoticePage(p=>p+1)}>Seguinte</button></div>}
     </>}
    </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Caixa'&&active!=='Simulador'&&<><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
-    <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.' :active==='Dashboard'?'Indicadores de microcrédito, mutuários e desempenho financeiro.':active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Agenda de cobrança'?'Folha de cobrança do dia: promessas de pagamento, contactos agendados, atrasos sem contacto e lembretes automáticos.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Agenda de cobrança'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
-    {active==='Visão geral'?<Overview token={token} onNavigate={setActive} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/>:active==='Dashboard'?<AnalyticsDashboard token={token}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
+    <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?(homeTab==='dashboard'?'Dashboard de análise: carteira, mutuários e desempenho financeiro.':'Visão integrada da carteira de microcrédito e das operações financeiras.') :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Agenda de cobrança'?'Folha de cobrança do dia: promessas de pagamento, contactos agendados, atrasos sem contacto e lembretes automáticos.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Agenda de cobrança'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
+    {active==='Visão geral'&&hasDash&&<div className="cis-home-tabs" role="tablist" aria-label="Visão geral e Dashboard">
+     <button type="button" role="tab" aria-selected={homeTab==='resumo'} className={homeTab==='resumo'?'selected':''} onClick={()=>setHomeTab('resumo')}><LayoutDashboard size={16}/> Visão geral</button>
+     <button type="button" role="tab" aria-selected={homeTab==='dashboard'} className={homeTab==='dashboard'?'selected':''} onClick={()=>setHomeTab('dashboard')}><BarChart3 size={16}/> Dashboard{dashDone&&!dashDone.ok?<em>!</em>:null}</button>
+    </div>}
+    {active==='Visão geral'?(hasOverview?<div hidden={homeTab!=='resumo'}><Overview token={token} onNavigate={setActive} onLoaded={()=>setOvReady(true)} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/></div>:null):active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
+    {hasDash&&<AnalyticsDashboard token={token} visible={active==='Visão geral'&&homeTab==='dashboard'} onProgress={setDash} onReady={(ok,msg)=>setDashDone({ok,msg})}/>}
    </main>
   </div>
   <Toaster/>

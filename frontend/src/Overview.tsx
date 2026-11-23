@@ -18,7 +18,7 @@ const nowMaputo=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/M
 const periodLabel=(m:string,y:string)=>m==='todos'&&y==='todos'?'todo o período':m==='todos'?'o ano '+y:y==='todos'?MONTHS[Number(m)-1].toLowerCase()+' (todos os anos)':MONTHS[Number(m)-1].toLowerCase()+' de '+y;
 
 export type ExtractoPreset={mes:string;ano:string;base:'cobranca'|'pagamento'|'desembolso';estado:'todos'|'aberta'|'vencida'|'paga';rotulo:string};
-export default function Overview({token,onNavigate,onOpenExtracto}:{token:string;onNavigate:(page:string)=>void;onOpenExtracto?:(p:ExtractoPreset)=>void}){
+export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{token:string;onNavigate:(page:string)=>void;onOpenExtracto?:(p:ExtractoPreset)=>void;onLoaded?:()=>void}){
  const [data,setData]=useState<Data|null>(null);
  const [error,setError]=useState('');
  const [loading,setLoading]=useState(true);
@@ -33,8 +33,9 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Não foi possível calcular os indicadores.');return j as Data;})
    .then(d=>{if(!ctrl.signal.aborted)setData(d);})
    .catch(e=>{if(!ctrl.signal.aborted)setError(e instanceof Error?e.message:'Erro ao carregar indicadores.');})
-   .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
+   .finally(()=>{if(!ctrl.signal.aborted){setLoading(false);onLoaded?.();}});
   return()=>ctrl.abort();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
  },[token,refresh,mes,ano,agencia]);
 
  const c=data?.carteira,r=data?.recebimentos,cx=data?.caixa;
