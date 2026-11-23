@@ -114,6 +114,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('extractos/evidencia',[\App\Http\Controllers\Api\ExtractoController::class,'evidencia'])->middleware('throttle:20,1');
         Route::post('contractos/validar-abertura',[ContractOpeningReviewController::class,'validateDraft'])->middleware('throttle:10,1');
         Route::get('contractos/saldo',[ContractOpeningReviewController::class,'cashBalance'])->middleware('throttle:10,1');
+        Route::get('contractos/saldo-conta',[ContractOpeningReviewController::class,'accountBalanceOn'])->middleware('throttle:60,1');
         Route::get('contractos/estado-operacional',ContractOperationalStatusController::class)->middleware('throttle:10,1');
         Route::get('contractos/proximo-numero',[ContractOpeningReviewController::class,'suggestedNumber'])->middleware('throttle:15,1');
         Route::post('contractos/abrir',[ContractOpeningController::class,'store'])->middleware('throttle:3,1');

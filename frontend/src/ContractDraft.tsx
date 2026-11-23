@@ -1,3 +1,4 @@
+import {useCan} from './perms';
 import {useEffect,useState,type FormEvent} from 'react';
 import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw,BadgePlus} from 'lucide-react';
 import {previewContractVba,type ContractPreview} from './contractVbaPreview';
@@ -52,7 +53,7 @@ const fields:Field[]=[
  {key:'cliente_id',label:'ID do mutuário',required:true,hint:'ID real obtido automaticamente após a selecção do mutuário.'},
  {key:'numero',label:'Número do contrato',hint:'Número provisório calculado pelo maior Nº da tabela Contractos. Será confirmado na gravação e pode mudar se outro contrato for criado primeiro.'},
  {key:'cidade',label:'Cidade',required:true},
- {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
+ {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Data em que o dinheiro saiu da conta. O saldo considerado é o da conta nesse dia.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
  {key:'quantia',label:'Capital a desembolsar (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
  {key:'conta_saida',label:'Conta / Caixa de saída do desembolso',required:true,hint:'O capital sai desta conta da Caixa; o contrato e o lançamento de Saída ficam associados a ela.'},
@@ -73,6 +74,7 @@ const groupings=[
  {name:'Sistema de amortização',icon:Wallet,keys:['estrategia_calculo']},
 ];
 export default function ContractDraft({onBack,onContractCreated,token}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string}){
+ const can=useCan();
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
  const [clientSearch,setClientSearch]=useState('');
  const [clients,setClients]=useState<Borrower[]>([]);
@@ -211,6 +213,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
  const [cashAccounts,setCashAccounts]=useState<{id:number;code:string;name:string;status:string;saldo_disponivel?:string|null}[]>([]);
  const [sourceAccount,setSourceAccount]=useState('');
  const [accountsLoaded,setAccountsLoaded]=useState(false);
+ const [dayBalance,setDayBalance]=useState<{data:string;hoje:boolean;pode_data_passada:boolean;saldo_no_dia:string|null;disponivel:string|null;problema:string|null}|null>(null);
  const [disbursementRef,setDisbursementRef]=useState('');
  const [openingKey,setOpeningKey]=useState('');
  useEffect(()=>{
@@ -220,7 +223,17 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   return()=>ctrl.abort();
  },[token]);
  const chosenAccount=cashAccounts.find(a=>String(a.id)===sourceAccount);
- const accountCovers=!!chosenAccount&&Number(chosenAccount.saldo_disponivel??0)>=Number(values.quantia||0);
+ // Saldo da conta na data do desembolso (data passada: menor saldo desse dia em diante).
+ useEffect(()=>{
+  setDayBalance(null);
+  if(!sourceAccount||!/^\d{4}-\d{2}-\d{2}$/.test(values.data_inicio??''))return;
+  const ctrl=new AbortController();
+  const t=window.setTimeout(()=>{fetch(API+'/cis/contractos/saldo-conta?conta_id='+encodeURIComponent(sourceAccount)+'&data='+encodeURIComponent(values.data_inicio),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
+   .then(r=>r.ok?r.json():null).then(d=>{if(d&&!ctrl.signal.aborted)setDayBalance(d);}).catch(()=>{});},250);
+  return()=>{ctrl.abort();window.clearTimeout(t);};
+ },[sourceAccount,values.data_inicio,token]);
+ const availableCash=dayBalance&&dayBalance.disponivel!==null?Number(dayBalance.disponivel):chosenAccount?Number(chosenAccount.saldo_disponivel??0):0;
+ const accountCovers=!!chosenAccount&&!dayBalance?.problema&&availableCash>=Number(values.quantia||0);
  const [openingRetryAt,setOpeningRetryAt]=useState(0);
  const [openingClock,setOpeningClock]=useState(Date.now());
  useEffect(()=>{
@@ -230,7 +243,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
  },[openingRetryAt]);
  const openingCooldownSeconds=Math.max(0,Math.ceil((openingRetryAt-openingClock)/1000));
 
- useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey]);
+ useEffect(()=>{setReview(null);setChecked(false);setMessage('');setPreview(null);setPreviewError('');setConfirmedDisbursement(false);setOpeningError('');},[values,selectedBorrower,quoteKey,sourceAccount]);
  const tipo=values.tipo_juro??'';
  const modalidade=selectedModality;
  const prazoMeses=selectedTerm.includes('Mês')||selectedTerm.includes('Meses')?Number(selectedTerm.slice(0,1)):0;
@@ -259,7 +272,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
-     data_inicio:values.data_inicio
+     data_inicio:values.data_inicio,conta_id:sourceAccount?Number(sourceAccount):null
     })
    });
    if(!result.ok){
@@ -282,7 +295,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   if(Date.now()<openingRetryAt){setOpeningError('Limite temporário de tentativas. Consulte primeiro a carteira para confirmar se o contrato já existe.');return;}
   if(!strategySelected.trim()){setOpeningError('Seleccione uma fórmula de cálculo antes de criar e desembolsar o crédito.');return;}
   if(!chosenAccount||disbursementRef.trim().length<4){setOpeningError('Seleccione a conta de saída e indique a referência do comprovativo.');return;}
-  if(!window.confirm('Confirma que '+values.quantia+' MT saíram da conta '+chosenAccount.code+' para o mutuário? O CIS vai criar o contrato, gravar as prestações e lançar a Saída nessa conta.'))return;
+  if(!window.confirm('Confirma que '+values.quantia+' MT saíram da conta '+chosenAccount.code+' em '+values.data_inicio.split('-').reverse().join('/')+' para o mutuário? O CIS vai criar o contrato, gravar as prestações e lançar a Saída nessa conta.'))return;
   const key=openingKey||(typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():String(Date.now()));
   setOpeningKey(key);
   setOpeningBusy(true);setOpeningError('');
@@ -331,8 +344,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
-    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?(chosenAccount?String(Number(chosenAccount.saldo_disponivel??0)):cashAccounts.length?'':cashBalance):key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='data_inicio'&&!can('contratos.data'))||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
+    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?(chosenAccount?String(availableCash):cashAccounts.length?'':cashBalance):key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -379,15 +392,17 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
       <option value="">{!accountsLoaded?'A carregar contas…':cashAccounts.length?'Seleccionar conta activa':'Sem contas activas'}</option>
       {cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
      </select>
-     <small><Info size={12}/>{!chosenAccount?field.hint:values.quantia?(accountCovers?'Saldo suficiente para o capital indicado.':'Saldo insuficiente nesta conta para o capital indicado.'):'Conta seleccionada.'}</small>
+     <small><Info size={12}/>{!chosenAccount?field.hint:dayBalance?.problema?dayBalance.problema:values.quantia?(accountCovers?'Saldo suficiente '+(dayBalance&&!dayBalance.hoje?'nessa data':'')+' para o capital indicado.':'Saldo insuficiente nesta conta '+(dayBalance&&!dayBalance.hoje?'nessa data ':'')+'para o capital indicado.'):'Conta seleccionada.'}</small>
     </label>;
     return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
      {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:defaultStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&!strategiesForType.includes(choice)}>{key==='modalidade'&&choice==='Uma Parcela'?'Prestação única':choice}{key==='estrategia_calculo'&&!strategiesForType.includes(choice)?' — não aplicável a este juro':''}</option>)}
-      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} step={field.type==='number'?'1':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
+      </select>:<input type={field.type??'text'} disabled={disabled} value={val} required={!disabled&&field.required} min={field.type==='number'?0:undefined} max={key==='data_inicio'?todayMaputo():undefined} step={field.type==='number'?'1':undefined} placeholder={key==='numero'?(numberLoading?'A consultar próximo número…':'Número indisponível'):undefined} onChange={e=>setValues(prev=>({...prev,[key]:e.target.value}))}/>}
      {field.hint&&<small><Info size={12}/>{field.hint}</small>}
      {key==='numero'&&numberError&&<small role="alert">{numberError}</small>}
      {key==='estrategia_calculo'&&tipo&&<small role="status">{strategyCompatible?'Estratégia compatível. Os valores são calculados em MT inteiros e arredondados para cima; a última amortização reconcilia o capital.':'Escolha uma estratégia compatível com o tipo de juro.'}</small>}
+     {key==='saldo_disponivel'&&dayBalance&&!dayBalance.hoje&&dayBalance.saldo_no_dia!==null&&<small role="status">Saldo da conta em {dayBalance.data.split('-').reverse().join('/')}: {Number(dayBalance.saldo_no_dia).toLocaleString('pt-MZ',{minimumFractionDigits:2})} MT{Number(dayBalance.disponivel)<Number(dayBalance.saldo_no_dia)?' · só '+Number(dayBalance.disponivel).toLocaleString('pt-MZ',{minimumFractionDigits:2})+' MT podem sair sem deixar a conta negativa nos dias seguintes':''}.</small>}
+     {key==='data_inicio'&&!can('contratos.data')&&<small role="status">O seu perfil regista desembolsos só com a data de hoje.</small>}
      {key==='saldo_disponivel'&&cashError&&<small role="status">{cashError}</small>}
      {key==='juros'&&fixedRate&&<small role="status" className={priced?'cis-pricing-success':'cis-pricing-pending'}>{quoteLoading?'A consultar a tabela…':priced?`Taxa encontrada: ${Number(quote?.taxa)}% · faixa ${quote?.limite_inferior}–${quote?.limite_superior} MT · ${quote?.periodo_dias} dias`:(quoteError||quote?.message||'Seleccione o período (15 ou 30 dias), o prazo e o montante para consultar a taxa.')}</small>}
     </label>;

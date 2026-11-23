@@ -16,6 +16,7 @@ final class Permissions
         'ver'              => 'Consultar mutuários, contratos, visão geral e simulador',
         'mutuarios.editar' => 'Editar a ficha dos mutuários',
         'contratos.abrir'  => 'Preparar e abrir contratos (desembolso)',
+        'contratos.data'   => 'Abrir contratos com data de desembolso passada',
         'cobrancas'        => 'Registar pagamentos e operações de cobrança; recibos',
         'cobrancas.data'   => 'Registar pagamentos com data passada',
         'caixa'            => 'Caixa: contas, movimentos, transferências, conferência e fecho',
@@ -32,7 +33,7 @@ final class Permissions
     public const ROLES = [
         'administrador' => ['label' => 'Administrador', 'descricao' => 'Acesso total, incluindo utilizadores e definições.', 'perms' => ['*']],
         'gestor' => ['label' => 'Gestor de crédito', 'descricao' => 'Carteira de crédito: mutuários, contratos, cobranças, extractos, mensagens e relatórios.',
-            'perms' => ['ver', 'mutuarios.editar', 'contratos.abrir', 'cobrancas', 'cobrancas.data', 'extractos', 'extractos.geral', 'mensagens', 'relatorios']],
+            'perms' => ['ver', 'mutuarios.editar', 'contratos.abrir', 'contratos.data', 'cobrancas', 'cobrancas.data', 'extractos', 'extractos.geral', 'mensagens', 'relatorios']],
         'financeiro' => ['label' => 'Gestor financeiro', 'descricao' => 'Caixa e tesouraria, recebimentos, extractos e relatórios.',
             'perms' => ['ver', 'cobrancas', 'cobrancas.data', 'caixa', 'extractos', 'extractos.geral', 'relatorios']],
         'cobrador' => ['label' => 'Cobrador / gestor de carteira', 'descricao' => 'Recebe pagamentos com a data de hoje, emite recibos e contacta os mutuários.',

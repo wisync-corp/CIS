@@ -111,9 +111,13 @@ final class ContractOpeningController extends Controller
         }
         // A data da operação é a data efectiva de desembolso, nunca uma
         // data histórica inserida retroactivamente ou futura.
-        if ($d['data_inicio'] !== now('Africa/Maputo')->toDateString()) {
+        $today=now('Africa/Maputo')->toDateString();
+        if ($d['data_inicio'] > $today) {
+            throw ValidationException::withMessages(['data_inicio'=>'A data do desembolso não pode ser futura.']);
+        }
+        if ($d['data_inicio'] !== $today && !\App\Support\Permissions::can($user,'contratos.data')) {
             throw ValidationException::withMessages(['data_inicio'=>
-                'Para desembolso real, a data de início deve ser a data de hoje em Moçambique.']);
+                'O seu perfil só pode registar desembolsos com a data de hoje.']);
         }
         if ($d['tipo_juro']==='Variável' && $d['modalidade']!=='Uma Parcela' ||
             $d['tipo_juro']==='Composto' && $d['modalidade']!=='Mensal') {
@@ -206,9 +210,21 @@ final class ContractOpeningController extends Controller
                     $d['tipo_juro'],$d['modalidade'],(int)$d['prazo_meses'],$d['data_inicio'],
                     $d['estrategia_calculo'],$d['prazo'],(int)$d['periodo_dias']);
                 // Saldo da CONTA escolhida (VBA usava o agregado do Extracto).
-                abort_if($accountBalance<(int)$d['montante']*100,422,
-                    'Saldo insuficiente na conta '.$account->code.' ('
-                    .CashAccountLedger::amount($accountBalance).' MT) para este desembolso.');
+                // Data passada: saldo da conta nesse dia, sem deixar nenhum dia seguinte negativo.
+                if ($d['data_inicio'] !== now('Africa/Maputo')->toDateString()) {
+                    CashAccountLedger::requireDateOpen($account,$d['data_inicio'],'registar o desembolso');
+                    [$atDate,$available]=CashAccountLedger::availableOn($db,$account,$d['data_inicio']);
+                    abort_if($available<(int)$d['montante']*100,422,
+                        'Saldo insuficiente na conta '.$account->code.' em '
+                        .implode('/',array_reverse(explode('-',$d['data_inicio']))).': '
+                        .CashAccountLedger::amount($atDate).' MT nesse dia'
+                        .($available<$atDate?', mas só '.CashAccountLedger::amount($available).' MT podem sair sem deixar a conta negativa nos dias seguintes':'')
+                        .'.');
+                } else {
+                    abort_if($accountBalance<(int)$d['montante']*100,422,
+                        'Saldo insuficiente na conta '.$account->code.' ('
+                        .CashAccountLedger::amount($accountBalance).' MT) para este desembolso.');
+                }
 
                 // Evitar repetição por duplo clique/reenvio para a mesma
                 // combinação. Revisão manual caso haja outro crédito legítimo igual.

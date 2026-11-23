@@ -35,6 +35,37 @@ final class ContractOpeningReviewController extends Controller
             'consulta_apenas'=>true])->header('Cache-Control','no-store, private');
     }
 
+    /** Saldo de uma conta da Caixa numa data (para desembolsos com data passada). Só leitura. */
+    public function accountBalanceOn(Request $request)
+    {
+        $user=$request->user();
+        \App\Support\Permissions::require($user,'contratos.abrir');
+        $q=$request->validate(['conta_id'=>['required','integer','min:1'],'data'=>['required','date_format:Y-m-d']]);
+        return response()->json($this->balanceOn((int)$q['conta_id'],$q['data'],$user))->header('Cache-Control','no-store, private');
+    }
+
+    private function balanceOn(int $accountId,string $date,$user): array
+    {
+        $today=now('Africa/Maputo')->toDateString();
+        $out=['data'=>$date,'hoje'=>$date===$today,'pode_data_passada'=>\App\Support\Permissions::can($user,'contratos.data'),
+            'saldo_no_dia'=>null,'disponivel'=>null,'problema'=>null];
+        if ($date>$today) { $out['problema']='A data do desembolso não pode ser futura.'; return $out; }
+        if ($date!==$today && !$out['pode_data_passada']) { $out['problema']='O seu perfil só pode registar desembolsos com a data de hoje.'; return $out; }
+        $account=DB::table('cis_cash_accounts')->where('id',$accountId)->first();
+        if (!$account) { $out['problema']='Conta da Caixa inexistente.'; return $out; }
+        try {
+            if ($date!==$today) \App\Services\CashAccountLedger::requireDateOpen($account,$date,'registar o desembolso');
+            [$at,$avail]=$date===$today
+                ? array_fill(0,2,\App\Services\CashAccountLedger::balance(DB::connection(),$account))
+                : \App\Services\CashAccountLedger::availableOn(DB::connection(),$account,$date);
+            $out['saldo_no_dia']=\App\Services\CashAccountLedger::amount($at);
+            $out['disponivel']=\App\Services\CashAccountLedger::amount($avail);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $out['problema']=$e->getMessage();
+        }
+        return $out;
+    }
+
     /**
      * Apenas PRÉVIA do próximo número: não faz reserva nem altera registos.
      * O número definitivo só é atribuído na transacção de abertura, sob lock.
@@ -87,6 +118,7 @@ final class ContractOpeningReviewController extends Controller
             'forma_pagamento' => ['required','string','max:100'],
             'disponibilidade' => ['required','string','max:100'],
             'data_inicio' => ['required','date_format:Y-m-d'],
+            'conta_id' => ['sometimes','nullable','integer','min:1'],
         ]);
 
         $rows = DB::connection('mysql_legacy')->table('Clientes')
@@ -183,6 +215,17 @@ final class ContractOpeningReviewController extends Controller
             $issues[] = 'Modalidade incompatível com a regra de preparação para juro composto.';
         }
 
+        // Data do desembolso e saldo da conta nesse dia.
+        if (!empty($values['conta_id'])) {
+            $b=$this->balanceOn((int)$values['conta_id'],$values['data_inicio'],$request->user());
+            if ($b['problema']) $issues[]=$b['problema'];
+            elseif ((float)$b['disponivel'] < (float)$values['montante']) {
+                $issues[]='Saldo insuficiente na conta nessa data: '.$b['saldo_no_dia'].' MT'
+                    .((float)$b['disponivel']<(float)$b['saldo_no_dia']?' (só '.$b['disponivel'].' MT podem sair sem deixar a conta negativa nos dias seguintes)':'').'.';
+            }
+        } elseif ($values['data_inicio']!==now('Africa/Maputo')->toDateString() && !\App\Support\Permissions::can($request->user(),'contratos.data')) {
+            $issues[]='O seu perfil só pode registar desembolsos com a data de hoje.';
+        }
         // Mesmas condições do endpoint de abertura (que volta a verificar tudo ao gravar).
         $on = fn (string $f) => filter_var(env($f, false), FILTER_VALIDATE_BOOLEAN);
         $blocked = [];
