@@ -9,7 +9,7 @@ import ContractDocument from './ContractDocument';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 
 type Item=Record<string,string|number|null>;
-type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[];desembolso?:{nr:number;valor:string|number;data:string;conta_id:number|null;conta:string|null;referencia:string|null}|null};
+type Payload={contract:Item;installments:Item[];legacy_rows?:Item[];installment_rows:number;notice:string;contract_fields_divergent?:string[];columns_missing_in_database?:string[];desembolso?:{nr:number;valor:string|number;data:string;conta_id:number|null;conta:string|null;referencia:string|null}|null;reforcos?:{nr:number;valor:string;data:string}[];abate?:{valor:string;recuperado:string;saldo:string;data:string;motivo:string}|null};
 type Tab='Contrato'|'Plano de pagamentos'|'Condições financeiras'|'Pagamentos'|'Documento do contrato';
 const API=import.meta.env.VITE_API_URL||'/api';
 const groups:{tab:Tab;icon:typeof FileText;fields:{name:string;label:string;kind?:'date'|'money'|'percent'}[]}[]=[
@@ -125,6 +125,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
  },[data]);
  const currency=(value:number)=>money.format(value)+' MT';
  const firstLoanAmount=contract?.['Quantia Creditada'];
+ const reinforced=(data?.reforcos??[]).reduce((t,r)=>t+Number(r.valor||0),0);
  const sortedInstallments=useMemo(()=>data?.installments.map((item,index)=>({item,index})).sort((a,b)=>{
   const cmp=compareInstallments(a.item,b.item,sortColumn);
   return cmp===0?a.index-b.index:(sortDirection==='asc'?cmp:-cmp);
@@ -150,8 +151,8 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
    </header>
    <div className="cis-credit-highlights" aria-label="Resumo do contrato">
     <article className="cis-credit-highlight cis-credit-highlight-main"><span>Crédito concedido</span>
-     <strong>{validAmount(firstLoanAmount)?currency(Number(firstLoanAmount)):'Não informado'}</strong>
-     <small>Capital inicial registado</small></article>
+     <strong>{validAmount(firstLoanAmount)?currency(Number(firstLoanAmount)+reinforced):'Não informado'}</strong>
+     <small>{reinforced>0?'Inicial '+currency(Number(firstLoanAmount))+' + '+(data.reforcos?.length??0)+' reforço(s) de '+currency(reinforced):'Capital inicial registado'}</small></article>
     <article className="cis-credit-highlight"><span>Prestações</span>
      <strong>{financialSnapshot.installments}</strong>
      <small>{financialSnapshot.pending} ainda por liquidar</small></article>
@@ -159,6 +160,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
      <strong>{financialSnapshot.nextDue?format(financialSnapshot.nextDue,'Data de Cobrança','date'):'—'}</strong>
      <small>{financialSnapshot.nextDue?'Prestação '+format(financialSnapshot.nextDue,'Nº da Parcela')+' · '+format(financialSnapshot.nextDue,'Valor a Pagar','money'):'Sem prestação pendente com data válida'}</small></article>
    </div>
+   {data.abate&&<div className="cis-contract-notice cis-writeoff-banner" role="status"><AlertCircle size={18}/><span><strong>Crédito abatido em {data.abate.data.split('-').reverse().join('/')}</strong> · abatido {currency(Number(data.abate.valor))} · recuperado {currency(Number(data.abate.recuperado))} · por recuperar {currency(Number(data.abate.saldo))}.{data.abate.motivo?' '+data.abate.motivo:''}</span></div>}
    {!!data.contract_fields_divergent?.length&&<details className="cis-credit-disclosure">
     <summary><AlertCircle size={16}/> Dados divergentes entre prestações <ChevronDown size={15}/></summary>
     <p>Estes campos apresentam valores diferentes: {data.contract_fields_divergent.join(', ')}. Verifique o contrato original antes de tomar decisões.</p>
@@ -180,7 +182,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{tab}</h3><p>{tab==='Plano de pagamentos'?'Calendário e valores das prestações.':tab==='Pagamentos'?'Cobranças, simulações e histórico deste contrato, num único local.':tab==='Documento do contrato'?'Contrato gerado a partir do modelo das Definições, com os dados deste contrato.':'Informações essenciais do contrato.'}</p></div></header>
-     {tab==='Pagamentos'?<>{can('cobrancas')&&can('definicoes')&&<CreditChanges key={numero} token={token} numero={numero} installments={data.installments} onChanged={()=>void load()}/>}<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/></>:tab==='Documento do contrato'?<section className="cis-contract-operation">
+     {tab==='Pagamentos'?<>{can('contratos.alterar')&&<CreditChanges key={numero} token={token} numero={numero} installments={data.installments} onChanged={()=>void load()}/>}<CollectionsDesk token={token} embeddedContract={numero} embeddedProfile={data} initialOrder={paymentOrder} onChanged={()=>{setPaymentOrder(undefined);void load();}}/></>:tab==='Documento do contrato'?<section className="cis-contract-operation">
       <ContractDocument token={token} numero={String(contract?.['Nr do Contracto']??numero)}/>
       <h4 style={{marginTop:24}}>Documento original (sistema antigo)</h4>
       <div className="cis-contract-notice"><LockKeyhole size={18}/><span>A rotina <strong>cmb_vizualizar_Click</strong> abre um ficheiro PDF guardado no computador Windows do Excel original. O ficheiro não é gerado pelo Contractos.frm e não está disponível automaticamente no servidor CIS.</span></div>

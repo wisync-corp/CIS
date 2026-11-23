@@ -96,6 +96,11 @@ final class OverviewController extends Controller
         [$dp,$db]=$period('d');
         $disb=$per->whereRaw($dp,$db)->where('d','<=',$today)
             ->selectRaw('COUNT(*) AS n, ROUND(SUM(COALESCE(q,0)),2) AS total, ROUND(SUM(COALESCE(pr,0)),2) AS prest')->first();
+        // Reforços de crédito no período (saída «Aumento de Crédito» na Caixa): também são dinheiro emprestado.
+        [$rp,$rb]=$period('Data da Operação');
+        $rq=DB::table('Extracto');\App\Support\Branches::restrictExtracto($rq,$user,$ag);
+        $ref=$rq->where('Tipo de Movimento','Saídas')->where('Descrição','like','%Aumento de Crédito%')->whereRaw($rp,$rb)
+            ->where('Data da Operação','<=',$today)->selectRaw('COUNT(*) AS n, ROUND(SUM(COALESCE(Valor,0)),2) AS total')->first();
 
         // Caixa: saldos das contas activas (mesma regra da página Caixa).
         $cash=['disponivel'=>false,'saldo_total'=>null,'contas'=>[],'entradas_mes'=>null,'saidas_mes'=>null,'desembolsos_mes'=>null];
@@ -134,7 +139,8 @@ final class OverviewController extends Controller
             'agencia'=>$branch!==null?['id'=>$branch,'nome'=>\App\Support\Branches::label($branch)]:null,
             'carteira_propria'=>$ownOnly,
             'carteira'=>[
-                'desembolsado_periodo'=>$this->money($disb->total??0),
+                'desembolsado_periodo'=>$this->money((float)($disb->total??0)+(float)($ref->total??0)),
+                'reforcos_periodo'=>['n'=>(int)($ref->n??0),'total'=>$this->money($ref->total??0)],
                 'contratos_desembolsados_periodo'=>(int)($disb->n??0),
                 'prestacoes_desembolsadas_periodo'=>$this->money($disb->prest??0),
                 'capital_em_carteira'=>$this->money($p->capital_carteira),

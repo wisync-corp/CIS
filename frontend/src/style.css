@@ -1941,3 +1941,4 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-credit-change-form legend { padding-inline: 0.4rem; font-weight: 700; color: var(--cis-heading); }
 .cis-credit-change-form > button { justify-self: start; }
 @media(max-width: 850px) { .cis-credit-change-options { grid-template-columns: 1fr; } }
+.cis-writeoff-banner{border-color:#fca5a5;background:#fef2f2;color:#7f1d1d}

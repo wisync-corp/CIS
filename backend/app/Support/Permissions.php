@@ -16,6 +16,7 @@ final class Permissions
         'ver'              => 'Consultar mutuários, contratos, visão geral e simulador',
         'mutuarios.editar' => 'Editar a ficha dos mutuários',
         'contratos.abrir'  => 'Preparar e abrir contratos (desembolso)',
+        'contratos.alterar' => 'Reforço, abate (e anulação) e recuperação de crédito',
         'contratos.data'   => 'Abrir contratos com data de desembolso passada',
         'cobrancas'        => 'Registar pagamentos e operações de cobrança; recibos',
         'cobrancas.data'   => 'Registar pagamentos com data passada',
