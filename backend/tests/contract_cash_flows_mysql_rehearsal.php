@@ -1133,6 +1133,44 @@ ok(collect($pr['resumo'])->firstWhere(0,'Taxa de cumprimento')[1]==='50.0 %' && 
 $hist=data($CC->index(req('/x',[],$admin),$cn));
 ok(count($hist['data'])===3 && $hist['data'][0]['resultado']==='sem_resposta','histórico de contactos do contrato');
 
+echo "== Propostas: limites da agência, não levantada e avisos (Loandisk)\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000230_cis_proposal_rules.php','--force'=>true]);
+ok(\Illuminate\Support\Facades\Schema::hasColumn('cis_branches','credito_maximo') && \Illuminate\Support\Facades\Schema::hasColumn('cis_credit_proposals','avisado_estado')
+    && $db->table('cis_message_templates')->whereIn('name',['Proposta aprovada','Proposta recusada','Proposta não levantada'])->count()===3,'colunas de limites/avisos e modelos de aviso instalados');
+$p4=data($PC->store(req('/x',$prop,$ag1)));
+$b4=(int)$db->table('cis_credit_proposals')->where('id',$p4['id'])->value('branch_id');
+$bRow=$db->table('cis_branches')->where('id',$b4)->first();
+$BC=new \App\Http\Controllers\Api\BranchController();
+ok(status(fn()=>$BC->update(req('/x',['codigo'=>$bRow->codigo,'nome'=>$bRow->nome,'credito_minimo'=>500,'credito_maximo'=>100],$admin),$b4))===422,'agência: máximo inferior ao mínimo é recusado');
+ok(status(fn()=>$BC->update(req('/x',['codigo'=>$bRow->codigo,'nome'=>$bRow->nome,'credito_maximo'=>350],$admin),$b4))===200
+    && (int)$db->table('cis_branches')->where('id',$b4)->value('credito_maximo')===350,'agência guarda só o máximo (mínimo em branco)');
+$an4=data($PC->analyse(req('/x',$prop,$ag1)));
+ok(collect($an4['analise']['alertas'])->contains(fn($a)=>str_contains($a,'máximo da agência')),'análise avisa que o montante passa o máximo da agência');
+ok($err(fn()=>$PC->submit(req('/x',[],$ag1),$p4['id']))===422,'proposta acima do máximo da agência não é submetida');
+$db->table('cis_branches')->where('id',$b4)->update(['credito_maximo'=>1000]);
+$p4=data($PC->submit(req('/x',[],$ag1),$p4['id']));
+ok($p4['estado']==='submetida','dentro dos limites: submetida');
+$db->table('cis_branches')->where('id',$b4)->update(['credito_maximo'=>350]);
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p4['id']))===422,'a aprovação também respeita o máximo da agência');
+$p4=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300],$admin),$p4['id']));
+$db->table('cis_branches')->where('id',$b4)->update(['credito_maximo'=>null]);
+$d4=data($PC->show(req('/x',[],$ag1),$p4['id']));
+ok($p4['estado']==='aprovada' && $d4['avisado']===false && ($d4['aviso']['modelo']??null)==='Proposta aprovada'
+    && str_contains($d4['aviso']['mensagem'],$p4['numero']) && str_contains($d4['aviso']['mensagem'],'300,00'),'aprovada: aviso por enviar com o modelo preenchido');
+$MC=new \App\Http\Controllers\Api\MessageCenterController();
+$fila=data($MC->destinatarios(req('/x',['grupo'=>'propostas'],$admin)));
+ok(collect($fila['destinatarios'])->pluck('contrato')->contains($p4['numero']),'Centro de Mensagens: a proposta aparece em «Avisos de propostas»');
+$MC->registo(req('/x',['contrato'=>$p4['numero'],'canal'=>'whatsapp','grupo'=>'propostas','mensagem'=>'teste'],$admin));
+$fila=data($MC->destinatarios(req('/x',['grupo'=>'propostas'],$admin)));
+ok(!collect($fila['destinatarios'])->pluck('contrato')->contains($p4['numero']) && data($PC->show(req('/x',[],$ag1),$p4['id']))['avisado']===true,'depois de enviado sai da fila e fica avisado');
+ok($err(fn()=>$PC->notTaken(req('/x',['notas'=>'x'],$ag1),$p4['id']))===422,'não levantada exige motivo');
+$p4=data($PC->notTaken(req('/x',['notas'=>'O mutuário desistiu'],$ag1),$p4['id']));
+ok($p4['estado']==='nao_levantada' && $p4['avisado']===false && ($p4['aviso']['modelo']??null)==='Proposta não levantada','não levantada: novo aviso por enviar');
+ok(!collect(data($PC->approved(req('/x',[],$admin)))['data'])->pluck('id')->contains($p4['id']),'não levantada já não serve para abrir contrato');
+ok($err(fn()=>$PC->notTaken(req('/x',['notas'=>'Outra vez'],$ag1),$p4['id']))===409,'só uma proposta aprovada pode ficar não levantada');
+$p4=data($PC->noticed(req('/x',[],$ag1),$p4['id']));
+ok($p4['avisado']===true && $db->table('cis_message_log')->where('group','propostas')->where('contract_number',$p4['numero'])->count()===2,'«Já avisei» regista o aviso no histórico de mensagens');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
