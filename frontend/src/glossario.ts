@@ -36,6 +36,9 @@ export const GLOSSARIO:{termo:string;significado:string}[]=[
  {termo:'Permissão',significado:'Acção autorizada a uma função (ex.: registar pagamentos, ver a Caixa).'},
  {termo:'Agência',significado:'Balcão ou filial da instituição. Quem está numa agência só vê os contratos e as contas dessa agência.'},
  {termo:'Agência principal (Sede)',significado:'Agência onde ficam os contratos ainda não atribuídos a outra agência.'},
+ {termo:'Proposta de crédito',significado:'Pedido de crédito com a análise do mutuário (rendimento, despesas, histórico e score). Só depois de aprovada se pode abrir o contrato e desembolsar.'},
+ {termo:'Limite de aprovação',significado:'Montante até ao qual o gestor de crédito pode aprovar propostas (Definições › Credit scoring). Acima disso decide o administrador. Ninguém aprova a própria proposta, excepto o administrador.'},
+ {termo:'Taxa de esforço',significado:'Parte do rendimento mensal do mutuário comprometida com prestações: (encargo mensal do crédito + outras prestações) ÷ rendimento mensal.'},
  {termo:'Reforço de crédito',significado:'Aumento do capital de uma prestação em curso (juro fixo): o valor novo sai da Caixa como «Aumento de Crédito» e os juros são recalculados; o vencimento mantém-se. Conta como dinheiro emprestado nos relatórios.'},
  {termo:'Abate de crédito',significado:'Retirar da carteira activa o saldo em dívida de um contrato considerado incobrável, sem movimento de Caixa. Exige 90 dias de atraso; antes disso, só como abate antecipado justificado. Pode ser anulado se ainda não houver recuperações.'},
  {termo:'Recuperação de crédito abatido',significado:'Valor recebido depois do abate; entra na Caixa e reduz o saldo abatido por recuperar.'},
@@ -78,10 +81,10 @@ export const GLOSSARIO:{termo:string;significado:string}[]=[
 // Funções dos utilizadores (igual à matriz do servidor: App\Support\Permissions).
 export const FUNCOES:{id:string;nome:string;definicao:string;pode:string[];naoPode:string[]}[]=[
  {id:'administrador',nome:'Administrador',definicao:'Responsável pelo sistema e pela empresa no CIS. Tem acesso total.',
-  pode:['Tudo o que as outras funções fazem','Ver o desempenho de toda a equipa (gestores de crédito, de carteira e agentes)','Reforçar, abater (e anular o abate) e recuperar créditos','Criar e gerir utilizadores, funções, agências e carteiras','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
+  pode:['Tudo o que as outras funções fazem','Ver o desempenho de toda a equipa (gestores de crédito, de carteira e agentes)','Reforçar, abater (e anular o abate) e recuperar créditos','Aprovar propostas de qualquer montante (incluindo as próprias)','Criar e gerir utilizadores, funções, agências e carteiras','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
  {id:'gestor',nome:'Gestor de crédito',definicao:'Gere a carteira de crédito: analisa, concede, acompanha e cobra.',
-  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Preparar e abrir contratos (desembolso), também com data passada se a conta tinha saldo nesse dia','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
-  naoPode:['Caixa (contas, movimentos, fecho)','Desempenho da equipa','Definições e utilizadores']},
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Criar propostas e aprovar as dos outros até ao limite de aprovação','Abrir contratos a partir de propostas aprovadas (desembolso), também com data passada se a conta tinha saldo nesse dia','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
+  naoPode:['Aprovar as próprias propostas ou acima do limite','Caixa (contas, movimentos, fecho)','Desempenho da equipa','Definições e utilizadores']},
  {id:'financeiro',nome:'Gestor financeiro',definicao:'Responsável pela Caixa e tesouraria e pelo controlo dos recebimentos. Função opcional: numa empresa pequena o administrador assume esta parte.',
   pode:['Consultar mutuários, contratos, visão geral e simulador','Caixa: contas, movimentos, transferências, conferência e fecho diário','Registar pagamentos (também com data passada) e emitir recibos','Extractos dos mutuários e extracto geral','Relatórios'],
   naoPode:['Abrir contratos','Editar mutuários','Mensagens','Estornos, definições e utilizadores']},
@@ -89,6 +92,6 @@ export const FUNCOES:{id:string;nome:string;definicao:string;pode:string[];naoPo
   pode:['Ver só a sua carteira: os contratos de que é responsável e os mutuários desses contratos','Registar pagamentos com a data de hoje e emitir recibos','Extractos dos mutuários','Enviar mensagens (lembretes, recibos, extractos)'],
   naoPode:['Ver contratos de outros gestores de carteira','Pagamentos com data passada','Abrir contratos ou editar mutuários','Caixa, relatórios, definições e utilizadores']},
  {id:'agente',nome:'Agente / promotor de crédito',definicao:'Angaria e cadastra mutuários e faz simulações no terreno.',
-  pode:['Cadastrar e editar mutuários','Ver só os mutuários que cadastrou (ou lhe foram atribuídos) e os contratos deles','Simulador'],
-  naoPode:['Ver mutuários de outros agentes','Registar pagamentos','Abrir contratos','Caixa, extractos, mensagens, relatórios, definições e utilizadores']},
+  pode:['Cadastrar e editar mutuários','Ver só os mutuários que cadastrou (ou lhe foram atribuídos) e os contratos deles','Criar e submeter propostas de crédito para os seus mutuários','Simulador'],
+  naoPode:['Ver mutuários de outros agentes','Aprovar propostas','Registar pagamentos','Abrir contratos','Caixa, extractos, mensagens, relatórios, definições e utilizadores']},
 ];

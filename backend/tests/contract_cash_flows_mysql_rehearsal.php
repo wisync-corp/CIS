@@ -1048,6 +1048,58 @@ $pc2=new \App\Http\Controllers\Api\ContractCollectionController();
 $plain=new User();$plain->forceFill(['name'=>'Gestora Sem Alteração','email'=>'gsa@ci.test','password'=>bcrypt('x'),'role'=>'gestor','active'=>1,'must_change_password'=>false])->save();
 ok($err(fn()=>$pc2->creditChange(req('/x',['operacao'=>'abate'],$plain),'C-4200'))===403,'só quem tem a permissão de alterações de crédito');
 
+echo "== Propostas de crédito com aprovação\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000210_cis_credit_proposals.php','--force'=>true]);
+$PC=new \App\Http\Controllers\Api\ProposalController();
+ok(\App\Http\Controllers\Api\ProposalController::ready(),'tabelas das propostas instaladas');
+\App\Support\Portfolio::assignClient(7,$ag1->id,$admin->id);\App\Support\Portfolio::reset();
+$pb=['cliente_id'=>7,'montante'=>300,'tipo_juro'=>'Fixo','estrategia_calculo'=>ContractCalculationStrategy::FIXED_AMORTIZATION,
+    'periodo_dias'=>30,'prazo'=>'1 Mês','taxa_informada'=>15,'taxa_multa'=>10,'prazo_meses'=>1,'modalidade'=>'Uma Parcela',
+    'forma_pagamento'=>'Numerário','disponibilidade'=>'Numerário','data_inicio'=>$today,'confirmacao_desembolso'=>true,'referencia'=>'SAIDA-PROP','conta_id'=>$banco];
+ok(status(fn()=>(new ContractOpeningController())->store(req('/x',$pb+['idempotency_key'=>'c0000000-0000-4000-8000-000000000001'],$admin)))===422,
+    'sem proposta aprovada não há desembolso');
+$prop=['client_id'=>7,'montante'=>400,'tipo_juro'=>'Fixo','estrategia'=>ContractCalculationStrategy::FIXED_AMORTIZATION,'periodo_dias'=>30,'prazo'=>'1 Mês',
+    'modalidade'=>'Uma Parcela','finalidade'=>'Compra de stock','rendimento_mensal'=>5000,'despesas_mensais'=>1500,'outras_dividas_mensais'=>0];
+$an=data($PC->analyse(req('/x',$prop,$ag1)));
+ok($an['analise']['prestacao']==='460.00' && $an['analise']['taxa_esforco']!==null,'análise: prestação estimada pela tabela (400 + 15%) e taxa de esforço');
+$p1=data($PC->store(req('/x',$prop,$ag1)));
+ok($p1['estado']==='rascunho' && str_starts_with($p1['numero'],'PROP-'),'agente cria a proposta em rascunho ('.$p1['numero'].')');
+$p1=data($PC->submit(req('/x',[],$ag1),$p1['id']));
+ok($p1['estado']==='submetida' && ($p1['analise']['calculo']['prestacao']??null)==='460.00','submetida com a análise registada');
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$ag1),$p1['id']))===403,'o agente não aprova');
+$g2=new User();$g2->forceFill(['name'=>'Gestor Sede','email'=>'gsede@ci.test','password'=>bcrypt('x'),'role'=>'gestor','active'=>1,'must_change_password'=>false])->save();
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'limite_aprovacao_gestor'],['valor'=>'350','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p1['id']))===403,'acima do limite do gestor: só o administrador');
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'rejeitar'],$admin),$p1['id']))===422,'rejeitar exige motivo');
+$p1=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300,'notas'=>'Aprovado com redução'],$admin),$p1['id']));
+ok($p1['estado']==='aprovada' && $p1['montante_aprovado']===300 && $p1['valida_ate']!==null,'administrador aprova com montante reduzido e validade');
+$ap=collect(data($PC->approved(req('/x',[],$admin)))['data'])->pluck('id');
+ok($ap->contains($p1['id']),'proposta aparece entre as aprovadas para abrir contrato');
+ok(status(fn()=>(new ContractOpeningController())->store(req('/x',array_replace($pb,['montante'=>400])+['proposta_id'=>$p1['id'],'idempotency_key'=>'c0000000-0000-4000-8000-000000000002'],$admin)))===422,
+    'o capital não pode exceder o aprovado');
+$kP='c0000000-0000-4000-8000-000000000003';
+$op=data((new ContractOpeningController())->store(req('/x',$pb+['proposta_id'=>$p1['id'],'idempotency_key'=>$kP],$admin)));
+$after=$db->table('cis_credit_proposals')->where('id',$p1['id'])->first();
+ok(!empty($op['numero']) && $after->status==='desembolsada' && $after->contract_number===$op['numero'],'desembolso a partir da proposta: proposta desembolsada e ligada ao contrato');
+$op2=data((new ContractOpeningController())->store(req('/x',$pb+['proposta_id'=>$p1['id'],'idempotency_key'=>$kP],$admin)));
+ok(($op2['repetido']??false)===true && $db->table('cis_credit_proposals')->where('id',$p1['id'])->value('contract_number')===$op['numero'],'repetição do desembolso não duplica nem desliga a proposta');
+ok(status(fn()=>(new ContractOpeningController())->store(req('/x',$pb+['proposta_id'=>$p1['id'],'idempotency_key'=>'c0000000-0000-4000-8000-000000000004'],$admin)))===422,
+    'a mesma proposta não abre um segundo contrato');
+$p2=data($PC->store(req('/x',array_replace($prop,['montante'=>200]),$ag1)));$PC->submit(req('/x',[],$ag1),$p2['id']);
+$p2=data($PC->decide(req('/x',['decisao'=>'devolver','notas'=>'Falta comprovativo de rendimento'],$g2),$p2['id']));
+ok($p2['estado']==='devolvida','gestor devolve dentro do seu limite, com notas');
+$PC->submit(req('/x',[],$ag1),$p2['id']);
+$p2=data($PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p2['id']));
+ok($p2['estado']==='aprovada' && $p2['decidido_por']==='Gestor Sede','gestor aprova dentro do limite');
+$db->table('cis_credit_proposals')->where('id',$p2['id'])->update(['valida_ate'=>now($tz)->subDay()->toDateString()]);
+$ix=data($PC->index(req('/x',[],$admin)));
+ok(collect($ix['data'])->firstWhere('id',$p2['id'])['estado']==='expirada','aprovação vencida passa a expirada');
+$p3=data($PC->store(req('/x',array_replace($prop,['montante'=>100]),$g2)));$PC->submit(req('/x',[],$g2),$p3['id']);
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p3['id']))===403,'ninguém (excepto o administrador) aprova a própria proposta');
+ok($err(fn()=>$PC->show(req('/x',[],$gmu),$p3['id']))===404,'gestora de outra agência não vê a proposta');
+$ev=$db->table('cis_credit_proposal_events')->where('proposal_id',$p1['id'])->pluck('accao')->all();
+ok($ev===['criada','submetida','aprovada','desembolsada'],'histórico da proposta: '.implode(' → ',$ev));
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

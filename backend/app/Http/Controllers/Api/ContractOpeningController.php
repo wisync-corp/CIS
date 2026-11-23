@@ -124,8 +124,23 @@ final class ContractOpeningController extends Controller
             throw ValidationException::withMessages(['modalidade'=>'Modalidade incompatível com o tipo de juro.']);
         }
 
+        // Proposta de crédito aprovada: obrigatória quando as propostas estão instaladas.
+        // Reservada antes do desembolso e libertada se nada for gravado.
+        $proposalId=null;$proposalReserved=false;
+        if (ProposalController::ready()) {
+            $proposalId=(int)$request->input('proposta_id')?:null;
+            $prop=$proposalId?DB::table('cis_credit_proposals')->where('id',$proposalId)->first():null;
+            $repeat=$prop && $prop->status==='desembolsada' && $prop->contract_number
+                && DB::connection('mysql_legacy')->table('Extracto')->where('operation_key',$key)->exists();
+            if (!$repeat) {
+                ProposalController::checkForOpening($proposalId,$d,$user);
+                ProposalController::reserve($proposalId);
+                $proposalReserved=true;
+            }
+        }
         $db = DB::connection('mysql_contract_writer');
         $lock = $db->selectOne('SELECT GET_LOCK(?, 10) AS acquired', ['cis_open_new_contract']);
+        if (!($lock && (int)$lock->acquired === 1) && $proposalReserved) ProposalController::release($proposalId);
         abort_unless($lock && (int)$lock->acquired === 1, 409,
             'Outra abertura está a decorrer. Aguarde e consulte a carteira antes de repetir.');
         try {
@@ -316,6 +331,12 @@ final class ContractOpeningController extends Controller
                 .'Verifique as permissões com: bash deploy/verify-contract-cash-flows.sh');
         } finally {
             $db->select('SELECT RELEASE_LOCK(?)', ['cis_open_new_contract']);
+            if ($proposalReserved && !isset($result)) ProposalController::release($proposalId);
+        }
+        if ($proposalReserved && empty($result['repetido']) && !empty($result['numero'])) {
+            ProposalController::link($proposalId,(string)$result['numero'],(int)$user->id);
+        } elseif ($proposalReserved) {
+            ProposalController::release($proposalId);
         }
         // Agência do contrato: a do utilizador; quem vê todas pode indicar «agencia_id»; senão, a principal.
         try {

@@ -8,7 +8,7 @@ import ContractProfile from './ContractProfile';
 import ContractDraft from './ContractDraft';
 import {situacaoContrato} from './glossario';
 
-type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void};
+type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void;openProposal?:number|null;onProposalHandled?:()=>void};
 type Row=Record<string,unknown>;
 type Paged={data:Row[];current_page:number;last_page:number;total:number};
 type ContractSummary={total:number;por_estado:{estado:string;total:number}[];por_situacao?:{situacao:string;total:number}[]};
@@ -21,7 +21,7 @@ const fields:Record<string,{key:string;label:string}[]>={
 };
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const monetary=new Set(['capital','prestacao_a_pagar','Valor','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago']);
-export default function LegacyTable({module,token,onProfileChange}:Props){
+export default function LegacyTable({module,token,onProfileChange,openProposal,onProposalHandled}:Props){
  const can=useCan();
  const branches=useBranches(token);
  const [branchFilter,setBranchFilter]=useState('');
@@ -31,6 +31,8 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
  const [selected,setSelected]=useState<number|null>(null);
  const [selectedContract,setSelectedContract]=useState<string|null>(null);
  const [contractDraftOpen,setContractDraftOpen]=useState(false);
+ const [draftProposal,setDraftProposal]=useState<number|null>(null);
+ useEffect(()=>{if(openProposal){setDraftProposal(openProposal);setSelectedContract(null);setContractDraftOpen(true);onProposalHandled?.();}},[openProposal,onProposalHandled]);
  const [newlyCreatedContract,setNewlyCreatedContract]=useState<string|null>(null);
  useEffect(()=>{onProfileChange?.((module==='Mutuários'&&(selected!==null||newClient))||(module==='Contratos e prestações'&&(selectedContract!==null||contractDraftOpen)));return ()=>onProfileChange?.(false);},[module,selected,newClient,selectedContract,contractDraftOpen,onProfileChange]);
  const [page,setPage]=useState(1),[search,setSearch]=useState(''),[term,setTerm]=useState('');
@@ -97,7 +99,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
  },[endpoint,token,page,term,appliedDates,refresh,selected,selectedContract,contractDraftOpen,stateFilter,situationFilter,contractSort,sortDirection,branchFilter]);
  if(endpoint==='clientes'&&newClient&&selected===null)return <NewClient token={token} onBack={()=>setNewClient(false)} onOpen={id=>{setNewClient(false);setSelected(id);}} onCreated={id=>{setNewClient(false);setRefresh(v=>v+1);setSelected(id);}}/>;
  if(endpoint==='clientes'&&selected!==null)return <ClientProfile id={selected} token={token} onBack={()=>{setSelected(null);setRefresh(v=>v+1);}}/>;
- if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft token={token} onBack={()=>setContractDraftOpen(false)} onContractCreated={numero=>{setNewlyCreatedContract(numero);setContractDraftOpen(false);setSelectedContract(numero);setRefresh(v=>v+1);window.scrollTo({top:0,behavior:'smooth'});}}/>;
+ if(endpoint==='contractos'&&contractDraftOpen)return <ContractDraft token={token} proposalId={draftProposal} onBack={()=>{setContractDraftOpen(false);setDraftProposal(null);}} onContractCreated={numero=>{setNewlyCreatedContract(numero);setContractDraftOpen(false);setSelectedContract(numero);setRefresh(v=>v+1);window.scrollTo({top:0,behavior:'smooth'});}}/>;
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} justCreated={newlyCreatedContract===selectedContract} onBack={()=>{setSelectedContract(null);setNewlyCreatedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">

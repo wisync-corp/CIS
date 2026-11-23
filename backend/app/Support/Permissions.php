@@ -15,6 +15,8 @@ final class Permissions
     public const PERMISSIONS = [
         'ver'              => 'Consultar mutuários, contratos, visão geral e simulador',
         'mutuarios.editar' => 'Editar a ficha dos mutuários',
+        'propostas.criar'  => 'Criar e submeter propostas de crédito',
+        'propostas.aprovar' => 'Aprovar, devolver ou rejeitar propostas (gestor: até ao limite definido)',
         'contratos.abrir'  => 'Preparar e abrir contratos (desembolso)',
         'contratos.alterar' => 'Reforço, abate (e anulação) e recuperação de crédito',
         'contratos.data'   => 'Abrir contratos com data de desembolso passada',
@@ -36,13 +38,13 @@ final class Permissions
     public const ROLES = [
         'administrador' => ['label' => 'Administrador', 'descricao' => 'Acesso total, incluindo utilizadores e definições.', 'perms' => ['*']],
         'gestor' => ['label' => 'Gestor de crédito', 'descricao' => 'Carteira de crédito: mutuários, contratos, cobranças, extractos, mensagens e relatórios.',
-            'perms' => ['ver', 'mutuarios.editar', 'contratos.abrir', 'contratos.data', 'cobrancas', 'cobrancas.data', 'extractos', 'extractos.geral', 'mensagens', 'relatorios']],
+            'perms' => ['ver', 'mutuarios.editar', 'propostas.criar', 'propostas.aprovar', 'contratos.abrir', 'contratos.data', 'cobrancas', 'cobrancas.data', 'extractos', 'extractos.geral', 'mensagens', 'relatorios']],
         'financeiro' => ['label' => 'Gestor financeiro', 'descricao' => 'Caixa e tesouraria, recebimentos, extractos e relatórios.',
             'perms' => ['ver', 'cobrancas', 'cobrancas.data', 'caixa', 'extractos', 'extractos.geral', 'relatorios']],
         'cobrador' => ['label' => 'Cobrador / gestor de carteira', 'descricao' => 'Só a sua carteira (contratos de que é responsável): recebe pagamentos com a data de hoje, emite recibos e contacta os mutuários.',
             'perms' => ['ver', 'cobrancas', 'extractos', 'mensagens']],
-        'agente' => ['label' => 'Agente / promotor de crédito', 'descricao' => 'Cadastra mutuários e vê só os que cadastrou (e os contratos deles); faz simulações.',
-            'perms' => ['ver', 'mutuarios.editar']],
+        'agente' => ['label' => 'Agente / promotor de crédito', 'descricao' => 'Cadastra mutuários, vê só os que cadastrou (e os contratos deles), faz simulações e propõe crédito para eles.',
+            'perms' => ['ver', 'mutuarios.editar', 'propostas.criar']],
     ];
 
     public static function roleKeys(): array
