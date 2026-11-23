@@ -1178,10 +1178,13 @@ ok(\App\Support\CreditDossier::ready() && Schema::hasTable('cis_client_branch'),
 ok(strtolower((string)$db->selectOne("SELECT DATA_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_document_files' AND COLUMN_NAME='conteudo'")->t)==='mediumblob','ficheiros guardados em MEDIUMBLOB');
 // Mutuários por agência
 $matClient=(int)$db->table('Contractos')->where('Nr do Contracto','OP-0001')->value('Nº de Cliente');
+$newRow=(array)$db->table('Clientes')->where('ID',7)->first();$newRow['ID']=9901;$newRow['Nome Completo']='Mutuário Sem Contratos';
+if(array_key_exists('Numeração',$newRow))$newRow['Numeração']='9901';if(array_key_exists('Nº de BI',$newRow))$newRow['Nº de BI']='990100000000Z';
+$db->table('Clientes')->insert($newRow);\App\Support\Branches::reset();
 $visMat=(clone $db->table('Clientes'));\App\Support\Branches::applyToClients($visMat,$mat);$visMat=$visMat->pluck('ID')->map(fn($v)=>(int)$v)->all();
 $visSede=(clone $db->table('Clientes'));\App\Support\Branches::applyToClients($visSede,$sede);$visSede=$visSede->pluck('ID')->map(fn($v)=>(int)$v)->all();
-$onlySede=collect($visSede)->first(fn($id)=>!in_array($id,$visMat,true));
-ok(in_array($matClient,$visMat,true) && $onlySede!==null && count($visMat)<$db->table('Clientes')->count(),'lista de mutuários por agência: Matola só vê os seus');
+$onlySede=9901;
+ok(in_array($matClient,$visMat,true) && in_array(9901,$visSede,true) && !in_array(9901,$visMat,true),'lista de mutuários por agência: mutuário sem contratos fica na Sede e não aparece na Matola');
 $e5=null;try{\App\Support\Portfolio::requireClient($gmu,$onlySede);}catch(\Symfony\Component\HttpKernel\Exception\HttpException $x){$e5=$x->getStatusCode();}
 ok($e5===403,'ficha de mutuário de outra agência recusada (403)');
 \App\Support\Branches::assignClient($onlySede,$mat,$admin->id);
@@ -1189,8 +1192,8 @@ $e6=null;try{\App\Support\Portfolio::requireClient($gmu,$onlySede);}catch(\Throw
 ok($e6===null,'mutuário atribuído à agência passa a ser visível nela');
 \App\Support\Branches::assignClient($onlySede,null,$admin->id);
 $ag2=new User();$ag2->forceFill(['name'=>'Beatriz Agente','email'=>'beatriz@ci.test','password'=>bcrypt('x'),'role'=>'agente','active'=>1,'must_change_password'=>false])->save();
-$bk=data($pc->assignClientsBulk($ureq('POST',['user_id'=>$ag2->id,'agencia'=>$mat,'so_sem_agente'=>true],$admin)));
-ok($bk['atribuidos']>=1 && $db->table('cis_client_owner')->where('user_id',$ag2->id)->count()===$bk['atribuidos'],'atribuição em massa de mutuários sem agente a um agente');
+$bk=data($pc->assignClientsBulk($ureq('POST',['user_id'=>$ag2->id,'agencia'=>$sede,'so_sem_agente'=>true],$admin)));
+ok($bk['atribuidos']>=1 && $db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',9901)->exists() && !$db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',7)->exists(),'atribuição em massa de mutuários sem agente a um agente');
 ok($err(fn()=>$pc->assignClientsBulk($ureq('POST',['user_id'=>$c1->id,'agencia'=>$mat],$admin)))===422,'atribuição de mutuários só a agentes');
 \App\Support\Portfolio::reset();
 // Dossier
