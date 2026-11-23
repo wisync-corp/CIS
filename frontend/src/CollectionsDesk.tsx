@@ -78,7 +78,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [list,setList]=useState<ListResponse|null>(null);
  const [listing,setListing]=useState(true);
  const [selected,setSelected]=useState<string|null>(embeddedContract??null);
- const [profile,setProfile]=useState<ProfileResponse|null>(embeddedProfile??null);
+ const [localProfile,setProfile]=useState<ProfileResponse|null>(null);
+ const profile=embeddedContract?(embeddedProfile??null):localProfile;
  const [loading,setLoading]=useState(false);
  const [message,setMessage]=useState('');
  const [mode,setMode]=useState<Mode>('total');
@@ -153,7 +154,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   return()=>ctrl.abort();
  },[selected,page,applied,refresh,token,embeddedContract]);
  useEffect(()=>{
-  if(!selected||(embeddedContract&&refresh===0))return;
+  if(!selected||embeddedContract)return;
   const ctrl=new AbortController();setLoading(true);setMessage('');
   fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/ficha',{
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal
@@ -382,7 +383,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
   },400);
   return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
+ },[selected,ord,view,selectedInstallment,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
 
  useEffect(()=>{
   setFinePreview(null);setFineError('');
@@ -402,7 +403,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    }catch(err){if(!ctrl.signal.aborted)setFineError(err instanceof Error?err.message:'Falha no cálculo da mora.');}
   },400);
   return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,activeOrder,paymentDone,payDate,payDateOk,fineRate,fineGrace,fineCap,token,refresh]);
+ },[selected,ord,view,selectedInstallment,activeOrder,paymentDone,payDate,payDateOk,fineRate,fineGrace,fineCap,token,refresh]);
 
  return <section className={'cis-collections'+(embeddedContract?' cis-collections-embedded':'')}>
   {!embeddedContract&&<div className="cis-collections-hero"><div><span className="cis-collections-kicker"><ReceiptText size={14}/> CAPTA · OPERAÇÕES DE CRÉDITO</span>
