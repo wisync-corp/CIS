@@ -2118,3 +2118,23 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-boot-skip{justify-self:start;border:1px solid var(--cis-border);background:var(--cis-surface-subtle);color:var(--cis-primary);border-radius:9px;padding:9px 14px;font-weight:700;font-size:calc(12px * var(--cis-fs))}
 .cis-boot-card footer{display:flex;align-items:center;gap:7px;color:var(--cis-text-muted);font-size:calc(11px * var(--cis-fs));border-top:1px solid var(--cis-border);padding-top:14px;margin-top:10px}
 @media (prefers-reduced-motion:reduce){.cis-boot,.cis-boot-bar i{animation:none;transition:none}}
+/* Cabeçalho compacto da Visão geral, com os separadores ao lado do título */
+.cis-home-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 16px}
+.cis-home-head h1{font:800 calc(24px * var(--cis-fs)) Manrope;letter-spacing:-.6px;color:var(--cis-heading);margin:6px 0 0}
+.cis-home-head .cis-home-tabs{margin:0}
+.cis-home-alerts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #F5C2BC;border-left:4px solid #B42318;border-radius:12px;padding:10px 14px;margin:0 0 16px;color:var(--cis-heading);font-size:calc(13px * var(--cis-fs))}
+.cis-home-alerts svg{color:#B42318}
+.cis-home-alerts button{border:0;border-radius:99px;padding:6px 12px;font-weight:700;font-size:calc(12px * var(--cis-fs))}
+.cis-home-alerts button.bad{background:#FEF0EE;color:#B42318}.cis-home-alerts button.warn{background:#FFF6E5;color:#B54708}
+.cis-home-alerts button.link{background:transparent;color:var(--cis-primary);margin-left:auto;text-decoration:underline}
+/* Visão geral mais compacta (mais indicadores visíveis sem deslocar) */
+.cis-home-overview .cis-overview-period{padding:8px 12px;margin-bottom:12px}
+.cis-home-overview .cis-banner{padding:12px 16px;margin-bottom:14px}
+.cis-home-overview .cis-stat-grid{gap:12px}
+.cis-home-overview .cis-stat{padding:15px 16px}
+.cis-home-overview .cis-stat-top{font-size:calc(11.5px * var(--cis-fs));align-items:flex-start}
+.cis-home-overview .cis-stat>strong{font-size:calc(25px * var(--cis-fs));margin:10px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cis-home-overview .cis-stat>small{line-height:1.5}
+.cis-home-overview .cis-home-grid{margin-top:14px;gap:14px}
+.cis-home-overview .cis-panel{padding:20px 22px}
+.cis-top-right .cis-client-edit{font-size:calc(12px * var(--cis-fs));padding:8px 12px}

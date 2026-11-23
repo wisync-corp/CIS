@@ -60,19 +60,21 @@ def css() -> None:
   --bad:{T['danger']}; --badt:{T['danger_tint']}; }}
 html, body, .stApp, [data-testid="stAppViewContainer"] {{ background: var(--bg) !important; color: var(--text); font-family: 'DM Sans', system-ui, sans-serif; }}
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], footer, #MainMenu {{ display: none !important; }}
-.block-container, [data-testid="stMainBlockContainer"] {{ padding: 6px 4px 32px !important; max-width: none; }}
+.block-container, [data-testid="stMainBlockContainer"] {{ padding: 2px 2px 12px !important; max-width: none; }}
+[data-testid="stMain"], section.main {{ overflow: hidden; }}
 h1, h2, h3, h4 {{ font-family: 'Manrope', sans-serif !important; color: var(--head) !important; letter-spacing: -.3px; }}
 .cis-kicker {{ color: var(--p); letter-spacing: 1.8px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; }}
-.cis-head h2 {{ margin: 4px 0 2px; font: 800 24px Manrope, sans-serif; color: var(--head); }}
-.cis-head p {{ margin: 0; color: var(--muted); font-size: 13px; }}
-.cis-sec {{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 22px 0 10px; flex-wrap: wrap; }}
+.cis-head {{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin: 2px 0 -6px; }}
+.cis-head h2 {{ margin: 0; font: 800 19px Manrope, sans-serif; color: var(--head); }}
+.cis-head p {{ margin: 0; color: var(--muted); font-size: 12.5px; }}
+.cis-sec {{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 14px 0 8px; flex-wrap: wrap; }}
 .cis-sec h3 {{ margin:0; font: 800 16px Manrope, sans-serif; color: var(--head); }}
 .cis-sec span {{ color: var(--muted); font-size: 12.5px; }}
 .cis-kpis {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }}
-.cis-kpi {{ background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 5px 24px #170f2b10; padding:16px 18px; min-width:0; }}
+.cis-kpi {{ background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 5px 24px #170f2b10; padding:13px 16px; min-width:0; }}
 .cis-kpi .l {{ display:flex; justify-content:space-between; gap:6px; color: var(--muted); font-size:12px; font-weight:700; }}
 .cis-kpi .l i {{ font-style:normal; color: var(--p); }}
-.cis-kpi .v {{ font: 800 25px Manrope, sans-serif; color: var(--head); margin: 10px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.cis-kpi .v {{ font: 800 23px Manrope, sans-serif; color: var(--head); margin: 6px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .cis-kpi .d {{ display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 8px; }}
 .cis-kpi .d.up {{ background: var(--okt); color: var(--ok); }} .cis-kpi .d.down {{ background: var(--badt); color: var(--bad); }}
 .cis-kpi .d.flat {{ background: var(--subtle); color: var(--muted); }}
@@ -649,8 +651,8 @@ titles = {"carteira": ("Desempenho da carteira", "Desembolsos, carteira em curso
           "mutuarios": ("Mutuários", "Clientes com crédito, novos clientes, retenção e aquisição."),
           "financeiro": ("Desempenho financeiro e crescimento", "Recebimentos, juros, taxa efectiva e crescimento dos desembolsos.")}
 t, sub = titles[page]
-st.html(f'<div class="cis-head"><span class="cis-kicker">CIS · Dashboard · {html.escape(per.label)}</span>'
-        f'<h2>{html.escape(t)}</h2><p>{html.escape(sub)}</p></div>')
+st.html(f'<div class="cis-head"><h2>{html.escape(t)}</h2><span class="cis-kicker">{html.escape(per.label)}</span>'
+        f'<p>{html.escape(sub)}</p></div>')
 
 if p.empty:
     empty("Sem contratos para os filtros seleccionados.")

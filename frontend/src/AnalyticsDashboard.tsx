@@ -7,7 +7,7 @@ const API=import.meta.env.VITE_API_URL||'/api';
 export type BootProgress={pct:number;text:string};
 
 export default function AnalyticsDashboard({token,visible=true,onProgress,onReady}:{token:string;visible?:boolean;onProgress?:(p:BootProgress)=>void;onReady?:(ok:boolean,msg?:string)=>void}){
- const [attempt,setAttempt]=useState(0),[ready,setReady]=useState(false),[error,setError]=useState('');
+ const [attempt,setAttempt]=useState(0),[ready,setReady]=useState(false),[error,setError]=useState(''),[height,setHeight]=useState(900);
  const frame=useRef<HTMLIFrameElement>(null);
  const cb=useRef({onProgress,onReady});cb.current={onProgress,onReady};
  const done=useRef(false);
@@ -59,10 +59,23 @@ export default function AnalyticsDashboard({token,visible=true,onProgress,onRead
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[ready]);
 
+ // Altura do iframe = altura do conteúdo do Streamlit: uma só barra de deslocamento (a da página).
+ useEffect(()=>{
+  if(!ready)return;
+  const t=window.setInterval(()=>{
+   const doc=frame.current?.contentDocument;
+   const el=doc?.querySelector('[data-testid="stMainBlockContainer"]') as HTMLElement|null;
+   if(!el)return;
+   const h=Math.ceil(el.getBoundingClientRect().height)+8;
+   if(h>200)setHeight(prev=>Math.abs(prev-h)>4?h:prev);
+  },600);
+  return()=>window.clearInterval(t);
+ },[ready]);
+
  const tema=document.documentElement.dataset.theme||'fintech';
  return <section className={'cis-panel cis-analytics'+(visible?'':' cis-analytics-hidden')} aria-label="Dashboard Streamlit" aria-hidden={!visible}>
   {error?<div className="cis-table-error" role="alert">{error} <button type="button" className="cis-edit-action" onClick={()=>setAttempt(v=>v+1)}><RefreshCw size={15}/> Tentar novamente</button></div>
-   :ready?<iframe ref={frame} title="Dashboard Streamlit" src={'/dashboard/?tema='+encodeURIComponent(tema)} tabIndex={visible?0:-1} style={{display:'block',width:'100%',height:'max(85vh, 900px)',minHeight:600,border:0}}/>
+   :ready?<iframe ref={frame} title="Dashboard Streamlit" src={'/dashboard/?tema='+encodeURIComponent(tema)} tabIndex={visible?0:-1} scrolling="no" style={{display:'block',width:'100%',height,minHeight:480,border:0,transition:'height .15s ease'}}/>
    :<p role="status">A abrir o Dashboard…</p>}
  </section>;
 }
