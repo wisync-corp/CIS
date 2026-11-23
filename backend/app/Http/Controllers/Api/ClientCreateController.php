@@ -232,6 +232,8 @@ final class ClientCreateController extends Controller
                 : ($code === 1062 ? 'número de mutuário repetido; tente de novo.' : LegacyClienteEditController::mysqlMessage($e));
             return response()->json(['message' => 'Não registado: '.$msg], 503);
         }
+        // Quem cadastra fica como agente do mutuário (carteira do agente).
+        try { \App\Support\Portfolio::assignClient((int) $result['id'], (int) $user->getKey(), (int) $user->getKey()); } catch (\Throwable) {}
         return response()->json($result + ['mensagem' => 'Mutuário registado.'], 201)
             ->header('Cache-Control', 'no-store, private');
     }

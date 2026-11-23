@@ -25,6 +25,7 @@ final class Permissions
         'extractos'        => 'Extractos dos mutuários',
         'extractos.geral'  => 'Extracto geral da Caixa',
         'mensagens'        => 'Centro de mensagens (WhatsApp/SMS)',
+        'desempenho'       => 'Ver o desempenho da equipa (gestores de crédito, de carteira e agentes)',
         'relatorios'       => 'Relatórios regulatórios e de gestão',
         'definicoes'       => 'Definições da empresa e parametrização',
         'utilizadores'     => 'Gerir utilizadores e funções',
@@ -37,9 +38,9 @@ final class Permissions
             'perms' => ['ver', 'mutuarios.editar', 'contratos.abrir', 'contratos.data', 'cobrancas', 'cobrancas.data', 'extractos', 'extractos.geral', 'mensagens', 'relatorios']],
         'financeiro' => ['label' => 'Gestor financeiro', 'descricao' => 'Caixa e tesouraria, recebimentos, extractos e relatórios.',
             'perms' => ['ver', 'cobrancas', 'cobrancas.data', 'caixa', 'extractos', 'extractos.geral', 'relatorios']],
-        'cobrador' => ['label' => 'Cobrador / gestor de carteira', 'descricao' => 'Recebe pagamentos com a data de hoje, emite recibos e contacta os mutuários.',
+        'cobrador' => ['label' => 'Cobrador / gestor de carteira', 'descricao' => 'Só a sua carteira (contratos de que é responsável): recebe pagamentos com a data de hoje, emite recibos e contacta os mutuários.',
             'perms' => ['ver', 'cobrancas', 'extractos', 'mensagens']],
-        'agente' => ['label' => 'Agente / promotor de crédito', 'descricao' => 'Cadastra e actualiza mutuários e faz simulações.',
+        'agente' => ['label' => 'Agente / promotor de crédito', 'descricao' => 'Cadastra mutuários e vê só os que cadastrou (e os contratos deles); faz simulações.',
             'perms' => ['ver', 'mutuarios.editar']],
     ];
 

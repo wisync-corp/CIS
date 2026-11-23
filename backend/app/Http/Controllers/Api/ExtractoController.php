@@ -98,7 +98,7 @@ final class ExtractoController extends Controller
         \App\Support\Permissions::require($request->user(),'extractos.geral');
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
-        [$q,$hasAccount]=$this->geralQuery($db,$f);
+        [$q,$hasAccount]=$this->geralQuery($db,$f,$request);
         $t=$this->geralTotals($q);
 
         $per=(int)($f['por_pagina']??50);
@@ -111,10 +111,12 @@ final class ExtractoController extends Controller
         ])->header('Cache-Control','no-store, private');
     }
 
-    private function geralQuery($db,array $f): array
+    private function geralQuery($db,array $f,?Request $request=null): array
     {
         $hasAccount=$db->getSchemaBuilder()->hasColumn('Extracto','account_id');
         $q=$db->table('Extracto as e');
+        // Agência: movimentos dos contratos da agência e das contas da Caixa da agência.
+        if ($request) \App\Support\Branches::restrictExtracto($q,$request->user(),$request->query('agencia'));
         if ($f['inicio']??null) $q->where('e.Data da Operação','>=',$f['inicio']);
         if ($f['fim']??null) $q->where('e.Data da Operação','<=',$f['fim']);
         if ($f['cliente']!=='') $q->where('e.Cliente',$f['cliente']);
@@ -204,7 +206,7 @@ final class ExtractoController extends Controller
         \App\Support\Permissions::require($request->user(),'extractos.geral');
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
-        [$q,$hasAccount]=$this->geralQuery($db,$f);
+        [$q,$hasAccount]=$this->geralQuery($db,$f,$request);
         $t=$this->geralTotals($q);
         abort_if($t['n']===0,404,'Sem movimentos para os filtros escolhidos.');
         abort_if($t['n']>5000,422,'Demasiados movimentos ('.$t['n'].') para um único documento; reduza o período (máximo 5000).');
@@ -258,9 +260,10 @@ final class ExtractoController extends Controller
         return (float)$r->{'Valor a Pagar'}+(float)($r->{'Valor de Multa'}??0);
     }
 
-    private function clientRows($db,array $f)
+    private function clientRows($db,array $f,?Request $request=null)
     {
         $q=$db->table('Contractos');
+        if ($request) \App\Support\Branches::restrict($q,$request->user(),$request->query('agencia'));
         $base=$f['base']??'cobranca';
         $mes=$f['mes']??'todos';$ano=$f['ano']??'todos';
         if ($base==='desembolso') {
@@ -352,7 +355,7 @@ final class ExtractoController extends Controller
     {
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
-        [$all,$tot]=$this->summarise($this->clientRows($db,$f),$this->today(),$f['estado']??'todos');
+        [$all,$tot]=$this->summarise($this->clientRows($db,$f,$request),$this->today(),$f['estado']??'todos');
         $per=(int)($f['por_pagina']??50);
         $page=max(1,(int)($f['page']??1));
         return response()->json([
@@ -374,13 +377,16 @@ final class ExtractoController extends Controller
         $d=$request->validate(['cliente'=>['nullable','string','max:255'],'termo'=>['nullable','string','max:100']]);
         $db=DB::connection('mysql_legacy');
         if (trim((string)($d['cliente']??''))!=='') {
-            $list=$db->table('Contractos')->where('Nome do Cliente',trim($d['cliente']))
-                ->distinct()->orderBy('Nr do Contracto')->pluck('Nr do Contracto');
+            $lq=$db->table('Contractos')->where('Nome do Cliente',trim($d['cliente']));
+            \App\Support\Branches::restrict($lq,$request->user(),$request->query('agencia'));
+            $list=$lq->distinct()->orderBy('Nr do Contracto')->pluck('Nr do Contracto');
             return response()->json(['contratos'=>$list->values()]);
         }
         $term=trim((string)($d['termo']??''));
         abort_if(mb_strlen($term)<2,422,'Escreva pelo menos 2 letras do nome do mutuário.');
-        $names=$db->table('Contractos')->where('Nome do Cliente','like','%'.addcslashes($term,'%_\\').'%')
+        $nq=$db->table('Contractos');
+        \App\Support\Branches::restrict($nq,$request->user(),$request->query('agencia'));
+        $names=$nq->where('Nome do Cliente','like','%'.addcslashes($term,'%_\\').'%')
             ->selectRaw('`Nome do Cliente` AS nome, MAX(`Nº de Cliente`) AS id, COUNT(DISTINCT `Nr do Contracto`) AS contratos')
             ->groupBy('Nome do Cliente')->orderBy('Nome do Cliente')->limit(15)->get();
         return response()->json(['clientes'=>$names]);
@@ -401,7 +407,7 @@ final class ExtractoController extends Controller
         $db=DB::connection('mysql_legacy');
         $today=$this->today();
         // Evidência completa: todas as prestações (sem filtro de estado) no intervalo escolhido.
-        [$rows,$tot]=$this->summarise($this->clientRows($db,$f),$today,'todos');
+        [$rows,$tot]=$this->summarise($this->clientRows($db,$f,$request),$today,'todos');
         $rows=$this->sortClientExtract($rows,$f);
         abort_if(!$rows,404,'Sem prestações para este mutuário/contrato no período escolhido.');
 

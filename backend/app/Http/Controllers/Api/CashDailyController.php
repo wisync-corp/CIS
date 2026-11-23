@@ -44,7 +44,8 @@ final class CashDailyController extends Controller
 
         $accounts=DB::table('cis_cash_accounts')
             ->when(isset($d['account_id']),fn($q)=>$q->where('id',$d['account_id']))
-            ->orderBy('code')->get(['id','code','name','status','opening_balance','opening_extracto_nr','cut_at','validated_at']);
+            ->orderBy('code')->get(['id','code','name','status','opening_balance','opening_extracto_nr','cut_at','validated_at'])
+            ->filter(fn($a)=>\App\Support\Branches::accountVisible($u,(int)$a->id))->values();
         abort_if(isset($d['account_id']) && $accounts->isEmpty(),404,'Conta não encontrada.');
 
         $result=[];$totals=['opening'=>0,'entries'=>0,'exits'=>0,'closing'=>0,'internal_in'=>0,'internal_out'=>0];

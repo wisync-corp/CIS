@@ -933,6 +933,46 @@ $bi=data($bc->index($ureq('GET',[],$admin)));
 ok(count($bi['agencias'])===2 && collect($bi['agencias'])->firstWhere('id',$mat)['contratos']===1 && collect($bi['agencias'])->firstWhere('id',$mat)['utilizadores']===1,'resumo por agência (contratos e utilizadores)');
 ok($err(fn()=>$bc->update($ureq('PUT',['codigo'=>'SEDE','nome'=>'Sede','activo'=>false],$admin),$sede))===422,'a agência principal não pode ser desactivada');
 
+echo "== Carteiras e desempenho\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000190_cis_portfolios.php','--force'=>true]);
+\App\Support\Portfolio::reset();\App\Support\Branches::reset();
+$pc=new \App\Http\Controllers\Api\PortfolioController();
+$c1=new User();$c1->forceFill(['name'=>'Carla Carteira','email'=>'carla@ci.test','password'=>bcrypt('x'),'role'=>'cobrador','active'=>1,'must_change_password'=>false])->save();
+$ag1=new User();$ag1->forceFill(['name'=>'Alberto Agente','email'=>'alberto@ci.test','password'=>bcrypt('x'),'role'=>'agente','active'=>1,'must_change_password'=>false])->save();
+ok($err(fn()=>$pc->assignContract($ureq('PUT',['user_id'=>$ag1->id],$admin),'OP-0002'))===422,'só um gestor de carteira (cobrador) pode ser responsável');
+ok($err(fn()=>$pc->assignContract($ureq('PUT',['user_id'=>$c1->id],$gmu),'OP-0002'))===403,'só o administrador atribui carteiras');
+data($pc->assignContract($ureq('PUT',['user_id'=>$c1->id],$admin),'OP-0002'));
+\App\Support\Portfolio::reset();
+$cobList=collect($lc->index($lreq([],$c1))->toArray()['data'])->pluck('numero')->all();
+ok($cobList===['OP-0002'],'gestor de carteira só vê os contratos de que é responsável');
+$e3=null;try{\App\Support\Branches::requireContract($c1,'OP-0001');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $x){$e3=$x->getStatusCode();}
+ok($e3===403,'contrato fora da carteira recusado (403)');
+$bulk=data($pc->assignBulk($ureq('POST',['user_id'=>$c1->id,'agencia'=>$sede,'so_activos'=>false,'so_sem_responsavel'=>true],$admin)));
+\App\Support\Portfolio::reset();
+$owned=$db->table('cis_contract_owner')->where('user_id',$c1->id)->pluck('contrato')->all();
+ok($bulk['atribuidos']>=1 && in_array('OP-0002',$owned,true) && !in_array('OP-0001',$owned,true),'atribuição em massa por agência (só a Sede; Matola fica de fora)');
+$cid=(int)$db->table('Contractos')->where('Nr do Contracto','OP-0003')->value('Nº de Cliente');
+data($pc->assignClient($ureq('PUT',['user_id'=>$ag1->id],$admin),$cid));
+\App\Support\Portfolio::reset();
+$agContracts=\App\Support\Portfolio::contracts($ag1);
+ok(\App\Support\Portfolio::clients($ag1)===[$cid] && in_array('OP-0003',$agContracts,true),'agente vê os seus mutuários e os contratos deles');
+$e4=null;try{\App\Support\Portfolio::requireClient($ag1,$cid+999);}catch(\Symfony\Component\HttpKernel\Exception\HttpException $x){$e4=$x->getStatusCode();}
+ok($e4===403,'mutuário de outro agente recusado (403)');
+$ovc=data((new \App\Http\Controllers\Api\OverviewController())($lreq([],$c1)));
+$ovg=data((new \App\Http\Controllers\Api\OverviewController())($lreq([],$gmu)));
+ok($ovc['carteira_propria']===true && $ovc['caixa']['disponivel']===false && $ovg['agencia']['nome']==='Matola','visão geral: carteira própria sem Caixa; gestora vê a sua agência');
+$rc=new \App\Http\Controllers\Api\ReportController();
+$cart=data($rc->show($lreq([],$admin),'carteira'));
+$names=collect($cart['seccoes'][0]['linhas'])->pluck(0)->all();
+ok(in_array('Carla Carteira',$names,true),'relatório de gestores de carteira');
+$agr=data($rc->show($lreq([],$admin),'agentes'));
+ok(collect($agr['seccoes'][0]['linhas'])->pluck(0)->contains('Alberto Agente'),'relatório de agentes');
+ok($err(fn()=>$rc->show($lreq([],$gmu),'carteira'))===403,'desempenho da equipa: só o administrador');
+$gl=collect(data($rc->index($lreq([],$gmu)))['relatorios'])->pluck('id');
+ok(!$gl->contains('carteira') && !$gl->contains('operadores') && $gl->contains('agenda'),'gestor não vê os relatórios de desempenho');
+$ex=data((new \App\Http\Controllers\Api\ExtractoController())->geral($lreq([],$gmu)));
+ok(collect($ex['linhas'])->every(fn($l)=>in_array((string)($l['contrato']??$l['Contracto']??''),['OP-0001',''],true)),'extracto geral: a gestora só vê movimentos da sua agência');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

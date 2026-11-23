@@ -240,7 +240,7 @@ final class MessageCenterController extends Controller
             [$body]=$this->body($request);
             $db=DB::connection('mysql_legacy');
             $today=now('Africa/Maputo')->toDateString();
-            $cq=$this->contractRows($db);\App\Support\Branches::applyToContracts($cq,\App\Support\Branches::scope($request->user(),$request->query('agencia')));
+            $cq=$this->contractRows($db);\App\Support\Branches::restrict($cq,$request->user(),$request->query('agencia'));
             $byContract=$cq->orderBy('Ordem')->get()->groupBy('Nr do Contracto');
             $clients=$this->clients($db,$byContract->map(fn($r)=>$r->first()->{'Nº de Cliente'})->values()->all());
             $items=[];
@@ -324,6 +324,7 @@ final class MessageCenterController extends Controller
             }
             if (($f['canal']??'todos')!=='todos') $q->where('l.channel',$f['canal']);
             if (trim((string)($f['contrato']??''))!=='') $q->where('l.contract_number',trim($f['contrato']));
+            \App\Support\Branches::restrict($q,$request->user(),$request->query('agencia'),'l.contract_number');
             if ($f['inicio']??null) $q->where('l.created_at','>=',$f['inicio'].' 00:00:00');
             if ($f['fim']??null) $q->where('l.created_at','<=',$f['fim'].' 23:59:59');
             $tot=(clone $q)->selectRaw($hasStatus
@@ -361,6 +362,7 @@ final class MessageCenterController extends Controller
         $this->admin($request);
         return $this->guard(function () use ($request) {
             $n=trim((string)$request->validate(['contrato'=>['required','string','max:155']])['contrato']);
+            \App\Support\Branches::requireContract($request->user(),$n);
             $rows=DB::table('cis_message_log as l')->leftJoin('users as u','u.id','=','l.sent_by')
                 ->where('l.contract_number',$n)->orderByDesc('l.id')->limit(50)
                 ->get(['l.id','l.channel','l.status','l.detail','l.phone','l.body','l.created_at','u.name as por']);

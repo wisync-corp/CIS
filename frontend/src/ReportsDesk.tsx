@@ -1,16 +1,17 @@
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile,type CompanyProfile} from './company';
 import {useEffect,useMemo,useRef,useState} from 'react';
+import BranchFilter from './BranchFilter';
 import {createPortal} from 'react-dom';
-import {BarChart3,FileText,Download,Printer,X,AlertCircle,ShieldCheck,Scale,Landmark,UserCheck,Loader2,CalendarClock,Hourglass,Users,TrendingUp,Wallet,Repeat,RefreshCw,Search,ChevronDown,ChevronUp,Info} from 'lucide-react';
+import {Briefcase,UserPlus,BarChart3,FileText,Download,Printer,X,AlertCircle,ShieldCheck,Scale,Landmark,UserCheck,Loader2,CalendarClock,Hourglass,Users,TrendingUp,Wallet,Repeat,RefreshCw,Search,ChevronDown,ChevronUp,Info} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Def={id:string;grupo?:string;titulo:string;periodo:'intervalo'|'futuro'|'data'|'ano'|'nenhum';descricao:string;base_legal:string};
 type Section={titulo:string;colunas:string[];linhas:string[][];grafico?:string[];tom?:'risco';total_final?:boolean};
-type Report=Def&{nota:string;resumo:[string,string][];seccoes:Section[];emitido_em:string;emitido_por:string|null;codigo_verificacao:string;
+type Report=Def&{agencia?:string|null;nota:string;resumo:[string,string][];seccoes:Section[];emitido_em:string;emitido_por:string|null;codigo_verificacao:string;
  intervalo?:{inicio:string;fim:string};data_referencia?:string;ano?:number};
 
-const ICON:Record<string,typeof BarChart3>={actividade:BarChart3,crc:Landmark,branqueamento:Scale,identificacao:UserCheck,agenda:CalendarClock,atrasos:Hourglass,operadores:Users,evolucao:TrendingUp,caixa:Wallet,novocredito:Repeat};
+const ICON:Record<string,typeof BarChart3>={actividade:BarChart3,crc:Landmark,branqueamento:Scale,identificacao:UserCheck,agenda:CalendarClock,atrasos:Hourglass,operadores:Users,carteira:Briefcase,agentes:UserPlus,evolucao:TrendingUp,caixa:Wallet,novocredito:Repeat};
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Africa/Maputo'}).format(new Date());
 const plusDays=(d:string,n:number)=>{const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
 const dt=(v?:string|null)=>{if(!v)return '—';const [y,m,d]=v.slice(0,10).split('-');return d?`${d}/${m}/${y}`:v;};
@@ -92,7 +93,7 @@ function SectionView({s,open}:{s:Section;open:boolean}){
 }
 
 const Doc=({r,company}:{r:Report;company:CompanyProfile|null})=><article className="cis-evidence cis-report-doc">
- <header><CompanyBrand company={company}/><div><h1>{r.titulo}</h1><p>{periodText(r)}</p><p>Emitido em {dt(r.emitido_em)} às {r.emitido_em.slice(11)}{r.emitido_por?` por ${r.emitido_por}`:''}</p></div></header>
+ <header><CompanyBrand company={company}/><div><h1>{r.titulo}</h1><p>{periodText(r)}{r.agencia?' · Agência '+r.agencia:''}</p><p>Emitido em {dt(r.emitido_em)} às {r.emitido_em.slice(11)}{r.emitido_por?` por ${r.emitido_por}`:''}</p></div></header>
  <section className="cis-evidence-summary cis-report-summary">{r.resumo.map(([k,v])=><div key={k}><span>{k}</span><strong>{fmtSummary(v)}</strong></div>)}</section>
  {r.seccoes.map(s=><section key={s.titulo}><h2>{s.titulo}</h2>{s.linhas.length?<table><thead><tr>{s.colunas.map(c=><th key={c} className={isNumCol(c)?'num':''}>{c}</th>)}</tr></thead>
   <tbody>{s.linhas.map((l,i)=><tr key={i} className={s.total_final&&i===s.linhas.length-1?'total':''}>{l.map((v,j)=><td key={j} className={isNumCol(s.colunas[j])?'num':''}>{fmtCell(s.colunas[j],v,l)}</td>)}</tr>)}</tbody></table>:<p>Sem registos.</p>}</section>)}
@@ -111,6 +112,7 @@ export default function ReportsDesk({token}:{token:string}){
  const [inicio,setInicio]=useState(startOf('mes')[0]);const [fim,setFim]=useState(today());
  const [aIni,setAIni]=useState(today());const [aFim,setAFim]=useState(plusDays(today(),30));
  const [data,setData]=useState(today());const [ano,setAno]=useState(String(new Date().getFullYear()));
+ const [agencia,setAgencia]=useState('');
  const [preset,setPreset]=useState('mes');const [aPreset,setAPreset]=useState('30');
  const [rep,setRep]=useState<Report|null>(null);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
  const [view,setView]=useState<'painel'|'documento'>('painel');const [printing,setPrinting]=useState(false);const [tick,setTick]=useState(0);
@@ -130,12 +132,13 @@ export default function ReportsDesk({token}:{token:string}){
   if(def.periodo==='futuro'){if(!aIni||!aFim||aFim<aIni)return;p.set('inicio',aIni);p.set('fim',aFim);}
   if(def.periodo==='data'){if(!data)return;p.set('data',data);}
   if(def.periodo==='ano')p.set('ano',ano);
+  if(agencia)p.set('agencia',agencia);
   const t=window.setTimeout(()=>{ctrl.current?.abort();const c=new AbortController();ctrl.current=c;setBusy(true);setError('');
    fetch(API+'/cis/relatorios/'+def.id+'?'+p,{headers,signal:c.signal}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error((j as {message?:string}).message||'Não foi possível gerar o relatório.');return j as Report;})
     .then(j=>{if(!c.signal.aborted)setRep(j);}).catch(e=>{if(e.name!=='AbortError'){setError(e.message);setRep(null);}}).finally(()=>{if(!c.signal.aborted)setBusy(false);});},300);
   return()=>window.clearTimeout(t);
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[def?.id,inicio,fim,aIni,aFim,data,ano,tick]);
+ },[def?.id,inicio,fim,aIni,aFim,data,ano,tick,agencia]);
  useEffect(()=>{setRep(null);},[sel]);
 
  function exportCsv(){
@@ -154,13 +157,13 @@ export default function ReportsDesk({token}:{token:string}){
    const done=()=>{document.body.classList.remove('cis-printing-evidence');document.title=prev;setPrinting(false);window.removeEventListener('afterprint',done);};
    window.addEventListener('afterprint',done);window.print();setTimeout(done,1500);},150);
  }
- const Ic=def?(ICON[def.id]??FileText):FileText;const g=def?.grupo==='Gestão';
+ const Ic=def?(ICON[def.id]??FileText):FileText;const g=!!def?.grupo&&def.grupo!=='Regulatórios';
 
  return <div className="cis-reports">
   <aside className="cis-report-list" aria-label="Relatórios">
-   {['Gestão','Regulatórios'].map(grp=>{const list=defs.filter(d=>(d.grupo??'Regulatórios')===grp);return list.length?<div key={grp} className="cis-report-group">
-    <h3>{grp==='Gestão'?'Gestão':'Regulatórios · Banco de Moçambique'}</h3>
-    <ul>{list.map(d=>{const I=ICON[d.id]??FileText;return <li key={d.id}><button type="button" className={d.id===sel?'selected':''} onClick={()=>setSel(d.id)} title={d.descricao}><span className={'cis-rep-ico '+(grp==='Gestão'?'g':'r')}><I size={16}/></span><b>{d.titulo}</b></button></li>;})}</ul>
+   {['Desempenho da equipa','Gestão','Regulatórios'].map(grp=>{const list=defs.filter(d=>(d.grupo??'Regulatórios')===grp);return list.length?<div key={grp} className="cis-report-group">
+    <h3>{grp==='Regulatórios'?'Regulatórios · Banco de Moçambique':grp}</h3>
+    <ul>{list.map(d=>{const I=ICON[d.id]??FileText;return <li key={d.id}><button type="button" className={d.id===sel?'selected':''} onClick={()=>setSel(d.id)} title={d.descricao}><span className={'cis-rep-ico '+(grp!=='Regulatórios'?'g':'r')}><I size={16}/></span><b>{d.titulo}</b></button></li>;})}</ul>
    </div>:null;})}
    <p className="cis-report-hint">Os relatórios regulatórios seguem a regulamentação pesquisada em Novembro de 2026 e serão ajustados aos modelos oficiais do Banco de Moçambique.</p>
   </aside>
@@ -168,12 +171,13 @@ export default function ReportsDesk({token}:{token:string}){
   <section className="cis-rep-main">
    {def&&<header className="cis-rep-head">
     <span className={'cis-rep-ico big '+(g?'g':'r')}><Ic size={22}/></span>
-    <div><span className={'cis-rep-badge '+(g?'g':'r')}>{g?'Gestão':'Regulatório'}</span><h2>{def.titulo}</h2><p>{def.descricao}</p>
+    <div><span className={'cis-rep-badge '+(g?'g':'r')}>{g?(def.grupo==='Gestão'?'Gestão':def.grupo):'Regulatório'}</span><h2>{def.titulo}</h2><p>{def.descricao}</p>
      <details className="cis-rep-legal"><summary><Info size={13}/> Base legal e notas</summary><p>{def.base_legal}</p>{rep?.nota&&<p>{rep.nota}</p>}</details></div>
    </header>}
 
    {def&&<div className="cis-rep-toolbar">
     <div className="cis-rep-period">
+     <BranchFilter token={token} value={agencia} onChange={setAgencia}/>
      {def.periodo==='intervalo'&&<><Seg label="Período" items={[['mes','Este mês'],['mes_anterior','Mês anterior'],['trimestre','Trimestre'],['ano','Ano']]} cur={preset} onPick={k=>{setPreset(k);const [a,b]=startOf(k);setInicio(a);setFim(b);}}/>
       <label>De<input type="date" value={inicio} max={fim} onChange={e=>{setInicio(e.target.value);setPreset('');}}/></label>
       <label>Até<input type="date" value={fim} min={inicio} max={today()} onChange={e=>{setFim(e.target.value);setPreset('');}}/></label></>}
@@ -196,7 +200,7 @@ export default function ReportsDesk({token}:{token:string}){
    {busy&&!rep&&<div className="cis-rep-skeleton" aria-busy="true" aria-label="A gerar o relatório"><div/><div/><div/><div/><span/><span/></div>}
 
    {rep&&view==='painel'&&<div className={'cis-rep-board'+(busy?' loading':'')}>
-    <div className="cis-rep-meta"><span>{periodText(rep)}</span><span>Gerado às {rep.emitido_em.slice(11)}{rep.emitido_por?` por ${rep.emitido_por}`:''} · código {rep.codigo_verificacao}</span></div>
+    <div className="cis-rep-meta"><span>{periodText(rep)}{rep.agencia?' · Agência '+rep.agencia:''}</span><span>Gerado às {rep.emitido_em.slice(11)}{rep.emitido_por?` por ${rep.emitido_por}`:''} · código {rep.codigo_verificacao}</span></div>
     <div className="cis-rep-kpis">{rep.resumo.map(([k,v])=><div key={k} className={'cis-rep-kpi '+tone(k)}><span>{k}</span><strong>{fmtSummary(v)}</strong></div>)}</div>
     {rep.seccoes.map((s,i)=><SectionView key={rep.id+rep.emitido_em+s.titulo} s={s} open={i<4||s.linhas.length<=12}/>)}
    </div>}

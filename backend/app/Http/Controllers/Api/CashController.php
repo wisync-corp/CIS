@@ -112,6 +112,7 @@ final class CashController extends Controller
         $d = $request->validate(['account_id'=>['nullable','integer','min:1']]);
         $query=DB::table('Extracto')->whereNotNull('account_id')->orderByDesc('Data da Operação')->orderByDesc('Nr');
         if (isset($d['account_id'])) $query->where('account_id',$d['account_id']);
+        if (($vis=\App\Support\Branches::visibleAccountIds($request->user()))!==null) $query->whereIn('account_id',$vis?:[0]);
         $columns=[
             'Nr as id','Nr as extracto_nr','account_id',
             'Tipo de Movimento as legacy_type','Valor as amount',

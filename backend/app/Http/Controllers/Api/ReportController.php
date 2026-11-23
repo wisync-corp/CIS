@@ -51,7 +51,13 @@ final class ReportController extends Controller
             ['id'=>'atrasos','grupo'=>'Gestão','titulo'=>'Antiguidade dos atrasos','periodo'=>'data',
              'descricao'=>'Valor vencido por escalões de dias e lista por contrato, com contacto e último pagamento.',
              'base_legal'=>'Relatório de gestão interna (acompanhamento do risco de crédito).'],
-            ['id'=>'operadores','grupo'=>'Gestão','titulo'=>'Desempenho por gestor de crédito','periodo'=>'intervalo',
+            ['id'=>'carteira','grupo'=>'Desempenho da equipa','titulo'=>'Gestores de carteira','periodo'=>'intervalo',
+             'descricao'=>'Por gestor de carteira (responsável pelos contratos): carteira, valor em atraso, PAR 30, a cobrar e cobrado no período e taxa de cobrança.',
+             'base_legal'=>'Relatório de gestão interna (desempenho da equipa). Responsável atribuído em Definições › Carteiras ou na ficha do contrato.'],
+            ['id'=>'agentes','grupo'=>'Desempenho da equipa','titulo'=>'Agentes','periodo'=>'intervalo',
+             'descricao'=>'Por agente: mutuários cadastrados, novos no período, quantos chegaram a contrato, valor desembolsado e qualidade (PAR 30).',
+             'base_legal'=>'Relatório de gestão interna (desempenho da equipa). Agente = quem cadastrou o mutuário no CIS ou a quem foi atribuído.'],
+            ['id'=>'operadores','grupo'=>'Desempenho da equipa','titulo'=>'Gestores de crédito','periodo'=>'intervalo',
              'descricao'=>'Por gestor de crédito (utilizador que registou os contratos): desembolsos, recebido, carteira, atraso e incentivos.',
              'base_legal'=>'Relatório de gestão interna (desempenho da equipa).'],
             ['id'=>'evolucao','grupo'=>'Gestão','titulo'=>'Evolução mensal','periodo'=>'ano',
@@ -66,6 +72,24 @@ final class ReportController extends Controller
         ];
     }
 
+    /** Utilizador e filtro de agência do pedido: aplicados a todos os relatórios. */
+    private ?object $who=null;
+    private mixed $ag=null;
+
+    private function contratos($db=null)
+    {
+        $q=($db??DB::connection('mysql_legacy'))->table('Contractos');
+        \App\Support\Branches::restrict($q,$this->who,$this->ag);
+        return $q;
+    }
+
+    private function extracto($db=null)
+    {
+        $q=($db??DB::connection('mysql_legacy'))->table('Extracto');
+        \App\Support\Branches::restrictExtracto($q,$this->who,$this->ag);
+        return $q;
+    }
+
     private function admin(Request $r): void
     {
         \App\Support\Permissions::require($r->user(),'relatorios');
@@ -75,17 +99,26 @@ final class ReportController extends Controller
     private static function d($v): string { return substr((string)$v,0,10); }
     private static function pct(float $a,float $b): string { return $b>0?number_format($a/$b*100,1,'.',''):'0.0'; }
 
+    /** Relatórios de desempenho da equipa: só com a permissão «desempenho» (administrador). */
+    private static function teamReport(string $id): bool
+    {
+        return in_array($id,['operadores','carteira','agentes'],true);
+    }
+
     public function index(Request $request)
     {
         $this->admin($request);
-        return response()->json(['relatorios'=>self::catalog()]);
+        $team=\App\Support\Permissions::can($request->user(),'desempenho');
+        return response()->json(['relatorios'=>array_values(array_filter(self::catalog(),fn($d)=>$team||!self::teamReport($d['id'])))]);
     }
 
     public function show(Request $request,string $id)
     {
         $this->admin($request);
+        $this->who=$request->user();$this->ag=$request->query('agencia');
         $def=collect(self::catalog())->firstWhere('id',$id);
         abort_unless($def,404,'Relatório desconhecido.');
+        if (self::teamReport($id)) \App\Support\Permissions::require($request->user(),'desempenho');
         $today=now('Africa/Maputo')->toDateString();
         $p=$request->validate([
             'inicio'=>['nullable','date_format:Y-m-d'],'fim'=>['nullable','date_format:Y-m-d'],
@@ -102,6 +135,8 @@ final class ReportController extends Controller
                 'agenda'=>$this->agenda($p['inicio']??$today,$p['fim']??CarbonImmutable::parse($today)->addDays(30)->toDateString()),
                 'atrasos'=>$this->atrasos(min($p['data']??$today,$today)),
                 'operadores'=>$this->operadores($ini,$fim),
+                'carteira'=>$this->carteira($ini,$fim),
+                'agentes'=>$this->agentes($ini,$fim),
                 'evolucao'=>$this->evolucao((int)($p['ano']??now('Africa/Maputo')->year)),
                 'caixa'=>$this->caixa($ini,$fim),
                 'novocredito'=>$this->novocredito(),
@@ -110,7 +145,8 @@ final class ReportController extends Controller
             report($e);
             abort(503,'Relatório indisponível (MySQL '.((int)($e->errorInfo[1]??0)).'). Detalhe no registo do servidor.');
         }
-        $doc=$def+$out+['emitido_em'=>now('Africa/Maputo')->format('Y-m-d H:i'),'emitido_por'=>$request->user()?->name];
+        $branch=\App\Support\Branches::scope($this->who,$this->ag);
+        $doc=$def+$out+['agencia'=>$branch!==null?\App\Support\Branches::label($branch):null,'emitido_em'=>now('Africa/Maputo')->format('Y-m-d H:i'),'emitido_por'=>$request->user()?->name];
         $doc['codigo_verificacao']=strtoupper(substr(hash('sha256',json_encode([$id,$out],JSON_UNESCAPED_UNICODE)),0,16));
         return response()->json($doc)->header('Cache-Control','no-store, private');
     }
@@ -121,7 +157,7 @@ final class ReportController extends Controller
     {
         $cols=['Ordem','Nr do Contracto','Nome do Cliente','Nº de Cliente','Quantia Creditada','% de Juro','Prazo/Duração','Nº de Prestações',
             'Data de Inicio','Data de Cobrança','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago','Data de Pagamento','Estado','M. Pagamento','usuario'];
-        return DB::connection('mysql_legacy')->table('Contractos')
+        return $this->contratos()
             ->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))->orderBy('Ordem')->get();
     }
 
@@ -182,7 +218,7 @@ final class ReportController extends Controller
         $ren=$paid->where('Estado','Renovado');
         $activos=$out->map(fn($r)=>(int)$r->{'Nº de Cliente'}?:$r->{'Nome do Cliente'})->unique()->count();
         // Caixa (Extracto), excluindo transferências internas.
-        $cx=DB::connection('mysql_legacy')->table('Extracto')->whereBetween('Data da Operação',[$ini,$fim])
+        $cx=$this->extracto()->whereBetween('Data da Operação',[$ini,$fim])
             ->whereRaw("NOT (`Descrição` LIKE '[TRANSFER %' OR `Descrição` LIKE '[ESTORNO TRANSFER %')")
             ->selectRaw("ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' THEN Valor ELSE 0 END),2) e, ROUND(SUM(CASE WHEN `Tipo de Movimento`<>'Entradas' THEN Valor ELSE 0 END),2) s")->first();
         // Distribuição dos desembolsos por montante.
@@ -444,12 +480,106 @@ final class ReportController extends Controller
         ];
     }
 
+    /** Nomes dos utilizadores do CIS. */
+    private static function userNames(): array
+    {
+        return DB::table('users')->pluck('name','id')->map(fn($n)=>(string)$n)->all();
+    }
+
+    /** Desempenho por gestor de carteira (responsável atribuído a cada contrato). */
+    private function carteira(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        abort_unless(\App\Support\Portfolio::ready(),503,'Carteiras ainda não instaladas. Na VPS execute: bash deploy/install-user-management.sh');
+        $owners=DB::table('cis_contract_owner')->pluck('user_id','contrato')->map(fn($v)=>(int)$v)->all();
+        $names=self::userNames();
+        $per=[];
+        foreach ($this->rows()->groupBy('Nr do Contracto') as $num=>$c) {
+            $uid=$owners[(string)$num]??0;
+            $k=$uid?($names[$uid]??'Utilizador #'.$uid):'(sem gestor de carteira)';
+            $per[$k]??=['n'=>0,'act'=>0,'cli'=>[],'cart'=>0.0,'venc'=>0.0,'atr30'=>0.0,'devido'=>0.0,'devido_pago'=>0.0,'cobrado'=>0.0,'sem'=>$uid===0];
+            $x=&$per[$k];$x['n']++;
+            $out=$c->filter(fn($r)=>self::outstandingAt($r,$fim));
+            if ($out->isNotEmpty()) {
+                $x['act']++;$x['cli'][(int)$c->first()->{'Nº de Cliente'}?:(string)$c->first()->{'Nome do Cliente'}]=1;
+                $cap=$out->sum(fn($r)=>self::principal($r));$x['cart']+=$cap;
+                $x['venc']+=$out->filter(fn($r)=>($d=self::d($r->{'Data de Cobrança'}))!=='' && $d<$fim)->sum(fn($r)=>(float)$r->{'Valor a Pagar'});
+                if ($out->contains(fn($r)=>($d=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($d)->addDays(30)->toDateString()<$fim)) $x['atr30']+=$cap;
+            }
+            foreach ($c as $r) {
+                $due=self::d($r->{'Data de Cobrança'});$pd=self::d($r->{'Data de Pagamento'});$paid=in_array($r->Estado,self::PAID,true);
+                if ($due>=$ini && $due<=$fim && $r->Estado!=='Renovado') {
+                    $x['devido']+=(float)$r->{'Valor a Pagar'};
+                    if ($paid && $pd!=='' && $pd<=$fim) $x['devido_pago']+=(float)$r->{'Valor a Pagar'};
+                }
+                if ($paid && $pd>=$ini && $pd<=$fim) $x['cobrado']+=(float)$r->{'Valor Pago'};
+            }
+            unset($x);
+        }
+        $lines=[];
+        foreach ($per as $k=>$x) $lines[]=[$k,(string)$x['n'],(string)$x['act'],(string)count($x['cli']),self::m($x['cart']),self::m($x['venc']),self::pct($x['atr30'],$x['cart']),self::m($x['devido']),self::m($x['cobrado']),self::pct($x['devido_pago'],$x['devido'])];
+        usort($lines,fn($a,$b)=>[str_starts_with($a[0],'(')?1:0,-(float)$a[4]]<=>[str_starts_with($b[0],'(')?1:0,-(float)$b[4]]);
+        $sem=array_values(array_filter($per,fn($x)=>$x['sem']));
+        $tot=fn($f)=>array_sum(array_column($per,$f));
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Gestor de carteira = responsável atribuído ao contrato. Carteira (capital em dívida), valor em atraso e PAR 30 à data final. '
+                .'«A cobrar» = prestações com vencimento no período; taxa de cobrança = parte dessas prestações já paga até à data final. «Cobrado» = tudo o que foi pago no período nos contratos da carteira.',
+            'resumo'=>[['Gestores de carteira',(string)count(array_filter($per,fn($x)=>!$x['sem']))],['Carteira em curso',self::m($tot('cart')).' MT'],['Em atraso',self::m($tot('venc')).' MT'],
+                ['Cobrado no período',self::m($tot('cobrado')).' MT'],['Taxa de cobrança',self::pct($tot('devido_pago'),$tot('devido')).' %'],
+                ['Contratos em curso sem gestor',(string)($sem[0]['act']??0)]],
+            'seccoes'=>[['titulo'=>'Desempenho por gestor de carteira','colunas'=>['Gestor de carteira','Contratos','Em curso','Mutuários activos','Carteira (MT)','Em atraso (MT)','PAR 30 (%)','A cobrar no período (MT)','Cobrado no período (MT)','Taxa de cobrança (%)'],'linhas'=>$lines]],
+        ];
+    }
+
+    /** Desempenho por agente (quem cadastrou ou a quem foi atribuído o mutuário). */
+    private function agentes(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        abort_unless(\App\Support\Portfolio::ready(),503,'Carteiras ainda não instaladas. Na VPS execute: bash deploy/install-user-management.sh');
+        $own=DB::table('cis_client_owner')->get(['client_id','user_id','created_at']);
+        $names=self::userNames();
+        $byClient=[];$per=[];
+        foreach ($own as $o) {
+            $byClient[(int)$o->client_id]=(int)$o->user_id;
+            $k=$names[(int)$o->user_id]??'Utilizador #'.$o->user_id;
+            $per[$k]??=['cli'=>0,'novos'=>0,'com'=>[],'n'=>0,'v'=>0.0,'cart'=>0.0,'atr30'=>0.0];
+            $per[$k]['cli']++;
+            $d=substr((string)$o->created_at,0,10);
+            if ($d>=$ini && $d<=$fim) $per[$k]['novos']++;
+        }
+        foreach ($this->rows()->groupBy('Nr do Contracto') as $c) {
+            $cid=(int)$c->first()->{'Nº de Cliente'};
+            if (!isset($byClient[$cid])) continue;
+            $k=$names[$byClient[$cid]]??'Utilizador #'.$byClient[$cid];
+            $x=&$per[$k];$x['com'][$cid]=1;
+            $start=self::d($c->min('Data de Inicio'));
+            if ($start>=$ini && $start<=$fim) { $x['n']++;$x['v']+=(float)$c->max('Quantia Creditada'); }
+            $out=$c->filter(fn($r)=>self::outstandingAt($r,$fim));
+            if ($out->isNotEmpty()) {
+                $cap=$out->sum(fn($r)=>self::principal($r));$x['cart']+=$cap;
+                if ($out->contains(fn($r)=>($d=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($d)->addDays(30)->toDateString()<$fim)) $x['atr30']+=$cap;
+            }
+            unset($x);
+        }
+        $lines=[];
+        foreach ($per as $k=>$x) $lines[]=[$k,(string)$x['cli'],(string)$x['novos'],(string)count($x['com']),self::pct(count($x['com']),$x['cli']),(string)$x['n'],self::m($x['v']),self::m($x['cart']),self::pct($x['atr30'],$x['cart'])];
+        usort($lines,fn($a,$b)=>(float)$b[6]<=>(float)$a[6] ?: (int)$b[1]<=>(int)$a[1]);
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Agente = utilizador que cadastrou o mutuário no CIS (ou a quem foi atribuído na ficha). Mutuários do sistema antigo só contam depois de atribuídos. Carteira e PAR 30 à data final.',
+            'resumo'=>[['Agentes',(string)count($per)],['Mutuários das carteiras',(string)array_sum(array_column($per,'cli'))],['Novos no período',(string)array_sum(array_column($per,'novos'))],
+                ['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT']],
+            'seccoes'=>[['titulo'=>'Desempenho por agente','colunas'=>['Agente','Mutuários','Novos no período','Com contrato','Conversão (%)','Contratos desembolsados','Desembolsado (MT)','Carteira (MT)','PAR 30 (%)'],'linhas'=>$lines]],
+        ];
+    }
+
     /** Evolução mensal no ano (até ao mês actual). */
     private function evolucao(int $ano): array
     {
         $rows=$this->rows();$today=now('Africa/Maputo')->toDateString();
         $starts=$rows->groupBy('Nr do Contracto')->map(fn($c)=>['d'=>self::d($c->min('Data de Inicio')),'q'=>(float)$c->max('Quantia Creditada')]);
-        $cx=DB::connection('mysql_legacy')->table('Extracto')->whereYear('Data da Operação',$ano)
+        $cx=$this->extracto()->whereYear('Data da Operação',$ano)
             ->whereRaw("NOT (`Descrição` LIKE '[TRANSFER %' OR `Descrição` LIKE '[ESTORNO TRANSFER %')")
             ->selectRaw("MONTH(`Data da Operação`) m, ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' THEN Valor ELSE 0 END),2) e, ROUND(SUM(CASE WHEN `Tipo de Movimento`<>'Entradas' THEN Valor ELSE 0 END),2) s")
             ->groupBy('m')->get()->keyBy('m');
@@ -484,7 +614,7 @@ final class ReportController extends Controller
         $db=DB::connection('mysql_legacy');
         $hasAcc=$db->getSchemaBuilder()->hasColumn('Extracto','account_id');
         $sel=['Tipo de Movimento','Descrição','Valor'];if ($hasAcc) $sel[]='account_id';
-        $mov=$db->table('Extracto')->whereBetween('Data da Operação',[$ini,$fim])->get($sel);
+        $mov=$this->extracto($db)->whereBetween('Data da Operação',[$ini,$fim])->get($sel);
         $names=[];
         if ($hasAcc) { try { $names=DB::table('cis_cash_accounts')->get(['id','code','name'])->keyBy('id')->map(fn($a)=>$a->code.' · '.$a->name)->all(); } catch (\Throwable $e) { report($e); } }
         $type=function ($m) {

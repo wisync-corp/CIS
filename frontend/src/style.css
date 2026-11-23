@@ -1921,3 +1921,11 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-contract-chosen-account span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
 .cis-contract-chosen-account small{color:#475569}
 .cis-contract-disburse{border:2px solid #16a34a33;background:#f0fdf4}
+
+/* Carteiras */
+.cis-portfolio-title{display:flex;align-items:center;gap:7px;margin:18px 0 8px}
+.cis-check{display:flex!important;align-items:center;gap:8px;flex-direction:row!important;font-weight:600}
+.cis-portfolio-owner select{max-width:220px}
+.cis-branch-filter{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.cis-branch-filter select{font:inherit}
+.cis-scope-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:#ede9fe;color:#4c1d95;font-size:12px;font-weight:700}

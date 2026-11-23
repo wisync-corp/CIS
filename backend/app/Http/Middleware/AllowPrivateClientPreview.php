@@ -20,6 +20,11 @@ final class AllowPrivateClientPreview
             abort(503, 'Consulta de mutuários ainda não autorizada neste ambiente.');
         }
         \App\Support\Permissions::require($user, 'ver');
+        // Gestor de carteira e agente: só os mutuários da sua carteira.
+        $id = $request->route('id');
+        if (is_numeric($id)) \App\Support\Portfolio::requireClient($user, (int) $id);
+        $numero = $request->route('numero');
+        if (is_string($numero) && $numero !== '') \App\Support\Branches::requireContract($user, $numero);
         $response = $next($request);
         $response->headers->set('Cache-Control', 'no-store, private');
         $response->headers->set('Pragma', 'no-cache');

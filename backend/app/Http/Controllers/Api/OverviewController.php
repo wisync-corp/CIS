@@ -41,6 +41,11 @@ final class OverviewController extends Controller
         $mes=$q['mes']??(string)now($tz)->month;
         $ano=$q['ano']??(string)now($tz)->year;
         $legacy=DB::connection('mysql_legacy');
+        $user=$request->user();$ag=$request->query('agencia');
+        // Agência e carteira do utilizador (o administrador pode filtrar por agência).
+        $contracts=function () use ($legacy,$user,$ag) { $t=$legacy->table('Contractos'); \App\Support\Branches::restrict($t,$user,$ag); return $t; };
+        $branch=\App\Support\Branches::scope($user,$ag);
+        $ownOnly=\App\Support\Portfolio::kind($user)!==null;
         // Condição de período sobre uma coluna de data (parâmetros vinculados).
         $period=function (string $col) use ($mes,$ano): array {
             $sql=[];$b=[];
@@ -54,7 +59,7 @@ final class OverviewController extends Controller
         $paid="`Estado` IN ('Pago','Pago em Atraso','Renovado')";
         $principal="GREATEST(0, COALESCE(`Valor a Pagar`,0) - COALESCE(`Valor de Juros`,0))";
         $recovered="GREATEST(0, COALESCE(`Valor Pago`,0) - COALESCE(`Valor de Juros`,0) - COALESCE(`Valor de Multa`,0))";
-        $p=$legacy->table('Contractos')->selectRaw("
+        $p=$contracts()->selectRaw("
             ROUND(SUM(CASE WHEN $pending THEN $principal ELSE 0 END),2) AS capital_carteira,
             ROUND(SUM(CASE WHEN $pending THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS a_receber,
             SUM(CASE WHEN $pending THEN 1 ELSE 0 END) AS prestacoes_por_receber,
@@ -74,7 +79,7 @@ final class OverviewController extends Controller
 
         // Prestações em aberto com VENCIMENTO no período: vencidas (< hoje) e pendentes (>= hoje).
         [$dc,$dcb]=$period('Data de Cobrança');
-        $due=$legacy->table('Contractos')->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
+        $due=$contracts()->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
             SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS v_n,
             ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS v_valor,
             COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS v_contratos,
@@ -86,7 +91,7 @@ final class OverviewController extends Controller
         // Carteira desembolsada no período: um valor por contrato (Quantia Creditada),
         // data do desembolso = primeira Data de Inicio do contrato (renovações não contam).
         $per=$legacy->query()->fromSub(
-            $legacy->table('Contractos')->selectRaw("`Nr do Contracto` AS nr, MIN(`Data de Inicio`) AS d, MAX(`Quantia Creditada`) AS q, SUM(CASE WHEN `Estado`<>'Renovado' THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END) AS pr")
+            $contracts()->selectRaw("`Nr do Contracto` AS nr, MIN(`Data de Inicio`) AS d, MAX(`Quantia Creditada`) AS q, SUM(CASE WHEN `Estado`<>'Renovado' THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END) AS pr")
                 ->groupBy('Nr do Contracto'),'t');
         [$dp,$db]=$period('d');
         $disb=$per->whereRaw($dp,$db)->where('d','<=',$today)
@@ -94,9 +99,11 @@ final class OverviewController extends Controller
 
         // Caixa: saldos das contas activas (mesma regra da página Caixa).
         $cash=['disponivel'=>false,'saldo_total'=>null,'contas'=>[],'entradas_mes'=>null,'saidas_mes'=>null,'desembolsos_mes'=>null];
-        if (Schema::hasTable('cis_cash_accounts') && Schema::hasColumn('Extracto','account_id')) {
+        if (!$ownOnly && Schema::hasTable('cis_cash_accounts') && Schema::hasColumn('Extracto','account_id')) {
             $total=0;$ok=true;
-            foreach (DB::table('cis_cash_accounts')->where('status','activa')->orderBy('code')->get() as $a) {
+            $accQ=DB::table('cis_cash_accounts')->where('status','activa')->orderBy('code');
+            if ($branch!==null) $accQ->whereIn('id',\App\Support\Branches::accountsOf($branch)?:[0]);
+            foreach ($accQ->get() as $a) {
                 try {
                     $b=CashAccountLedger::balance(DB::connection(),$a);
                     $total+=$b;
@@ -109,7 +116,8 @@ final class OverviewController extends Controller
             $cash['disponivel']=$ok && count($cash['contas'])>0;
             $cash['saldo_total']=$ok?CashAccountLedger::amount($total):null;
             $internal="(`Descrição` LIKE '[TRANSFER %' OR `Descrição` LIKE '[ESTORNO TRANSFER %')";
-            $m=DB::table('Extracto')->selectRaw("
+            $mq=DB::table('Extracto');\App\Support\Branches::restrictExtracto($mq,$user,$ag);
+            $m=$mq->selectRaw("
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' AND NOT $internal THEN Valor ELSE 0 END),2) AS entradas,
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Saídas' AND NOT $internal THEN Valor ELSE 0 END),2) AS saidas,
                 ROUND(SUM(CASE WHEN `Tipo de Movimento`='Saídas' AND `Descrição` LIKE '%Desembolso%' THEN Valor ELSE 0 END),2) AS desembolsos
@@ -123,6 +131,8 @@ final class OverviewController extends Controller
             'actualizado_em'=>now($tz)->format('Y-m-d H:i'),
             'mes'=>now($tz)->format('Y-m'),
             'periodo'=>['mes'=>$mes,'ano'=>$ano,'anos'=>$this->years($legacy)],
+            'agencia'=>$branch!==null?['id'=>$branch,'nome'=>\App\Support\Branches::label($branch)]:null,
+            'carteira_propria'=>$ownOnly,
             'carteira'=>[
                 'desembolsado_periodo'=>$this->money($disb->total??0),
                 'contratos_desembolsados_periodo'=>(int)($disb->n??0),

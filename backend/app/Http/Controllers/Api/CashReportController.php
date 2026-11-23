@@ -50,7 +50,8 @@ final class CashReportController extends Controller
 
         $accounts=DB::table('cis_cash_accounts')
             ->when(isset($data['account_id']),fn($q)=>$q->where('id',$data['account_id']))
-            ->orderBy('code')->get(['id','code','name','status','cut_at','opening_extracto_nr']);
+            ->orderBy('code')->get(['id','code','name','status','cut_at','opening_extracto_nr'])
+            ->filter(fn($a)=>\App\Support\Branches::accountVisible($user,(int)$a->id))->values();
         abort_if(isset($data['account_id']) && $accounts->isEmpty(),404,'Conta financeira inexistente.');
         $byAccount=$accounts->keyBy('id');
         $ids=$accounts->pluck('id')->all();
