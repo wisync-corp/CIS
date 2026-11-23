@@ -182,7 +182,50 @@ def empty(msg: str) -> None:
     st.html(f'<div class="cis-empty">{html.escape(msg)}</div>')
 
 
-def style(fig: go.Figure, title: str, height: int = 340, legend: bool = False) -> go.Figure:
+def short(v: float, kind: str) -> str:
+    """Rótulo curto para os valores nos gráficos."""
+    if v is None or pd.isna(v):
+        return ""
+    if kind == "pct":
+        return num(v, 1) + " %"
+    if kind == "n":
+        return num(v)
+    a = abs(v)
+    if a >= 1_000_000:
+        return num(v / 1_000_000, 1) + " M"
+    if a >= 1_000:
+        return num(v / 1_000, 1) + " mil"
+    return num(v)
+
+
+def data_labels(fig: go.Figure, kind: str) -> None:
+    """Rótulos a negrito nos próprios dados (substituem as linhas de grelha e o eixo dos valores)."""
+    stacked = fig.layout.barmode == "stack"
+    if stacked:
+        fig.update_layout(uniformtext=dict(minsize=10, mode="hide"))
+    for tr in fig.data:
+        if tr.type == "bar":
+            horiz = tr.orientation == "h"
+            vals = list(tr.x if horiz else tr.y)
+            tr.text = [f"<b>{short(v, kind)}</b>" if v else "" for v in vals]
+            tr.texttemplate = "%{text}"
+            tr.textposition = "inside" if stacked else "outside"
+            tr.insidetextanchor = "middle"
+            tr.textfont = dict(family="DM Sans", size=12, color=(T["heading"] if tr.name == "Por receber" else "#fff") if stacked else T["heading"])
+            tr.cliponaxis = False
+        elif tr.type == "scatter":
+            tr.mode = "lines+markers+text"
+            tr.text = [f"<b>{short(v, kind)}</b>" for v in tr.y]
+            tr.texttemplate = "%{text}"
+            tr.textposition = "top center"
+            tr.textfont = dict(family="DM Sans", size=11.5, color=T["heading"])
+            tr.cliponaxis = False
+        elif tr.type == "pie":
+            tr.texttemplate = "<b>%{percent}</b>"
+            tr.textfont = dict(family="DM Sans", size=12)
+
+
+def style(fig: go.Figure, title: str, height: int = 340, legend: bool = False, kind: str = "mt") -> go.Figure:
     fig.update_layout(
         title=dict(text=f"<b>{title}</b>", font=dict(family="Manrope, sans-serif", size=15, color=T["heading"]), x=0.01, y=0.97),
         font=dict(family="DM Sans, sans-serif", size=12, color=T["text"]), separators=", ",
@@ -191,8 +234,17 @@ def style(fig: go.Figure, title: str, height: int = 340, legend: bool = False) -
         legend=dict(orientation="h", y=-0.12, x=0, font=dict(size=11)),
         hoverlabel=dict(bgcolor="#fff", bordercolor=T["border"], font=dict(family="DM Sans", color=T["text"])),
         bargap=0.28)
-    fig.update_xaxes(showgrid=False, linecolor=T["border"], tickfont=dict(color=T["muted"]), title=None, automargin=True)
-    fig.update_yaxes(gridcolor="#ECE8F3", zeroline=False, tickfont=dict(color=T["muted"]), title=None, automargin=True, tickformat=",~r")
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor=T["border"], tickfont=dict(color=T["muted"], size=12), title=None, automargin=True)
+    fig.update_yaxes(showgrid=False, zeroline=False, showline=False, tickfont=dict(color=T["text"], size=12), title=None, automargin=True)
+    data_labels(fig, kind)
+    horiz = any(getattr(tr, "orientation", None) == "h" for tr in fig.data)
+    # O eixo dos valores fica só com os rótulos dos dados (sem linhas nem números repetidos).
+    if horiz:
+        fig.update_xaxes(showticklabels=False, showline=False)
+        fig.update_layout(margin=dict(r=72))
+    elif any(tr.type in ("bar", "scatter") for tr in fig.data):
+        fig.update_yaxes(showticklabels=False)
+        fig.update_layout(margin=dict(t=64, l=28, r=28))
     return fig
 
 
@@ -368,8 +420,7 @@ def page_carteira(p: pd.DataFrame, c: pd.DataFrame, per: Period) -> None:
             fig = go.Figure(go.Bar(x=fx["n"], y=fx["faixa"], orientation="h", marker_color=PALETTE[: len(fx)],
                                    hovertemplate="%{y}<br><b>%{x} contrato(s)</b><extra></extra>"))
             fig.update_yaxes(autorange="reversed")
-            fig.update_xaxes(tickformat="d")
-            chart(style(fig, "Contratos por faixa de crédito"), "faixa_n")
+            chart(style(fig, "Contratos por faixa de crédito", kind="n"), "faixa_n")
 
 
 def retention_series(c: pd.DataFrame) -> pd.DataFrame:
@@ -434,9 +485,8 @@ def page_mutuarios(p: pd.DataFrame, c: pd.DataFrame, cl: pd.DataFrame, per: Peri
                      color_discrete_map={"Novos": T["accent"], "Recorrentes": T["primary"]},
                      category_orders={"tipo": ["Recorrentes", "Novos"]})
         fig.update_traces(hovertemplate="%{x}<br><b>%{y}</b> mutuário(s)<extra>%{fullData.name}</extra>")
-        fig.update_yaxes(tickformat="d")
         fig.update_layout(legend_title_text="")
-        chart(style(fig, "Novos e recorrentes", legend=True), "novos")
+        chart(style(fig, "Novos e recorrentes", legend=True, kind="n"), "novos")
     with b:
         merged = (cp.drop_duplicates("cliente")[["nome"]]
                   .merge(cl.drop_duplicates("Nome Completo"), left_on="nome", right_on="Nome Completo", how="left"))
@@ -451,14 +501,12 @@ def page_mutuarios(p: pd.DataFrame, c: pd.DataFrame, cl: pd.DataFrame, per: Peri
         t = top.nlargest(10, "valor").sort_values("valor")
         fig = go.Figure(go.Bar(x=t["valor"], y=t["nome"], orientation="h", marker_color=T["primary"], customdata=t["n"],
                                hovertemplate="%{y}<br><b>%{x:,.2f} MT</b> · %{customdata} contrato(s)<extra></extra>"))
-        fig.update_xaxes(tickformat=",~r")
         chart(style(fig, "Top 10 mutuários por crédito", height=380), "top_valor")
     with b:
         t = top.nlargest(10, "n").sort_values("n")
         fig = go.Figure(go.Bar(x=t["n"], y=t["nome"], orientation="h", marker_color=T["accent"],
                                hovertemplate="%{y}<br><b>%{x} contrato(s)</b><extra></extra>"))
-        fig.update_xaxes(dtick=1, tickformat="d")
-        chart(style(fig, "Top 10 mutuários por nº de contratos", height=380), "top_n")
+        chart(style(fig, "Top 10 mutuários por nº de contratos", height=380, kind="n"), "top_n")
 
 
 def growth(c: pd.DataFrame, per: Period) -> tuple[float | None, pd.DataFrame]:
@@ -526,8 +574,9 @@ def page_financeiro(p: pd.DataFrame, c: pd.DataFrame, per: Period) -> None:
             fig = go.Figure(go.Bar(x=[blabel(t, "M", multi) for t in gg["t"]], y=gg["v"],
                                    marker_color=[T["accent"] if v >= 0 else T["danger"] for v in gg["v"]],
                                    hovertemplate="%{x}<br><b>%{y:,.1f} %</b><extra></extra>"))
-            fig.update_yaxes(ticksuffix=" %")
-            chart(style(fig, "Crescimento mensal dos desembolsos"), "crescimento")
+            fig = style(fig, "Crescimento mensal dos desembolsos", kind="pct")
+            fig.update_yaxes(zeroline=True, zerolinecolor=T["border"])
+            chart(fig, "crescimento")
     if not due.empty:
         r = series(paid, "Data de Cobrança", "Valor Pago", per).rename(columns={"v": "Recebido"})
         q = series(pend, "Data de Cobrança", "Valor a Pagar", per).rename(columns={"v": "Por receber"})
