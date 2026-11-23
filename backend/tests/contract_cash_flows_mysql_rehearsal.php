@@ -978,6 +978,9 @@ echo "== Reforço, abate e recuperação de crédito\n";
 $changeAccount=$acc('CREDITO-TESTE','5000.00');
 $creditOrder=$row(['Nr do Contracto'=>'C-4200','Nº'=>4200,'Valor Pago'=>0,'Valor de Juros'=>150,'Valor a Pagar'=>1150]);
 $creditBefore=$db->table('Contractos')->where('Ordem',$creditOrder)->first();
+$creditProfile=data((new \App\Http\Controllers\Api\ContractProfileController())->show(req('/x',[],$user),'C-4200'));
+ok(($creditProfile['installments'][0]['Tipo de Juro']??null)==='Fixo','a ficha expõe o tipo de juro de cada prestação para o reforço');
+
 $creditChanges=new \App\Http\Controllers\Api\ContractCollectionController();
 $change=fn(array $fields)=>data($creditChanges->creditChange(req('/x',$fields,$user),'C-4200'));
 $reinforce=['operacao'=>'reforco','ordem'=>$creditOrder,'valor'=>'200.00','taxa'=>15];
