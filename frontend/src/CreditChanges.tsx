@@ -15,7 +15,7 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
  const [operation,setOperation]=useState<Operation|null>(null);
  const [order,setOrder]=useState('');
  const [amount,setAmount]=useState('');
- const [rate,setRate]=useState('');
+ const [rate,setRate]=useState<string|null>(null);
  const selectedRate=fixed.find(row=>String(row.Ordem)===order)?.['% de Juro'];
  const [accounts,setAccounts]=useState<Account[]>([]);
  const [account,setAccount]=useState('');
@@ -30,7 +30,7 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
  const endpoint=api+'/cis/contractos/'+encodeURIComponent(numero)+'/alteracao-credito';
  const normalAmount=amount.trim().replace(',','.');
  const canPreview=operation==='abate'||(cash&&!!order&&/^\d+(?:\.\d{1,2})?$/.test(normalAmount)&&Number(normalAmount)>0);
- const payload=operation&&{operacao:operation,...(cash?{ordem:Number(order),valor:normalAmount}:{}),...(operation==='reforco'&&rate!==''?{taxa:Number(rate)}:{})};
+ const payload=operation&&{operacao:operation,...(cash?{ordem:Number(order),valor:normalAmount}:{}),...(operation==='reforco'&&rate!==null&&rate!==''?{taxa:Number(rate)}:{})};
  const headers={Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'};
 
  useEffect(()=>{
@@ -56,7 +56,7 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
  },[endpoint,token,operation,order,normalAmount,rate,canPreview]);
 
  function resetPreview(){setPreview(null);setError('');setRequestKey('');}
- function choose(value:Operation){resetPreview();setOperation(value);setOrder('');setAmount('');setRate('');setReason('');setReference('');setAccount('');setSuccess('');}
+ function choose(value:Operation){resetPreview();setOperation(value);setOrder('');setAmount('');setRate(null);setReason('');setReference('');setAccount('');setSuccess('');}
 
  async function submit(){
   if(!preview||!payload||saving)return;
@@ -95,11 +95,11 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
    <legend>{operation==='reforco'?'Reforço de crédito':operation==='abate'?'Abate do contrato':'Recuperação de crédito abatido'}</legend>
    <div className="cis-collections-fields">
     {cash&&<>
-     <label>Prestação<select value={order} onChange={e=>{resetPreview();setOrder(e.target.value);setRate('');}}><option value="">Seleccione</option>
+     <label>Prestação<select value={order} onChange={e=>{resetPreview();setOrder(e.target.value);setRate(null);}}><option value="">Seleccione</option>
       {choices.map(row=><option key={String(row.Ordem)} value={String(row.Ordem)}>Prestação {row['Nº da Parcela']}</option>)}
      </select></label>
      <label>Montante (MT)<input inputMode="decimal" value={amount} onChange={e=>{resetPreview();setAmount(e.target.value);}}/></label>
-     {operation==='reforco'&&<label>Taxa de juro (%)<input type="number" min="0" max="100" step="1" value={rate||String(selectedRate??'')} disabled={!order} onChange={e=>{resetPreview();setRate(e.target.value);}}/><small>Preenchida com a taxa da prestação. Pode alterá-la antes de confirmar.</small></label>}
+     {operation==='reforco'&&<label>Taxa de juro (%)<input type="number" min="0" max="100" step="1" value={rate??String(selectedRate??'')} disabled={!order} onBlur={()=>{if(rate==='')setRate(null);}} onChange={e=>{resetPreview();setRate(e.target.value);}}/><small>Preenchida com a taxa da prestação. Pode alterá-la antes de confirmar.</small></label>}
      <label>{operation==='reforco'?'Conta de origem':'Conta receptora'}<select value={account} onChange={e=>{setAccount(e.target.value);setRequestKey('');}}>
       <option value="">Seleccione uma conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}
      </select></label>
