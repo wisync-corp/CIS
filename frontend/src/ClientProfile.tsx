@@ -36,13 +36,17 @@ const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[
   {key:'ID',label:'ID interno'}, {key:'Conduta',label:'Conduta'},
   {key:'usuario',label:'Utilizador associado'}]}
 ];
-const editableOriginal=new Set(['Nome Completo','Bairro','Cidade','Provincia','Rua']);
+// Ficha original: tudo editável excepto o n.º do mutuário (Numeração), o ID interno e o utilizador associado.
+// O servidor indica em «editaveis» as colunas com permissão de gravação activa.
+const editableOriginal=new Set(['Nome Completo','Bairro','Cidade','Provincia','Rua','Contacto','Email','Nº de BI','Data de Emissão',
+ 'Nacionalidade','Naturalidade','Estado Civil','Nº da Casa','Nº de Quarterão','Conduta']);
+const lockedFields=new Set(['Numeração','ID','usuario']);
 const secondaryFields=new Set([
  'ponto_referencia','local_trabalho_actividade','fonte_rendimento_principal',
  'contacto_alternativo','pessoa_referencia_nome','pessoa_referencia_contacto','melhor_horario_contacto',
  'tipo_cliente','genero','profissao','tipo_documento','nuit','local_emissao_documento','validade_documento',
  'nome_pai','nome_mae','grau_parentesco_referencia']);
-const originalFields=['Nome Completo','Bairro','Cidade','Provincia','Rua'];
+const originalFields=[...editableOriginal];
 function normalized(value:string|number|null|undefined){return value===null||value===undefined?'':String(value);}
 const dateFields=new Set(['Data de Emissão','validade_documento']);
 const timeFields=new Set(['melhor_horario_contacto']);
@@ -68,6 +72,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  const [loading,setLoading]=useState(true);
  const [saving,setSaving]=useState(false);
  const [editing,setEditing]=useState(false);
+ const [writable,setWritable]=useState<Set<string>>(new Set());
  const [error,setError]=useState('');
  const [success,setSuccess]=useState('');
  const [secondaryReady,setSecondaryReady]=useState(false);
@@ -102,6 +107,8 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
      headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal
     });
     setOriginalEditReady(edit.ok);
+    if(edit.ok){const j=await edit.json().catch(()=>({})) as {editaveis?:string[]};
+     setWritable(new Set(j.editaveis??['Nome Completo','Bairro','Cidade','Provincia','Rua']));}
    }catch{setOriginalEditReady(false);}
   }catch(e){
    if((e as Error).name!=='AbortError')setError(e instanceof Error?e.message:'Erro ao abrir ficha.');
@@ -109,7 +116,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  },[id,token]);
  useEffect(()=>{const ctrl=new AbortController();void load(ctrl.signal);return()=>ctrl.abort();},[load]);
 
- const canEdit=(key:string)=>editableOriginal.has(key)?originalEditReady:secondaryFields.has(key)?secondaryReady:false;
+ const canEdit=(key:string)=>lockedFields.has(key)?false:editableOriginal.has(key)?originalEditReady&&writable.has(key):secondaryFields.has(key)?secondaryReady:false;
  const hasChanges=Boolean(profile&&Object.entries(draft).some(([key,value])=>canEdit(key)&&value!==formValue(key,profile[key])));
  async function save(e:FormEvent){
   e.preventDefault();if(!profile||!hasChanges)return;
@@ -132,7 +139,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     const res=await fetch(API+'/cis/clientes/'+id,{
      method:'PATCH',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
      body:JSON.stringify({changes:originalChanges,original:before})});
-    if(!res.ok)throw new Error(res.status===409?'O registo foi alterado por outra pessoa; recarrega a ficha.':'Falha ao guardar os dados principais.');
+    if(!res.ok)throw new Error(res.status===409?'O registo foi alterado por outra pessoa; recarrega a ficha.':'Dados principais não guardados: '+await serverError(res,'verifique os campos e repita.'));
    }
    if(secondaryChanged){
     const values=Object.fromEntries([...secondaryFields].map(k=>[k,draft[k]??'']));
@@ -173,8 +180,8 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
        const enabled=editing&&canEdit(key);
        const display=isExtra&&!secondaryReady?'Ainda não activado':formValue(key,profile[key])||'Não informado';
        return <label className="cis-profile-field" key={key}><span>{label}</span>
-        {enabled?<input type={dateFields.has(key)?'date':timeFields.has(key)?'time':'text'} step={timeFields.has(key)?60:undefined} value={draft[key]??''} maxLength={maxLen[key]??180} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
-        {editing&&!canEdit(key)&&<small><LockKeyhole size={12}/> Campo protegido{isExtra?' · necessita activação':''}</small>}
+        {enabled?<input type={dateFields.has(key)?'date':timeFields.has(key)?'time':key==='Email'?'email':key==='Contacto'?'tel':'text'} inputMode={key==='Contacto'?'tel':undefined} step={timeFields.has(key)?60:undefined} value={draft[key]??''} maxLength={maxLen[key]??(editableOriginal.has(key)?155:180)} required={key==='Nome Completo'} onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>:<div className={'cis-profile-field-value '+(isExtra&&!secondaryReady?'muted':'')}>{display}</div>}
+        {editing&&!canEdit(key)&&<small><LockKeyhole size={12}/> {lockedFields.has(key)?'Não editável':editableOriginal.has(key)&&originalEditReady?'Necessita activação (enable-client-full-edit.sh)':'Campo protegido'}{isExtra?' · necessita activação':''}</small>}
        </label>;
      })}</div>
      {tab==='Identificação'&&<p className="cis-profile-safety"><ShieldCheck size={16}/> O número do documento existente corresponde ao BI. Outros documentos não reutilizam esse campo sem revisão do cadastro legado.</p>}
