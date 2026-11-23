@@ -1,3 +1,4 @@
+import {useCan} from './perms';
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
 import {Landmark,Wallet,ArrowDownLeft,ArrowUpRight,ArrowLeftRight,RefreshCw,ShieldCheck,AlertCircle,CheckCircle2,Plus,Building2,Smartphone,Layers,Hash,BookOpen,LockKeyhole,Clock3,Search,Filter,ArrowRight,Eye,Info,X,ClipboardCheck,ChevronRight} from 'lucide-react';
 
@@ -23,7 +24,11 @@ const statusName:Record<CashAccount['status'],string>={em_preparacao:'Em prepara
 const moneyInput=(value:string)=>/^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(value)&&Number(value)>0;
 const todayCut=()=>{const d=new Date();const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'Africa/Maputo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d);return parts.replace(' ','T').slice(0,16);};
 
+const todayDate=()=>todayCut().slice(0,10);
 export default function CashDesk({token}:{token:string}){
+ const can=useCan();
+ const canBackdate=can('caixa.data');
+ const [moveDate,setMoveDate]=useState(todayDate());
  const [accounts,setAccounts]=useState<CashAccount[]>([]);
  const [movements,setMovements]=useState<CashMovement[]>([]);
  const [enabled,setEnabled]=useState(false);
@@ -207,8 +212,8 @@ export default function CashDesk({token}:{token:string}){
   setBusy(true);
   try{
    const data=what==='record'
-    ?await request<CashEstimate>('simular-movimento','POST',{account_id:Number(record.account_id),type:record.type,amount:record.amount})
-    :await request<CashEstimate>('simular-transferencia','POST',{source_account_id:Number(transfer.source_account_id),destination_account_id:Number(transfer.destination_account_id),amount:transfer.amount});
+    ?await request<CashEstimate>('simular-movimento','POST',{account_id:Number(record.account_id),type:record.type,amount:record.amount,data:moveDate})
+    :await request<CashEstimate>('simular-transferencia','POST',{source_account_id:Number(transfer.source_account_id),destination_account_id:Number(transfer.destination_account_id),amount:transfer.amount,data:moveDate});
    if(!data.consulta_apenas||data.movimento_registado)throw new Error('Resposta de simulação inesperada; nenhum pagamento deve ser registado.');
    setEstimate(data);
   }catch(e){setError(e instanceof Error?e.message:'Não foi possível calcular a prévia.');}
@@ -220,7 +225,7 @@ export default function CashDesk({token}:{token:string}){
   if(what==='record' && !moneyInput(record.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer' && !moneyInput(transfer.amount)){setError('Montante inválido. Utilize até duas casas decimais.');return;}
   if(what==='transfer'&&!window.confirm('Confirma que a saída da origem E a entrada no destino foram ambas efectivamente executadas e comprovadas? Se qualquer uma estiver pendente, não registe a transferência como concluída.'))return;
-  if(what==='record'&&!window.confirm('Confirma o registo deste movimento financeiro na Caixa? A operação não poderá ser apagada.'))return;
+  if(what==='record'&&!window.confirm('Confirma o registo deste movimento financeiro na Caixa'+(moveDate!==todayDate()?' com data de '+moveDate.split('-').reverse().join('/'):'')+'? A operação não poderá ser apagada.'))return;
   if(what==='activate'&&!window.confirm('Confirma que conferiu o SALDO REAL, a data de corte e a evidência documental? No modo de administrador único não existe aprovação independente.'))return;
   setBusy(true);
   try{
@@ -230,13 +235,13 @@ export default function CashDesk({token}:{token:string}){
     evidence_reference:opening.evidence_reference
    });
    if(what==='activate')await request('contas/'+id+'/activar','POST',{confirmed_document:true,confirmation_phrase:'CONFIRMO-SALDO-REAL'});
-   if(what==='record')await request('movimentos','POST',{...record,account_id:Number(record.account_id),idempotency_key:operationKey});
+   if(what==='record')await request('movimentos','POST',{...record,account_id:Number(record.account_id),idempotency_key:operationKey,data:moveDate});
    if(what==='transfer')await request('transferencias','POST',{
     ...transfer,source_account_id:Number(transfer.source_account_id),
-    destination_account_id:Number(transfer.destination_account_id),confirmed_source_debit:true,confirmed_destination_credit:true,idempotency_key:operationKey
+    destination_account_id:Number(transfer.destination_account_id),confirmed_source_debit:true,confirmed_destination_credit:true,idempotency_key:operationKey,data:moveDate
    });
    setNotice(what==='create'?'Conta criada em preparação.':what==='opening'?'Saldo submetido para conferência documental.':what==='activate'?'Conta activada após confirmação documental; não houve validação independente no modo de administrador único.':'Operação financeira registada.');
-   if(what==='record'||what==='transfer')setOperationKey(crypto.randomUUID());
+   if(what==='record'||what==='transfer'){setOperationKey(crypto.randomUUID());setMoveDate(todayDate());}
    setAccountDetail(null);setAction('none');setNewAccount({code:'',name:'',type:'banco',identifier:''});await reload();
   }catch(e){setError(e instanceof Error?e.message:'Não foi possível efectuar a operação. Não repita sem verificar o histórico.');}
   finally{setBusy(false);}
@@ -306,6 +311,7 @@ export default function CashDesk({token}:{token:string}){
     <div className="cis-cash-form-note"><Info size={16}/> A prévia não movimenta dinheiro. {enabled?'Após conferência, poderá confirmar o registo no Extracto.':'O registo real continua bloqueado.'}</div>
     <div className="cis-cash-form-title"><span className="cis-cash-step">{enabled?'ENTRADA / SAÍDA FINANCEIRA':'SIMULAÇÃO FINANCEIRA'}</span><h4>Prévia de entrada ou saída</h4><p>Para receitas e despesas gerais. Desembolsos e cobranças exigem integração própria com os contratos.</p></div>
     <label>Conta financeira<select required value={record.account_id} onChange={e=>{setRecord(p=>({...p,account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar conta activa</option>{active.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
+    {canBackdate&&<label>Data do movimento<input type="date" required max={todayDate()} value={moveDate} onChange={e=>{setMoveDate(e.target.value||todayDate());setEstimate(null);}}/><small>{moveDate===todayDate()?'Hoje. Pode escolher uma data anterior.':'Data passada: o saldo considerado é o da conta nesse dia.'}</small></label>}
     <label>Natureza<select value={record.type} onChange={e=>{setRecord(p=>({...p,type:e.target.value as 'entrada'|'saida',category:''}));setEstimate(null);}}><option value="entrada">Entrada / receita</option><option value="saida">Saída / despesa</option></select></label>
     <label>Valor (MT)<input required inputMode="decimal" value={record.amount} onChange={e=>{setRecord(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/><small>Utilize um valor positivo com até duas casas decimais.</small></label>
     {typeOptions.length>0?<label>Tipo de movimento<select required value={record.category} onChange={e=>{setRecord(p=>({...p,category:e.target.value}));setEstimate(null);}}>
@@ -329,6 +335,7 @@ export default function CashDesk({token}:{token:string}){
     <div className="cis-cash-form-title"><span className="cis-cash-step">SIMULAÇÃO DE TRANSFERÊNCIA</span><h4>Prévia entre contas</h4><p>Consulte o efeito estimado nas duas contas. Não é necessário executar qualquer transferência real para esta simulação.</p></div>
     <label>Conta de origem<select required value={transfer.source_account_id} onChange={e=>{setTransfer(p=>({...p,source_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar origem</option>{active.map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
     <label>Conta de destino<select required value={transfer.destination_account_id} onChange={e=>{setTransfer(p=>({...p,destination_account_id:e.target.value}));setEstimate(null);}}><option value="">Seleccionar destino</option>{active.filter(a=>String(a.id)!==transfer.source_account_id).map(a=><option value={a.id} key={a.id}>{a.code} · {a.name}</option>)}</select></label>
+    {canBackdate&&<label>Data do movimento<input type="date" required max={todayDate()} value={moveDate} onChange={e=>{setMoveDate(e.target.value||todayDate());setEstimate(null);}}/><small>{moveDate===todayDate()?'Hoje. Pode escolher uma data anterior.':'Data passada: o saldo considerado é o da conta nesse dia.'}</small></label>}
     <label>Valor (MT)<input required inputMode="decimal" value={transfer.amount} onChange={e=>{setTransfer(p=>({...p,amount:e.target.value}));setEstimate(null);}} placeholder="0.00"/></label>
     <label>Referência / comprovativo<input required minLength={6} maxLength={70} value={transfer.evidence_reference} onChange={e=>{setTransfer(p=>({...p,evidence_reference:e.target.value}));setEstimate(null);}}/></label>
     <label className="cis-cash-wide">Descrição<input required minLength={5} maxLength={100} value={transfer.description} onChange={e=>{setTransfer(p=>({...p,description:e.target.value}));setEstimate(null);}}/></label>
@@ -347,7 +354,7 @@ export default function CashDesk({token}:{token:string}){
      <div><CheckCircle2 size={19}/><strong>Prévia calculada pelo servidor · Sem movimento registado</strong></div>
      <dl>
       <div><dt>Montante</dt><dd>{formatMoney(estimate.amount)}</dd></div>
-      {estimate.saldo_actual!==undefined&&<div><dt>Saldo actual</dt><dd>{formatMoney(estimate.saldo_actual)}</dd></div>}
+      {estimate.saldo_actual!==undefined&&<div><dt>{moveDate!==todayDate()?'Saldo em '+moveDate.split('-').reverse().join('/'):'Saldo actual'}</dt><dd>{formatMoney(estimate.saldo_actual)}</dd></div>}
       {estimate.saldo_estimado!==undefined&&<div><dt>Saldo após operação (indicativo)</dt><dd>{formatMoney(estimate.saldo_estimado)}</dd></div>}
       {estimate.source&&<><div><dt>Origem · {estimate.source.code}</dt><dd>{formatMoney(estimate.source.saldo_actual)} → {formatMoney(estimate.source.saldo_estimado)}</dd></div>
        <div><dt>Destino · {estimate.destination?.code??'—'}</dt><dd>{formatMoney(estimate.destination?.saldo_actual??null)} → {formatMoney(estimate.destination?.saldo_estimado??null)}</dd></div></>}
