@@ -287,7 +287,7 @@ final class ExtractoController extends Controller
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
         $cols=['Ordem','Nº','Nr do Contracto','Nome do Cliente','Nº de Cliente','Nº da Parcela','Data de Inicio',
             'Data de Cobrança','Dias','M. Pagamento','Quantia Creditada','Valor de Juros','Valor de Multa',
-            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado'];
+            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado','Estado do Contrato'];
         return $q->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))
             ->orderBy('Data de Cobrança',$f['direccao']??'asc')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->orderBy('Ordem')->get();
     }
@@ -320,7 +320,7 @@ final class ExtractoController extends Controller
                 'juros'=>self::money($juros),'multa'=>self::money($multa),
                 'valor'=>self::money(in_array($sit,['aberta','vencida'],true)?self::owed($r):$r->{'Valor Pago'}),
                 'data_pagamento'=>$r->{'Data de Pagamento'}?substr((string)$r->{'Data de Pagamento'},0,10):null,
-                'situacao'=>$sit,'estado'=>self::stateLabel($r,$sit),
+                'situacao'=>$sit,'estado'=>self::stateLabel($r,$sit),'contrato_abatido'=>$r->{'Estado do Contrato'}==='Abatido',
             ];
         }
         foreach ($tot as $k=>$v) if (!str_starts_with($k,'n_')) $tot[$k]=self::money($v);
@@ -429,7 +429,7 @@ final class ExtractoController extends Controller
         $contracts=[];
         foreach ($rows as $r) {
             $k=$r['contrato'];
-            $contracts[$k]??=['contrato'=>$k,'capital'=>$r['capital'],'inicio'=>$r['inicio'],'prestacoes'=>0,'em_divida'=>0.0,'pago'=>0.0];
+            $contracts[$k]??=['contrato'=>$k,'capital'=>$r['capital'],'inicio'=>$r['inicio'],'prestacoes'=>0,'em_divida'=>0.0,'pago'=>0.0,'abatido'=>$r['contrato_abatido']];
             $contracts[$k]['prestacoes']++;
             if (in_array($r['situacao'],['aberta','vencida'],true)) $contracts[$k]['em_divida']+=(float)$r['valor'];
             if ($r['situacao']==='paga') $contracts[$k]['pago']+=(float)$r['valor'];
@@ -437,7 +437,8 @@ final class ExtractoController extends Controller
         }
         $contracts=array_map(function ($c) {
             $c['em_divida']=self::money($c['em_divida']);$c['pago']=self::money($c['pago']);
-            $c['situacao']=(float)$c['em_divida']>0?'Em curso':'Liquidado';
+            $c['situacao']=$c['abatido']?'Abatido':((float)$c['em_divida']>0?'Em curso':'Liquidado');
+            unset($c['abatido']);
             return $c;
         },array_values($contracts));
 
@@ -464,7 +465,7 @@ final class ExtractoController extends Controller
             'periodo'=>['inicio'=>$f['inicio']??null,'fim'=>$f['fim']??null],
             'cliente'=>$client,
             'contratos'=>$contracts,
-            'prestacoes'=>array_map(fn($r)=>array_diff_key($r,['cliente'=>1,'cliente_id'=>1,'situacao'=>1]),$rows),
+            'prestacoes'=>array_map(fn($r)=>array_diff_key($r,['cliente'=>1,'cliente_id'=>1,'situacao'=>1,'contrato_abatido'=>1]),$rows),
             'movimentos'=>$movements,
             'totais'=>$tot,
         ];
@@ -501,7 +502,7 @@ final class ExtractoController extends Controller
             }
             if ($s==='paga') $paid+=(float)$r->{'Valor Pago'};
         }
-        $situacao=$sit['vencida']>0?'Pagamento atrasado':(($sit['aberta']>0)?'Pendente':'Finalizado');
+        $situacao=($first->{'Estado do Contrato'}??null)==='Abatido'?'Abatido':($sit['vencida']>0?'Pagamento atrasado':(($sit['aberta']>0)?'Pendente':'Finalizado'));
         $final=$db->table('Contractos')->where('Nr do Contracto',$numero)->max('Data Final');
         $clientId=(int)($first->{'Nº de Cliente'}??0);
         $client=['id'=>$clientId?:null,'codigo'=>$clientId?str_pad((string)$clientId,3,'0',STR_PAD_LEFT):null,
