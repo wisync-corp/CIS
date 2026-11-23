@@ -74,7 +74,7 @@ export const FUNCOES:{id:string;nome:string;definicao:string;pode:string[];naoPo
  {id:'administrador',nome:'Administrador',definicao:'Responsável pelo sistema e pela empresa no CIS. Tem acesso total.',
   pode:['Tudo o que as outras funções fazem','Criar e gerir utilizadores, funções e agências','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
  {id:'gestor',nome:'Gestor de crédito',definicao:'Gere a carteira de crédito: analisa, concede, acompanha e cobra.',
-  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Preparar e abrir contratos (desembolso)','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Preparar e abrir contratos (desembolso), também com data passada se a conta tinha saldo nesse dia','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
   naoPode:['Caixa (contas, movimentos, fecho)','Definições e utilizadores']},
  {id:'financeiro',nome:'Gestor financeiro',definicao:'Responsável pela Caixa e tesouraria e pelo controlo dos recebimentos.',
   pode:['Consultar mutuários, contratos, visão geral e simulador','Caixa: contas, movimentos, transferências, conferência e fecho diário','Registar pagamentos (também com data passada) e emitir recibos','Extractos dos mutuários e extracto geral','Relatórios'],

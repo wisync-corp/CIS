@@ -84,4 +84,52 @@ final class CashAccountLedger
         abort_unless($sum>=0,409,'Saldo da conta inconsistente; requer conferência.');
         return $sum;
     }
+
+    /**
+     * Saldo da conta num dia passado e quanto se pode retirar com essa data.
+     * Devolve [saldo no fim desse dia, disponível] em cêntimos. O disponível é o menor saldo
+     * desse dia em diante: uma saída com data antiga não pode deixar nenhum dia seguinte negativo.
+     */
+    public static function availableOn($db,object $a,string $date): array
+    {
+        self::balance($db,$a); // valida o estado da conta
+        $cut=substr((string)$a->cut_at,0,10);
+        $start=self::cents((string)$a->opening_balance);
+        $byDay=[];
+        $moves=$db->table('Extracto')->where('account_id',$a->id)
+            ->where('Nr','>',$a->opening_extracto_nr)
+            ->get(['Valor','Tipo de Movimento','Data da Operação as d']);
+        foreach ($moves as $m) {
+            $day=substr((string)($m->d??''),0,10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/',$day) || $day<$cut) $day=$cut;
+            $v=self::cents((string)$m->Valor);
+            $byDay[$day]=($byDay[$day]??0)+($m->{'Tipo de Movimento'}==='Entradas'?$v:-$v);
+        }
+        ksort($byDay);
+        $atDate=$start;
+        foreach ($byDay as $day=>$net) if ($day<=$date) $atDate+=$net;
+        $run=$atDate; $min=$atDate;
+        foreach ($byDay as $day=>$net) {
+            if ($day<=$date) continue;
+            $run+=$net; $min=min($min,$run);
+        }
+        return [$atDate,max(0,$min)];
+    }
+
+    /** A data tem de estar no período aberto da conta: depois da abertura e sem fecho diário nesse dia ou depois. */
+    public static function requireDateOpen(object $a,string $date,string $what='lançar movimentos'): void
+    {
+        $cut=substr((string)($a->cut_at??''),0,10);
+        abort_if($cut!=='' && $date<$cut,422,'A data é anterior à abertura da conta '.$a->code.' na Caixa ('
+            .implode('/',array_reverse(explode('-',$cut))).').');
+        try {
+            $closed=\Illuminate\Support\Facades\DB::connection()->table('cis_cash_daily_closures')
+                ->where('account_id',(int)$a->id)->where('closing_date','>=',$date)->max('closing_date');
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int)($e->errorInfo[1]??0)===1146) return;
+            throw $e;
+        }
+        abort_if($closed!==null,422,'A conta '.$a->code.' já tem fecho diário em '
+            .implode('/',array_reverse(explode('-',substr((string)$closed,0,10)))).'; não é possível '.$what.' com data até esse dia.');
+    }
 }
