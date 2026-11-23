@@ -2,7 +2,7 @@
 // App\Support\Permissions). A interface só esconde o que o servidor já recusa.
 import {createContext,useContext} from 'react';
 
-export type Perm='ver'|'mutuarios.editar'|'contratos.abrir'|'contratos.data'|'cobrancas'|'cobrancas.data'|'caixa'|'caixa.data'|'caixa.estornar'
+export type Perm='ver'|'mutuarios.editar'|'contratos.abrir'|'contratos.data'|'contratos.alterar'|'cobrancas'|'cobrancas.data'|'caixa'|'caixa.data'|'caixa.estornar'
  |'extractos'|'extractos.geral'|'mensagens'|'desempenho'|'relatorios'|'definicoes'|'utilizadores';
 
 export const PermsContext=createContext<string[]>([]);

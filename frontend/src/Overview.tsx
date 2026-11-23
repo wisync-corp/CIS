@@ -7,7 +7,7 @@ const API=import.meta.env.VITE_API_URL||'/api';
 type Data={
  agencia?:{id:number;nome:string|null}|null;carteira_propria?:boolean;
  actualizado_em:string;mes:string;nota:string;periodo?:{mes:string;ano:string;anos:number[]};
- carteira:{desembolsado_periodo:string;contratos_desembolsados_periodo:number;prestacoes_desembolsadas_periodo:string;capital_em_carteira:string;valor_a_receber:string;prestacoes_por_receber:number;contratos_activos:number;prestacoes_vencidas:number;valor_vencido:string;contratos_em_atraso:number;vencidas_periodo:number;valor_vencido_periodo:string;contratos_vencidos_periodo:number;pendentes_periodo:number;valor_pendente_periodo:string;contratos_pendentes_periodo:number};
+ carteira:{desembolsado_periodo:string;reforcos_periodo?:{n:number;total:string};contratos_desembolsados_periodo:number;prestacoes_desembolsadas_periodo:string;capital_em_carteira:string;valor_a_receber:string;prestacoes_por_receber:number;contratos_activos:number;prestacoes_vencidas:number;valor_vencido:string;contratos_em_atraso:number;vencidas_periodo:number;valor_vencido_periodo:string;contratos_vencidos_periodo:number;pendentes_periodo:number;valor_pendente_periodo:string;contratos_pendentes_periodo:number};
  recebimentos:{juros:string;juros_mes:string;multas:string;multas_mes:string;capital_recuperado:string;capital_recuperado_mes:string;total_recebido:string;recebido_mes:string};
  caixa:{disponivel:boolean;saldo_total:string|null;contas:{code:string;name:string;saldo:string|null}[];entradas_mes:string|null;saidas_mes:string|null;desembolsos_mes:string|null};
 };
@@ -41,7 +41,7 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
  const per=periodLabel(mes,ano);
  const years=Array.from(new Set([...(data?.periodo?.anos??[]),Number(nowMaputo().y)])).sort((a,b)=>b-a);
  const stats=[
-  {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s) em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período',go:{base:'desembolso',estado:'todos'} as const},
+  {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s)${c.reforcos_periodo?.n?` + ${c.reforcos_periodo.n} reforço(s)`:''} em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período',go:{base:'desembolso',estado:'todos'} as const},
   {name:'Juros efectivamente recebidos',icon:ArrowUpRight,value:mt(r?.juros_mes),hint:r?`Em ${per} · total geral ${mt(r.juros)}`:'Separados da amortização',go:{base:'pagamento',estado:'paga'} as const},
   {name:'Juros de mora recebidos',icon:ArrowDownRight,value:mt(r?.multas_mes),hint:r?`Em ${per} · total geral ${mt(r.multas)}`:'Por atraso no pagamento',go:{base:'pagamento',estado:'paga'} as const},
   {name:'Prestações em atraso',icon:CalendarDays,value:c?String(c.vencidas_periodo):'—',hint:c?`${mt(c.valor_vencido_periodo)} em atraso · ${c.contratos_vencidos_periodo} contrato(s) · vencimento em ${per}`:'Vencimento anterior a hoje',alert:!!c&&c.vencidas_periodo>0,go:{base:'cobranca',estado:'vencida'} as const},

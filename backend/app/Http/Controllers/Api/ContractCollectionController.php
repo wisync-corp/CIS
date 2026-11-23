@@ -519,6 +519,9 @@ final class ContractCollectionController extends Controller
     // Pagamento parcial e liquidação do saldo (com Caixa); renovação dos juros, capitalização e
     // prorrogação 15→30 dias (sem recebimento). Todas com chave idempotente e histórico antes/depois.
 
+    /** Dias mínimos de atraso para abater um crédito sem justificação de abate antecipado. */
+    public const WRITE_OFF_DAYS=90;
+
     public const OPERATIONS=['parcial','remanescente','renovar_juros','capitalizar','prorrogar_15_30'];
     private const CASH_OPS=['parcial','remanescente'];
 
@@ -873,12 +876,13 @@ final class ContractCollectionController extends Controller
     public function creditChange(Request $request, string $numero)
     {
         $this->admin($request);
-        abort_unless($request->user()->role === 'administrador', 403,
-            'Esta operação requer aprovação do administrador.');
+        \App\Support\Permissions::require($request->user(), 'contratos.alterar');
         $d = $request->validate([
-            'operacao' => ['required','in:reforco,abate,recuperacao'],
-            'ordem' => ['required_unless:operacao,abate','nullable','integer','min:1'],
-            'valor' => ['required_unless:operacao,abate','nullable','string','max:16'],
+            'operacao' => ['required','in:reforco,abate,recuperacao,anular_abate'],
+            'data' => ['nullable','date_format:Y-m-d'],
+            'antecipado' => ['nullable','boolean'],
+            'ordem' => ['required_if:operacao,reforco,recuperacao','nullable','integer','min:1'],
+            'valor' => ['required_if:operacao,reforco,recuperacao','nullable','string','max:16'],
             'taxa' => ['nullable','integer','min:0','max:100'],
             'confirmar' => ['nullable','boolean'],
             'valor_confirmado' => ['required_if:confirmar,true','nullable','string','max:20'],
@@ -889,10 +893,15 @@ final class ContractCollectionController extends Controller
         ]);
         $operation = $d['operacao'];
         $commit = (bool) ($d['confirmar'] ?? false);
-        $cash = $operation !== 'abate';
+        $cash = in_array($operation, ['reforco','recuperacao'], true);
         $amount = $cash ? CashAccountLedger::cents($d['valor'], 'valor') : 0;
         abort_if($cash && $amount <= 0, 422, 'Indique um montante positivo.');
-        $date = now('Africa/Maputo')->toDateString();
+        // Data da operação: hoje, ou passada para quem pode registar com data passada.
+        $today = now('Africa/Maputo')->toDateString();
+        $date = $d['data'] ?? $today;
+        abort_if($date > $today, 422, 'A data da operação não pode ser futura.');
+        abort_if($date !== $today && !\App\Support\Permissions::can($request->user(), 'contratos.data'), 403,
+            'O seu perfil só pode registar estas operações com a data de hoje.');
         $reason = trim($d['motivo'] ?? '');
         $reference = trim($d['referencia'] ?? '');
         if ($commit) {
@@ -927,10 +936,55 @@ final class ContractCollectionController extends Controller
                     return ['registado'=>true,'repetido'=>true,'notice'=>'Operação já registada.'];
                 }
             }
-            if ($commit && $cash) $this->cashDateOpen($account,$date);
+            if ($commit && $cash) {
+                $this->cashDateOpen($account,$date);
+                if ($date !== now('Africa/Maputo')->toDateString()) CashAccountLedger::requireDateOpen($account,$date,'registar esta operação');
+            }
+            if ($operation === 'anular_abate') {
+                abort_unless(($rows->first()->{'Estado do Contrato'} ?? '') === 'Abatido', 409, 'O contrato não está abatido.');
+                $hist = $db->table('cis_contractos_historico')->where('contract_number',$numero);
+                $since = (clone $hist)->where('operation','anulacao_abate')->max('id') ?? 0;
+                $abates = (clone $hist)->where('operation','abate_credito')->where('id','>',$since)->orderBy('id')->get();
+                abort_if($abates->isEmpty(), 409, 'Não foi encontrado o registo do abate no histórico.');
+                abort_if((clone $hist)->where('operation','recuperacao_credito')->where('id','>',$since)->exists(), 409,
+                    'Já existem recuperações registadas: o abate não pode ser anulado.');
+                $restore = [];
+                foreach ($abates as $h) {
+                    $before = json_decode((string) $h->before_snapshot, true) ?: [];
+                    $restore[(int) $h->installment_ordem] = array_intersect_key($before, array_flip(['Estado','Estado do Contrato','Situação de Pagamento','Valor Pago']));
+                }
+                if ($commit) {
+                    abort_unless(mb_strlen($reason) >= 5, 422, 'Indique o motivo da anulação.');
+                    foreach ($rows as $row) {
+                        $order = (int) $row->Ordem;
+                        if (!isset($restore[$order]) || !$restore[$order]) continue;
+                        $line = $db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$order);
+                        $line->update($restore[$order]);
+                        ContractHistory::record($db,[
+                            'contract_number'=>$numero,'installment_ordem'=>$order,'installment_number'=>$row->{'Nº da Parcela'},
+                            'operation'=>'anulacao_abate','before'=>$row,'after'=>$line->first(),
+                            'reason'=>'Anulação do abate: '.$reason,'operation_key'=>$key,'performed_by'=>$user->id,
+                        ]);
+                    }
+                }
+                $total = $abates->sum(fn ($h) => (float) ($h->amount ?? 0));
+                return ['registado'=>$commit,'valor'=>CashAccountLedger::amount(CashAccountLedger::legacyCents($total)),'prestacoes'=>count(array_filter($restore)),
+                    'notice'=>$commit?'Abate anulado: as prestações voltaram à carteira activa.':'As prestações voltam ao estado anterior ao abate.'];
+            }
             if ($operation === 'abate') {
                 $open = $rows->filter(fn ($row) => in_array($row->Estado,['Pendente','Pagamento Atrasado'],true));
                 abort_if($open->isEmpty(),409,'Não existem prestações em aberto para abater.');
+                // Regra: abate só com pelo menos 90 dias de atraso; antes disso, só com justificação expressa.
+                $maxLate = 0;
+                foreach ($open as $row) {
+                    $due = substr((string) $row->{'Data de Cobrança'}, 0, 10);
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) && $due < $date) $maxLate = max($maxLate, (int) CarbonImmutable::parse($due)->diffInDays(CarbonImmutable::parse($date)));
+                }
+                $early = $maxLate < self::WRITE_OFF_DAYS;
+                if ($commit && $early) {
+                    abort_unless(!empty($d['antecipado']), 422, 'O contrato tem '.$maxLate.' dia(s) de atraso (mínimo '.self::WRITE_OFF_DAYS.'). Para abater antes, confirme o abate antecipado e justifique.');
+                    abort_unless(mb_strlen($reason) >= 15, 422, 'Abate antecipado: descreva o motivo com pelo menos 15 caracteres.');
+                }
                 $balances = [];
                 foreach ($open as $row) {
                     $this->opBase($db,$row);
@@ -954,12 +1008,12 @@ final class ContractCollectionController extends Controller
                             'contract_number'=>$numero,'installment_ordem'=>$order,'installment_number'=>$row->{'Nº da Parcela'},
                             'operation'=>'abate_credito','before'=>$row,'after'=>$line->first(),
                             'amount'=>isset($balances[$order])?CashAccountLedger::amount($balances[$order]):null,
-                            'reason'=>$reason,'operation_key'=>$key,'performed_by'=>$user->id,
+                            'reason'=>mb_substr('Abate em '.implode('/',array_reverse(explode('-',$date))).' ('.$maxLate.' dias de atraso'.($early?', antecipado':'').'): '.$reason,0,255),'operation_key'=>$key,'performed_by'=>$user->id,
                         ]);
                     }
                 }
                 return ['registado'=>$commit,'valor'=>CashAccountLedger::amount(array_sum($balances)),
-                    'prestacoes'=>count($balances),'notice'=>$commit?'Contrato abatido com saldo disponível para recuperação.':'Abate do saldo em aberto, sem movimento na Caixa.'];
+                    'prestacoes'=>count($balances),'dias_atraso'=>$maxLate,'dias_minimos'=>self::WRITE_OFF_DAYS,'antecipado'=>$early,'notice'=>$commit?'Contrato abatido com saldo disponível para recuperação.':'Abate do saldo em aberto, sem movimento na Caixa.'];
             }
 
             $selected = $rows->where('Ordem',(int)$d['ordem']);
@@ -971,6 +1025,7 @@ final class ContractCollectionController extends Controller
             if ($operation === 'reforco') {
                 $this->opBase($db,$row);
                 abort_unless(mb_strtolower(trim((string)$row->{'Tipo de Juro'})) === 'fixo',409,'O reforço directo só se aplica a juro fixo.');
+                abort_if($date < substr((string)$row->{'Data de Inicio'},0,10),422,'A data do reforço não pode ser anterior ao início da prestação.');
                 abort_unless($this->partialPaid($db,$row)===0,409,'A prestação tem pagamentos parciais, que devem ser regularizados antes do reforço.');
                 abort_unless($amount % 100 === 0,422,'O reforço de capital deve ser em meticais inteiros.');
                 $capital = (int)$row->Capital;
@@ -1015,8 +1070,9 @@ final class ContractCollectionController extends Controller
                 }
             } else {
                 abort_unless($row->Estado==='Abatido' && $row->{'Estado do Contrato'}==='Abatido',409,'A prestação não está abatida.');
-                $history = $db->table('cis_contractos_historico')->where('contract_number',$numero)->where('installment_ordem',$order);
-                $original = (clone $history)->where('operation','abate_credito')->value('amount');
+                $since = $db->table('cis_contractos_historico')->where('contract_number',$numero)->where('operation','anulacao_abate')->max('id') ?? 0;
+                $history = $db->table('cis_contractos_historico')->where('contract_number',$numero)->where('installment_ordem',$order)->where('id','>',$since);
+                $original = (clone $history)->where('operation','abate_credito')->orderByDesc('id')->value('amount');
                 $recovered = (clone $history)->where('operation','recuperacao_credito')->sum('amount');
                 $balance = CashAccountLedger::legacyCents($original ?? 0)-CashAccountLedger::legacyCents($recovered);
                 abort_unless($amount <= $balance,422,'O montante excede o saldo abatido recuperável.');

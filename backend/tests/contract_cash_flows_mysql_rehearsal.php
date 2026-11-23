@@ -525,7 +525,7 @@ ok(!isset($pg['valores']) && $pg['perfil']['nome_empresa']==='CAPTA Microcrédit
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
-ok(count(data($rc->index($rq([])))['relatorios'])===12,'catálogo com 12 relatórios (4 regulatórios + 5 de gestão + 3 de desempenho)');
+ok(count(data($rc->index($rq([])))['relatorios'])===13,'catálogo com 13 relatórios (4 regulatórios + 6 de gestão + 3 de desempenho)');
 $mStart=now($tz)->startOfMonth()->toDateString();
 $ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
 $ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
@@ -1016,7 +1016,16 @@ ok(count($reinforcedProfile['installments'])===1
 ok($change($reinforce)['repetido']===true && $db->table('Extracto')->where('Contracto','C-4200')->where('Tipo de Movimento','Saídas')->count()===1,
     'reforço e repetição geram uma saída');
 $beforeAbate=$db->table('Extracto')->count();
-$change(['operacao'=>'abate','idempotency_key'=>'a0000000-0000-4000-8000-000000004201','valor_confirmado'=>'1380.00']+$confirm);
+$abatePreview=$change(['operacao'=>'abate']);
+ok($abatePreview['antecipado']===true && $abatePreview['dias_minimos']===90,'abate de contrato sem 90 dias de atraso é marcado como antecipado');
+ok($err(fn()=>$change(['operacao'=>'abate','idempotency_key'=>'a0000000-0000-4000-8000-000000004203','valor_confirmado'=>'1380.00']+$confirm))===422,
+    'abate antecipado exige confirmação expressa');
+$change(['operacao'=>'abate','antecipado'=>true,'idempotency_key'=>'a0000000-0000-4000-8000-000000004204','valor_confirmado'=>'1380.00']+$confirm);
+ok($db->table('Contractos')->where('Ordem',$creditOrder)->value('Estado')==='Abatido','abate antecipado justificado registado');
+$change(['operacao'=>'anular_abate','idempotency_key'=>'a0000000-0000-4000-8000-000000004205','valor_confirmado'=>'1380.00']+$confirm);
+ok(in_array($db->table('Contractos')->where('Ordem',$creditOrder)->value('Estado'),['Pendente','Pagamento Atrasado'],true)
+    && $db->table('Contractos')->where('Ordem',$creditOrder)->value('Estado do Contrato')!=='Abatido','anular o abate devolve a prestação à carteira');
+$change(['operacao'=>'abate','antecipado'=>true,'idempotency_key'=>'a0000000-0000-4000-8000-000000004201','valor_confirmado'=>'1380.00']+$confirm);
 ok($db->table('Extracto')->count()===$beforeAbate && $db->table('Contractos')->where('Ordem',$creditOrder)->value('Estado')==='Abatido',
     'abate sai da carteira sem afectar a Caixa');
 $recover=['operacao'=>'recuperacao','ordem'=>$creditOrder,'valor'=>'50.00'];
@@ -1024,6 +1033,20 @@ ok($change($recover)['saldo_apos_operacao']==='1330.00','recuperação parte do 
 $change($recover+['idempotency_key'=>'a0000000-0000-4000-8000-000000004202','valor_confirmado'=>'1330.00']+$confirm);
 ok($change($recover)['saldo_recuperavel']==='1330.00' && $db->table('Extracto')->where('Contracto','C-4200')->where('Tipo de Movimento','Entradas')->count()===1,
     'recuperação reduz saldo abatido, com uma entrada na Caixa');
+ok($err(fn()=>$change(['operacao'=>'anular_abate','idempotency_key'=>'a0000000-0000-4000-8000-000000004206','valor_confirmado'=>'1380.00']+$confirm))===409,
+    'com recuperações o abate já não pode ser anulado');
+$abProfile=data((new \App\Http\Controllers\Api\ContractProfileController())->show(req('/x',[],$user),'C-4200'));
+ok(($abProfile['abate']['valor']??null)==='1380.00' && ($abProfile['abate']['recuperado']??null)==='50.00' && count($abProfile['reforcos']??[])===1
+    && ($abProfile['reforcos'][0]['valor']??null)==='200.00','a ficha mostra o reforço e o abate em vigor com o recuperado');
+$abRep=data((new \App\Http\Controllers\Api\ReportController())->show(req('/x',['inicio'=>now($tz)->subDays(30)->toDateString(),'fim'=>now($tz)->toDateString()],$user),'abates'));
+$abLines=collect($abRep['seccoes'][0]['linhas'])->where(1,'C-4200');
+ok($abLines->count()===2 && $abLines->pluck(6)->sort()->values()->all()===['Anulado','Recuperação parcial'] && count($abRep['seccoes'][1]['linhas'])===1,
+    'relatório de abates: abate anulado, abate em vigor com recuperação parcial e a recuperação do período');
+$act=data((new \App\Http\Controllers\Api\ReportController())->show(req('/x',['inicio'=>now($tz)->subDays(30)->toDateString(),'fim'=>now($tz)->toDateString()],$user),'actividade'));
+ok(collect($act['seccoes'][0]['linhas'])->contains(fn($l)=>$l[0]==='Reforços de crédito (n.º / MT)' && str_starts_with($l[1],'1 / 200.00')),'relatório de actividade conta o reforço');
+$pc2=new \App\Http\Controllers\Api\ContractCollectionController();
+$plain=new User();$plain->forceFill(['name'=>'Gestora Sem Alteração','email'=>'gsa@ci.test','password'=>bcrypt('x'),'role'=>'gestor','active'=>1,'must_change_password'=>false])->save();
+ok($err(fn()=>$pc2->creditChange(req('/x',['operacao'=>'abate'],$plain),'C-4200'))===403,'só quem tem a permissão de alterações de crédito');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

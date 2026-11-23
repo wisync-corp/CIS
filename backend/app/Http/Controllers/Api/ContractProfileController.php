@@ -102,8 +102,35 @@ final class ContractProfileController extends Controller
         } catch (\Throwable) {
             $desembolso = null;
         }
+        // Reforços de crédito (saídas «Aumento de Crédito») e abate (histórico), para o resumo da ficha.
+        $reforcos = [];
+        try {
+            foreach (DB::table('Extracto')->where('Contracto', $numero)->where('Tipo de Movimento', 'Saídas')
+                ->where('Descrição', 'like', '%Aumento de Crédito%')->orderBy('Nr')->get(['Nr', 'Valor', 'Data da Operação as d']) as $r) {
+                $reforcos[] = ['nr' => (int) $r->Nr, 'valor' => number_format((float) $r->Valor, 2, '.', ''), 'data' => substr((string) $r->d, 0, 10)];
+            }
+        } catch (\Throwable) {
+            $reforcos = [];
+        }
+        $abate = null;
+        try {
+            if (Schema::hasTable('cis_contractos_historico')) {
+                $h = DB::table('cis_contractos_historico')->where('contract_number', $numero);
+                // Só o abate em vigor: o posterior à última anulação.
+                $since = (clone $h)->where('operation', 'anulacao_abate')->max('id') ?? 0;
+                $ab = (clone $h)->where('operation', 'abate_credito')->where('id', '>', $since)->whereNotNull('amount')->get(['amount', 'performed_at', 'reason']);
+                if ($ab->isNotEmpty() && trim((string) ($detail['Estado do Contrato'] ?? '')) === 'Abatido') {
+                    $rec = (clone $h)->where('operation', 'recuperacao_credito')->where('id', '>', $since)->sum('amount');
+                    $abate = ['valor' => number_format((float) $ab->sum('amount'), 2, '.', ''), 'recuperado' => number_format((float) $rec, 2, '.', ''),
+                        'saldo' => number_format(max(0, (float) $ab->sum('amount') - (float) $rec), 2, '.', ''),
+                        'data' => substr((string) $ab->max('performed_at'), 0, 10), 'motivo' => (string) $ab->last()->reason];
+                }
+            }
+        } catch (\Throwable) {
+            $abate = null;
+        }
         return response()->json([
-            'contract' => $detail, 'desembolso' => $desembolso, 'installments' => $payments,
+            'contract' => $detail, 'desembolso' => $desembolso, 'reforcos' => $reforcos, 'abate' => $abate, 'installments' => $payments,
             'legacy_rows' => $rows,
             'installment_rows' => $total,
             'contract_fields_divergent' => $divergent,

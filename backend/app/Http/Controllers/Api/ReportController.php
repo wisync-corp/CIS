@@ -51,6 +51,9 @@ final class ReportController extends Controller
             ['id'=>'atrasos','grupo'=>'Gestão','titulo'=>'Antiguidade dos atrasos','periodo'=>'data',
              'descricao'=>'Valor vencido por escalões de dias e lista por contrato, com contacto e último pagamento.',
              'base_legal'=>'Relatório de gestão interna (acompanhamento do risco de crédito).'],
+            ['id'=>'abates','grupo'=>'Gestão','titulo'=>'Créditos abatidos e recuperações','periodo'=>'intervalo',
+             'descricao'=>'Contratos abatidos (write-off) no período, valor abatido, quanto já foi recuperado e saldo; recuperações recebidas no período.',
+             'base_legal'=>'Gestão do risco de crédito: registo dos créditos considerados incobráveis e das recuperações posteriores.'],
             ['id'=>'carteira','grupo'=>'Desempenho da equipa','titulo'=>'Gestores de carteira','periodo'=>'intervalo',
              'descricao'=>'Por gestor de carteira (responsável pelos contratos): carteira, valor em atraso, PAR 30, a cobrar e cobrado no período e taxa de cobrança.',
              'base_legal'=>'Relatório de gestão interna (desempenho da equipa). Responsável atribuído em Definições › Carteiras ou na ficha do contrato.'],
@@ -136,6 +139,7 @@ final class ReportController extends Controller
                 'atrasos'=>$this->atrasos(min($p['data']??$today,$today)),
                 'operadores'=>$this->operadores($ini,$fim),
                 'carteira'=>$this->carteira($ini,$fim),
+                'abates'=>$this->abates($ini,$fim),
                 'agentes'=>$this->agentes($ini,$fim),
                 'evolucao'=>$this->evolucao((int)($p['ano']??now('Africa/Maputo')->year)),
                 'caixa'=>$this->caixa($ini,$fim),
@@ -204,6 +208,7 @@ final class ReportController extends Controller
         $firstByClient=$byC->map(fn($c)=>['cli'=>(int)$c->first()->{'Nº de Cliente'}?:$c->first()->{'Nome do Cliente'},'d'=>self::d($c->min('Data de Inicio'))])
             ->groupBy('cli')->map(fn($g)=>$g->min('d'));
         $novos=$firstByClient->filter(fn($d)=>$d>=$ini && $d<=$fim)->count();
+        $refs=$this->reforcos($ini,$fim);
         // Carteira na data de fim.
         $out=$rows->filter(fn($r)=>self::outstandingAt($r,$fim));
         $cart=$out->sum(fn($r)=>self::principal($r));
@@ -240,7 +245,7 @@ final class ReportController extends Controller
             'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
             'nota'=>'Carteira e carteira em risco reconstituídas à data '.CarbonImmutable::parse($fim)->format('d/m/Y').' (prestação iniciada e não paga até essa data). Capital = Valor a Pagar − Juros.',
             'resumo'=>[
-                ['Contratos desembolsados',(string)$disb->count()],['Valor desembolsado',self::m($disb->sum('q')).' MT'],
+                ['Contratos desembolsados',(string)$disb->count()],['Valor desembolsado',self::m($disb->sum('q')+$refs->sum('v')).' MT'],
                 ['Carteira em curso',self::m($cart).' MT'],['Saldo em dívida (com juros)',self::m($owed).' MT'],
                 ['Carteira em risco a 30 dias (PAR 30)',self::pct($parC($par30),$cart).'%'],['Recebido no período',self::m($tot).' MT'],
                 ['Mutuários activos',(string)$activos],['Mutuários novos',(string)$novos],
@@ -248,7 +253,9 @@ final class ReportController extends Controller
             'seccoes'=>[
                 ['titulo'=>'1. Desembolsos','colunas'=>['Indicador','Valor'],'linhas'=>[
                     ['Número de contratos desembolsados',(string)$disb->count()],
-                    ['Valor desembolsado (MT)',self::m($disb->sum('q'))],
+                    ['Valor desembolsado em contratos novos (MT)',self::m($disb->sum('q'))],
+                    ['Reforços de crédito (n.º / MT)',$refs->count().' / '.self::m($refs->sum('v'))],
+                    ['Total emprestado no período (MT)',self::m($disb->sum('q')+$refs->sum('v'))],
                     ['Montante médio por contrato (MT)',self::m($disb->count()?$disb->avg('q'):0)],
                     ['Taxa de juro média (% por período)',number_format($avgRate,2,'.','')],
                     ['Mutuários novos (primeiro contrato no período)',(string)$novos],
@@ -322,9 +329,11 @@ final class ReportController extends Controller
         $rows=$this->rows();$cl=$this->clients();
         $ini="$ano-01-01";$fim="$ano-12-31";
         $per=[];
-        foreach ($rows->groupBy('Nr do Contracto') as $c) {
+        $refBy=$this->reforcos($ini,$fim)->groupBy('c');
+        foreach ($rows->groupBy('Nr do Contracto') as $num=>$c) {
             $first=$c->first();$key=(int)$first->{'Nº de Cliente'}?:(string)$first->{'Nome do Cliente'};
             $per[$key]??=['nome'=>(string)$first->{'Nome do Cliente'},'cid'=>(int)$first->{'Nº de Cliente'},'desemb'=>0.0,'receb'=>0.0,'meses'=>[],'contratos'=>0];
+            foreach ($refBy[(string)$num]??[] as $rf) { $per[$key]['desemb']+=$rf['v'];$per[$key]['meses'][substr($rf['d'],0,7)]=($per[$key]['meses'][substr($rf['d'],0,7)]??0)+$rf['v']; }
             $d=self::d($c->min('Data de Inicio'));
             if ($d>=$ini && $d<=$fim) { $q=(float)$c->max('Quantia Creditada');$per[$key]['desemb']+=$q;$per[$key]['meses'][substr($d,0,7)]=($per[$key]['meses'][substr($d,0,7)]??0)+$q;$per[$key]['contratos']++; }
             foreach ($c as $r) {
@@ -465,6 +474,12 @@ final class ReportController extends Controller
                 if ($late30) $per[$op]['atr']+=$cap;
             }
         }
+        // Reforços: contam para quem os registou.
+        foreach ($this->reforcos($ini,$fim) as $rf) {
+            $op=$rf['u']!==''?$rf['u']:'(sem gestor)';
+            $per[$op]??=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'cart'=>0.0,'atr'=>0.0,'cli'=>[],'ativos'=>0,'novos'=>0,'ren'=>0];
+            $per[$op]['v']+=$rf['v'];
+        }
         $iN=CS::num('incentivo_cliente_novo');$iR=CS::num('incentivo_renovacao');$iC=CS::num('incentivo_taxa_capital');$iJ=CS::num('incentivo_taxa_juros');
         $inc=fn($x)=>round($x['novos']*$iN+$x['ren']*$iR+$x['cart']*$iC/100+$x['jur']*$iJ/100,2);
         $lines=[];foreach ($per as $op=>$x) $lines[]=[$op,(string)$x['n'],self::m($x['v']),self::m($x['rec']),self::m($x['jur']),(string)$x['ativos'],(string)count($x['cli']),self::m($x['cart']),self::pct($x['atr'],$x['cart']),(string)$x['novos'],(string)$x['ren'],self::m($inc($x))];
@@ -477,6 +492,75 @@ final class ReportController extends Controller
                     :'Incentivos por configurar (Definições › Incentivos).'),
             'resumo'=>[['Gestores de crédito',(string)count($lines)],['Desembolsado no período',self::m(array_sum(array_column($per,'v'))).' MT'],['Recebido no período',self::m(array_sum(array_column($per,'rec'))).' MT'],['Carteira em curso',self::m(array_sum(array_column($per,'cart'))).' MT'],['Incentivos estimados',self::m(array_sum(array_map($inc,$per))).' MT']],
             'seccoes'=>[['titulo'=>'Desempenho por gestor de crédito','colunas'=>['Gestor de crédito','Contratos desembolsados','Desembolsado (MT)','Recebido (MT)','Juros e mora (MT)','Contratos em curso','Mutuários activos','Carteira (MT)','PAR 30 (%)','Mutuários novos','Renovações','Incentivo estimado (MT)'],'linhas'=>$lines]],
+        ];
+    }
+
+    /** Reforços de crédito (saída «Aumento de Crédito» na Caixa) num intervalo, na agência/carteira do pedido. */
+    private function reforcos(string $ini,string $fim)
+    {
+        return $this->extracto()->where('Tipo de Movimento','Saídas')->where('Descrição','like','%Aumento de Crédito%')
+            ->whereBetween('Data da Operação',[$ini,$fim])->get(['Contracto','Valor','usuario','Data da Operação as d'])
+            ->map(fn($m)=>['c'=>(string)$m->Contracto,'v'=>(float)$m->Valor,'u'=>trim((string)$m->usuario),'d'=>self::d($m->d)]);
+    }
+
+    /** Abates de crédito (histórico imutável) e recuperações. */
+    private function abates(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        $db=DB::connection('mysql_legacy');
+        abort_unless($db->getSchemaBuilder()->hasTable('cis_contractos_historico'),503,'Histórico de contratos não instalado.');
+        $rows=$this->rows();
+        $byC=$rows->groupBy('Nr do Contracto');
+        $names=self::userNames();
+        $hist=$db->table('cis_contractos_historico')->whereIn('operation',['abate_credito','recuperacao_credito','anulacao_abate'])
+            ->whereIn('contract_number',$byC->keys()->map(fn($k)=>(string)$k)->all()?:['__none__'])->orderBy('id')
+            ->get(['id','contract_number','operation','amount','reason','operation_key','performed_by','performed_at']);
+        $events=[];$recs=[];
+        foreach ($hist->groupBy('contract_number') as $num=>$h) {
+            $cur=null;
+            foreach ($h->groupBy('operation_key')->sortBy(fn($g)=>$g->min('id')) as $g) {
+                $op=$g->first()->operation;
+                if ($op==='abate_credito') {
+                    $date=preg_match('#Abate em (\d{2})/(\d{2})/(\d{4})#u',(string)$g->first()->reason,$m)?"$m[3]-$m[2]-$m[1]":substr((string)$g->first()->performed_at,0,10);
+                    $events[]=['c'=>(string)$num,'d'=>$date,'v'=>(float)$g->sum(fn($x)=>(float)($x->amount??0)),'rec'=>0.0,'anulado'=>false,
+                        'mot'=>preg_replace('#^Abate em [^:]*: #u','',(string)$g->first()->reason),'por'=>$names[(int)$g->first()->performed_by]??'—'];
+                    $cur=count($events)-1;
+                } elseif ($op==='anulacao_abate' && $cur!==null) {
+                    $events[$cur]['anulado']=true;$cur=null;
+                } elseif ($op==='recuperacao_credito') {
+                    $v=(float)$g->sum(fn($x)=>(float)($x->amount??0));
+                    if ($cur!==null) $events[$cur]['rec']+=$v;
+                    $recs[]=['c'=>(string)$num,'d'=>substr((string)$g->first()->performed_at,0,10),'v'=>$v,'por'=>$names[(int)$g->first()->performed_by]??'—'];
+                }
+            }
+        }
+        // Datas das recuperações: a do lançamento no Extracto quando existe.
+        $exDates=$this->extracto($db)->where('Tipo de Movimento','Entradas')->where('Descrição','like','%Recuperação de Crédito%')
+            ->get(['Contracto','Valor','Data da Operação as d']);
+        foreach ($recs as &$r) {
+            $hit=$exDates->first(fn($e)=>(string)$e->Contracto===$r['c'] && abs((float)$e->Valor-$r['v'])<0.005);
+            if ($hit) $r['d']=self::d($hit->d);
+        }
+        unset($r);
+        $inP=array_values(array_filter($events,fn($e)=>$e['d']>=$ini && $e['d']<=$fim));
+        $recP=array_values(array_filter($recs,fn($r)=>$r['d']>=$ini && $r['d']<=$fim));
+        $client=fn($c)=>(string)($byC[$c]??collect())->first()?->{'Nome do Cliente'};
+        $l1=array_map(fn($e)=>[$e['d'],$e['c'],$client($e['c']),self::m($e['v']),self::m($e['rec']),self::m($e['anulado']?0:max(0,$e['v']-$e['rec'])),
+            $e['anulado']?'Anulado':($e['rec']>=$e['v']-0.005?'Recuperado':($e['rec']>0?'Recuperação parcial':'Abatido')),$e['mot'],$e['por']],$inP);
+        $l2=array_map(fn($r)=>[$r['d'],$r['c'],$client($r['c']),self::m($r['v']),$r['por']],$recP);
+        $valid=array_filter($inP,fn($e)=>!$e['anulado']);
+        $tv=array_sum(array_column($valid,'v'));$tr=array_sum(array_column($valid,'rec'));
+        $allValid=array_filter($events,fn($e)=>!$e['anulado']);
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Abate = saldo em dívida retirado da carteira activa por ser considerado incobrável (sem movimento de Caixa). Recuperação = valor recebido depois do abate (entrada na Caixa). Abates anulados não contam nos totais.',
+            'resumo'=>[['Contratos abatidos no período',(string)count($valid)],['Valor abatido no período',self::m($tv).' MT'],
+                ['Recuperado desses abates',self::m($tr).' MT ('.self::pct($tr,$tv).' %)'],['Recuperações recebidas no período',self::m(array_sum(array_column($recP,'v'))).' MT'],
+                ['Saldo abatido por recuperar (total)',self::m(array_sum(array_map(fn($e)=>max(0,$e['v']-$e['rec']),$allValid))).' MT']],
+            'seccoes'=>[
+                ['titulo'=>'Abates no período','colunas'=>['Data','Contrato','Mutuário','Abatido (MT)','Recuperado (MT)','Saldo (MT)','Situação','Motivo','Registado por'],'linhas'=>$l1],
+                ['titulo'=>'Recuperações recebidas no período','colunas'=>['Data','Contrato','Mutuário','Valor (MT)','Registado por'],'linhas'=>$l2],
+            ],
         ];
     }
 
@@ -548,6 +632,7 @@ final class ReportController extends Controller
             $d=substr((string)$o->created_at,0,10);
             if ($d>=$ini && $d<=$fim) $per[$k]['novos']++;
         }
+        $refAg=$this->reforcos($ini,$fim)->groupBy('c')->map(fn($g)=>$g->sum('v'))->all();
         foreach ($this->rows()->groupBy('Nr do Contracto') as $c) {
             $cid=(int)$c->first()->{'Nº de Cliente'};
             if (!isset($byClient[$cid])) continue;
@@ -555,6 +640,7 @@ final class ReportController extends Controller
             $x=&$per[$k];$x['com'][$cid]=1;
             $start=self::d($c->min('Data de Inicio'));
             if ($start>=$ini && $start<=$fim) { $x['n']++;$x['v']+=(float)$c->max('Quantia Creditada'); }
+            $x['v']+=(float)($refAg[(string)$c->first()->{'Nr do Contracto'}]??0);
             $out=$c->filter(fn($r)=>self::outstandingAt($r,$fim));
             if ($out->isNotEmpty()) {
                 $cap=$out->sum(fn($r)=>self::principal($r));$x['cart']+=$cap;
@@ -583,20 +669,22 @@ final class ReportController extends Controller
             ->whereRaw("NOT (`Descrição` LIKE '[TRANSFER %' OR `Descrição` LIKE '[ESTORNO TRANSFER %')")
             ->selectRaw("MONTH(`Data da Operação`) m, ROUND(SUM(CASE WHEN `Tipo de Movimento`='Entradas' THEN Valor ELSE 0 END),2) e, ROUND(SUM(CASE WHEN `Tipo de Movimento`<>'Entradas' THEN Valor ELSE 0 END),2) s")
             ->groupBy('m')->get()->keyBy('m');
+        $refY=$this->reforcos("$ano-01-01","$ano-12-31");
         $names=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
         $lines=[];$tot=['n'=>0,'v'=>0.0,'rec'=>0.0,'jur'=>0.0,'mul'=>0.0];
         for ($m=1;$m<=12;$m++) {
             $a=sprintf('%04d-%02d-01',$ano,$m);if ($a>$today) break;
             $z=min(CarbonImmutable::parse($a)->endOfMonth()->toDateString(),$today);
             $dis=$starts->filter(fn($c)=>$c['d']>=$a && $c['d']<=$z);
+            $refM=$refY->filter(fn($x)=>$x['d']>=$a && $x['d']<=$z)->sum('v');
             $paid=$rows->filter(fn($r)=>in_array($r->Estado,self::PAID,true) && ($pd=self::d($r->{'Data de Pagamento'}))>=$a && $pd<=$z);
             $rec=$paid->sum(fn($r)=>(float)$r->{'Valor Pago'});$jur=$paid->sum(fn($r)=>(float)$r->{'Valor de Juros'});$mul=$paid->sum(fn($r)=>(float)($r->{'Valor de Multa'}??0));
             $out=$rows->filter(fn($r)=>self::outstandingAt($r,$z));$cart=$out->sum(fn($r)=>self::principal($r));
             $n30=$out->filter(fn($r)=>($x=self::d($r->{'Data de Cobrança'}))!=='' && CarbonImmutable::parse($x)->addDays(30)->toDateString()<$z)->pluck('Nr do Contracto')->unique();
             $par=$out->whereIn('Nr do Contracto',$n30->all())->sum(fn($r)=>self::principal($r));
             $c=$cx[$m]??null;
-            $lines[]=[$names[$m-1],(string)$dis->count(),self::m($dis->sum('q')),self::m($rec),self::m($jur),self::m($mul),self::m($cart),self::pct($par,$cart),self::m((float)($c->e??0)),self::m((float)($c->s??0))];
-            $tot['n']+=$dis->count();$tot['v']+=$dis->sum('q');$tot['rec']+=$rec;$tot['jur']+=$jur;$tot['mul']+=$mul;
+            $lines[]=[$names[$m-1],(string)$dis->count(),self::m($dis->sum('q')+$refM),self::m($rec),self::m($jur),self::m($mul),self::m($cart),self::pct($par,$cart),self::m((float)($c->e??0)),self::m((float)($c->s??0))];
+            $tot['n']+=$dis->count();$tot['v']+=$dis->sum('q')+$refM;$tot['rec']+=$rec;$tot['jur']+=$jur;$tot['mul']+=$mul;
         }
         $lines[]=['Total do ano',(string)$tot['n'],self::m($tot['v']),self::m($tot['rec']),self::m($tot['jur']),self::m($tot['mul']),'','','',''];
         return [
@@ -620,7 +708,7 @@ final class ReportController extends Controller
         $type=function ($m) {
             $d=(string)$m->{'Descrição'};
             if (str_starts_with($d,'[TRANSFER') || str_starts_with($d,'[ESTORNO TRANSFER')) return 'Transferências internas';
-            if (str_contains($d,'[CAIXA:COBRANCA]') || stripos($d,'Receita de Juros')!==false || stripos($d,'Pagamento')!==false) return 'Cobranças';
+            if (str_contains($d,'[CAIXA:COBRANCA]') || stripos($d,'Receita de Juros')!==false || stripos($d,'Pagamento')!==false || stripos($d,'Recuperação de Crédito')!==false) return 'Cobranças';
             if (str_contains($d,'[CAIXA:DESEMBOLSO]') || stripos($d,'Desembolso')!==false || stripos($d,'Aumento de Crédito')!==false) return 'Desembolsos';
             return 'Outros';
         };

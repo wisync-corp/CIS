@@ -18,13 +18,13 @@ export const coluna=(k:string)=>COLUNA[k]??k;
 
 /** Estado da prestação (valor gravado → termo). */
 export const ESTADO_PRESTACAO:Record<string,string>={
- 'Pendente':'Em curso','Pagamento Atrasado':'Em atraso','Pago':'Paga','Pago em Atraso':'Paga com atraso','Renovado':'Renovada',
+ 'Pendente':'Em curso','Pagamento Atrasado':'Em atraso','Pago':'Paga','Pago em Atraso':'Paga com atraso','Renovado':'Renovada','Abatido':'Abatida',
 };
 export const estadoPrestacao=(v:unknown)=>{const s=String(v??'').trim();return ESTADO_PRESTACAO[s]??(s||'—');};
 
 /** Situação do contrato (valor calculado → termo). */
 export const SITUACAO_CONTRATO:Record<string,string>={
- 'Pendente':'Em curso','Pagamento Atrasado':'Em atraso','Pagamento atrasado':'Em atraso','Finalizado':'Liquidado',
+ 'Pendente':'Em curso','Pagamento Atrasado':'Em atraso','Pagamento atrasado':'Em atraso','Finalizado':'Liquidado','Abatido':'Abatido',
 };
 export const situacaoContrato=(v:unknown)=>{const s=String(v??'').trim();return SITUACAO_CONTRATO[s]??(s||'—');};
 
@@ -36,6 +36,9 @@ export const GLOSSARIO:{termo:string;significado:string}[]=[
  {termo:'Permissão',significado:'Acção autorizada a uma função (ex.: registar pagamentos, ver a Caixa).'},
  {termo:'Agência',significado:'Balcão ou filial da instituição. Quem está numa agência só vê os contratos e as contas dessa agência.'},
  {termo:'Agência principal (Sede)',significado:'Agência onde ficam os contratos ainda não atribuídos a outra agência.'},
+ {termo:'Reforço de crédito',significado:'Aumento do capital de uma prestação em curso (juro fixo): o valor novo sai da Caixa como «Aumento de Crédito» e os juros são recalculados; o vencimento mantém-se. Conta como dinheiro emprestado nos relatórios.'},
+ {termo:'Abate de crédito',significado:'Retirar da carteira activa o saldo em dívida de um contrato considerado incobrável, sem movimento de Caixa. Exige 90 dias de atraso; antes disso, só como abate antecipado justificado. Pode ser anulado se ainda não houver recuperações.'},
+ {termo:'Recuperação de crédito abatido',significado:'Valor recebido depois do abate; entra na Caixa e reduz o saldo abatido por recuperar.'},
  {termo:'Carteira',significado:'Conjunto de contratos ou mutuários pelos quais uma pessoa responde. O gestor de carteira e o agente só veem a sua carteira.'},
  {termo:'Gestor de carteira (responsável)',significado:'Utilizador com a função Cobrador atribuído a um contrato; acompanha e cobra esse contrato. Atribui-se na ficha do contrato ou em massa em Definições › Carteiras.'},
  {termo:'Agente do mutuário',significado:'Utilizador com a função Agente que cadastrou o mutuário (ou a quem foi atribuído). Conta para o desempenho do agente.'},
@@ -75,7 +78,7 @@ export const GLOSSARIO:{termo:string;significado:string}[]=[
 // Funções dos utilizadores (igual à matriz do servidor: App\Support\Permissions).
 export const FUNCOES:{id:string;nome:string;definicao:string;pode:string[];naoPode:string[]}[]=[
  {id:'administrador',nome:'Administrador',definicao:'Responsável pelo sistema e pela empresa no CIS. Tem acesso total.',
-  pode:['Tudo o que as outras funções fazem','Ver o desempenho de toda a equipa (gestores de crédito, de carteira e agentes)','Criar e gerir utilizadores, funções, agências e carteiras','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
+  pode:['Tudo o que as outras funções fazem','Ver o desempenho de toda a equipa (gestores de crédito, de carteira e agentes)','Reforçar, abater (e anular o abate) e recuperar créditos','Criar e gerir utilizadores, funções, agências e carteiras','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
  {id:'gestor',nome:'Gestor de crédito',definicao:'Gere a carteira de crédito: analisa, concede, acompanha e cobra.',
   pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Preparar e abrir contratos (desembolso), também com data passada se a conta tinha saldo nesse dia','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
   naoPode:['Caixa (contas, movimentos, fecho)','Desempenho da equipa','Definições e utilizadores']},
