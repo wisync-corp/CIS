@@ -1,9 +1,10 @@
 // Definições › Utilizadores: equipa do CIS, funções e permissões (só administrador).
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
+import {useBranches} from './branches';
 import {UserPlus,Search,ShieldCheck,KeyRound,LogOut,Copy,CheckCircle2,AlertCircle,X,Pencil,History,Users as UsersIcon} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
-type U={id:number;name:string;email:string;telefone:string|null;role:string;role_label:string;active:boolean;must_change_password:boolean;last_login_at:string|null;created_at:string|null;sessoes:number};
+type U={branch_id:number|null;agencia:string|null;id:number;name:string;email:string;telefone:string|null;role:string;role_label:string;active:boolean;must_change_password:boolean;last_login_at:string|null;created_at:string|null;sessoes:number};
 type Role={id:string;label:string;descricao:string;permissoes:string[]};
 type Perm={id:string;label:string};
 type Audit={accao:string;detalhe:string|null;created_at:string;actor:string|null;alvo:string|null};
@@ -64,7 +65,7 @@ export default function UsersAdmin({token}:{token:string}){
   {loading?<p className="cis-msg-muted">A carregar…</p>:<div className="cis-table-scroll"><table className="cis-users-table"><thead><tr><th>Utilizador</th><th>Função</th><th>Estado</th><th>Último acesso</th><th></th></tr></thead>
    <tbody>{shown.map(u=><tr key={u.id} className={u.active?'':'off'}>
     <td><div className="cis-users-who"><span className="cis-initial">{u.name.charAt(0).toUpperCase()}</span><div><b>{u.name}</b><small>{u.email}{u.telefone?' · '+u.telefone:''}</small></div></div></td>
-    <td><span className={'cis-users-role r-'+u.role}>{u.role_label}</span></td>
+    <td><span className={'cis-users-role r-'+u.role}>{u.role_label}</span><small className="cis-users-branch">{u.agencia??'Todas as agências'}</small></td>
     <td>{!u.active?<span className="cis-users-state off">Inactivo</span>:u.must_change_password?<span className="cis-users-state wait">Aguarda 1.º acesso</span>:<span className="cis-users-state on">Activo</span>}</td>
     <td>{when(u.last_login_at)}</td>
     <td className="cis-users-actions">
@@ -87,10 +88,11 @@ export default function UsersAdmin({token}:{token:string}){
 function UserForm({token,roles,user,onClose,onSaved}:{token:string;roles:Role[];user:U|null;onClose:()=>void;onSaved:(notice:string,secret?:{nome:string;email:string;senha:string})=>void}){
  const [name,setName]=useState(user?.name??''),[email,setEmail]=useState(user?.email??''),[tel,setTel]=useState(user?.telefone??''),[role,setRole]=useState(user?.role??'cobrador');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const branches=useBranches(token);const [branch,setBranch]=useState(user?.branch_id!=null?String(user.branch_id):'');
  const sel=roles.find(r=>r.id===role);
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');
   try{const r=await fetch(API+'/cis/utilizadores'+(user?'/'+user.id:''),{method:user?'PATCH':'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({name,email,telefone:tel||null,role})});
+    body:JSON.stringify({name,email,telefone:tel||null,role,...(branches.agencias.length?{branch_id:branch?Number(branch):null}:{})})});
    const j=await r.json().catch(()=>({})) as {notice?:string;palavra_passe_temporaria?:string;message?:string;errors?:Record<string,string[]>};
    if(!r.ok)throw new Error(Object.values(j.errors??{}).flat()[0]||j.message||'Não foi possível guardar.');
    onSaved(j.notice??'Guardado.',j.palavra_passe_temporaria?{nome:name,email:email.trim().toLowerCase(),senha:j.palavra_passe_temporaria}:undefined);
@@ -103,6 +105,8 @@ function UserForm({token,roles,user,onClose,onSaved}:{token:string;roles:Role[];
     <label>Email (para entrar)<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required maxLength={190}/></label>
     <label>Telefone<input inputMode="tel" value={tel} onChange={e=>setTel(e.target.value)} maxLength={30} placeholder="Opcional"/></label>
    </div>
+   {branches.agencias.length>0&&<label>Agência<select value={branch} onChange={e=>setBranch(e.target.value)}><option value="">Todas as agências (vê a empresa toda)</option>{branches.agencias.map(b=><option key={b.id} value={b.id}>{b.nome} ({b.codigo})</option>)}</select>
+    <small className="cis-msg-muted">Numa agência, vê e trabalha só os contratos e contas dessa agência.</small></label>}
    <fieldset className="cis-users-roles"><legend>Função</legend>
     {roles.map(r=><label key={r.id} className={role===r.id?'on':''}><input type="radio" name="cis-user-role" checked={role===r.id} onChange={()=>setRole(r.id)}/><span><b>{r.label}</b><small>{r.descricao}</small></span></label>)}
    </fieldset>

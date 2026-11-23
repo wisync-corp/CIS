@@ -1864,3 +1864,26 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-users-roles span{display:flex;flex-direction:column}.cis-users-roles small{color:var(--cis-text-muted)}
 .cis-users-hint{display:flex;gap:6px;align-items:center;margin:0;color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
 @media(max-width:700px){.cis-users-form-row{grid-template-columns:1fr}}
+
+/* Definições › Agências */
+.cis-users-branch{display:block;color:var(--cis-text-muted);font-size:calc(11.5px * var(--cis-fs));margin-top:3px}
+.cis-branch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cis-branch-card{border:1px solid var(--cis-border);border-radius:14px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:8px}
+.cis-branch-card.off{opacity:.6}.cis-branch-card.all{background:#fcfcfd;border-style:dashed}
+.cis-branch-card header{display:flex;gap:6px;align-items:center}
+.cis-branch-code{font-weight:800;font-size:calc(11px * var(--cis-fs));letter-spacing:.06em;background:var(--cis-tint,#f4f0ff);color:var(--cis-primary);border-radius:6px;padding:2px 7px}
+.cis-branch-main{display:inline-flex;align-items:center;gap:3px;font-weight:800;font-size:calc(11px * var(--cis-fs));color:#b54708;background:#fffaeb;border-radius:6px;padding:2px 7px}
+.cis-branch-off{font-weight:800;font-size:calc(11px * var(--cis-fs));color:#667085;background:#f2f4f7;border-radius:6px;padding:2px 7px}
+.cis-branch-card h4{margin:0;font-size:calc(16px * var(--cis-fs))}
+.cis-branch-where{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin:0;font-size:calc(12.5px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-branch-card dl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 0}
+.cis-branch-card dl div{background:#f9fafb;border-radius:9px;padding:7px 8px}
+.cis-branch-card dt{display:flex;align-items:center;gap:4px;font-size:calc(11px * var(--cis-fs));color:var(--cis-text-muted)}
+.cis-branch-card dd{margin:2px 0 0;font-weight:800;font-size:calc(17px * var(--cis-fs))}
+.cis-branch-card footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.cis-branch-card footer button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:800;font-size:calc(12px * var(--cis-fs));border:1px solid var(--cis-border);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--cis-heading)}
+.cis-branch-accounts h4{display:flex;align-items:center;gap:6px;margin:6px 0 2px}
+.cis-branch-accounts select{font:inherit;border:1px solid var(--cis-border);border-radius:8px;padding:6px 8px}
+.cis-branch-active{flex-direction:row!important;align-items:center;gap:8px!important}.cis-branch-active input{width:auto!important}
+.cis-contract-branch select{font:inherit;font-weight:800;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;border-radius:7px;padding:2px 6px}
+.cis-contract-branch select option{color:#101828}

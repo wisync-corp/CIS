@@ -7,7 +7,7 @@ import PasswordChange from './PasswordChange';
 import {applyTheme,getTheme,applyFontSize,getFontSize,type ThemeId} from './theme';
 applyFontSize(getFontSize());
 
-type User={name:string;email:string;role:string;role_label?:string;permissions?:string[];must_change_password?:boolean};
+type User={name:string;email:string;role:string;role_label?:string;permissions?:string[];must_change_password?:boolean;agencia?:{id:number;nome:string}|null};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export default function App(){
@@ -33,7 +33,7 @@ export default function App(){
  sessionStorage.removeItem('cis_token');setToken(null);setUser(null);}
  if(token&&!user)return <div className="cis-auth-pending" role="status">A validar a sessão do CIS…</div>;
  if(token&&user&&user.must_change_password)return <PasswordChange token={token} name={user.name} required onDone={u=>setUser(u as User)} onLogout={logout}/>;
- if(token&&user)return <Dashboard token={token} name={user.name} role={user.role_label??user.role} permissions={user.permissions??[]} theme={theme} onThemeChange={setTheme} onLogout={logout}/>;
+ if(token&&user)return <Dashboard token={token} name={user.name} role={user.role_label??user.role} permissions={user.permissions??[]} agency={user.agencia?.nome??null} theme={theme} onThemeChange={setTheme} onLogout={logout}/>;
  return <div className="cis-login"><div className="cis-login-left"><div className="cis-login-brand"><img src={logoPrincipalClaro} alt="CIS – Credit Insight Shift" width={260} height={95}/></div><div className="cis-login-story"><div className="cis-login-eyebrow">PLATAFORMA DE GESTÃO FINANCEIRA</div><h1>Crédito com<br/>mais <em>clareza.</em><br/>Gestão com<br/>mais confiança.</h1><p>Um só espaço para acompanhar mutuários, contratos, prestações e operações de microcrédito.</p><div className="cis-login-feature"><ShieldCheck size={21}/><span>Protecção de dados e controlo de acessos</span></div></div><div className="cis-login-caption">CIS · Sistema de Informação de Crédito</div></div>
  <div className="cis-login-right"><form className="cis-login-form" onSubmit={login}><div className="cis-login-mobile-mark"><img src={logoCompactaClaro} alt="CIS" width={150} height={49}/></div><div className="cis-form-caption">ÁREA RESERVADA</div><h2>Entrar na plataforma</h2><p>Introduza as credenciais do CIS Web para continuar.</p>
  <label htmlFor="email">Endereço de email</label><input id="email" type="email" autoComplete="username" required placeholder="nome@empresa.co.mz" value={email} onChange={e=>setEmail(e.target.value)}/>

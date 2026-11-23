@@ -88,9 +88,9 @@ final class ContractListController extends Controller
             ->groupBy('Nr do Contracto');
     }
 
-    public function summary(Request $request)
+    public function summary(?Request $request = null)
     {
-        $branch = \App\Support\Branches::scope($request->user(), $request->query('agencia'));
+        $branch = $request ? \App\Support\Branches::scope($request->user(), $request->query('agencia')) : null;
         // Reutiliza EXACTAMENTE a mesma regra de estado da listagem.
         // Conta contratos distintos, e nunca as 679 linhas de prestações.
         $rows = DB::connection('mysql_legacy')->query()
@@ -119,11 +119,11 @@ final class ContractListController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
-    public function states(Request $request)
+    public function states(?Request $request = null)
     {
         // Estados de contrato agregados (não estados individuais de parcelas).
         $rows = DB::connection('mysql_legacy')
-            ->query()->fromSub($this->groupedContracts(\App\Support\Branches::scope($request->user(), $request->query('agencia'))), 'contratos')
+            ->query()->fromSub($this->groupedContracts($request ? \App\Support\Branches::scope($request->user(), $request->query('agencia')) : null), 'contratos')
             ->select('estado')->distinct()->orderBy('estado')->pluck('estado');
 
         return response()->json(['states' => $rows])

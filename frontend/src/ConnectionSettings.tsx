@@ -1,7 +1,8 @@
 import {useEffect,useState} from 'react';
-import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound} from 'lucide-react';
+import {ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2} from 'lucide-react';
 import {useCan} from './perms';
 import UsersAdmin from './UsersAdmin';
+import BranchesAdmin from './BranchesAdmin';
 import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type FontSizeId} from './theme';
 import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
 import {PriceTable,MovementTypes} from './Parametrizacao';
@@ -27,9 +28,9 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
   {grupo:'Empresa',items:COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))},
   {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight},{id:'modelos',title:'Modelos de contrato',icon:FileSignature}]},
-  {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'conta',title:'A minha conta',icon:KeyRound}]},
+  {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'agencias',title:'Agências',icon:Building2},{id:'conta',title:'A minha conta',icon:KeyRound}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
- const nav=NAV.map(g=>({...g,items:g.items.filter(i=>i.id==='utilizadores'?manageUsers:i.id==='conta'||i.id==='aparencia'||i.id==='glossario'?true:admin)})).filter(g=>g.items.length);
+ const nav=NAV.map(g=>({...g,items:g.items.filter(i=>i.id==='utilizadores'?manageUsers:i.id==='agencias'?admin:i.id==='conta'||i.id==='aparencia'||i.id==='glossario'?true:admin)})).filter(g=>g.items.length);
  const [gq,setGq]=useState('');
  const isCompany=COMPANY_SECTIONS.some(s=>s.id===tab);
  return <div className="cis-settings-page cis-settings-layout">
@@ -38,6 +39,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
   <div className="cis-settings-content">
   {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
   {manageUsers&&tab==='utilizadores'&&<UsersAdmin token={token}/>}
+  {admin&&tab==='agencias'&&<BranchesAdmin token={token}/>}
   {tab==='conta'&&<section className="cis-panel cis-co-section"><div className="cis-co-section-head"><div><h3>A minha conta</h3><p>Sessão iniciada como <b>{role}</b>. Pode alterar a sua palavra-passe a qualquer momento.</p></div></div>
    <button type="button" className="cis-client-edit" onClick={onChangePassword}><KeyRound size={15}/> Alterar a minha palavra-passe</button></section>}
   {admin&&tab==='precos'&&<PriceTable token={token}/>}
