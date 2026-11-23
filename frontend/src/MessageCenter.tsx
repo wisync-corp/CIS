@@ -250,9 +250,10 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
 
   <div className="cis-msg-grid">
    <aside className="cis-msg-list" aria-label="Modelos">
-    <div className="cis-msg-list-head"><h3>Modelos <span className="cis-msg-count">{templates.length}</span></h3><button type="button" onClick={startNew} disabled={!!editing}><Plus size={14}/> Novo</button></div>
-    {templates.length>4&&<label className="cis-msg-search"><Search size={14}/><input value={tplSearch} onChange={e=>setTplSearch(e.target.value)} placeholder="Procurar modelo" aria-label="Procurar modelo"/></label>}
-    <ul>{shownTemplates.map(t=>{const c=catOf(t);const n=fieldsIn(t.body).length;return <li key={t.id}><button type="button" className={'cat-'+c.id+(t.id===selId?' selected':'')} disabled={!!editing} onClick={()=>setSelId(t.id)}>
+    <div className="cis-msg-list-head"><h3>Modelos <span className="cis-msg-count">{templates.length}</span></h3>
+     {templates.length>4&&<label className="cis-msg-search"><Search size={14}/><input value={tplSearch} onChange={e=>setTplSearch(e.target.value)} placeholder="Procurar modelo" aria-label="Procurar modelo"/></label>}
+     <button type="button" onClick={startNew} disabled={!!editing}><Plus size={14}/> Novo modelo</button></div>
+    <ul role="listbox" aria-label="Escolher modelo">{shownTemplates.map(t=>{const c=catOf(t);const n=fieldsIn(t.body).length;return <li key={t.id}><button type="button" className={'cat-'+c.id+(t.id===selId?' selected':'')} disabled={!!editing} onClick={()=>setSelId(t.id)}>
      <span className="cis-msg-tile"><c.Icon size={16}/></span>
      <span className="cis-msg-item"><b>{t.name}</b><small>{t.body.replace(/[*_~]/g,'').replace(/\{([^{}]+)\}/g,'‹$1›').replace(/\s+/g,' ').slice(0,64)}{t.body.length>64?'…':''}</small>
       <em>{c.label}{n?` · ${n} campo${n>1?'s':''}`:''}</em></span></button></li>;})}</ul>
