@@ -3,7 +3,7 @@
 import {createContext,useContext} from 'react';
 
 export type Perm='ver'|'mutuarios.editar'|'contratos.abrir'|'contratos.data'|'cobrancas'|'cobrancas.data'|'caixa'|'caixa.data'|'caixa.estornar'
- |'extractos'|'extractos.geral'|'mensagens'|'relatorios'|'definicoes'|'utilizadores';
+ |'extractos'|'extractos.geral'|'mensagens'|'desempenho'|'relatorios'|'definicoes'|'utilizadores';
 
 export const PermsContext=createContext<string[]>([]);
 export function useCan(){const p=useContext(PermsContext);return (...any:Perm[])=>any.some(x=>p.includes(x));}

@@ -24,6 +24,7 @@ class CisConsultaController extends Controller
         $query = LegacyCliente::query()->select([
             'ID', 'Numeração', 'Nome Completo', 'Bairro', 'Cidade', 'Provincia'
         ]);
+        \App\Support\Portfolio::applyToClients($query, $request->user());
         if ($term !== '') {
             $query->where(function ($q) use ($term) {
                 $q->where('Nome Completo', 'like', '%'.addcslashes($term, '%_\\').'%');

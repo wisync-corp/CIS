@@ -1,3 +1,4 @@
+import BranchFilter from './BranchFilter';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCan} from './perms';
 import {useCompanyProfile} from './company';
@@ -82,7 +83,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const [suggestions,setSuggestions]=useState<{nome:string;id:number|null;contratos:number}[]>([]);
  const [contratos,setContratos]=useState<string[]>([]);const [contrato,setContrato]=useState('');
  const [tipo,setTipo]=useState('todos');const [estado,setEstado]=useState<string>(preset?.estado??'todos');
- const [contaId,setContaId]=useState('');const [accounts,setAccounts]=useState<Account[]>([]);
+ const [contaId,setContaId]=useState('');const [agencia,setAgencia]=useState('');const [accounts,setAccounts]=useState<Account[]>([]);
  const [page,setPage]=useState(1);
  const [selection,setSelection]=useState(defaults);
  const [columnsOpen,setColumnsOpen]=useState(false);
@@ -114,6 +115,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
  const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction,ordenar:sortField});
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
   if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
+  if(agencia)p.set('agencia',agencia);
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
  const datesOk=!(inicio&&fim&&fim<inicio);
 
@@ -137,7 +139,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
    .finally(()=>{if(!c.signal.aborted)setLoading(false);});
   return()=>c.abort();
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period,direction,sortField]);
+ },[mode,inicio,fim,cliente,contrato,tipo,estado,contaId,page,token,period,direction,sortField,agencia]);
 
  useEffect(()=>{setContrato('');setContratos([]);if(!cliente)return;const c=new AbortController();
   getJson<{contratos:string[]}>('/cis/extractos/contratos?'+new URLSearchParams({cliente}),c.signal).then(j=>setContratos(j.contratos)).catch(()=>{});
@@ -238,6 +240,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <label>Contrato<select value={contrato} onChange={e=>{setContrato(e.target.value);setPage(1);}} disabled={!cliente||!contratos.length}><option value="">Todos</option>{contratos.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
     {mode==='geral'?<>
      <label>Tipo<select value={tipo} onChange={e=>{setTipo(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="entradas">Entradas</option><option value="saidas">Saídas</option></select></label>
+     <BranchFilter token={token} value={agencia} onChange={v=>{setAgencia(v);setPage(1);}}/>
      {accounts.length>0&&<label>Conta<select value={contaId} onChange={e=>{setContaId(e.target.value);setPage(1);}}><option value="">Todas</option>{accounts.map(a=><option key={a.id} value={String(a.id)}>{a.code} · {a.name}</option>)}</select></label>}
     </>:<label>Estado<select value={estado} onChange={e=>{setEstado(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="aberta">Em curso</option><option value="vencida">Em atraso</option><option value="paga">Pagas</option></select></label>}
     <button type="button" className="cis-extracto-clear" onClick={clearAll}>Limpar</button>

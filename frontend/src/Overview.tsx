@@ -1,8 +1,11 @@
 import {useEffect,useState} from 'react';
+import BranchFilter from './BranchFilter';
+import {useCan} from './perms';
 import {Landmark,ArrowUpRight,ArrowDownRight,CalendarDays,Users,FileText,Wallet,RefreshCw,AlertCircle,Clock} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Data={
+ agencia?:{id:number;nome:string|null}|null;carteira_propria?:boolean;
  actualizado_em:string;mes:string;nota:string;periodo?:{mes:string;ano:string;anos:number[]};
  carteira:{desembolsado_periodo:string;contratos_desembolsados_periodo:number;prestacoes_desembolsadas_periodo:string;capital_em_carteira:string;valor_a_receber:string;prestacoes_por_receber:number;contratos_activos:number;prestacoes_vencidas:number;valor_vencido:string;contratos_em_atraso:number;vencidas_periodo:number;valor_vencido_periodo:string;contratos_vencidos_periodo:number;pendentes_periodo:number;valor_pendente_periodo:string;contratos_pendentes_periodo:number};
  recebimentos:{juros:string;juros_mes:string;multas:string;multas_mes:string;capital_recuperado:string;capital_recuperado_mes:string;total_recebido:string;recebido_mes:string};
@@ -22,15 +25,17 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
  const [refresh,setRefresh]=useState(0);
  const [mes,setMes]=useState(()=>nowMaputo().m);
  const [ano,setAno]=useState(()=>nowMaputo().y);
+ const [agencia,setAgencia]=useState('');
+ const can=useCan();
  useEffect(()=>{
   const ctrl=new AbortController();setLoading(true);setError('');
-  fetch(API+'/cis/visao-geral?'+new URLSearchParams({mes,ano}),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
+  fetch(API+'/cis/visao-geral?'+new URLSearchParams({mes,ano,...(agencia?{agencia}:{})}),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Não foi possível calcular os indicadores.');return j as Data;})
    .then(d=>{if(!ctrl.signal.aborted)setData(d);})
    .catch(e=>{if(!ctrl.signal.aborted)setError(e instanceof Error?e.message:'Erro ao carregar indicadores.');})
    .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
   return()=>ctrl.abort();
- },[token,refresh,mes,ano]);
+ },[token,refresh,mes,ano,agencia]);
 
  const c=data?.carteira,r=data?.recebimentos,cx=data?.caixa;
  const per=periodLabel(mes,ano);
@@ -54,6 +59,9 @@ export default function Overview({token,onNavigate,onOpenExtracto}:{token:string
    <CalendarDays size={16}/><span>Período</span>
    <label>Mês<select value={mes} onChange={e=>setMes(e.target.value)}><option value="todos">Todos</option>{MONTHS.map((n,i)=><option key={n} value={String(i+1)}>{n}</option>)}</select></label>
    <label>Ano<select value={ano} onChange={e=>setAno(e.target.value)}><option value="todos">Todos</option>{years.map(y=><option key={y} value={String(y)}>{y}</option>)}</select></label>
+   <BranchFilter token={token} value={agencia} onChange={setAgencia}/>
+   {can('desempenho')&&<button type="button" onClick={()=>onNavigate('Relatórios')}>Desempenho da equipa</button>}
+   {data?.carteira_propria?<span className="cis-scope-badge">A sua carteira</span>:data?.agencia?.nome?<span className="cis-scope-badge">Agência {data.agencia.nome}</span>:null}
    {(mes!==nowMaputo().m||ano!==nowMaputo().y)&&<button type="button" onClick={()=>{const n=nowMaputo();setMes(n.m);setAno(n.y);}}>Mês actual</button>}
    <small>Prestações em atraso e em curso contam pela data de vencimento. Os saldos das contas são sempre os de hoje.</small>
   </div>

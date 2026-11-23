@@ -3,6 +3,7 @@ import {useCan} from './perms';
 import {useBranches} from './branches';
 import {ArrowLeft,FileText,CalendarDays,Wallet,Layers,ShieldCheck,LockKeyhole,AlertCircle,RefreshCw,ChevronDown,ChevronUp,ArrowDownUp,ReceiptText,Eye,ArrowUpRight,CheckCircle2,Info,ChevronRight} from 'lucide-react';
 import CollectionsDesk from './CollectionsDesk';
+import PortfolioOwner from './PortfolioOwner';
 import ContractDocument from './ContractDocument';
 import {coluna,estadoPrestacao,situacaoContrato} from './glossario';
 
@@ -141,7 +142,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
     <div className="cis-profile-heading">
      <span>FICHA DE CRÉDITO · {numero}</span>
      <h2>{format(contract,'Nome do Cliente')}</h2>
-     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><ContractBranch numero={numero} token={token}/>{data.desembolso&&<span title={'Desembolso de '+Number(data.desembolso.valor).toLocaleString('pt-MZ')+' MT · Extracto n.º '+data.desembolso.nr+(data.desembolso.referencia?' · Ref. '+data.desembolso.referencia:'')}><Wallet size={14}/> Conta: {data.desembolso.conta??'sem conta da Caixa'}</span>}<span>Início: {format(contract,'Data de Inicio','date')}</span></div>
+     <div className="cis-credit-hero-meta"><span className="cis-credit-status"><span className="cis-credit-status-dot"/>{situacaoContrato(format(contract,'Estado do Contrato'))}</span><span>Mutuário #{format(contract,'Nº de Cliente')}</span><ContractBranch numero={numero} token={token}/><PortfolioOwner kind="contrato" id={numero} token={token}/>{data.desembolso&&<span title={'Desembolso de '+Number(data.desembolso.valor).toLocaleString('pt-MZ')+' MT · Extracto n.º '+data.desembolso.nr+(data.desembolso.referencia?' · Ref. '+data.desembolso.referencia:'')}><Wallet size={14}/> Conta: {data.desembolso.conta??'sem conta da Caixa'}</span>}<span>Início: {format(contract,'Data de Inicio','date')}</span></div>
     </div>
     <div className="cis-profile-hero-actions"><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Actualizar</button></div>
    </header>

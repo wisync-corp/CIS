@@ -86,12 +86,57 @@ final class Branches
         $mine ? $query->whereIn($column, $mine) : $query->whereRaw('1 = 0');
     }
 
-    /** 403 se o contrato for de outra agência que não a do utilizador. */
+    /** 403 se o contrato for de outra agência ou estiver fora da carteira do utilizador. */
     public static function requireContract(?object $user, string $numero): void
     {
+        Portfolio::requireContract($user, $numero);
         $own = self::userBranch($user);
         if ($own === null) return;
         abort_unless(self::contractBranch($numero) === $own, 403, 'Este contrato pertence a outra agência.');
+    }
+
+    /** Agência (obrigatória ou filtro pedido) + carteira do utilizador, numa só chamada. */
+    public static function restrict($query, ?object $user, mixed $requested = null, string $column = 'Nr do Contracto'): void
+    {
+        self::applyToContracts($query, self::scope($user, $requested), $column);
+        Portfolio::applyToContracts($query, $user, $column);
+    }
+
+    /** Contas da Caixa de uma agência: as atribuídas a ela e, na agência principal, as partilhadas. */
+    public static function accountsOf(int $branch): array
+    {
+        if (!Schema::hasTable('cis_cash_account_branch')) return [];
+        $mapped = DB::table('cis_cash_account_branch')->pluck('branch_id', 'account_id')->map(fn ($v) => (int) $v)->all();
+        $ids = array_keys(array_filter($mapped, fn ($b) => $b === $branch));
+        if ($branch === self::principalId() && Schema::hasTable('cis_cash_accounts')) {
+            $ids = array_merge($ids, DB::table('cis_cash_accounts')->whereNotIn('id', array_keys($mapped) ?: [0])->pluck('id')->map(fn ($v) => (int) $v)->all());
+        }
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Extracto de uma agência e da carteira: movimentos de contratos da agência/carteira e,
+     * sem contrato (Caixa geral), os das contas da agência. Carteira restrita → só os dos seus contratos.
+     */
+    public static function restrictExtracto($query, ?object $user, mixed $requested = null): void
+    {
+        $branch = self::scope($user, $requested);
+        $own = Portfolio::contracts($user);
+        if ($branch === null && $own === null) return;
+        $query->where(function ($w) use ($branch, $own) {
+            $w->where(function ($c) use ($branch, $own) {
+                $c->whereNotNull('Contracto')->where('Contracto', '<>', '');
+                self::applyToContracts($c, $branch, 'Contracto');
+                if ($own !== null) $own ? $c->whereIn('Contracto', $own) : $c->whereRaw('1 = 0');
+            });
+            if ($own === null && $branch !== null && Schema::hasColumn('Extracto', 'account_id')) {
+                $accs = self::accountsOf($branch);
+                $w->orWhere(function ($g) use ($accs) {
+                    $g->where(fn ($z) => $z->whereNull('Contracto')->orWhere('Contracto', ''));
+                    $accs ? $g->whereIn('account_id', $accs) : $g->whereRaw('1 = 0');
+                });
+            }
+        });
     }
 
     public static function assignContract(string $numero, int $branch, ?int $by): void
@@ -109,6 +154,15 @@ final class Branches
         if ($own === null || !Schema::hasTable('cis_cash_account_branch')) return true;
         $b = DB::table('cis_cash_account_branch')->where('account_id', $accountId)->value('branch_id');
         return $b === null || (int) $b === $own;
+    }
+
+    /** Contas visíveis a um utilizador com agência (as dela + partilhadas); null = todas. */
+    public static function visibleAccountIds(?object $user): ?array
+    {
+        $own = self::userBranch($user);
+        if ($own === null || !Schema::hasTable('cis_cash_accounts')) return null;
+        return DB::table('cis_cash_accounts')->pluck('id')->map(fn ($v) => (int) $v)
+            ->filter(fn ($id) => self::accountVisible($user, $id))->values()->all();
     }
 
     public static function label(?int $branch): ?string

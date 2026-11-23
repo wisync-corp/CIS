@@ -47,6 +47,12 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::put('cis/agencias/contas/{accountId}',[\App\Http\Controllers\Api\BranchController::class,'assignAccount'])->whereNumber('accountId')->middleware('throttle:30,1');
     Route::get('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'contractBranch'])->middleware('throttle:60,1');
     Route::put('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'assignContract'])->middleware('throttle:30,1');
+    Route::get('cis/carteiras',[\App\Http\Controllers\Api\PortfolioController::class,'summary'])->middleware('throttle:30,1');
+    Route::post('cis/carteiras/atribuir',[\App\Http\Controllers\Api\PortfolioController::class,'assignBulk'])->middleware('throttle:10,1');
+    Route::get('cis/carteiras/contratos/{numero}',[\App\Http\Controllers\Api\PortfolioController::class,'contract'])->middleware('throttle:60,1');
+    Route::put('cis/carteiras/contratos/{numero}',[\App\Http\Controllers\Api\PortfolioController::class,'assignContract'])->middleware('throttle:30,1');
+    Route::get('cis/carteiras/mutuarios/{id}',[\App\Http\Controllers\Api\PortfolioController::class,'client'])->whereNumber('id')->middleware('throttle:60,1');
+    Route::put('cis/carteiras/mutuarios/{id}',[\App\Http\Controllers\Api\PortfolioController::class,'assignClient'])->whereNumber('id')->middleware('throttle:30,1');
     // Caixa Geral: cadastro e consulta separados de movimentos financeiros.
     Route::prefix('cis/caixa')->group(function() {
         Route::get('contas',[CashController::class,'index'])->middleware('throttle:30,1');
