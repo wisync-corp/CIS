@@ -268,6 +268,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
    }
    const body=await result.json() as OpeningReview;
    setReview(body);setChecked(true);
+   if(body.dados_verificados)window.setTimeout(()=>document.getElementById('cis-contract-disburse')?.scrollIntoView({behavior:'smooth',block:'center'}),150);
    if(body.cadastro_confirmado&&strategyCompatible&&!(tipo==='Composto'&&modalidade==='Semanal')){
     try{setPreview(previewContractVba({montante:Number(values.quantia),taxa:Number(fixedRate?quote?.taxa:values.juros),tipo:tipo as 'Fixo'|'Variável'|'Composto',modalidade:modalidade as 'Mensal'|'Semanal'|'Uma Parcela',prazoMeses,dataInicio:values.data_inicio,estrategia:strategySelected as import('./contractVbaPreview').Strategy,prazo:selectedTerm,periodoDias:Number(periodo)}));}
     catch(e){setPreviewError(e instanceof Error?e.message:'Não foi possível preparar o plano.');}
@@ -424,8 +425,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
     <p>Contrato <strong>{openedContract.numero}</strong> · {openedContract.prestacoes} prestação(ões) · desembolso de {Number(openedContract.desembolso).toLocaleString('pt-MZ')} MT{chosenAccount?' a partir da conta '+chosenAccount.code+' · '+chosenAccount.name:''}.</p>
     <p>Não submeta novamente. Consulte o contrato na carteira.</p>
     <button type="button" className="cis-contract-draft-button" onClick={onBack}>Voltar à carteira de contratos</button>
-   </div>:review?.dados_verificados&&<div className="cis-contract-review">
-    <strong>Confirmação de abertura real</strong>
+   </div>:review?.dados_verificados&&<div className="cis-contract-review cis-contract-disburse" id="cis-contract-disburse">
+    <strong>Desembolsar o empréstimo</strong>
     {review.autorizado_para_gravar?<><label className="cis-contract-confirm"><input type="checkbox" checked={confirmedDisbursement} onChange={e=>setConfirmedDisbursement(e.target.checked)}/>
      <span>Confirmo que o montante indicado foi efectivamente disponibilizado ao mutuário e autorizo o lançamento da saída no Extracto.</span></label>
      <div className="cis-contract-cash-source">
@@ -434,7 +435,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
       <label>Referência do comprovativo <input type="text" maxLength={60} value={disbursementRef} onChange={e=>setDisbursementRef(e.target.value)} placeholder="Recibo, transferência ou M-Pesa"/><small>Fica gravada no Extracto e no histórico.</small></label>
      </div>
      <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||!chosenAccount||!accountCovers||disbursementRef.trim().length<4||openingBusy||openingCooldownSeconds>0} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':openingCooldownSeconds>0?'Aguarde '+openingCooldownSeconds+' s (limite de segurança)':'Criar contrato e registar desembolso'}</button>
-    </>:<p>A funcionalidade de escrita ainda não está activada no servidor. O administrador deve executar a activação privada após o backup e reconciliação da caixa.</p>}
+    </>:<p>{review.pendencias[review.pendencias.length-1]??'Abertura com desembolso ainda não activada neste servidor.'}</p>}
    </div>}
    <div className="cis-edit-actions"><button type="reset" disabled={openingBusy||!!openedContract}><RotateCcw size={16}/> Limpar formulário</button><button type="submit" disabled={reviewBusy||openingBusy||!!openedContract}>{reviewBusy?"A validar no servidor…":"Validar abertura no servidor"}</button></div>
   </section></form>

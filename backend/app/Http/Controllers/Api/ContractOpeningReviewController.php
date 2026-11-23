@@ -183,6 +183,20 @@ final class ContractOpeningReviewController extends Controller
             $issues[] = 'Modalidade incompatível com a regra de preparação para juro composto.';
         }
 
+        // Mesmas condições do endpoint de abertura (que volta a verificar tudo ao gravar).
+        $on = fn (string $f) => filter_var(env($f, false), FILTER_VALIDATE_BOOLEAN);
+        $blocked = [];
+        foreach (['CIS_PRIVATE_PREVIEW','CIS_CLIENTES_PREVIEW_APPROVED','CIS_CONTRACTS_READ_APPROVED',
+            'CIS_NEW_CONTRACTS_APPROVED','CIS_CASH_WRITES_APPROVED','CIS_CASH_CONTRACT_FLOWS_APPROVED'] as $flag) {
+            if (!$on($flag)) $blocked[] = $flag;
+        }
+        try {
+            \App\Services\CashAccountLedger::requireReady();
+        } catch (\Throwable) {
+            $blocked[] = 'caixa';
+        }
+        $canOpen = \App\Support\Permissions::can($request->user(), 'contratos.abrir');
+        $authorized = !$blocked && $canOpen && count($issues) === 0;
         // Sem taxa nem valor financeiro calculado de forma inferida.
         return response()->json([
             'cadastro_confirmado' => true,
@@ -194,11 +208,12 @@ final class ContractOpeningReviewController extends Controller
             'taxa_tabela' => $rate,
             'problemas' => $issues,
             'dados_verificados' => count($issues) === 0,
-            'autorizado_para_gravar' => false, // aguardando desembolso integrado por conta da Caixa
+            'autorizado_para_gravar' => $authorized,
             'pendencias' => [
                 'O servidor verificará novamente saldo disponível, taxa, mutuário e esquema antes de gravar.',
                 'Todas as quantias e parcelas são inteiras; os juros são arredondados para cima e o capital é reconciliado integralmente.',
-                'A nova abertura real está bloqueada até integrar saída por conta reconciliada na Caixa, com registo atómico e permissões.',
+                $authorized ? 'Escolha a conta de saída, indique a referência e confirme o desembolso.'
+                    : (!$canOpen ? 'O seu perfil não pode abrir contratos.' : ($blocked ? 'Abertura com desembolso ainda não activada neste servidor.' : 'Corrija as incompatibilidades indicadas.')),
             ],
         ])->header('Cache-Control', 'no-store, private');
     }

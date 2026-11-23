@@ -1920,3 +1920,4 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-contract-chosen-account{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--cis-line,#e3e8ef);border-radius:12px;background:#f8fafc}
 .cis-contract-chosen-account span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
 .cis-contract-chosen-account small{color:#475569}
+.cis-contract-disburse{border:2px solid #16a34a33;background:#f0fdf4}
