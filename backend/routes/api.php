@@ -23,7 +23,11 @@ use App\Http\Controllers\Api\CashClosureController;
 use App\Http\Controllers\Api\CashReversalController;
 use App\Http\Controllers\Api\CashPostingController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
+Route::get('streamlit/verificar',[\App\Http\Controllers\Api\StreamlitController::class,'verify']);
+Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::class,'data'])->middleware('throttle:60,1');
+
 Route::middleware('auth:sanctum')->group(function(){
+    Route::post('streamlit/sessao',[\App\Http\Controllers\Api\StreamlitController::class,'session'])->middleware('throttle:30,1');
     Route::get('auth/me',[AuthController::class,'me']);
     Route::get('admin/connection-status', ConnectionStatusController::class);
     Route::get('admin/financial-references', [FinancialReferenceController::class,'index'])->middleware('throttle:30,1');
