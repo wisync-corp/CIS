@@ -34,7 +34,7 @@ function data($response):array{return $response->getData(true);}
 try {
 // ---------- Esquema legado (colunas verificadas pelo próprio controlador) ----------
 $db=DB::connection();
-foreach (['cis_contractos_historico','Contractos','Extracto','Clientes','cis_tabela_juros','cis_cash_accounts','users'] as $t) {
+foreach (['cis_contractos_historico','Contractos','Extracto','Clientes','cis_tabela_juros','cis_cash_accounts','users','personal_access_tokens','cis_user_audit'] as $t) {
     $db->statement('DROP TABLE IF EXISTS `'.$t.'`');
 }
 $db->unprepared(<<<'SQL'
@@ -290,8 +290,8 @@ $bp=fn($o)=>$o+['data_pagamento'=>now($tz)->subDays(2)->toDateString(),'cobrar_m
     'conta_id'=>$numerario,'referencia'=>'RECIBO-120','idempotency_key'=>'b2b2b2b2-0120-4000-8000-000000000001','confirmacao_recebimento'=>true];
 ok($err(fn()=>$col->preview(req('/x',['data_pagamento'=>now($tz)->addDay()->toDateString(),'cobrar_multa'=>false],$user),'C-0120',$bd))===422,'data futura recusada');
 ok($err(fn()=>$col->collect(req('/x',$bp([]),$user),'C-0120',$bd))===422,'data anterior à abertura da conta recusada');
-$gestor=clone $user;$gestor->role='gestor';
-ok($err(fn()=>$col->collect(req('/x',$bp([]),$gestor),'C-0120',$bd))===403,'gestor não pode alterar a data de pagamento');
+$gestor=clone $user;$gestor->role='agente'; // perfil sem cobranças/caixa/mensagens/relatórios/definições
+ok($err(fn()=>$col->collect(req('/x',$bp([]),$gestor),'C-0120',$bd))===403,'agente não regista pagamentos (nem com data passada)');
 $db->table('cis_cash_accounts')->whereIn('id',[$numerario,$banco])->update(['cut_at'=>now($tz)->subDays(15)]);
 $main=\Illuminate\Support\Facades\DB::connection();
 if (!$main->getSchemaBuilder()->hasTable('cis_cash_daily_closures')) {
@@ -871,7 +871,36 @@ ok(substr((string)$rD->{'Data de Cobrança'},0,10)===\Carbon\CarbonImmutable::pa
     && abs((float)$rD->{'Valor de Juros'}-150.5)<0.001,'prorrogação: vencimento = início + 30 dias, prazo 30 dias, juros mantidos');
 $hk=$db->table('cis_contractos_historico')->whereIn('operation',['pagamento_parcial','liquidacao_saldo','renovacao_juros_sem_pagamento','capitalizacao_juros','prorrogacao_15_30'])->pluck('operation')->countBy();
 ok(($hk['pagamento_parcial']??0)===1 && ($hk['liquidacao_saldo']??0)===0 && ($hk['renovacao_juros_sem_pagamento']??0)===1 && ($hk['capitalizacao_juros']??0)===1 && ($hk['prorrogacao_15_30']??0)===1,'histórico antes/depois de cada operação');
-ok($err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'e0000000-0000-4000-8000-000000000001'],'OP-0003',$oC,$gestor))===403,'operações: só o administrador');
+ok($err(fn()=>$op(['operacao'=>'renovar_juros','idempotency_key'=>'e0000000-0000-4000-8000-000000000001'],'OP-0003',$oC,$gestor))===403,'operações: perfil sem cobranças recusado');
+
+echo "== Utilizadores e permissões\n";
+$db->statement('CREATE TABLE IF NOT EXISTS personal_access_tokens(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tokenable_type VARCHAR(255),tokenable_id BIGINT UNSIGNED,name VARCHAR(255),token VARCHAR(64) UNIQUE,abilities TEXT NULL,last_used_at TIMESTAMP NULL,expires_at TIMESTAMP NULL,created_at TIMESTAMP NULL,updated_at TIMESTAMP NULL)');
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000170_cis_user_management.php','--force'=>true]);
+$uc=new \App\Http\Controllers\Api\UserController();
+$ureq=function(string $m,array $p,$u){$r=Request::create('/x',$m,$p);$r->setUserResolver(static fn()=>$u);return $r;};
+$admin=User::query()->where('email','admin@ci.test')->firstOrFail();
+$cr=$uc->store($ureq('POST',['name'=>'Cobrador Ensaio','email'=>'Cobrador@CI.test','role'=>'cobrador','telefone'=>'841234567'],$admin));
+$cj=data($cr);$cob=User::query()->where('email','cobrador@ci.test')->firstOrFail();
+ok($cr->getStatusCode()===201 && strlen($cj['palavra_passe_temporaria'])===12 && $cob->must_change_password===true && \App\Support\Permissions::of($cob)===[],'utilizador criado com palavra-passe temporária; sem acesso até a trocar');
+ok($err(fn()=>$uc->store($ureq('POST',['name'=>'Outro','email'=>'cobrador@ci.test','role'=>'gestor'],$admin)))===422,'email repetido recusado');
+$au=new \App\Http\Controllers\Api\AuthController();
+ok($err(fn()=>$au->changePassword($ureq('POST',['actual'=>'errada','nova'=>'NovaSenha2026','nova_confirmation'=>'NovaSenha2026'],$cob)))===422,'troca de palavra-passe exige a actual correcta');
+$pw=data($au->changePassword($ureq('POST',['actual'=>$cj['palavra_passe_temporaria'],'nova'=>'NovaSenha2026','nova_confirmation'=>'NovaSenha2026'],$cob)));
+$cob->refresh();
+ok($cob->must_change_password===false && \Illuminate\Support\Facades\Hash::check('NovaSenha2026',$cob->password) && in_array('cobrancas',$pw['user']['permissions'],true)
+    && !in_array('caixa',$pw['user']['permissions'],true) && !in_array('utilizadores',$pw['user']['permissions'],true),'após trocar: permissões do cobrador (cobranças sim, Caixa/utilizadores não)');
+ok($err(fn()=>$uc->index($ureq('GET',[],$cob)))===403,'cobrador não gere utilizadores');
+ok($err(fn()=>$uc->update($ureq('PATCH',['role'=>'gestor'],$admin),$admin->id))===422 && $err(fn()=>$uc->update($ureq('PATCH',['active'=>false],$admin),$admin->id))===422,'não pode mudar a própria função nem desactivar-se');
+$up=data($uc->update($ureq('PATCH',['role'=>'financeiro'],$admin),$cob->id));
+$cob->refresh();
+ok($cob->role==='financeiro' && $up['utilizador']['role_label']==='Gestor financeiro' && \App\Support\Permissions::can($cob,'caixa'),'função alterada para Gestor financeiro (Caixa)');
+$cob->createToken('t');data($uc->update($ureq('PATCH',['active'=>false],$admin),$cob->id));$cob->refresh();
+ok($cob->active===false && $cob->tokens()->count()===0 && \App\Support\Permissions::of($cob)===[],'desactivado: sessões terminadas e sem permissões');
+$rp=data($uc->resetPassword($ureq('POST',[],$admin),$cob->id));$cob->refresh();
+ok(strlen($rp['palavra_passe_temporaria'])===12 && $cob->must_change_password===true,'repor palavra-passe gera nova temporária');
+$li=data($uc->index($ureq('GET',[],$admin)));
+ok(count($li['utilizadores'])>=2 && count($li['auditoria'])>=4,'lista de utilizadores e auditoria');
+ok($err(fn()=>$col->collect(req('/x',$bp([]),$gestor),'C-0120',$bd))===403,'agente continua sem cobranças');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

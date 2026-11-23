@@ -27,7 +27,7 @@ final class MessageCenterController extends Controller
 
     private function admin(Request $r): void
     {
-        abort_unless($r->user()?->role==='administrador',403,'O centro de mensagens é reservado ao administrador.');
+        \App\Support\Permissions::require($r->user(),'mensagens');
     }
 
     private function guard(callable $f)

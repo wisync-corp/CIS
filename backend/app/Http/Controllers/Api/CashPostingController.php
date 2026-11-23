@@ -26,8 +26,7 @@ final class CashPostingController extends Controller
     private function requireReady(Request $request): void
     {
         $u=$request->user();
-        abort_unless($u && $u->active && $u->role==='administrador',403,
-            'Movimentos de Caixa reservados ao administrador autorizado.');
+        \App\Support\Permissions::require($u,'caixa');
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CASH_WRITES_APPROVED','CIS_CASH_LEDGER_POSTING_APPROVED'] as $flag) {
             abort_unless(filter_var(env($flag,false),FILTER_VALIDATE_BOOLEAN),503,
                 'Escrituração de Caixa não autorizada neste ambiente.');

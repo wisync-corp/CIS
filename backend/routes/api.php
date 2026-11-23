@@ -30,6 +30,14 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::get('admin/interest-quote', [FinancialReferenceController::class,'quote'])->middleware('throttle:30,1');
     Route::post('cis/simulador/calcular',[GenericSimulatorController::class,'preview'])->middleware('throttle:20,1');
     Route::post('auth/logout',[AuthController::class,'logout']);
+    Route::post('auth/palavra-passe',[AuthController::class,'changePassword'])->middleware('throttle:6,1');
+    // Utilizadores (permissão «utilizadores»: administrador).
+    Route::get('cis/utilizadores/funcoes',[\App\Http\Controllers\Api\UserController::class,'roles']);
+    Route::get('cis/utilizadores',[\App\Http\Controllers\Api\UserController::class,'index']);
+    Route::post('cis/utilizadores',[\App\Http\Controllers\Api\UserController::class,'store'])->middleware('throttle:20,1');
+    Route::patch('cis/utilizadores/{id}',[\App\Http\Controllers\Api\UserController::class,'update'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::post('cis/utilizadores/{id}/repor-palavra-passe',[\App\Http\Controllers\Api\UserController::class,'resetPassword'])->whereNumber('id')->middleware('throttle:10,1');
+    Route::post('cis/utilizadores/{id}/terminar-sessoes',[\App\Http\Controllers\Api\UserController::class,'endSessions'])->whereNumber('id')->middleware('throttle:10,1');
     // Caixa Geral: cadastro e consulta separados de movimentos financeiros.
     Route::prefix('cis/caixa')->group(function() {
         Route::get('contas',[CashController::class,'index'])->middleware('throttle:30,1');

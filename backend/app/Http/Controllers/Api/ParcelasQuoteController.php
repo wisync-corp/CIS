@@ -58,7 +58,7 @@ final class ParcelasQuoteController extends Controller
     public function preview(Request $request, string $numero, int $ordem)
     {
         $user=$request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador',403);
+        \App\Support\Permissions::require($user,'cobrancas');
         abort_unless(
             filter_var(env('CIS_PRIVATE_PREVIEW',false), FILTER_VALIDATE_BOOLEAN)
             && filter_var(env('CIS_CONTRACTS_READ_APPROVED',false), FILTER_VALIDATE_BOOLEAN),

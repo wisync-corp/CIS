@@ -27,7 +27,7 @@ final class ContractOpeningController extends Controller
         // saldo da conta (não o agregado do Extracto), account_id, chave idempotente
         // e histórico imutável de cada prestação criada, na mesma transacção.
         $user = $request->user();
-        abort_unless($user && $user->active && $user->role === 'administrador', 403);
+        \App\Support\Permissions::require($user,'contratos.abrir');
         foreach (['CIS_PRIVATE_PREVIEW','CIS_CLIENTES_PREVIEW_APPROVED',
             'CIS_CONTRACTS_READ_APPROVED','CIS_NEW_CONTRACTS_APPROVED'] as $flag) {
             abort_unless(filter_var(env($flag,false), FILTER_VALIDATE_BOOLEAN), 503,

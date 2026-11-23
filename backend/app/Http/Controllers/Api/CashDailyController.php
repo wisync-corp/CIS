@@ -29,7 +29,7 @@ final class CashDailyController extends Controller
     public function index(Request $request)
     {
         $u=$request->user();
-        abort_unless($u && $u->active && $u->role==='administrador',403);
+        \App\Support\Permissions::require($u,'caixa');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503);
         abort_unless(Schema::hasTable('cis_cash_accounts')
             && Schema::hasColumn('Extracto','account_id')

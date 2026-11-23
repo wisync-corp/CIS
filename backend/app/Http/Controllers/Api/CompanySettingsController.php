@@ -16,7 +16,7 @@ class CompanySettingsController
     public function show(Request $request): JsonResponse
     {
         $s = CS::load(true);
-        if ($request->user()?->role !== 'administrador') {
+        if (!\App\Support\Permissions::can($request->user(), 'definicoes')) {
             return response()->json(['perfil' => CS::profile(), 'instalado' => $s['instalado']]);
         }
         return response()->json($s + ['perfil' => CS::profile(), 'provincias' => CS::PROVINCIAS]);
@@ -24,7 +24,7 @@ class CompanySettingsController
 
     public function update(Request $request): JsonResponse
     {
-        abort_unless($request->user()?->role === 'administrador', 403, 'Só o administrador altera as configurações da empresa.');
+        \App\Support\Permissions::require($request->user(),'definicoes');
         $in = $request->input('valores');
         abort_unless(is_array($in) && $in !== [], 422, 'Nada para guardar.');
         $clean = []; $errors = [];

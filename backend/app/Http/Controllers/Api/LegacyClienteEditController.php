@@ -51,6 +51,7 @@ final class LegacyClienteEditController extends Controller
 
     public function show(Request $request, int $id)
     {
+        \App\Support\Permissions::require($request->user(), 'mutuarios.editar');
         $db = $this->editor();
         $have = array_flip($db->getSchemaBuilder()->getColumnListing('Clientes'));
         $fields = array_values(array_filter(self::FIELDS, fn ($f) => isset($have[$f])));
@@ -66,6 +67,7 @@ final class LegacyClienteEditController extends Controller
 
     public function update(Request $request, int $id)
     {
+        \App\Support\Permissions::require($request->user(), 'mutuarios.editar');
         $validated = $request->validate([
             'changes' => ['required', 'array', 'min:1'],
             'changes.*' => ['nullable', 'string', 'max:'.self::MAX],

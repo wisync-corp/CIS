@@ -37,7 +37,7 @@ final class GenericSimulatorController extends Controller
     public function preview(Request $request)
     {
         $user=$request->user();
-        abort_unless($user&&$user->active&&$user->role==='administrador',403);
+        \App\Support\Permissions::require($user,'ver');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503,
             'Simulador disponível apenas na pré-visualização privada.');
         $d=$request->validate([

@@ -22,7 +22,7 @@ final class CashReversalController extends Controller
     private function access(Request $request, bool $write): void
     {
         $user=$request->user();
-        abort_unless($user && $user->active && $user->role==='administrador',403);
+        \App\Support\Permissions::require($user,'caixa.estornar');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503);
         if($write){
             foreach(['CIS_CASH_WRITES_APPROVED','CIS_CASH_LEDGER_POSTING_APPROVED','CIS_CASH_REVERSALS_APPROVED'] as $flag){

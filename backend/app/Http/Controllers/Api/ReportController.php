@@ -68,7 +68,7 @@ final class ReportController extends Controller
 
     private function admin(Request $r): void
     {
-        abort_unless($r->user()?->role==='administrador',403,'Os relatórios regulatórios são reservados ao administrador.');
+        \App\Support\Permissions::require($r->user(),'relatorios');
     }
 
     private static function m(float $v): string { return number_format(round($v,2),2,'.',''); }

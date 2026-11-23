@@ -69,7 +69,7 @@ class ContractTemplateController
 
     private static function admin(Request $r): void
     {
-        abort_unless($r->user()?->role === 'administrador', 403, 'Só o administrador edita os modelos de contrato.');
+        \App\Support\Permissions::require($r->user(),'definicoes');
     }
 
     private static function ready(): void

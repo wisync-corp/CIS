@@ -95,7 +95,7 @@ final class ExtractoController extends Controller
     private function geralImpl(Request $request)
     {
         // Movimentos da Caixa: mesmo acesso que a página Caixa (só administrador).
-        abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
+        \App\Support\Permissions::require($request->user(),'extractos.geral');
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
         [$q,$hasAccount]=$this->geralQuery($db,$f);
@@ -201,7 +201,7 @@ final class ExtractoController extends Controller
 
     private function geralEvidenciaImpl(Request $request)
     {
-        abort_unless($request->user()?->role==='administrador',403,'O extracto geral (movimentos da Caixa) é reservado ao administrador.');
+        \App\Support\Permissions::require($request->user(),'extractos.geral');
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
         [$q,$hasAccount]=$this->geralQuery($db,$f);
@@ -344,6 +344,7 @@ final class ExtractoController extends Controller
     /** GET /cis/extractos/clientes */
     public function clientes(Request $request)
     {
+        \App\Support\Permissions::require($request->user(),'extractos');
         return $this->guard(fn()=>$this->clientesImpl($request));
     }
 
@@ -364,6 +365,7 @@ final class ExtractoController extends Controller
     /** GET /cis/extractos/contratos?cliente= : contratos de um cliente (como o combo do VBA). */
     public function contratos(Request $request)
     {
+        \App\Support\Permissions::require($request->user(),'extractos');
         return $this->guard(fn()=>$this->contratosImpl($request));
     }
 
@@ -387,6 +389,7 @@ final class ExtractoController extends Controller
     /** GET /cis/extractos/evidencia?cliente=&contrato=&inicio=&fim= : extracto para entregar ao cliente. */
     public function evidencia(Request $request)
     {
+        \App\Support\Permissions::require($request->user(),'extractos');
         return $this->guard(fn()=>$this->evidenciaImpl($request));
     }
 
@@ -465,6 +468,7 @@ final class ExtractoController extends Controller
     /** GET /cis/extractos/informacao?contrato= : painel «Informação» (formulário VBA Informação). */
     public function informacao(Request $request)
     {
+        \App\Support\Permissions::require($request->user(),'extractos');
         return $this->guard(fn()=>$this->informacaoImpl($request));
     }
 
