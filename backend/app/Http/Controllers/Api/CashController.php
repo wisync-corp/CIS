@@ -315,7 +315,9 @@ final class CashController extends Controller
             'account_id'=>['required','integer','min:1'],
             'type'=>['required','in:entrada,saida'],
             'amount'=>['required','string','regex:/^(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
+            'data'=>['sometimes','nullable','date_format:Y-m-d'],
         ]);
+        $date=CashPostingController::movementDate($request,$d['data']??null);
         $value=$this->cents($d['amount']);
         abort_unless($value>0,422,'O montante deve ser superior a zero.');
         $account=DB::table('cis_cash_accounts')->where('id',$d['account_id'])->first();
@@ -324,6 +326,14 @@ final class CashController extends Controller
         $before=$this->balance($account);
         $after=$before+($d['type']==='entrada'?$value:-$value);
         abort_unless($after>=0,409,'Saldo insuficiente na conta seleccionada.');
+        if ($date!==now('Africa/Maputo')->format('Y-m-d')) {
+            \App\Services\CashAccountLedger::requireDateOpen($account,$date,'lançar movimentos');
+            [$at,$avail]=\App\Services\CashAccountLedger::availableOn(DB::connection(),$account,$date);
+            abort_unless($d['type']==='entrada'||$avail>=$value,409,'Saldo insuficiente na conta em '
+                .implode('/',array_reverse(explode('-',$date))).': '.$this->decimal($at).' MT nesse dia'
+                .($avail<$at?', mas só '.$this->decimal($avail).' MT podem sair sem deixar a conta negativa nos dias seguintes':'').'.');
+            $before=$at; $after=$at+($d['type']==='entrada'?$value:-$value);
+        }
         return response()->json([
             'consulta_apenas'=>true,'movimento_registado'=>false,'saldo_reservado'=>false,
             'type'=>$d['type'],'account_id'=>$account->id,
@@ -345,7 +355,9 @@ final class CashController extends Controller
             'source_account_id'=>['required','integer','min:1'],
             'destination_account_id'=>['required','integer','min:1','different:source_account_id'],
             'amount'=>['required','string','regex:/^(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$/'],
+            'data'=>['sometimes','nullable','date_format:Y-m-d'],
         ]);
+        $date=CashPostingController::movementDate($request,$d['data']??null);
         $value=$this->cents($d['amount']);
         abort_unless($value>0,422,'O montante deve ser superior a zero.');
         $accounts=DB::table('cis_cash_accounts')
@@ -360,6 +372,14 @@ final class CashController extends Controller
         $sourceBefore=$this->balance($source);
         $destinationBefore=$this->balance($destination);
         abort_unless($sourceBefore >= $value,409,'Saldo insuficiente na conta de origem.');
+        if ($date!==now('Africa/Maputo')->format('Y-m-d')) {
+            \App\Services\CashAccountLedger::requireDateOpen($source,$date,'lançar movimentos');
+            \App\Services\CashAccountLedger::requireDateOpen($destination,$date,'lançar movimentos');
+            [$sourceBefore,$avail]=\App\Services\CashAccountLedger::availableOn(DB::connection(),$source,$date);
+            [$destinationBefore]=\App\Services\CashAccountLedger::availableOn(DB::connection(),$destination,$date);
+            abort_unless($avail>=$value,409,'Saldo insuficiente na conta de origem em '.implode('/',array_reverse(explode('-',$date)))
+                .': só '.$this->decimal($avail).' MT podem sair nessa data.');
+        }
         return response()->json([
             'consulta_apenas'=>true,'movimento_registado'=>false,'saldo_reservado'=>false,
             'amount'=>$this->decimal($value),

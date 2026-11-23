@@ -108,14 +108,37 @@ final class CashPostingController extends Controller
             'A chave da operação já foi utilizada para dados diferentes.');
     }
 
-    private function row(int $id,string $key,string $type,int $value,string $description,int $userId): array
+    /** Data do movimento: hoje, ou data passada para quem tem a permissão caixa.data. */
+    public static function movementDate(Request $request,?string $date): string
+    {
+        $today=now('Africa/Maputo')->format('Y-m-d');
+        if ($date===null || $date==='' || $date===$today) return $today;
+        abort_if($date>$today,422,'A data do movimento não pode ser futura.');
+        abort_unless(\App\Support\Permissions::can($request->user(),'caixa.data'),403,
+            'Só o administrador pode lançar movimentos com data passada.');
+        return $date;
+    }
+
+    /** Data passada: período aberto da conta e, numa saída, saldo suficiente nesse dia sem deixar dias seguintes negativos. */
+    private function checkPastDate($db,object $a,string $date,int $outflow): void
+    {
+        if ($date===now('Africa/Maputo')->format('Y-m-d')) return;
+        \App\Services\CashAccountLedger::requireDateOpen($a,$date,'lançar movimentos');
+        if ($outflow<=0) return;
+        [$at,$avail]=\App\Services\CashAccountLedger::availableOn($db,$a,$date);
+        abort_if($avail<$outflow,409,'Saldo insuficiente na conta '.$a->code.' em '
+            .implode('/',array_reverse(explode('-',$date))).': '.$this->amount($at).' MT nesse dia'
+            .($avail<$at?', mas só '.$this->amount($avail).' MT podem sair sem deixar a conta negativa nos dias seguintes':'').'.');
+    }
+
+    private function row(int $id,string $key,string $type,int $value,string $description,int $userId,?string $date=null): array
     {
         return [
             'account_id'=>$id,
             'operation_key'=>$key,
             'Tipo de Movimento'=>$type,
             'Valor'=>$this->amount($value),
-            'Data da Operação'=>now('Africa/Maputo')->format('Y-m-d'),
+            'Data da Operação'=>$date??now('Africa/Maputo')->format('Y-m-d'),
             'Descrição'=>$description,
             'Contracto'=>'','Cliente'=>'CAIXA GERAL',
             'Parcela'=>0,'usuario'=>(string)$userId,
@@ -133,18 +156,20 @@ final class CashPostingController extends Controller
             'description'=>['required','string','min:5','max:100'],
             'evidence_reference'=>['required','string','min:6','max:70'],
             'idempotency_key'=>['required','uuid'],
+            'data'=>['sometimes','nullable','date_format:Y-m-d'],
         ]);
+        $date=self::movementDate($request,$d['data']??null);
         $value=$this->cents($d['amount']);
         abort_unless($value>0,422,'Valor deve ser maior que zero.');
         $type=$d['type']==='entrada'?'Entradas':'Saídas';
         $key='cash:'.strtolower($d['idempotency_key']).':1';
         $db=$this->writer();
-        return $db->transaction(function () use ($db,$d,$key,$type,$value,$request) {
+        return $db->transaction(function () use ($db,$d,$key,$type,$value,$request,$date) {
             $a=$db->table('cis_cash_accounts')->where('id',$d['account_id'])->lockForUpdate()->first();
             abort_unless($a,404,'Conta inexistente.');
             $this->balance($db,$a); // exige estado activo, mesmo em replay
             $description=$this->description($d);
-            $expected=$this->row((int)$a->id,$key,$type,$value,$description,(int)$request->user()->id);
+            $expected=$this->row((int)$a->id,$key,$type,$value,$description,(int)$request->user()->id,$date);
             $already=$db->table('Extracto')->where('operation_key',$key)->first();
             if ($already) {
                 $this->same($already,$expected);
@@ -156,6 +181,7 @@ final class CashPostingController extends Controller
             }
             $before=$this->balance($db,$a);
             abort_unless($type==='Entradas'||$before>=$value,409,'Saldo insuficiente.');
+            $this->checkPastDate($db,$a,$date,$type==='Saídas'?$value:0);
             $nr=$db->table('Extracto')->insertGetId($expected,'Nr');
             $after=$before+($type==='Entradas'?$value:-$value);
             return response()->json([
@@ -179,12 +205,14 @@ final class CashPostingController extends Controller
             'confirmed_source_debit'=>['required','accepted'],
             'confirmed_destination_credit'=>['required','accepted'],
             'idempotency_key'=>['required','uuid'],
+            'data'=>['sometimes','nullable','date_format:Y-m-d'],
         ]);
+        $date=self::movementDate($request,$d['data']??null);
         $value=$this->cents($d['amount']);
         abort_unless($value>0,422,'Valor deve ser maior que zero.');
         $key='cash:'.strtolower($d['idempotency_key']);
         $db=$this->writer();
-        return $db->transaction(function () use ($db,$d,$key,$value,$request) {
+        return $db->transaction(function () use ($db,$d,$key,$value,$request,$date) {
             // Ordem de locking determinística evita deadlocks A->B / B->A.
             $ordered=[$d['source_account_id'],$d['destination_account_id']];
             sort($ordered,SORT_NUMERIC);
@@ -200,9 +228,9 @@ final class CashPostingController extends Controller
             $dstBalance=$this->balance($db,$dst);
             $user=(int)$request->user()->id;
             $out=$this->row((int)$src->id,$key.':1','Saídas',$value,
-                $this->transferDescription($d,(int)$src->id,(int)$dst->id,'SAIDA'),$user);
+                $this->transferDescription($d,(int)$src->id,(int)$dst->id,'SAIDA'),$user,$date);
             $in=$this->row((int)$dst->id,$key.':2','Entradas',$value,
-                $this->transferDescription($d,(int)$src->id,(int)$dst->id,'ENTRADA'),$user);
+                $this->transferDescription($d,(int)$src->id,(int)$dst->id,'ENTRADA'),$user,$date);
             $existing=$db->table('Extracto')->whereIn('operation_key',[$key.':1',$key.':2'])
                 ->get()->keyBy('operation_key');
             if ($existing->count()>0) {
@@ -219,6 +247,8 @@ final class CashPostingController extends Controller
                 ])->header('Cache-Control','no-store, private');
             }
             abort_unless($srcBalance>=$value,409,'Saldo insuficiente na conta de origem.');
+            $this->checkPastDate($db,$src,$date,$value);
+            $this->checkPastDate($db,$dst,$date,0);
             $nrOut=$db->table('Extracto')->insertGetId($out,'Nr');
             $nrIn=$db->table('Extracto')->insertGetId($in,'Nr');
             return response()->json([

@@ -20,6 +20,7 @@ final class Permissions
         'cobrancas'        => 'Registar pagamentos e operações de cobrança; recibos',
         'cobrancas.data'   => 'Registar pagamentos com data passada',
         'caixa'            => 'Caixa: contas, movimentos, transferências, conferência e fecho',
+        'caixa.data'       => 'Lançar entradas, saídas e transferências com data passada',
         'caixa.estornar'   => 'Estornar movimentos da Caixa',
         'extractos'        => 'Extractos dos mutuários',
         'extractos.geral'  => 'Extracto geral da Caixa',
