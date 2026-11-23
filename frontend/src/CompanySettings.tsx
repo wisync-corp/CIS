@@ -46,7 +46,7 @@ const SECTIONS:Section[]=[
    {k:'modalidade_calendario',label:'Calendário das prestações',type:'select',options:[['dias_corridos','Dias corridos (15 / 30 dias)'],['mesmo_dia_mes','Mesmo dia de cada mês']]},
    {k:'lembrete_dias_antes',label:'Antecedência dos avisos de cobrança',type:'number',unit:'dias',help:'Número de dias antes do vencimento. Zero mostra só as prestações que vencem hoje.'},
    {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
- {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito'],groups:[
+ {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito','Propostas de crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
    {k:'score_minimo',label:'Score mínimo para aprovação',type:'number',unit:'0–100'},
    {k:'score_baixo_risco',label:'Limiar de baixo risco',type:'number',unit:'0–100'},
@@ -54,7 +54,10 @@ const SECTIONS:Section[]=[
   {title:'Limites por mutuário',icon:UserRound,fields:[
    {k:'max_creditos_activos',label:'Máximo de créditos activos',type:'number'},
    {k:'max_creditos_atraso',label:'Máximo de créditos em atraso',type:'number'},
-   {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Valor da prestação ÷ rendimento mensal do mutuário.'}]}]},
+   {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Encargo mensal (prestação + outras prestações) ÷ rendimento mensal do mutuário.'}]},
+  {title:'Propostas de crédito',icon:Gauge,fields:[
+   {k:'limite_aprovacao_gestor',label:'Limite de aprovação do gestor de crédito',type:'number',unit:'MT',help:'Propostas até este montante podem ser aprovadas pelo gestor de crédito; acima, só pelo administrador.'},
+   {k:'validade_aprovacao_dias',label:'Validade da aprovação',type:'number',unit:'dias',help:'Depois deste prazo sem desembolso, a proposta aprovada expira.'}]}]},
  {id:'numeracao',kicker:'Contratos',title:'Numeração dos contratos',icon:Hash,desc:'Código dos contratos e dos recibos por ano: a contagem recomeça em 1 no início de cada ano (contratos pelo desembolso, recibos pelo pagamento).',used:['Novo contrato','Contratos e prestações','Recibos','Extractos','Relatórios'],groups:[
   {title:'Formato',icon:Hash,fields:[
    {k:'contrato_prefixo',label:'Prefixo',type:'text',req:true,placeholder:'CAPTA',help:'Letras ou números, sem espaços (ex.: CAPTA, EMP).'},

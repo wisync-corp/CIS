@@ -1,6 +1,6 @@
 import {useCan} from './perms';
 import {useEffect,useState,type FormEvent} from 'react';
-import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw,BadgePlus} from 'lucide-react';
+import {ArrowLeft,FilePlus2,LockKeyhole,CalendarDays,Wallet,UserRound,Info,RotateCcw,BadgePlus,ShieldCheck} from 'lucide-react';
 import {previewContractVba,type ContractPreview} from './contractVbaPreview';
 
 type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:string[];required?:boolean;hint?:string};
@@ -73,12 +73,17 @@ const groupings=[
  {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','conta_saida','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
  {name:'Sistema de amortização',icon:Wallet,keys:['estrategia_calculo']},
 ];
-export default function ContractDraft({onBack,onContractCreated,token}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string}){
+type ApprovedProposal={id:number;numero:string;mutuario:{id:number;nome:string};montante:number;montante_aprovado:number|null;tipo_juro:string;estrategia:string;periodo_dias:number;prazo:string;modalidade:string;taxa_aprovada:number|null;valida_ate:string|null;decidido_por:string|null};
+export default function ContractDraft({onBack,onContractCreated,token,proposalId}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string;proposalId?:number|null}){
  const can=useCan();
  const [values,setValues]=useState<Record<string,string>>(()=>({data_inicio:todayMaputo()}));
  const [clientSearch,setClientSearch]=useState('');
  const [clients,setClients]=useState<Borrower[]>([]);
  const [selectedBorrower,setSelectedBorrower]=useState<Borrower|null>(null);
+ // Propostas aprovadas: só se abre contrato a partir de uma delas (quando instaladas).
+ const [proposals,setProposals]=useState<ApprovedProposal[]|null>(null);
+ const [proposalsInstalled,setProposalsInstalled]=useState(false);
+ const [proposal,setProposal]=useState<ApprovedProposal|null>(null);
  const [clientError,setClientError]=useState('');
  const [clientLoading,setClientLoading]=useState(false);
  const [suggestionsOpen,setSuggestionsOpen]=useState(false);
@@ -155,6 +160,24 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
    .catch(()=>{if(!controller.signal.aborted)setOperational(null);});
   return ()=>controller.abort();
  },[token]);
+ useEffect(()=>{const c=new AbortController();
+  fetch(API+'/cis/propostas/aprovadas',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(r=>r.ok?r.json():null).then(j=>{if(!j||c.signal.aborted)return;setProposalsInstalled(!!j.instalado);setProposals(j.data??[]);
+    if(proposalId){const p=(j.data??[]).find((x:ApprovedProposal)=>x.id===proposalId);if(p)applyProposal(p);}}).catch(()=>{});
+  return()=>c.abort();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[token,proposalId]);
+ function applyProposal(p:ApprovedProposal|null){
+  setProposal(p);
+  if(!p)return;
+  setSelectedBorrower({ID:p.mutuario.id,'Numeração':null,'Nome Completo':p.mutuario.nome,Cidade:null});
+  setClientSearch(p.mutuario.nome);setSuggestionsOpen(false);setClientError('');
+  setValues(v=>({...v,cliente:p.mutuario.nome,cliente_id:String(p.mutuario.id),quantia:String(p.montante_aprovado??p.montante),tipo_juro:p.tipo_juro,
+   estrategia_calculo:p.estrategia,periodo_tabela:String(p.periodo_dias),prazo:p.prazo,modalidade:p.modalidade,...(p.taxa_aprovada!=null?{juros:String(p.taxa_aprovada)}:{})}));
+  fetch(API+'/cis/clientes/'+p.mutuario.id,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}}).then(r=>r.ok?r.json():null)
+   .then(c=>{const cid=c?.Cidade??c?.data?.Cidade;if(cid)setValues(v=>({...v,cidade:String(cid)}));}).catch(()=>{});
+ }
+ const lockedByProposal=(key:string)=>!!proposal&&['cliente','tipo_juro','estrategia_calculo','periodo_tabela','prazo','modalidade'].includes(key)||(!!proposal&&key==='juros'&&proposal.taxa_aprovada!=null);
  const chooseBorrower=(borrower:Borrower)=>{
   setSelectedBorrower(borrower);
   setClientSearch(borrower['Nome Completo']);
@@ -260,6 +283,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   if(fixedRate&&!priced){setQuoteError('Não existe taxa parametrizada válida para este montante e período.');return;}
   if(!validAmount){setReviewError('O montante do crédito deve ser um número inteiro de meticais.');return;}
   if(!selectedBorrower){setClientError('Seleccione um mutuário existente no cadastro.');return;}
+  if(proposalsInstalled&&!proposal){setReviewError('Seleccione a proposta de crédito aprovada: só se abrem contratos a partir de propostas aprovadas.');return;}
+  if(proposal&&Number(values.quantia)>(proposal.montante_aprovado??proposal.montante)){setReviewError('O capital não pode exceder o aprovado na proposta.');return;}
   if(!chosenAccount){setReviewError(cashAccounts.length?'Seleccione a conta / caixa de onde sai o desembolso.':'Não há contas activas na Caixa. Crie e valide uma conta em Caixa antes de abrir contratos.');document.getElementById('cis-conta-saida')?.focus();return;}
   setReviewBusy(true);
   try{
@@ -272,7 +297,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
-     data_inicio:values.data_inicio,conta_id:sourceAccount?Number(sourceAccount):null
+     data_inicio:values.data_inicio,conta_id:sourceAccount?Number(sourceAccount):null,proposta_id:proposal?.id??null
     })
    });
    if(!result.ok){
@@ -309,7 +334,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
      taxa_multa:Number(values.multa),prazo_meses:prazoMeses,
      periodo_dias:Number(periodo),prazo:selectedTerm,
      modalidade,forma_pagamento:values.forma,disponibilidade:values.disponibilidade,
-     data_inicio:values.data_inicio,confirmacao_desembolso:true,
+     data_inicio:values.data_inicio,confirmacao_desembolso:true,proposta_id:proposal?.id??null,
      conta_id:Number(sourceAccount),referencia:disbursementRef.trim(),idempotency_key:key
     })
    });
@@ -340,11 +365,19 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   <header className="cis-profile-hero"><div className="cis-profile-avatar"><FilePlus2 size={29}/></div><div className="cis-profile-heading"><span>NOVO CONTRATO</span><h2>Preparar novo contrato</h2><p>Preencha os dados, valide e confirme o desembolso</p></div></header>
   {operational&&(()=>{const off=[!operational.abertura_desembolso_prontos&&'abertura e desembolso',!operational.semanal_pronto&&'prestações semanais',!operational.cobranca_pronta&&'cobrança',!operational.formulas_adicionais_prontas&&'fórmulas adicionais'].filter(Boolean) as string[];
    return off.length?<div className="cis-contract-notice" role="status"><LockKeyhole size={18}/><span><strong>Ainda não activado no servidor:</strong> {off.join(', ')}. Peça ao administrador para concluir a activação.</span></div>:null;})()}
+  {proposalsInstalled&&<section className="cis-panel cis-contract-draft-section cis-prop-pick">
+   <h3><ShieldCheck size={20}/>Proposta de crédito aprovada</h3>
+   {proposals&&proposals.length===0?<p className="cis-msg-muted">Não há propostas aprovadas por desembolsar. Crie a proposta em «Propostas» e aguarde a aprovação.</p>:
+   <label className="cis-profile-field"><span>Proposta *</span><select value={proposal?.id??''} onChange={e=>applyProposal(proposals?.find(p=>String(p.id)===e.target.value)??null)}>
+    <option value="">Seleccionar proposta aprovada</option>
+    {(proposals??[]).map(p=><option key={p.id} value={p.id}>{p.numero} · {p.mutuario.nome} · {(p.montante_aprovado??p.montante).toLocaleString('pt-MZ')} MT · {p.prazo}{p.valida_ate?' · válida até '+p.valida_ate.split('-').reverse().join('/'):''}</option>)}
+   </select><small><Info size={12}/>{proposal?`Aprovada por ${proposal.decidido_por??'—'}: mutuário e condições ficam fixos; o capital pode ser igual ou inferior a ${(proposal.montante_aprovado??proposal.montante).toLocaleString('pt-MZ')} MT.`:'O mutuário, o montante e as condições vêm da proposta aprovada.'}</small></label>}
+  </section>}
   <form className="cis-contract-draft" onSubmit={handle} onReset={()=>{setValues({data_inicio:todayMaputo()});setSelectedBorrower(null);setClientSearch('');setClients([]);setSuggestionsOpen(false);setActiveSuggestion(0);setQuote(null);setQuoteKey('');setQuoteError('');setChecked(false);setReview(null);setReviewError('');setPreview(null);setPreviewError('');setMessage('');}}>
   {groupings.map(({name,icon:Icon,keys})=><section className="cis-panel cis-contract-draft-section" key={name}>
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
-    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='data_inicio'&&!can('contratos.data'))||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
+    const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||lockedByProposal(key)||(key==='data_inicio'&&!can('contratos.data'))||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
     const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?(chosenAccount?String(availableCash):cashAccounts.length?'':cashBalance):key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
@@ -353,7 +386,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
        aria-expanded={suggestionsOpen&&clientSearch.trim().length>0}
        aria-controls="cis-client-suggestions"
        aria-activedescendant={suggestionsOpen&&matchingClients[activeSuggestion]?'cis-client-option-'+matchingClients[activeSuggestion].ID:undefined}
-       placeholder="Digite nome ou ID do mutuário" value={clientSearch} autoComplete="off"
+       placeholder="Digite nome ou ID do mutuário" disabled={!!proposal} value={clientSearch} autoComplete="off"
        onFocus={()=>{if(!selectedBorrower)setSuggestionsOpen(true);}}
        onBlur={()=>setSuggestionsOpen(false)}
        onChange={e=>{

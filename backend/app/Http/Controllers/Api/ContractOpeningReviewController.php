@@ -119,6 +119,7 @@ final class ContractOpeningReviewController extends Controller
             'disponibilidade' => ['required','string','max:100'],
             'data_inicio' => ['required','date_format:Y-m-d'],
             'conta_id' => ['sometimes','nullable','integer','min:1'],
+            'proposta_id' => ['sometimes','nullable','integer','min:1'],
         ]);
 
         $rows = DB::connection('mysql_legacy')->table('Clientes')
@@ -215,6 +216,14 @@ final class ContractOpeningReviewController extends Controller
             $issues[] = 'Modalidade incompatível com a regra de preparação para juro composto.';
         }
 
+        // Proposta de crédito aprovada (obrigatória quando as propostas estão instaladas).
+        if (ProposalController::ready()) {
+            try {
+                ProposalController::checkForOpening(isset($values['proposta_id'])?(int)$values['proposta_id']:null,$values,$request->user());
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+                $issues[]=$e->getMessage();
+            }
+        }
         // Data do desembolso e saldo da conta nesse dia.
         if (!empty($values['conta_id'])) {
             $b=$this->balanceOn((int)$values['conta_id'],$values['data_inicio'],$request->user());

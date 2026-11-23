@@ -47,6 +47,15 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::put('cis/agencias/contas/{accountId}',[\App\Http\Controllers\Api\BranchController::class,'assignAccount'])->whereNumber('accountId')->middleware('throttle:30,1');
     Route::get('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'contractBranch'])->middleware('throttle:60,1');
     Route::put('cis/agencias/contratos/{numero}',[\App\Http\Controllers\Api\BranchController::class,'assignContract'])->middleware('throttle:30,1');
+    Route::get('cis/propostas',[\App\Http\Controllers\Api\ProposalController::class,'index'])->middleware('throttle:60,1');
+    Route::get('cis/propostas/aprovadas',[\App\Http\Controllers\Api\ProposalController::class,'approved'])->middleware('throttle:60,1');
+    Route::post('cis/propostas/analise',[\App\Http\Controllers\Api\ProposalController::class,'analyse'])->middleware('throttle:60,1');
+    Route::post('cis/propostas',[\App\Http\Controllers\Api\ProposalController::class,'store'])->middleware('throttle:20,1');
+    Route::get('cis/propostas/{id}',[\App\Http\Controllers\Api\ProposalController::class,'show'])->whereNumber('id')->middleware('throttle:60,1');
+    Route::put('cis/propostas/{id}',[\App\Http\Controllers\Api\ProposalController::class,'update'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::post('cis/propostas/{id}/submeter',[\App\Http\Controllers\Api\ProposalController::class,'submit'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('cis/propostas/{id}/decisao',[\App\Http\Controllers\Api\ProposalController::class,'decide'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('cis/propostas/{id}/cancelar',[\App\Http\Controllers\Api\ProposalController::class,'cancel'])->whereNumber('id')->middleware('throttle:20,1');
     Route::get('cis/carteiras',[\App\Http\Controllers\Api\PortfolioController::class,'summary'])->middleware('throttle:30,1');
     Route::post('cis/carteiras/atribuir',[\App\Http\Controllers\Api\PortfolioController::class,'assignBulk'])->middleware('throttle:10,1');
     Route::get('cis/carteiras/contratos/{numero}',[\App\Http\Controllers\Api\PortfolioController::class,'contract'])->middleware('throttle:60,1');

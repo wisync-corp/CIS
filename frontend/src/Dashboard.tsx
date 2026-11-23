@@ -16,7 +16,8 @@ import ConnectionSettings from './ConnectionSettings';
 import type {ThemeId} from './theme';
 import {PermsContext,type Perm} from './perms';
 import PasswordChange from './PasswordChange';
-import {KeyRound} from 'lucide-react';
+import {KeyRound,ClipboardCheck} from 'lucide-react';
+import ProposalsDesk from './ProposalsDesk';
 
 const noticesApi=import.meta.env.VITE_API_URL||'/api';
 type NoticeKind='cobranca'|'atraso';
@@ -25,7 +26,7 @@ const noticeMoney=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximum
 
 const nav:{label:string;icon:typeof Users;perm?:Perm}[]=[
  {label:'Visão geral',icon:LayoutDashboard,perm:'ver'},{label:'Mutuários',icon:Users,perm:'ver'},
- {label:'Contratos e prestações',icon:FileText,perm:'ver'},{label:'Simulador',icon:CalendarDays,perm:'ver'},
+ {label:'Propostas',icon:ClipboardCheck,perm:'propostas.criar'},{label:'Contratos e prestações',icon:FileText,perm:'ver'},{label:'Simulador',icon:CalendarDays,perm:'ver'},
  {label:'Extractos',icon:ReceiptText,perm:'extractos'},{label:'Mensagens',icon:MessageSquare,perm:'mensagens'},{label:'Caixa',icon:Landmark,perm:'caixa'},{label:'Relatórios',icon:BarChart3,perm:'relatorios'},
  {label:'Definições',icon:Settings}
 ];
@@ -38,6 +39,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  setWaToken(token);
  const [clientProfileOpen,setClientProfileOpen]=useState(false);
  const [extractoContract,setExtractoContract]=useState<string|null>(null);
+ const [proposalToOpen,setProposalToOpen]=useState<number|null>(null);
  const [extractoPreset,setExtractoPreset]=useState<(ExtractoPreset&{key:number})|null>(null);
  const [notices,setNotices]=useState<NoticeData|null>(null);
  const [noticeKind,setNoticeKind]=useState<NoticeKind>('atraso');
@@ -91,8 +93,8 @@ export default function Dashboard({token, name, role, permissions, agency, theme
      {notices.paginas>1&&<div className="cis-collections-pagination"><button type="button" disabled={noticePage<=1} onClick={()=>setNoticePage(p=>p-1)}>Anterior</button><span>{noticePage} / {notices.paginas}</span><button type="button" disabled={noticePage>=notices.paginas} onClick={()=>setNoticePage(p=>p+1)}>Seguinte</button></div>}
     </>}
    </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Caixa'&&active!=='Simulador'&&<><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
-    <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.' :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
-    {active==='Visão geral'?<Overview token={token} onNavigate={setActive} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter token={token}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen}/>}
+    <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?'Visão integrada da carteira de microcrédito e das operações financeiras.' :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
+    {active==='Visão geral'?<Overview token={token} onNavigate={setActive} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/>:active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter token={token}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
    </main>
   </div>
   <Toaster/>
