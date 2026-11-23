@@ -22,7 +22,36 @@ use Illuminate\Support\Facades\Schema;
  */
 final class ProposalController extends Controller
 {
-    public const STATES = ['rascunho', 'submetida', 'devolvida', 'aprovada', 'rejeitada', 'cancelada', 'desembolsada', 'expirada'];
+    public const STATES = ['rascunho', 'submetida', 'devolvida', 'aprovada', 'rejeitada', 'cancelada', 'desembolsada', 'expirada', 'nao_levantada'];
+    /** Estados em que o mutuário é avisado e o modelo usado. */
+    public const NOTICES = ['aprovada' => 'Proposta aprovada', 'rejeitada' => 'Proposta recusada', 'nao_levantada' => 'Proposta não levantada'];
+
+    /** Limites de montante e taxa da agência (null = sem limite). */
+    public static function branchLimits(?int $branch): array
+    {
+        $none = ['credito_minimo' => null, 'credito_maximo' => null, 'taxa_minima' => null, 'taxa_maxima' => null];
+        if (!$branch || !Schema::hasTable('cis_branches') || !Schema::hasColumn('cis_branches', 'credito_minimo')) return $none;
+        $b = DB::table('cis_branches')->where('id', $branch)->first(['credito_minimo', 'credito_maximo', 'taxa_minima', 'taxa_maxima']);
+        return $b ? array_map(fn ($v) => $v === null ? null : (float) $v, (array) $b) : $none;
+    }
+
+    /** Violações dos limites da agência para um montante e taxa. */
+    public static function limitIssues(?int $branch, float $amount, ?float $rate): array
+    {
+        $l = self::branchLimits($branch);
+        $f = fn ($v) => number_format((float) $v, 0, ',', ' ');
+        $out = [];
+        if ($l['credito_minimo'] !== null && $amount < $l['credito_minimo']) $out[] = 'Montante abaixo do mínimo da agência ('.$f($l['credito_minimo']).' MT).';
+        if ($l['credito_maximo'] !== null && $amount > $l['credito_maximo']) $out[] = 'Montante acima do máximo da agência ('.$f($l['credito_maximo']).' MT).';
+        if ($rate !== null && $l['taxa_minima'] !== null && $rate < $l['taxa_minima']) $out[] = 'Taxa abaixo da mínima da agência ('.(float) $l['taxa_minima'].'%).';
+        if ($rate !== null && $l['taxa_maxima'] !== null && $rate > $l['taxa_maxima']) $out[] = 'Taxa acima da máxima da agência ('.(float) $l['taxa_maxima'].'%).';
+        return $out;
+    }
+
+    private static function proposalBranch(?object $u): ?int
+    {
+        return Branches::userBranch($u) ?? (Branches::ready() ? Branches::principalId() : null);
+    }
     private const TERMS = ['1 Semana', '2 Semanas', '3 Semanas', '1 Mês', '2 Meses', '3 Meses'];
 
     public static function ready(): bool
@@ -115,6 +144,7 @@ final class ProposalController extends Controller
             'valida_ate' => $p->valida_ate, 'contrato' => $p->contract_number,
             'criado_por' => $names[$p->created_by] ?? null, 'criado_por_id' => (int) $p->created_by, 'criado_em' => $p->created_at, 'submetido_em' => $p->submitted_at,
             'agencia' => $p->branch_id ? Branches::label((int) $p->branch_id) : null,
+            'avisado' => isset(self::NOTICES[$p->status]) ? (($p->avisado_estado ?? null) === $p->status) : null,
         ];
     }
 
@@ -140,6 +170,9 @@ final class ProposalController extends Controller
             'data' => $list->values()->map(fn ($p) => self::out($p, $names))->all(),
             'contagem' => ['para_decidir' => $toDecide->count()] + $all->countBy('status')->all(),
             'limite_aprovacao' => $limit, 'validade_dias' => (int) CS::get('validade_aprovacao_dias'),
+            'avisos_por_enviar' => Schema::hasColumn('cis_credit_proposals', 'avisado_estado')
+                ? $all->filter(fn ($p) => isset(self::NOTICES[$p->status]) && ($p->avisado_estado ?? null) !== $p->status)->count() : 0,
+            'limites_agencia' => self::branchLimits(self::proposalBranch($u)),
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -155,9 +188,13 @@ final class ProposalController extends Controller
         [$decide, $why] = self::canDecide($u, $p);
         $mine = (int) $p->created_by === (int) $u->id || ($u->role ?? '') === 'administrador';
         $history = CreditScore::forClient((int) $p->client_id);
+        $live = in_array($p->status, ['rascunho', 'devolvida'], true) ? CreditScore::analyse((array) $p, $history) : null;
+        if ($live) $live['alertas'] = array_merge(self::limitIssues($p->branch_id ? (int) $p->branch_id : null, (float) $p->montante, $live['taxa'] !== null ? (float) $live['taxa'] : null), $live['alertas']);
         return response()->json(self::out($p, $names) + [
+            'limites_agencia' => self::branchLimits($p->branch_id ? (int) $p->branch_id : null),
+            'aviso' => self::notice($p),
             'historico_mutuario' => $history,
-            'analise_actual' => in_array($p->status, ['rascunho', 'devolvida'], true) ? CreditScore::analyse((array) $p, $history) : null,
+            'analise_actual' => $live,
             'eventos' => $ev->map(fn ($e) => ['accao' => $e->accao, 'de' => $e->de, 'para' => $e->para, 'notas' => $e->notas,
                 'por' => $e->user_id ? ($names[$e->user_id] ?? '—') : 'Sistema', 'em' => $e->created_at])->all(),
             'pode' => [
@@ -166,6 +203,7 @@ final class ProposalController extends Controller
                 'cancelar' => $mine && in_array($p->status, ['rascunho', 'submetida', 'devolvida', 'aprovada'], true),
                 'decidir' => $p->status === 'submetida' && $decide, 'motivo_nao_decidir' => $p->status === 'submetida' && !$decide ? $why : null,
                 'abrir_contrato' => $p->status === 'aprovada' && Permissions::can($u, 'contratos.abrir'),
+                'nao_levantada' => $p->status === 'aprovada' && ($mine || Permissions::can($u, 'propostas.aprovar', 'contratos.abrir')),
             ],
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -213,7 +251,10 @@ final class ProposalController extends Controller
         $d = $this->rules($r);
         $this->client($r, (int) $d['client_id']);
         $h = CreditScore::forClient((int) $d['client_id']);
-        return response()->json(['historico_mutuario' => $h, 'analise' => CreditScore::analyse($d, $h)])->header('Cache-Control', 'no-store, private');
+        $a = CreditScore::analyse($d, $h);
+        $branch = self::proposalBranch($r->user());
+        $a['alertas'] = array_merge(self::limitIssues($branch, (float) $d['montante'], $a['taxa'] !== null ? (float) $a['taxa'] : null), $a['alertas']);
+        return response()->json(['historico_mutuario' => $h, 'analise' => $a, 'limites_agencia' => self::branchLimits($branch)])->header('Cache-Control', 'no-store, private');
     }
 
     public function store(Request $r)
@@ -229,7 +270,7 @@ final class ProposalController extends Controller
             $seq = $last ? ((int) substr((string) $last, -4)) + 1 : 1;
             $id = DB::table('cis_credit_proposals')->insertGetId($d + [
                 'numero' => sprintf('PROP-%s-%04d', $year, $seq), 'client_name' => mb_substr((string) $c->{'Nome Completo'}, 0, 160),
-                'branch_id' => Branches::userBranch($u) ?? (Branches::ready() ? Branches::principalId() : null),
+                'branch_id' => self::proposalBranch($u),
                 'status' => 'rascunho', 'created_by' => $u->id, 'created_at' => now(), 'updated_at' => now(),
             ]);
             self::event($id, 'criada', null, 'rascunho', null, (int) $u->id);
@@ -264,6 +305,8 @@ final class ProposalController extends Controller
         $h = CreditScore::forClient((int) $p->client_id);
         $a = CreditScore::analyse((array) $p, $h);
         abort_if($a['prestacao'] === null, 422, 'Não foi possível calcular as prestações: '.implode(' ', $a['alertas']));
+        $lim = self::limitIssues($p->branch_id ? (int) $p->branch_id : null, (float) $p->montante, $a['taxa'] !== null ? (float) $a['taxa'] : null);
+        abort_if($lim, 422, implode(' ', $lim));
         $n = DB::table('cis_credit_proposals')->where('id', $id)->whereIn('status', ['rascunho', 'devolvida'])
             ->update(['status' => 'submetida', 'submitted_at' => now(), 'analise' => json_encode(['calculo' => $a, 'historico' => $h], JSON_UNESCAPED_UNICODE), 'updated_at' => now()]);
         abort_unless($n === 1, 409, 'A proposta foi alterada entretanto.');
@@ -296,6 +339,8 @@ final class ProposalController extends Controller
             // Juro fixo: a taxa vem sempre da tabela de preços no desembolso.
             $rate = $p->tipo_juro === 'Fixo' ? null : ($d['taxa_aprovada'] ?? ($p->taxa !== null ? (float) $p->taxa : null));
             if ($rate !== null) abort_unless(abs($rate - round($rate)) < 0.000001, 422, 'A taxa tem de ser um número inteiro.');
+            $lim = self::limitIssues($p->branch_id ? (int) $p->branch_id : null, (float) $amount, $rate);
+            abort_if($lim, 422, implode(' ', $lim));
             $upd += ['status' => 'aprovada', 'montante_aprovado' => $amount, 'taxa_aprovada' => $rate,
                 'valida_ate' => now('Africa/Maputo')->addDays(max(1, (int) CS::get('validade_aprovacao_dias')))->toDateString()];
         } else {
@@ -319,6 +364,84 @@ final class ProposalController extends Controller
         abort_if(mb_strlen($notes) < 5, 422, 'Indique o motivo do cancelamento.');
         DB::table('cis_credit_proposals')->where('id', $id)->where('status', $p->status)->update(['status' => 'cancelada', 'updated_at' => now()]);
         self::event($id, 'cancelada', $p->status, 'cancelada', $notes, (int) $u->id);
+        return $this->show($r, $id);
+    }
+
+    /** Aprovada mas o mutuário não levantou o crédito (Loandisk: «Not Taken Up»). */
+    public function notTaken(Request $r, int $id)
+    {
+        $u = $r->user();
+        $this->needReady();
+        $p = $this->find($r, $id);
+        abort_unless($p->status === 'aprovada', 409, 'Só uma proposta aprovada pode ficar como não levantada.');
+        abort_unless((int) $p->created_by === (int) $u->id || Permissions::can($u, 'propostas.aprovar', 'contratos.abrir'), 403, 'Sem permissão.');
+        $notes = trim((string) $r->input('notas', ''));
+        abort_if(mb_strlen($notes) < 5, 422, 'Indique o motivo (ex.: o mutuário desistiu).');
+        DB::table('cis_credit_proposals')->where('id', $id)->where('status', 'aprovada')->update(['status' => 'nao_levantada', 'updated_at' => now()]);
+        self::event($id, 'nao_levantada', 'aprovada', 'nao_levantada', $notes, (int) $u->id);
+        return $this->show($r, $id);
+    }
+
+    /** Aviso ao mutuário para o estado actual (aprovada / recusada / não levantada). */
+    public static function notice(object $p): ?array
+    {
+        if (!isset(self::NOTICES[$p->status])) return null;
+        $tpl = DB::table('cis_message_templates')->where('name', self::NOTICES[$p->status])->value('body');
+        if ($tpl === null) return null;
+        $phone = null;
+        try {
+            $db = DB::connection('mysql_legacy');
+            if ($db->getSchemaBuilder()->hasColumn('Clientes', 'Contacto')) $phone = trim((string) $db->table('Clientes')->where('ID', $p->client_id)->value('Contacto')) ?: null;
+        } catch (\Throwable) {}
+        $name = trim((string) $p->client_name);
+        $v = ['Primeiro Nome' => explode(' ', $name)[0] ?? $name, 'Nome Completo' => $name, 'Número da Proposta' => $p->numero,
+            'Montante Aprovado' => number_format((float) ($p->montante_aprovado ?? $p->montante), 2, ',', ' '), 'Montante Pedido' => number_format((float) $p->montante, 2, ',', ' '),
+            'Válida Até' => $p->valida_ate ? implode('/', array_reverse(explode('-', substr((string) $p->valida_ate, 0, 10)))) : '', 'Motivo' => (string) ($p->decisao_notas ?? '')];
+        $msg = preg_replace_callback('/\{([^{}]{1,40})\}/u', fn ($m) => $v[$m[1]] ?? $m[0], $tpl);
+        return ['estado' => $p->status, 'modelo' => self::NOTICES[$p->status], 'mensagem' => $msg, 'contacto' => $phone,
+            'telefone' => MessageCenterController::phone($phone), 'enviado' => ($p->avisado_estado ?? null) === $p->status, 'enviado_em' => $p->avisado_em ?? null];
+    }
+
+    /** Avisos por enviar (grupo «propostas» do Centro de Mensagens). */
+    public static function pendingNotices(Request $r): array
+    {
+        if (!self::ready() || !Schema::hasColumn('cis_credit_proposals', 'avisado_estado')) return [];
+        self::expire();
+        $q = (new self())->scoped($r)->whereIn('status', array_keys(self::NOTICES))
+            ->where(fn ($w) => $w->whereNull('avisado_estado')->orWhereColumn('avisado_estado', '<>', 'status'))
+            ->where('updated_at', '>=', now()->subDays(30));
+        $out = [];
+        foreach ($q->orderBy('updated_at')->get() as $p) {
+            $n = self::notice($p);
+            if (!$n) continue;
+            $out[] = ['contrato' => $p->numero, 'cliente' => $p->client_name, 'cliente_id' => (int) $p->client_id, 'contacto' => $n['contacto'], 'telefone' => $n['telefone'],
+                'contacto_alternativo' => null, 'telefone_alternativo' => null, 'situacao' => $p->status, 'regra' => $p->status,
+                'regra_label' => ['aprovada' => 'Proposta aprovada', 'rejeitada' => 'Proposta recusada', 'nao_levantada' => 'Não levantada'][$p->status], 'mensagem' => $n['mensagem']];
+        }
+        return $out;
+    }
+
+    /** Marca o aviso como enviado (registo do Centro de Mensagens ou botão na proposta). */
+    public static function markNoticed(string $numero): void
+    {
+        if (!self::ready() || !Schema::hasColumn('cis_credit_proposals', 'avisado_estado')) return;
+        DB::table('cis_credit_proposals')->where('numero', $numero)->whereIn('status', array_keys(self::NOTICES))
+            ->update(['avisado_estado' => DB::raw('status'), 'avisado_em' => now()]);
+    }
+
+    /** POST propostas/{id}/avisado : o operador enviou o aviso fora da fila (WhatsApp directo). */
+    public function noticed(Request $r, int $id)
+    {
+        Permissions::require($r->user(), ['propostas.criar', 'propostas.aprovar', 'contratos.abrir']);
+        $this->needReady();
+        $p = $this->find($r, $id);
+        $n = self::notice($p);
+        abort_unless($n, 409, 'Não há aviso para este estado.');
+        try {
+            DB::table('cis_message_log')->insert(['contract_number' => $p->numero, 'client_id' => $p->client_id, 'phone' => $n['telefone'], 'channel' => 'whatsapp',
+                'group' => 'propostas', 'body' => $n['mensagem'], 'sent_by' => $r->user()->id, 'created_at' => now()]);
+        } catch (\Throwable) {}
+        self::markNoticed($p->numero);
         return $this->show($r, $id);
     }
 

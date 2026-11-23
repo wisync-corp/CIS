@@ -23,7 +23,7 @@ final class MessageCenterController extends Controller
         'Nome Completo','Nome do Cliente','Primeiro Nome','Nº de Cliente','Contacto','Nr do Contracto','Quantia Creditada','% de Juro',
         'Data de Inicio','Data de Cobrança','Data Final','Valor a Pagar','Dias','-1*Dias','Valor em Dívida','Prestações Vencidas','Dias de Atraso',
     ];
-    private const GROUPS=['todos','activos','inactivos','pendentes','atrasados','lembretes'];
+    private const GROUPS=['todos','activos','inactivos','pendentes','atrasados','lembretes','propostas'];
 
     private function admin(Request $r): void
     {
@@ -288,8 +288,8 @@ final class MessageCenterController extends Controller
         $this->admin($request);
         return $this->guard(function () use ($request) {
             $g=$request->validate(['grupo'=>['required','in:'.implode(',',self::GROUPS)]])['grupo'];
-            if ($g==='lembretes') {
-                $list=collect($this->lembretesLista($request));
+            if ($g==='lembretes'||$g==='propostas') {
+                $list=collect($g==='lembretes'?$this->lembretesLista($request):ProposalController::pendingNotices($request));
                 return response()->json(['grupo'=>$g,'total'=>$list->count(),'com_contacto'=>$list->whereNotNull('telefone')->count(),
                     'por_regra'=>$list->countBy('regra')->all(),'destinatarios'=>$list->values()])->header('Cache-Control','no-store, private');
             }
@@ -355,6 +355,7 @@ final class MessageCenterController extends Controller
             $hasStatus=\Illuminate\Support\Facades\Schema::hasColumn('cis_message_log','status');
             if ($hasStatus) $row+=['status'=>$d['estado']??($d['canal']==='copia'?null:'aberta'),'detail'=>$d['detalhe']??null];
             $id=DB::table('cis_message_log')->insertGetId($row);
+            if (($d['grupo']??null)==='propostas'&&($d['estado']??null)!=='falhada'&&!empty($d['contrato'])) ProposalController::markNoticed($d['contrato']);
             return response()->json(['id'=>$id,'estado_registado'=>$hasStatus],201);
         });
     }

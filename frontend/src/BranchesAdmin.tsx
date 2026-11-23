@@ -1,9 +1,12 @@
 // Definições › Agências: cadastro das agências e atribuição de contratos (por cidade) e contas da Caixa.
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
-import {Building2,Plus,Pencil,MapPin,Phone,Users,FileText,Landmark,Star,X,AlertCircle,CheckCircle2,Shuffle} from 'lucide-react';
+import {Building2,Plus,Pencil,MapPin,Phone,Users,FileText,Landmark,Star,X,AlertCircle,CheckCircle2,Shuffle,Scale} from 'lucide-react';
+const num=(v:unknown)=>v===null||v===undefined||v===''?null:Number(v);
+const range=(lo:number|null,hi:number|null,fmt:(n:number)=>string)=>lo!=null&&hi!=null?fmt(lo)+' – '+fmt(hi):lo!=null?'desde '+fmt(lo):hi!=null?'até '+fmt(hi):null;
+const mzn=(n:number)=>n.toLocaleString('pt-MZ')+' MT';
 
 const API=import.meta.env.VITE_API_URL||'/api';
-type Branch={id:number;codigo:string;nome:string;provincia:string|null;cidade:string|null;morada:string|null;telefone:string|null;email:string|null;principal:number|boolean;activo:number|boolean;contratos:number;utilizadores:number;contas:number};
+type Branch={id:number;codigo:string;nome:string;provincia:string|null;cidade:string|null;morada:string|null;telefone:string|null;email:string|null;principal:number|boolean;activo:number|boolean;credito_minimo?:number|null;credito_maximo?:number|null;taxa_minima?:string|number|null;taxa_maxima?:string|number|null;contratos:number;utilizadores:number;contas:number};
 type Account={id:number;codigo:string;nome:string;estado:string;branch_id:number|null};
 type City={cidade:string;contratos:number};
 
@@ -36,6 +39,8 @@ export default function BranchesAdmin({token}:{token:string}){
     <h4>{b.nome}</h4>
     <p className="cis-branch-where">{(b.cidade||b.provincia)?<><MapPin size={13}/> {[b.cidade,b.provincia].filter(Boolean).join(', ')}</>:<span className="cis-msg-muted">Sem localização</span>}{b.telefone&&<><Phone size={13}/> {b.telefone}</>}</p>
     <dl><div><dt><FileText size={13}/> Contratos</dt><dd>{b.contratos}</dd></div><div><dt><Users size={13}/> Utilizadores</dt><dd>{b.utilizadores}</dd></div><div><dt><Landmark size={13}/> Contas</dt><dd>{b.contas}</dd></div></dl>
+    {(()=>{const m=range(num(b.credito_minimo),num(b.credito_maximo),mzn),t=range(num(b.taxa_minima),num(b.taxa_maxima),n=>n+'%');
+     return m||t?<p className="cis-branch-limits"><Scale size={13}/> {[m&&'Crédito '+m,t&&'Taxa '+t].filter(Boolean).join(' · ')}</p>:null;})()}
     <footer><button type="button" onClick={()=>setEditing(b)}><Pencil size={13}/> Editar</button><button type="button" onClick={()=>setAssign(b)}><Shuffle size={13}/> Atribuir contratos</button></footer>
    </article>)}
    <article className="cis-branch-card all"><header><span className="cis-branch-code">TODAS</span></header><h4>Todas as agências</h4>
@@ -57,7 +62,7 @@ export default function BranchesAdmin({token}:{token:string}){
 }
 
 function BranchForm({token,branch,onClose,onSaved}:{token:string;branch:Branch|null;onClose:()=>void;onSaved:(n:string)=>void}){
- const [f,setF]=useState({codigo:branch?.codigo??'',nome:branch?.nome??'',provincia:branch?.provincia??'',cidade:branch?.cidade??'',morada:branch?.morada??'',telefone:branch?.telefone??'',email:branch?.email??'',activo:branch?!!branch.activo:true});
+ const [f,setF]=useState({codigo:branch?.codigo??'',nome:branch?.nome??'',provincia:branch?.provincia??'',cidade:branch?.cidade??'',morada:branch?.morada??'',telefone:branch?.telefone??'',email:branch?.email??'',credito_minimo:String(branch?.credito_minimo??''),credito_maximo:String(branch?.credito_maximo??''),taxa_minima:branch?.taxa_minima!=null?String(Number(branch.taxa_minima)):'',taxa_maxima:branch?.taxa_maxima!=null?String(Number(branch.taxa_maxima)):'',activo:branch?!!branch.activo:true});
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const set=(k:keyof typeof f)=>(e:{target:{value:string}})=>setF(v=>({...v,[k]:e.target.value}));
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');
@@ -74,6 +79,12 @@ function BranchForm({token,branch,onClose,onSaved}:{token:string;branch:Branch|n
    <div className="cis-users-form-row"><label>Cidade<input value={f.cidade} onChange={set('cidade')} maxLength={100}/></label><label>Província<input value={f.provincia} onChange={set('provincia')} maxLength={60}/></label></div>
    <label>Morada<input value={f.morada} onChange={set('morada')} maxLength={255}/></label>
    <div className="cis-users-form-row"><label>Telefone<input inputMode="tel" value={f.telefone} onChange={set('telefone')} maxLength={30}/></label><label>Email<input type="email" value={f.email} onChange={set('email')} maxLength={190}/></label></div>
+   <fieldset className="cis-branch-limits-form"><legend><Scale size={14}/> Limites das propostas de crédito</legend>
+    <p className="cis-msg-muted">Opcional. Uma proposta fora destes limites não pode ser submetida nem aprovada. Deixe em branco para não limitar.</p>
+    <div className="cis-users-form-row"><label>Montante mínimo (MT)<input type="number" min={1} step={1} value={f.credito_minimo} onChange={set('credito_minimo')}/></label>
+     <label>Montante máximo (MT)<input type="number" min={1} step={1} value={f.credito_maximo} onChange={set('credito_maximo')}/></label></div>
+    <div className="cis-users-form-row"><label>Taxa mínima (%)<input type="number" min={0} max={100} step="0.01" value={f.taxa_minima} onChange={set('taxa_minima')}/></label>
+     <label>Taxa máxima (%)<input type="number" min={0} max={100} step="0.01" value={f.taxa_maxima} onChange={set('taxa_maxima')}/></label></div></fieldset>
    {branch&&!branch.principal&&<label className="cis-branch-active"><input type="checkbox" checked={f.activo} onChange={e=>setF(v=>({...v,activo:e.target.checked}))}/> Agência activa</label>}
    {error&&<p className="cis-pw-error" role="alert"><AlertCircle size={15}/> {error}</p>}
    <div className="cis-pw-actions"><button type="submit" className="primary" disabled={busy}>{busy?'A guardar…':branch?'Guardar':'Criar agência'}</button><button type="button" onClick={onClose}>Cancelar</button></div>

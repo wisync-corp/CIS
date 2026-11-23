@@ -57,14 +57,23 @@ final class BranchController extends Controller
 
     private function data(Request $r, ?int $id = null): array
     {
-        return $r->validate([
+        $d = $r->validate([
             'codigo' => ['required', 'string', 'max:12', 'regex:/^[A-Z0-9-]+$/', Rule::unique('cis_branches', 'codigo')->ignore($id)],
             'nome' => ['required', 'string', 'min:2', 'max:120'],
             'provincia' => ['nullable', 'string', 'max:60'], 'cidade' => ['nullable', 'string', 'max:100'],
             'morada' => ['nullable', 'string', 'max:255'], 'telefone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:190'], 'responsavel_id' => ['nullable', 'integer', 'exists:users,id'],
             'activo' => ['sometimes', 'boolean'],
-        ], ['codigo.regex' => 'Código: só maiúsculas, números e hífen (ex.: MAT-01).', 'codigo.unique' => 'Já existe uma agência com este código.']);
+            'credito_minimo' => ['nullable', 'integer', 'min:1', 'max:16777216'], 'credito_maximo' => ['nullable', 'integer', 'min:1', 'max:16777216'],
+            'taxa_minima' => ['nullable', 'numeric', 'min:0', 'max:100'], 'taxa_maxima' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ], ['codigo.regex' => 'Código: só maiúsculas, números e hífen (ex.: MAT-01).', 'codigo.unique' => 'Já existe uma agência com este código.',
+        ]);
+        foreach ([['credito_minimo', 'credito_maximo', 'O montante máximo tem de ser igual ou superior ao mínimo.'], ['taxa_minima', 'taxa_maxima', 'A taxa máxima tem de ser igual ou superior à mínima.']] as [$lo, $hi, $msg]) {
+            if (isset($d[$lo], $d[$hi]) && (float) $d[$hi] < (float) $d[$lo]) throw \Illuminate\Validation\ValidationException::withMessages([$hi => $msg]);
+        }
+        // Limites de crédito: só quando as colunas existem (deploy/install-credit-proposals.sh).
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('cis_branches', 'credito_minimo')) unset($d['credito_minimo'], $d['credito_maximo'], $d['taxa_minima'], $d['taxa_maxima']);
+        return $d;
     }
 
     public function store(Request $r): JsonResponse
