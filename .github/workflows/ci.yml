@@ -42,6 +42,8 @@ jobs:
       - run: php -l app/Domain/Money.php
       - run: php -l app/Domain/DistribuicaoPagamento.php
       - run: php tests/domain_smoke.php
+      - run: php tests/client_create_smoke.php
+      - run: bash -n ../deploy/enable-client-create.sh
       - run: cp .env.example .env
       - run: sed -i '/^DB_DATABASE=/d' .env
       - run: touch database/database.sqlite
