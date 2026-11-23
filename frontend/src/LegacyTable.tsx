@@ -12,7 +12,7 @@ type Props={module:string;token:string;onProfileChange?:(isOpen:boolean)=>void};
 type Row=Record<string,unknown>;
 type Paged={data:Row[];current_page:number;last_page:number;total:number};
 type ContractSummary={total:number;por_estado:{estado:string;total:number}[];por_situacao?:{situacao:string;total:number}[]};
-const situationInfo:Record<string,{label:string;hint:string;tone:string}>={'Pendente':{label:'Em curso',hint:'Prestações dentro do prazo',tone:''},'Pagamento Atrasado':{label:'Em atraso',hint:'Prestações em atraso',tone:' warning'},'Finalizado':{label:'Liquidado',hint:'Sem prestações por pagar',tone:''}};
+const situationInfo:Record<string,{label:string;hint:string;tone:string}>={'Pendente':{label:'Em curso',hint:'Prestações dentro do prazo',tone:''},'Pagamento Atrasado':{label:'Em atraso',hint:'Prestações em atraso',tone:' warning'},'Finalizado':{label:'Liquidado',hint:'Sem prestações por pagar',tone:''},'Abatido':{label:'Abatido',hint:'Saldo fora da carteira activa',tone:''}};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const fields:Record<string,{key:string;label:string}[]>={
  'Mutuários':[{key:'ID',label:'ID'},{key:'Nome Completo',label:'Nome completo'},{key:'Cidade',label:'Cidade'},{key:'Provincia',label:'Província'}],

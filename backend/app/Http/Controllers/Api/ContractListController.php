@@ -53,7 +53,7 @@ final class ContractListController extends Controller
     //  Pagamento Atrasado — há prestação por pagar marcada como atrasada ou com vencimento passado;
     //  Pendente           — há prestações por pagar, todas dentro do prazo;
     //  Finalizado         — não há prestações por pagar.
-    public const SITUATIONS = ['Pendente','Pagamento Atrasado','Finalizado'];
+    public const SITUATIONS = ['Pendente','Pagamento Atrasado','Finalizado','Abatido'];
 
     private function groupedContracts(?Request $request = null)
     {
@@ -84,6 +84,7 @@ final class ContractListController extends Controller
                 ORDER BY `Data de Cobrança`,`Nº da Parcela` SEPARATOR '|'),'|',1) AS proximo_vencimento")
             ->selectRaw("CASE WHEN SUM(CASE WHEN $late THEN 1 ELSE 0 END)>0 THEN 'Pagamento Atrasado'
                 WHEN SUM(CASE WHEN $open THEN 1 ELSE 0 END)>0 THEN 'Pendente'
+                WHEN MAX(CASE WHEN `Estado do Contrato`='Abatido' THEN 1 ELSE 0 END)>0 THEN 'Abatido'
                 ELSE 'Finalizado' END AS situacao",[$today])
             ->groupBy('Nr do Contracto');
     }
@@ -134,7 +135,7 @@ final class ContractListController extends Controller
         $filters = $request->validate([
             'q' => ['sometimes', 'string', 'max:155'],
             'estado' => ['sometimes', 'string', 'max:155'],
-            'situacao' => ['sometimes', 'string', 'in:Pendente,Pagamento Atrasado,Finalizado'],
+            'situacao' => ['sometimes', 'string', 'in:Pendente,Pagamento Atrasado,Finalizado,Abatido'],
             'sort' => ['sometimes', 'string', 'in:numero,cliente,cliente_id,linhas_prestacoes,estado,capital,prestacao_a_pagar,situacao'],
             'direction' => ['sometimes', 'string', 'in:asc,desc'],
         ]);

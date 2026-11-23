@@ -868,6 +868,166 @@ final class ContractCollectionController extends Controller
         return response()->json($result,empty($result['repetido'])?201:200)->header('Cache-Control','no-store, private');
     }
 
+
+    /** Alterações de crédito e recuperação de saldo abatido. */
+    public function creditChange(Request $request, string $numero)
+    {
+        $this->admin($request);
+        abort_unless($request->user()->role === 'administrador', 403,
+            'Esta operação requer aprovação do administrador.');
+        $d = $request->validate([
+            'operacao' => ['required','in:reforco,abate,recuperacao'],
+            'ordem' => ['required_unless:operacao,abate','nullable','integer','min:1'],
+            'valor' => ['required_unless:operacao,abate','nullable','string','max:16'],
+            'taxa' => ['nullable','integer','min:0','max:100'],
+            'confirmar' => ['nullable','boolean'],
+            'valor_confirmado' => ['required_if:confirmar,true','nullable','string','max:20'],
+            'idempotency_key' => ['required_if:confirmar,true','nullable','uuid'],
+            'conta_id' => ['nullable','integer','min:1'],
+            'motivo' => ['nullable','string','max:180'],
+            'referencia' => ['nullable','string','max:60'],
+        ]);
+        $operation = $d['operacao'];
+        $commit = (bool) ($d['confirmar'] ?? false);
+        $cash = $operation !== 'abate';
+        $amount = $cash ? CashAccountLedger::cents($d['valor'], 'valor') : 0;
+        abort_if($cash && $amount <= 0, 422, 'Indique um montante positivo.');
+        $date = now('Africa/Maputo')->toDateString();
+        $reason = trim($d['motivo'] ?? '');
+        $reference = trim($d['referencia'] ?? '');
+        if ($commit) {
+            abort_unless(CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED'), 503, 'A gravação de cobranças está desactivada.');
+            abort_unless(isset($d['valor_confirmado']),422,'Confirme o valor da prévia.');
+            abort_unless(!empty($d['idempotency_key']) && mb_strlen($reason) >= 5, 422, 'Indique o motivo da operação.');
+            if ($cash) {
+                CashAccountLedger::requireReady();
+                abort_unless(!empty($d['conta_id']) && mb_strlen($reference) >= 4, 422, 'Indique uma conta activa e referência.');
+            }
+        }
+        $db = DB::connection('mysql_contract_writer');
+        $key = 'contract:credit:'.$operation.':'.strtolower($d['idempotency_key'] ?? '');
+        $user = $request->user();
+
+        return response()->json($db->transaction(function () use ($db,$numero,$d,$operation,$commit,$cash,$amount,$date,$reason,$reference,$key,$user) {
+            $account = null;
+            if ($commit && $cash) {
+                [$account] = CashAccountLedger::lockActive($db, (int) $d['conta_id']);
+
+            }
+            $query = $db->table('Contractos')->where('Nr do Contracto',$numero)->orderBy('Ordem');
+            $rows = ($commit ? $query->lockForUpdate() : $query)->get();
+            abort_if($rows->isEmpty(),404,'Contrato não encontrado.');
+            if ($commit) {
+                $previous = $db->table('cis_contractos_historico')->where('operation_key',$key)->first();
+                if ($previous) {
+                    abort_unless((string)$previous->contract_number === $numero
+                        && (!$cash || ((int)$previous->installment_ordem === (int)$d['ordem']
+                        && (int)$previous->account_id === (int)$account->id
+                        && CashAccountLedger::legacyCents($previous->amount) === $amount)),409,'A chave já pertence a outra operação.');
+                    return ['registado'=>true,'repetido'=>true,'notice'=>'Operação já registada.'];
+                }
+            }
+            if ($commit && $cash) $this->cashDateOpen($account,$date);
+            if ($operation === 'abate') {
+                $open = $rows->filter(fn ($row) => in_array($row->Estado,['Pendente','Pagamento Atrasado'],true));
+                abort_if($open->isEmpty(),409,'Não existem prestações em aberto para abater.');
+                $balances = [];
+                foreach ($open as $row) {
+                    $this->opBase($db,$row);
+                    $due = $this->quote($row,$date,false)['_cents']['total'];
+                    $balance = $due - $this->partialPaid($db,$row);
+                    abort_unless($balance > 0,409,'Existe uma prestação sem saldo abatível.');
+                    $balances[(int)$row->Ordem] = $balance;
+                }
+                if ($commit) {
+                    abort_unless(CashAccountLedger::cents($d['valor_confirmado']) === array_sum($balances),409,'O saldo mudou. Actualize a prévia.');
+                    foreach ($rows as $row) {
+                        $order = (int)$row->Ordem;
+                        $change = ['Estado do Contrato'=>'Abatido'];
+                        if (isset($balances[$order])) {
+                            $change += ['Estado'=>'Abatido','Situação de Pagamento'=>'Abatido'];
+                            if (!$this->partialPaid($db,$row)) $change['Valor Pago'] = 0;
+                        }
+                        $line = $db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$order);
+                        $line->update($change);
+                        ContractHistory::record($db,[
+                            'contract_number'=>$numero,'installment_ordem'=>$order,'installment_number'=>$row->{'Nº da Parcela'},
+                            'operation'=>'abate_credito','before'=>$row,'after'=>$line->first(),
+                            'amount'=>isset($balances[$order])?CashAccountLedger::amount($balances[$order]):null,
+                            'reason'=>$reason,'operation_key'=>$key,'performed_by'=>$user->id,
+                        ]);
+                    }
+                }
+                return ['registado'=>$commit,'valor'=>CashAccountLedger::amount(array_sum($balances)),
+                    'prestacoes'=>count($balances),'notice'=>$commit?'Contrato abatido com saldo disponível para recuperação.':'Abate do saldo em aberto, sem movimento na Caixa.'];
+            }
+
+            $selected = $rows->where('Ordem',(int)$d['ordem']);
+            abort_unless($selected->count()===1,404,'Prestação não encontrada ou duplicada.');
+            $row = $selected->first();
+            $order = (int)$row->Ordem;
+            $changes = [];
+            $details = [];
+            if ($operation === 'reforco') {
+                $this->opBase($db,$row);
+                abort_unless(mb_strtolower(trim((string)$row->{'Tipo de Juro'})) === 'fixo',409,'O reforço directo só se aplica a juro fixo.');
+                abort_unless($this->partialPaid($db,$row)===0,409,'A prestação tem pagamentos parciais, que devem ser regularizados antes do reforço.');
+                abort_unless($amount % 100 === 0,422,'O reforço de capital deve ser em meticais inteiros.');
+                $capital = (int)$row->Capital;
+                $principal = (int)$row->{'Amortização'};
+                abort_unless($capital>0 && $principal>0 && $principal<=$capital,409,'Capital ou amortização da prestação não identificável.');
+                $rate = (int)($d['taxa'] ?? $row->{'% de Juro'});
+                abort_unless($rate>=0 && $rate<=100,409,'Taxa inválida.');
+                $increment = intdiv($amount,100);
+                abort_unless($capital+$increment<=2147483647,422,'O capital ultrapassa o limite do contrato.');
+                $newPrincipal = $principal+$increment;
+                $interest = self::isCisContract($row)
+                    ? LegacyContractPricing::upwards($newPrincipal*$rate/100)*100
+                    : (int) round($newPrincipal*$rate);
+                $fine = CashAccountLedger::legacyCents($row->{'Valor de Multa'} ?? 0);
+                $total = $newPrincipal*100+$interest+$fine;
+                $changes = ['Capital'=>$capital+$increment,'Amortização'=>$newPrincipal,'% de Juro'=>$rate,
+                    'Valor de Juros'=>self::money($row,$interest),'Valor a Pagar'=>self::money($row,$total),'Valor Pago'=>0];
+                $details = ['capital'=>CashAccountLedger::amount($newPrincipal*100),'juros'=>CashAccountLedger::amount($interest),
+                    'valor_a_pagar'=>CashAccountLedger::amount($total),'taxa'=>$rate,
+                    'vencimento'=>self::date($row->{'Data de Cobrança'},'Data de vencimento')->toDateString()];
+                if ($commit) {
+                    [, $available] = CashAccountLedger::availableOn($db,$account,$date);
+                    abort_unless($amount <= $available,422,'Saldo insuficiente na conta seleccionada.');
+                }
+            } else {
+                abort_unless($row->Estado==='Abatido' && $row->{'Estado do Contrato'}==='Abatido',409,'A prestação não está abatida.');
+                $history = $db->table('cis_contractos_historico')->where('contract_number',$numero)->where('installment_ordem',$order);
+                $original = (clone $history)->where('operation','abate_credito')->value('amount');
+                $recovered = (clone $history)->where('operation','recuperacao_credito')->sum('amount');
+                $balance = CashAccountLedger::legacyCents($original ?? 0)-CashAccountLedger::legacyCents($recovered);
+                abort_unless($amount <= $balance,422,'O montante excede o saldo abatido recuperável.');
+                $details = ['saldo_recuperavel'=>CashAccountLedger::amount($balance),'saldo_apos_operacao'=>CashAccountLedger::amount($balance-$amount)];
+            }
+            if ($commit) {
+                abort_unless(CashAccountLedger::cents($d['valor_confirmado']) === ($operation==='reforco' ? $total : $balance-$amount),409,'O saldo mudou. Actualize a prévia.');
+                $line = $db->table('Contractos')->where('Nr do Contracto',$numero)->where('Ordem',$order);
+                if ($changes) $line->update($changes);
+                $isOutgoing = $operation === 'reforco';
+                $nr = $db->table('Extracto')->insertGetId([
+                    'Contracto'=>$numero,'Cliente'=>mb_substr((string)$row->{'Nome do Cliente'},0,255),
+                    'Parcela'=>(string)$row->{'Nº da Parcela'},'Data da Operação'=>$date,'Valor'=>CashAccountLedger::amount($amount),
+                    'Tipo de Movimento'=>$isOutgoing?'Saídas':'Entradas',
+                    'Descrição'=>($isOutgoing?'Aumento de Crédito':'Recuperação de Crédito Abatido').' | REF:'.$reference,
+                    'usuario'=>mb_substr((string)$user->name,0,255),'account_id'=>$account->id,'operation_key'=>$key,
+                ],'Nr');
+                ContractHistory::record($db,[
+                    'contract_number'=>$numero,'installment_ordem'=>$order,'installment_number'=>$row->{'Nº da Parcela'},
+                    'operation'=>$isOutgoing?'reforco_credito':'recuperacao_credito','before'=>$row,'after'=>$line->first(),
+                    'extracto_nr'=>$nr,'account_id'=>$account->id,'amount'=>CashAccountLedger::amount($amount),
+                    'evidence_reference'=>$reference,'reason'=>$reason,'operation_key'=>$key,'performed_by'=>$user->id,
+                ]);
+            }
+            return $details+['registado'=>$commit,'valor'=>CashAccountLedger::amount($amount),
+                'notice'=>$commit?'Operação registada no Extracto e no histórico.':'Prévia da operação.'];
+        },3))->header('Cache-Control','no-store, private');
+    }
+
     /** Histórico imutável da prestação/contrato (leitura). */
     public function history(Request $request, string $numero)
     {

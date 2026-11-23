@@ -973,6 +973,31 @@ ok(!$gl->contains('carteira') && !$gl->contains('operadores') && $gl->contains('
 $ex=data((new \App\Http\Controllers\Api\ExtractoController())->geral($lreq([],$gmu)));
 ok(collect($ex['linhas'])->every(fn($l)=>in_array((string)($l['contrato']??$l['Contracto']??''),['OP-0001',''],true)),'extracto geral: a gestora só vê movimentos da sua agência');
 
+
+echo "== Reforço, abate e recuperação de crédito\n";
+$changeAccount=$acc('CREDITO-TESTE','5000.00');
+$creditOrder=$row(['Nr do Contracto'=>'C-4200','Nº'=>4200,'Valor Pago'=>0,'Valor de Juros'=>150,'Valor a Pagar'=>1150]);
+$creditBefore=$db->table('Contractos')->where('Ordem',$creditOrder)->first();
+$creditChanges=new \App\Http\Controllers\Api\ContractCollectionController();
+$change=fn(array $fields)=>data($creditChanges->creditChange(req('/x',$fields,$user),'C-4200'));
+$reinforce=['operacao'=>'reforco','ordem'=>$creditOrder,'valor'=>'200.00','taxa'=>15];
+$preview=$change($reinforce);
+ok($preview['valor_a_pagar']==='1380.00' && $preview['vencimento']===$creditBefore->{'Data de Cobrança'},'reforço mantém vencimento e recalcula juros');
+$confirm=['confirmar'=>true,'motivo'=>'Autorizado no ensaio','referencia'=>'DOC-CI','conta_id'=>$changeAccount];
+$reinforce+=['idempotency_key'=>'a0000000-0000-4000-8000-000000004200','valor_confirmado'=>'1380.00']+$confirm;
+$change($reinforce);
+ok($change($reinforce)['repetido']===true && $db->table('Extracto')->where('Contracto','C-4200')->where('Tipo de Movimento','Saídas')->count()===1,
+    'reforço e repetição geram uma saída');
+$beforeAbate=$db->table('Extracto')->count();
+$change(['operacao'=>'abate','idempotency_key'=>'a0000000-0000-4000-8000-000000004201','valor_confirmado'=>'1380.00']+$confirm);
+ok($db->table('Extracto')->count()===$beforeAbate && $db->table('Contractos')->where('Ordem',$creditOrder)->value('Estado')==='Abatido',
+    'abate sai da carteira sem afectar a Caixa');
+$recover=['operacao'=>'recuperacao','ordem'=>$creditOrder,'valor'=>'50.00'];
+ok($change($recover)['saldo_apos_operacao']==='1330.00','recuperação parte do saldo abatido congelado');
+$change($recover+['idempotency_key'=>'a0000000-0000-4000-8000-000000004202','valor_confirmado'=>'1330.00']+$confirm);
+ok($change($recover)['saldo_recuperavel']==='1330.00' && $db->table('Extracto')->where('Contracto','C-4200')->where('Tipo de Movimento','Entradas')->count()===1,
+    'recuperação reduz saldo abatido, com uma entrada na Caixa');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
