@@ -110,7 +110,7 @@ final class CashController extends Controller
     {
         $this->access($request);
         $d = $request->validate(['account_id'=>['nullable','integer','min:1']]);
-        $query=DB::table('Extracto')->whereNotNull('account_id')->orderByDesc('Nr');
+        $query=DB::table('Extracto')->whereNotNull('account_id')->orderByDesc('Data da Operação')->orderByDesc('Nr');
         if (isset($d['account_id'])) $query->where('account_id',$d['account_id']);
         $columns=[
             'Nr as id','Nr as extracto_nr','account_id',
