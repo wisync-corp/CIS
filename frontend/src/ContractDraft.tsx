@@ -55,7 +55,8 @@ const fields:Field[]=[
  {key:'data_inicio',label:'Data de início / desembolso',type:'date',required:true,hint:'Para desembolso efectivo, utilize a data de hoje em Moçambique.'},
  {key:'data_final',label:'Data final prevista',type:'date',hint:'Calculada a partir da data de início e do prazo após a homologação.'},
  {key:'quantia',label:'Capital a desembolsar (MT)',type:'number',required:true,hint:'Introduza meticais inteiros. Juros e prestações serão arredondados sempre para cima.'},
- {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Consultado no Extracto segundo a regra CalculateBalance do VBA. O saldo será revalidado ao gravar.'},
+ {key:'conta_saida',label:'Conta / Caixa de saída do desembolso',required:true,hint:'O capital sai desta conta da Caixa; o contrato e o lançamento de Saída ficam associados a ela.'},
+ {key:'saldo_disponivel',label:'Saldo disponível para desembolso (MT)',type:'number',hint:'Saldo da conta seleccionada. É revalidado ao gravar.'},
  {key:'tipo_juro',label:'Tipo de juro',type:'select',choices:['Fixo','Variável','Composto'],required:true},
  {key:'estrategia_calculo',label:'Sistema de amortização',type:'select',required:true,hint:'A estratégia depende do tipo de juro. Três fórmulas adicionais são regras CIS. A sua gravação exige testes e activação específica no servidor.'},
  {key:'periodo_tabela',label:'Período da tabela de juros (dias)',type:'select',choices:['15','30'],required:true,hint:'15 dias: 1 ou 2 semanas. 30 dias: 1, 2 ou 3 semanas e 1, 2 ou 3 meses.'},
@@ -68,7 +69,7 @@ const fields:Field[]=[
 ];
 const groupings=[
  {name:'Mutuário',icon:UserRound,keys:['cliente','cliente_id','cidade']},
- {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
+ {name:'Contrato e condições de crédito',icon:Wallet,keys:['numero','quantia','conta_saida','saldo_disponivel','tipo_juro','periodo_tabela','juros','multa','prazo','modalidade','data_inicio','data_final','forma','disponibilidade']},
  {name:'Sistema de amortização',icon:Wallet,keys:['estrategia_calculo']},
 ];
 export default function ContractDraft({onBack,onContractCreated,token}:{onBack:()=>void;onContractCreated:(numero:string)=>void;token:string}){
@@ -209,12 +210,13 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
  const [openingError,setOpeningError]=useState('');
  const [cashAccounts,setCashAccounts]=useState<{id:number;code:string;name:string;status:string;saldo_disponivel?:string|null}[]>([]);
  const [sourceAccount,setSourceAccount]=useState('');
+ const [accountsLoaded,setAccountsLoaded]=useState(false);
  const [disbursementRef,setDisbursementRef]=useState('');
  const [openingKey,setOpeningKey]=useState('');
  useEffect(()=>{
   const ctrl=new AbortController();
   fetch(API+'/cis/caixa/contas',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:ctrl.signal})
-   .then(r=>r.ok?r.json():null).then(d=>{if(!ctrl.signal.aborted)setCashAccounts((d?.accounts??[]).filter((a:{status:string})=>a.status==='activa'));}).catch(()=>{});
+   .then(r=>r.ok?r.json():null).then(d=>{if(ctrl.signal.aborted)return;const act=(d?.accounts??[]).filter((a:{status:string})=>a.status==='activa');setCashAccounts(act);setAccountsLoaded(true);if(act.length===1)setSourceAccount(String(act[0].id));}).catch(()=>{});
   return()=>ctrl.abort();
  },[token]);
  const chosenAccount=cashAccounts.find(a=>String(a.id)===sourceAccount);
@@ -245,6 +247,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
   if(fixedRate&&!priced){setQuoteError('Não existe taxa parametrizada válida para este montante e período.');return;}
   if(!validAmount){setReviewError('O montante do crédito deve ser um número inteiro de meticais.');return;}
   if(!selectedBorrower){setClientError('Seleccione um mutuário existente no cadastro.');return;}
+  if(!chosenAccount){setReviewError(cashAccounts.length?'Seleccione a conta / caixa de onde sai o desembolso.':'Não há contas activas na Caixa. Crie e valide uma conta em Caixa antes de abrir contratos.');document.getElementById('cis-conta-saida')?.focus();return;}
   setReviewBusy(true);
   try{
    const result=await fetch(API+'/cis/contractos/validar-abertura',{
@@ -327,7 +330,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
    <h3><Icon size={20}/>{name}</h3><div className="cis-profile-fields">{keys.map(key=>{
     const field=fields.find(f=>f.key===key)!;
     const disabled=['numero','data_final','saldo_disponivel','cliente','cliente_id'].includes(key)||(key==='juros'&&fixedRate)||((key==='prazo'&&!periodo)||(key==='modalidade'&&!selectedTerm)||(key==='estrategia_calculo'&&!tipo));
-    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?cashBalance:key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
+    const val=key==='numero'?(openedContract?.numero??suggestedNumber):key==='modalidade'?selectedModality:key==='prazo'?selectedTerm:key==='saldo_disponivel'?(chosenAccount?String(Number(chosenAccount.saldo_disponivel??0)):cashAccounts.length?'':cashBalance):key==='data_final'?dataFinal:key==='juros'&&fixedRate?(priced?String(Number(quote?.taxa)):''):values[key]??'';
     if(key==='cliente')return <div key={key} className="cis-profile-field cis-contract-client-picker">
      <label htmlFor="cis-client-search">Pesquisar mutuário existente *</label>
      <div className="cis-client-combobox">
@@ -369,6 +372,13 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
      {!selectedBorrower&&clientSearch.trim().length>0&&<small>Escolha uma das sugestões para associar o mutuário ao contrato.</small>}
      {clientError&&<small role="alert">{clientError}</small>}
     </div>;
+    if(key==='conta_saida')return <label key={key} className="cis-profile-field"><span>{field.label} *</span>
+     <select id="cis-conta-saida" value={sourceAccount} required onChange={e=>{setSourceAccount(e.target.value);setOpeningKey('');}}>
+      <option value="">{!accountsLoaded?'A carregar contas…':cashAccounts.length?'Seleccionar conta activa':'Sem contas activas'}</option>
+      {cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+     </select>
+     <small><Info size={12}/>{!chosenAccount?field.hint:values.quantia?(accountCovers?'Saldo suficiente para o capital indicado.':'Saldo insuficiente nesta conta para o capital indicado.'):'Conta seleccionada.'}</small>
+    </label>;
     return <label key={key} className={'cis-profile-field'+(key==='numero'?' cis-contract-number-row':'')}><span>{field.label}{field.required?' *':''}</span>
      {field.choices||key==='prazo'||key==='modalidade'||key==='estrategia_calculo'?<select value={val} disabled={disabled} required={!disabled&&field.required} onChange={e=>setValues(prev=>key==='periodo_tabela'?({...prev,periodo_tabela:e.target.value,prazo:'',modalidade:''}):key==='prazo'?({...prev,prazo:e.target.value,modalidade:''}):key==='tipo_juro'?({...prev,tipo_juro:e.target.value,estrategia_calculo:defaultStrategyByInterest[e.target.value]??''}):({...prev,[key]:e.target.value}))}>
        <option value="">Seleccionar</option>{(key==='prazo'?availableTerms:key==='modalidade'?availableModalities:key==='estrategia_calculo'?[...calculationStrategies]:field.choices??[]).map(choice=><option key={choice} value={choice} disabled={key==='estrategia_calculo'&&!strategiesForType.includes(choice)}>{key==='modalidade'&&choice==='Uma Parcela'?'Prestação única':choice}{key==='estrategia_calculo'&&!strategiesForType.includes(choice)?' — não aplicável a este juro':''}</option>)}
@@ -410,7 +420,7 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
    {openingError&&<div className="cis-table-error" role="alert">{openingError}</div>}
    {openedContract?<div className="cis-contract-review" role="status">
     <strong>Contrato criado e desembolso registado</strong>
-    <p>Contrato <strong>{openedContract.numero}</strong> · {openedContract.prestacoes} prestação(ões) · desembolso de {Number(openedContract.desembolso).toLocaleString('pt-MZ')} MT.</p>
+    <p>Contrato <strong>{openedContract.numero}</strong> · {openedContract.prestacoes} prestação(ões) · desembolso de {Number(openedContract.desembolso).toLocaleString('pt-MZ')} MT{chosenAccount?' a partir da conta '+chosenAccount.code+' · '+chosenAccount.name:''}.</p>
     <p>Não submeta novamente. Consulte o contrato na carteira.</p>
     <button type="button" className="cis-contract-draft-button" onClick={onBack}>Voltar à carteira de contratos</button>
    </div>:review?.dados_verificados&&<div className="cis-contract-review">
@@ -418,8 +428,8 @@ export default function ContractDraft({onBack,onContractCreated,token}:{onBack:(
     {review.autorizado_para_gravar?<><label className="cis-contract-confirm"><input type="checkbox" checked={confirmedDisbursement} onChange={e=>setConfirmedDisbursement(e.target.checked)}/>
      <span>Confirmo que o montante indicado foi efectivamente disponibilizado ao mutuário e autorizo o lançamento da saída no Extracto.</span></label>
      <div className="cis-contract-cash-source">
-      <label>Conta de saída do desembolso <select value={sourceAccount} onChange={e=>{setSourceAccount(e.target.value);setOpeningKey('');}}><option value="">Seleccionar conta activa</option>{cashAccounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+Number(a.saldo_disponivel).toLocaleString('pt-MZ',{minimumFractionDigits:2})+' MT':''}</option>)}</select>
-       <small>{!chosenAccount?'O dinheiro sai do saldo desta conta da Caixa.':accountCovers?'Saldo suficiente para o desembolso.':'Saldo insuficiente nesta conta para o montante pedido.'}</small></label>
+      <div className="cis-contract-chosen-account"><span>Conta / Caixa de saída</span><strong>{chosenAccount?chosenAccount.code+' · '+chosenAccount.name:'— seleccione no formulário acima'}</strong>
+       <small>{!chosenAccount?'Escolha a conta no grupo «Contrato e condições de crédito».':accountCovers?'Saldo '+Number(chosenAccount.saldo_disponivel??0).toLocaleString('pt-MZ',{minimumFractionDigits:2})+' MT · suficiente.':'Saldo insuficiente nesta conta para o montante pedido.'}</small></div>
       <label>Referência do comprovativo <input type="text" maxLength={60} value={disbursementRef} onChange={e=>setDisbursementRef(e.target.value)} placeholder="Recibo, transferência ou M-Pesa"/><small>Fica gravada no Extracto e no histórico.</small></label>
      </div>
      <button type="button" className="cis-contract-draft-button" disabled={!confirmedDisbursement||!chosenAccount||!accountCovers||disbursementRef.trim().length<4||openingBusy||openingCooldownSeconds>0} onClick={()=>void openContract()}>{openingBusy?'A gravar contrato e desembolso…':openingCooldownSeconds>0?'Aguarde '+openingCooldownSeconds+' s (limite de segurança)':'Criar contrato e registar desembolso'}</button>

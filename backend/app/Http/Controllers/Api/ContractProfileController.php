@@ -83,8 +83,27 @@ final class ContractProfileController extends Controller
             $line = (array)$row;
             return array_intersect_key($line, array_flip(self::PAYMENT_FIELDS));
         })->values();
+        // Conta da Caixa de onde saiu o desembolso (lançamento «Saídas» do contrato).
+        $desembolso = null;
+        try {
+            if (Schema::hasColumn('Extracto', 'account_id')) {
+                $out = DB::table('Extracto as e')
+                    ->leftJoin('cis_cash_accounts as a', 'a.id', '=', 'e.account_id')
+                    ->where('e.Contracto', $numero)->where('e.Tipo de Movimento', 'Saídas')
+                    ->orderBy('e.Nr')->first(['e.Nr', 'e.Valor', 'e.Data da Operação as data', 'e.Descrição as descricao',
+                        'e.account_id', 'a.code', 'a.name']);
+                if ($out) {
+                    $desembolso = ['nr' => (int) $out->Nr, 'valor' => $out->Valor, 'data' => $out->data,
+                        'conta_id' => $out->account_id === null ? null : (int) $out->account_id,
+                        'conta' => $out->code ? trim($out->code.' · '.$out->name) : null,
+                        'referencia' => preg_match('/REF:(.+)$/u', (string) $out->descricao, $m) ? trim($m[1]) : null];
+                }
+            }
+        } catch (\Throwable) {
+            $desembolso = null;
+        }
         return response()->json([
-            'contract' => $detail, 'installments' => $payments,
+            'contract' => $detail, 'desembolso' => $desembolso, 'installments' => $payments,
             'legacy_rows' => $rows,
             'installment_rows' => $total,
             'contract_fields_divergent' => $divergent,
