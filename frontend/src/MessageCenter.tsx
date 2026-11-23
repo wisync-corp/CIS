@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff,ExternalLink} from 'lucide-react';
+import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,Search,Bell,AlertTriangle,Receipt,FileText,Bold,Italic,Strikethrough,Smile,Braces,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff,ExternalLink} from 'lucide-react';
 import MessageLog from './MessageLog';
 import {onWa,waState,waSend,waStop,waCheck,jobStatus,jobDetail,failKind,getShowPref,setShowPref,type WaImage} from './waBridge';
 
@@ -19,6 +19,26 @@ const GROUPS:{id:Group;label:string;hint:string}[]=[
  {id:'pendentes',label:'Contratos em curso',hint:'Dentro do prazo'},
  {id:'atrasados',label:'Contratos em atraso',hint:'Com prestações em atraso'},
 ];
+// Categoria visual do modelo (ícone e cor), deduzida do nome/texto.
+type Cat={id:string;label:string;Icon:typeof Bell};
+const CATS:{test:RegExp;cat:Cat}[]=[
+ {test:/recibo/i,cat:{id:'recibo',label:'Recibo',Icon:Receipt}},
+ {test:/extracto|extrato/i,cat:{id:'extracto',label:'Extracto',Icon:FileText}},
+ {test:/atras|vencid|d[ií]vida/i,cat:{id:'atraso',label:'Cobrança',Icon:AlertTriangle}},
+ {test:/lembr|venc|prestação|pagamento/i,cat:{id:'lembrete',label:'Lembrete',Icon:Bell}},
+];
+const catOf=(t:{name:string;body:string}):Cat=>CATS.find(c=>c.test.test(t.name))?.cat??CATS.find(c=>c.test.test(t.body))?.cat??{id:'geral',label:'Geral',Icon:MessageSquare};
+const fieldsIn=(b:string)=>[...new Set([...b.matchAll(/\{([^{}\n]{1,40})\}/g)].map(m=>m[1]))];
+// Grupos dos campos para inserir com um clique.
+const FIELD_GROUPS:{label:string;test:RegExp}[]=[
+ {label:'Mutuário',test:/nome|contacto|cliente|mutu/i},
+ {label:'Valores',test:/valor|capital|juro|total|saldo|d[ií]vida|multa|pago/i},
+ {label:'Datas e prazos',test:/data|dias|prazo|venc|per[ií]odo/i},
+ {label:'Contrato',test:/contract|contrato|presta|parcela|recibo|extracto|c[óo]digo/i},
+];
+const groupFields=(fs:string[])=>{const out:Record<string,string[]>={};
+ for(const f of fs){const g=FIELD_GROUPS.find(x=>x.test.test(f))?.label??'Outros';(out[g]??=[]).push(f);}
+ return [...FIELD_GROUPS.map(g=>g.label),'Outros'].filter(g=>out[g]?.length).map(g=>({label:g,fields:out[g]}));};
 const EMOJIS=['😊','🙏','👍','✅','⚠️','📅','💰','📞','📌','🔔','❗','🤝','👋','💳','🏦','📄'];
 const situ=(s:string)=>s==='atrasado'?'Em atraso':s==='pendente'?'Em curso':'Liquidado';
 // Directo no WhatsApp Web: o wa.me passa pela página de partilha («Open app») e estraga alguns emojis.
@@ -38,7 +58,7 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  const [selId,setSelId]=useState<number|''>('');
  const [editing,setEditing]=useState<false|'new'|'edit'>(false);
  const [name,setName]=useState('');const [body,setBody]=useState('');
- const [field,setField]=useState('');const [showEmoji,setShowEmoji]=useState(false);
+ const [showEmoji,setShowEmoji]=useState(false);
  const [preview,setPreview]=useState<Preview|null>(null);const [text,setText]=useState('');
  const [group,setGroup]=useState<Group|''>('');const [queue,setQueue]=useState<Recipient[]|null>(null);const [queueInfo,setQueueInfo]=useState('');
  const [qFilter,setQFilter]=useState<QueueFilter>('todos');const [qNumero,setQNumero]=useState<'principal'|'alternativo'>('principal');const [qLabel,setQLabel]=useState('');
@@ -51,6 +71,9 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
  const sendMode=!!contrato;
  const [numero,setNumero]=useState<'principal'|'alternativo'>('principal');
  const sel=useMemo(()=>templates.find(t=>t.id===selId)??null,[templates,selId]);
+ const [tplSearch,setTplSearch]=useState('');
+ const shownTemplates=useMemo(()=>{const q=tplSearch.trim().toLowerCase();return q?templates.filter(t=>(t.name+' '+t.body).toLowerCase().includes(q)):templates;},[templates,tplSearch]);
+ const fieldGroups=useMemo(()=>groupFields(fields),[fields]);
  // Sem número principal válido, usa o alternativo automaticamente.
  useEffect(()=>{if(preview&&!preview.telefone&&preview.telefone_alternativo)setNumero('alternativo');},[preview]);
  // Número de destino escolhido (principal ou alternativo da ficha do mutuário).
@@ -99,6 +122,12 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
   const a=el.selectionStart??body.length,b=el.selectionEnd??body.length;const v=body.slice(0,a)+s+body.slice(b);setBody(v);
   requestAnimationFrame(()=>{el.focus();el.selectionStart=el.selectionEnd=a+s.length;});}
  function startNew(){setEditing('new');setName('');setBody('');setNotice('');setError('');}
+ function duplicate(){if(!sel)return;setEditing('new');setName(('Cópia de '+sel.name).slice(0,80));setBody(sel.body);setNotice('');setError('');}
+ // Formatação WhatsApp à volta da selecção (*negrito*, _itálico_, ~riscado~).
+ function wrap(mark:string){const el=ta.current;if(!el)return;
+  const a=el.selectionStart??0,b=el.selectionEnd??0;const inner=body.slice(a,b)||'texto';
+  const v=body.slice(0,a)+mark+inner+mark+body.slice(b);setBody(v);
+  requestAnimationFrame(()=>{el.focus();el.selectionStart=a+1;el.selectionEnd=a+1+inner.length;});}
  function startEdit(){if(!sel)return;setEditing('edit');setName(sel.name);setBody(sel.body);setNotice('');setError('');}
  function cancel(){setEditing(false);setBody(sel?.body??'');setError('');}
  async function save(){
@@ -221,32 +250,49 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
 
   <div className="cis-msg-grid">
    <aside className="cis-msg-list" aria-label="Modelos">
-    <div className="cis-msg-list-head"><h3>Modelos</h3><button type="button" onClick={startNew} disabled={!!editing}><Plus size={14}/> Novo</button></div>
-    <ul>{templates.map(t=><li key={t.id}><button type="button" className={t.id===selId?'selected':''} disabled={!!editing} onClick={()=>setSelId(t.id)}>
-     <b>{t.name}</b><small>{t.body.replace(/[*_~]/g,'').replace(/\s+/g,' ').slice(0,70)}{t.body.length>70?'…':''}</small></button></li>)}</ul>
-    {!templates.length&&<p className="cis-msg-muted">Ainda não há modelos.</p>}
+    <div className="cis-msg-list-head"><h3>Modelos <span className="cis-msg-count">{templates.length}</span></h3><button type="button" onClick={startNew} disabled={!!editing}><Plus size={14}/> Novo</button></div>
+    {templates.length>4&&<label className="cis-msg-search"><Search size={14}/><input value={tplSearch} onChange={e=>setTplSearch(e.target.value)} placeholder="Procurar modelo" aria-label="Procurar modelo"/></label>}
+    <ul>{shownTemplates.map(t=>{const c=catOf(t);const n=fieldsIn(t.body).length;return <li key={t.id}><button type="button" className={'cat-'+c.id+(t.id===selId?' selected':'')} disabled={!!editing} onClick={()=>setSelId(t.id)}>
+     <span className="cis-msg-tile"><c.Icon size={16}/></span>
+     <span className="cis-msg-item"><b>{t.name}</b><small>{t.body.replace(/[*_~]/g,'').replace(/\{([^{}]+)\}/g,'‹$1›').replace(/\s+/g,' ').slice(0,64)}{t.body.length>64?'…':''}</small>
+      <em>{c.label}{n?` · ${n} campo${n>1?'s':''}`:''}</em></span></button></li>;})}</ul>
+    {!templates.length&&<div className="cis-msg-empty"><MessageSquare size={22}/><p>Ainda não há modelos.</p><button type="button" onClick={startNew}><Plus size={14}/> Criar o primeiro</button></div>}
+    {templates.length>0&&!shownTemplates.length&&<p className="cis-msg-muted">Nenhum modelo com «{tplSearch}».</p>}
    </aside>
 
    <div className="cis-msg-main">
-    <div className="cis-msg-card">
-     <div className="cis-msg-card-head">
-      {editing?<input className="cis-msg-name" value={name} onChange={e=>setName(e.target.value)} placeholder="Nome do modelo" maxLength={80} autoFocus={editing==='new'} aria-label="Nome do modelo"/>
-       :<h3>{sel?.name??'Escolha um modelo'}</h3>}
+    <div className={'cis-msg-card cis-msg-editor'+(editing?' editing':'')}>
+     {(()=>{const c=sel&&!editing?catOf(sel):editing?catOf({name,body}):null;return <div className="cis-msg-card-head">
+      {editing?<label className="cis-msg-field-label">{editing==='new'?'Novo modelo':'Editar modelo'}<input className="cis-msg-name" value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Lembrete de vencimento" maxLength={80} autoFocus={editing==='new'} aria-label="Nome do modelo"/></label>
+       :<div className="cis-msg-title">{c&&<span className={'cis-msg-tile cat-'+c.id}><c.Icon size={18}/></span>}<div><h3>{sel?.name??'Escolha um modelo'}</h3>{sel&&c&&<small>{c.label}{sel.updated_at?` · actualizado em ${sel.updated_at.slice(0,10).split('-').reverse().join('/')}`:''}</small>}</div></div>}
       <div className="cis-msg-btns">{!editing?<>
-       <button type="button" onClick={startEdit} disabled={!sel}><Pencil size={14}/> Editar</button>
-       <button type="button" onClick={()=>void remove()} disabled={!sel||busy==='del'} aria-label="Eliminar modelo"><Trash2 size={14}/></button>
+       <button type="button" className="primary" onClick={startEdit} disabled={!sel}><Pencil size={14}/> Editar</button>
+       <button type="button" onClick={duplicate} disabled={!sel} title="Criar um novo modelo a partir deste"><Copy size={14}/> Duplicar</button>
+       <button type="button" className="danger" onClick={()=>void remove()} disabled={!sel||busy==='del'} aria-label="Eliminar modelo" title="Eliminar modelo"><Trash2 size={14}/></button>
       </>:<>
        <button type="button" className="primary" onClick={()=>void save()} disabled={busy==='save'||name.trim().length<3||body.trim().length<3}><Save size={14}/> {busy==='save'?'A guardar…':'Guardar'}</button>
        <button type="button" onClick={cancel}><X size={14}/> Cancelar</button>
       </>}</div>
-     </div>
-     <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} readOnly={!editing} rows={sendMode?9:13} className={editing?'':'locked'} placeholder="Escreva a mensagem e insira campos como {Nome Completo}" aria-label="Texto do modelo"/>
-     {editing?<div className="cis-msg-tools">
-      <select value={field} onChange={e=>setField(e.target.value)} aria-label="Campo"><option value="">Inserir campo…</option>{fields.map(f=><option key={f} value={f}>{f}</option>)}</select>
-      <button type="button" onClick={()=>field&&insert(field)} disabled={!field}>Inserir</button>
-      <button type="button" onClick={()=>setShowEmoji(v=>!v)} aria-expanded={showEmoji}>😊 Emojis</button>
-      {showEmoji&&<div className="cis-msg-emojis">{EMOJIS.map(e=><button type="button" key={e} onClick={()=>insert(e)}>{e}</button>)}</div>}
-     </div>:<p className="cis-msg-muted">Carregue em <b>Editar</b> para alterar o modelo. Os campos entre chavetas são preenchidos com os dados de cada contrato.</p>}
+     </div>;})()}
+     {editing?<>
+      <div className="cis-msg-toolbar" role="toolbar" aria-label="Formatação">
+       <button type="button" onClick={()=>wrap('*')} title="Negrito (*texto*)" aria-label="Negrito"><Bold size={15}/></button>
+       <button type="button" onClick={()=>wrap('_')} title="Itálico (_texto_)" aria-label="Itálico"><Italic size={15}/></button>
+       <button type="button" onClick={()=>wrap('~')} title="Riscado (~texto~)" aria-label="Riscado"><Strikethrough size={15}/></button>
+       <span className="sep"/>
+       <button type="button" onClick={()=>setShowEmoji(v=>!v)} aria-expanded={showEmoji} title="Emojis"><Smile size={15}/> Emojis</button>
+       <span className="count">{body.length} caracteres</span>
+       {showEmoji&&<div className="cis-msg-emojis">{EMOJIS.map(e=><button type="button" key={e} onClick={()=>insert(e)}>{e}</button>)}</div>}
+      </div>
+      <textarea ref={ta} value={body} onChange={e=>setBody(e.target.value)} rows={sendMode?8:11} placeholder="Escreva a mensagem. Use os campos abaixo para inserir os dados de cada contrato." aria-label="Texto do modelo"/>
+      <div className="cis-msg-fields"><p><Braces size={14}/> Campos — clique para inserir no cursor</p>
+       {fieldGroups.map(g=><div key={g.label} className="cis-msg-field-group"><span>{g.label}</span><div>{g.fields.map(f=>
+        <button type="button" key={f} className={body.includes(f)?'used':''} onClick={()=>insert(f)}>{f.slice(1,-1)}</button>)}</div></div>)}
+      </div>
+     </>:sel?<>
+      <div className="cis-msg-read"><WaText text={sel.body} fields/></div>
+      {fieldsIn(sel.body).length>0&&<div className="cis-msg-used"><span>Campos usados</span>{fieldsIn(sel.body).map(f=><span key={f} className="cis-wa-field">{f}</span>)}</div>}
+     </>:<div className="cis-msg-empty"><MessageSquare size={22}/><p>Escolha um modelo à esquerda ou crie um novo.</p></div>}
      <div className="cis-msg-image">
       <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" hidden onChange={e=>{pickImage(e.target.files?.[0]);e.target.value='';}}/>
       {image?<>{isPdf(image)?<span className="cis-msg-pdf" aria-hidden="true">PDF</span>:<img src={image.dataUrl} alt="Imagem a enviar"/>}<span><b>{image.name}</b><small>{wa.available?isPdf(image)?'Documento PDF; vai com a mensagem como legenda.':'Vai com cada mensagem, com o texto como legenda.':'Só segue automaticamente com a extensão.'}</small></span>
@@ -331,15 +377,19 @@ export default function MessageCenter({token,contrato,onClose,preset}:{token:str
 }
 
 /** Texto como o WhatsApp o mostra: *negrito*, _itálico_, ~riscado~, quebras de linha; campos {…} em destaque. */
-function WaText({text,fields}:{text:string;fields:boolean}){
+function inline(text:string,fields:boolean,key:{k:number}):React.ReactNode[]{
  const parts:React.ReactNode[]=[];
- const re=/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|\{[^{}\n]{1,40}\})/g;let last=0;let m:RegExpExecArray|null;let k=0;
- while((m=re.exec(text))){if(m.index>last)parts.push(text.slice(last,m.index));const t=m[0];
-  if(t.startsWith('{'))parts.push(fields?<span key={k++} className="cis-wa-field">{t.slice(1,-1)}</span>:t);
-  else if(t.startsWith('*'))parts.push(<strong key={k++}>{t.slice(1,-1)}</strong>);
-  else if(t.startsWith('_'))parts.push(<em key={k++}>{t.slice(1,-1)}</em>);
-  else parts.push(<s key={k++}>{t.slice(1,-1)}</s>);
+ const re=/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|\{[^{}\n]{1,40}\})/g;let last=0;let m:RegExpExecArray|null;
+ while((m=re.exec(text))){if(m.index>last)parts.push(text.slice(last,m.index));const t=m[0];const inner=t.slice(1,-1);
+  if(t.startsWith('{'))parts.push(fields?<span key={key.k++} className="cis-wa-field">{inner}</span>:t);
+  else if(t.startsWith('*'))parts.push(<strong key={key.k++}>{inline(inner,fields,key)}</strong>);
+  else if(t.startsWith('_'))parts.push(<em key={key.k++}>{inline(inner,fields,key)}</em>);
+  else parts.push(<s key={key.k++}>{inline(inner,fields,key)}</s>);
   last=m.index+t.length;}
  if(last<text.length)parts.push(text.slice(last));
+ return parts;
+}
+function WaText({text,fields}:{text:string;fields:boolean}){
+ const parts=inline(text,fields,{k:0});
  return <div className="cis-wa-text">{parts.length?parts:<span className="cis-msg-muted">Sem texto.</span>}</div>;
 }

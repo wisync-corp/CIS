@@ -1732,3 +1732,50 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-msg-queue-tip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:calc(12px * var(--cis-fs))}
 .cis-msg-queue-tip button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:800;border:1px solid #fedf89;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:#93370d}
 .cis-msg-fail-detail{display:block;font-weight:500;color:#b42318;max-width:260px;white-space:normal}
+
+/* Modelos de mensagem: lista com categorias, editor com barra de formatação e campos */
+.cis-msg-count{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:99px;background:var(--cis-tint,#f4f0ff);color:var(--cis-primary);font-size:calc(11px * var(--cis-fs));font-weight:800}
+.cis-msg-search{display:flex;align-items:center;gap:6px;border:1px solid var(--cis-border);border-radius:9px;padding:0 9px;margin:4px 0 8px;color:var(--cis-text-muted);background:#fff}
+.cis-msg .cis-msg-search input{border:0;outline:0;padding:8px 0;min-width:0;width:100%;font:inherit;font-size:calc(12px * var(--cis-fs));background:transparent}
+.cis-msg-list li button{flex-direction:row!important;align-items:flex-start;gap:10px!important;position:relative}
+.cis-msg-list li button.selected::before{content:'';position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--cis-primary)}
+.cis-msg-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cis-msg-item em{font-style:normal;font-size:calc(10.5px * var(--cis-fs));font-weight:700;color:var(--cis-text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.cis-msg-tile{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;flex:0 0 32px;background:#f2f4f7;color:#475467}
+.cat-recibo .cis-msg-tile,.cis-msg-tile.cat-recibo{background:#ecfdf3;color:#067647}
+.cat-extracto .cis-msg-tile,.cis-msg-tile.cat-extracto{background:#eff8ff;color:#175cd3}
+.cat-atraso .cis-msg-tile,.cis-msg-tile.cat-atraso{background:#fef3f2;color:#b42318}
+.cat-lembrete .cis-msg-tile,.cis-msg-tile.cat-lembrete{background:#fffaeb;color:#b54708}
+.cat-geral .cis-msg-tile,.cis-msg-tile.cat-geral{background:var(--cis-tint,#f4f0ff);color:var(--cis-primary)}
+.cis-msg-empty{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--cis-text-muted);padding:22px 10px}
+.cis-msg-empty p{margin:0;font-size:calc(13px * var(--cis-fs))}
+.cis-msg-empty button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:800;border:1px solid var(--cis-border);background:#fff;color:var(--cis-primary);border-radius:8px;padding:6px 10px;cursor:pointer}
+.cis-msg-title{display:flex;align-items:center;gap:10px;min-width:0}
+.cis-msg-title .cis-msg-tile{width:38px;height:38px;flex-basis:38px;border-radius:11px}
+.cis-msg-title h3{margin:0!important}.cis-msg-title small{color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
+.cis-msg-editor .cis-msg-btns button.danger:hover:not(:disabled){color:#b42318;border-color:#fda29b;background:#fef3f2}
+.cis-msg-field-label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:220px;font-size:calc(11px * var(--cis-fs));font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--cis-text-muted)}
+.cis-msg-field-label input{text-transform:none;letter-spacing:0;font-size:calc(15px * var(--cis-fs))}
+.cis-msg-read{background:#fcfcfd;border:1px solid var(--cis-border);border-radius:12px;padding:14px 16px;line-height:1.6;min-height:140px;white-space:pre-wrap}
+.cis-msg-used{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.cis-msg-used>span:first-child{font-size:calc(11px * var(--cis-fs));font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--cis-text-muted);margin-right:4px}
+.cis-msg-toolbar{position:relative;display:flex;align-items:center;gap:4px;border:1px solid var(--cis-border);border-bottom:0;border-radius:10px 10px 0 0;background:#f9fafb;padding:5px 6px}
+.cis-msg-toolbar button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:calc(12px * var(--cis-fs));font-weight:700;border:1px solid transparent;background:transparent;border-radius:7px;padding:5px 8px;cursor:pointer;color:var(--cis-heading)}
+.cis-msg-toolbar button:hover,.cis-msg-toolbar button[aria-expanded=true]{background:#fff;border-color:var(--cis-border)}
+.cis-msg-toolbar .sep{width:1px;height:18px;background:var(--cis-border);margin:0 4px}
+.cis-msg-toolbar .count{margin-left:auto;font-size:calc(11px * var(--cis-fs));color:var(--cis-text-muted);padding-right:4px}
+.cis-msg-toolbar .cis-msg-emojis{position:absolute;top:100%;left:60px;z-index:5;box-shadow:0 10px 24px rgba(16,24,40,.12)}
+.cis-msg-editor.editing textarea{border-radius:0 0 10px 10px!important;margin-top:0;line-height:1.55}
+.cis-msg-fields{margin-top:12px;border:1px dashed var(--cis-border);border-radius:12px;padding:10px 12px;background:#fcfcfd}
+.cis-msg-fields>p{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:calc(12px * var(--cis-fs));font-weight:800;color:var(--cis-heading)}
+.cis-msg-field-group{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:start;padding:4px 0}
+.cis-msg-field-group>span{font-size:calc(11px * var(--cis-fs));font-weight:700;color:var(--cis-text-muted);padding-top:5px}
+.cis-msg-field-group>div{display:flex;flex-wrap:wrap;gap:5px}
+.cis-msg-field-group button{font:inherit;font-size:calc(11.5px * var(--cis-fs));font-weight:700;border:1px solid #fedf89;background:#fffaeb;color:#93370d;border-radius:99px;padding:3px 9px;cursor:pointer}
+.cis-msg-field-group button:hover{background:#fef0c7}
+.cis-msg-field-group button.used{background:#ecfdf3;border-color:#abefc6;color:#067647}
+@media (max-width:700px){.cis-msg-field-group{grid-template-columns:1fr}}
+.cis-msg-read,.cis-msg-read .cis-wa-text{font-weight:500}
+.cis-msg-editor.editing textarea{font-weight:500}
+.cis-msg-field-group{grid-template-columns:1fr;gap:4px}
+.cis-msg-field-group>span{padding-top:0}
