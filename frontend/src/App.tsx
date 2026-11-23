@@ -3,10 +3,11 @@ import logoPrincipalClaro from './assets/brand/cis-principal-claro.svg';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import {ShieldCheck, ArrowRight, Eye, EyeOff, LockKeyhole} from 'lucide-react';
 import Dashboard from './Dashboard';
+import PasswordChange from './PasswordChange';
 import {applyTheme,getTheme,applyFontSize,getFontSize,type ThemeId} from './theme';
 applyFontSize(getFontSize());
 
-type User={name:string;email:string;role:string};
+type User={name:string;email:string;role:string;role_label?:string;permissions?:string[];must_change_password?:boolean};
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export default function App(){
@@ -31,11 +32,12 @@ export default function App(){
  async function logout(){if(token)await fetch(API+'/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+token}}).catch(()=>{});
  sessionStorage.removeItem('cis_token');setToken(null);setUser(null);}
  if(token&&!user)return <div className="cis-auth-pending" role="status">A validar a sessão do CIS…</div>;
- if(token&&user)return <Dashboard token={token} name={user.name} role={user.role} theme={theme} onThemeChange={setTheme} onLogout={logout}/>;
+ if(token&&user&&user.must_change_password)return <PasswordChange token={token} name={user.name} required onDone={u=>setUser(u as User)} onLogout={logout}/>;
+ if(token&&user)return <Dashboard token={token} name={user.name} role={user.role_label??user.role} permissions={user.permissions??[]} theme={theme} onThemeChange={setTheme} onLogout={logout}/>;
  return <div className="cis-login"><div className="cis-login-left"><div className="cis-login-brand"><img src={logoPrincipalClaro} alt="CIS – Credit Insight Shift" width={260} height={95}/></div><div className="cis-login-story"><div className="cis-login-eyebrow">PLATAFORMA DE GESTÃO FINANCEIRA</div><h1>Crédito com<br/>mais <em>clareza.</em><br/>Gestão com<br/>mais confiança.</h1><p>Um só espaço para acompanhar mutuários, contratos, prestações e operações de microcrédito.</p><div className="cis-login-feature"><ShieldCheck size={21}/><span>Protecção de dados e controlo de acessos</span></div></div><div className="cis-login-caption">CIS · Sistema de Informação de Crédito</div></div>
  <div className="cis-login-right"><form className="cis-login-form" onSubmit={login}><div className="cis-login-mobile-mark"><img src={logoCompactaClaro} alt="CIS" width={150} height={49}/></div><div className="cis-form-caption">ÁREA RESERVADA</div><h2>Entrar na plataforma</h2><p>Introduza as credenciais do CIS Web para continuar.</p>
  <label htmlFor="email">Endereço de email</label><input id="email" type="email" autoComplete="username" required placeholder="nome@empresa.co.mz" value={email} onChange={e=>setEmail(e.target.value)}/>
  <label htmlFor="password">Palavra-passe</label><div className="cis-password"><input id="password" type={showPassword?'text':'password'} autoComplete="current-password" required value={password} placeholder="A sua palavra-passe" onChange={e=>setPassword(e.target.value)}/><button type="button" aria-label={showPassword?'Ocultar palavra-passe':'Mostrar palavra-passe'} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={19}/>:<Eye size={19}/>}</button></div>
  {error&&<div className="cis-login-error" role="alert">{error}</div>}<button className="cis-signin" type="submit" disabled={busy}>{busy?'A autenticar…':'Entrar no CIS'}<ArrowRight size={18}/></button>
- <div className="cis-login-safe"><LockKeyhole size={17}/><span>Primeiro acesso: conta criada por um administrador do servidor. As credenciais do Excel não são utilizadas.</span></div></form><div className="cis-login-footer">CIS Microcrédito · Ambiente de desenvolvimento</div></div></div>;
+ <div className="cis-login-safe"><LockKeyhole size={17}/><span>Primeiro acesso: use a palavra-passe temporária dada pelo administrador; vai ser pedido que a troque.</span></div></form><div className="cis-login-footer">CIS Microcrédito · Ambiente de desenvolvimento</div></div></div>;
 }

@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {useCan} from './perms';
 import {Search,RefreshCw,ChevronLeft,ChevronRight,LockKeyhole,Database,AlertCircle,ArrowUpRight,ArrowDownUp,ChevronUp,ChevronDown,Filter} from 'lucide-react';
 import ClientProfile from './ClientProfile';
 import ContractProfile from './ContractProfile';
@@ -19,6 +20,7 @@ const fields:Record<string,{key:string;label:string}[]>={
 const money=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const monetary=new Set(['capital','prestacao_a_pagar','Valor','Amortização','Valor de Juros','Valor de Multa','Valor a Pagar','Valor Pago']);
 export default function LegacyTable({module,token,onProfileChange}:Props){
+ const can=useCan();
  const endpoint=module==='Mutuários'?'clientes':module==='Contratos e prestações'?'contractos':module==='Extractos'?'extracto':null;
  const [selected,setSelected]=useState<number|null>(null);
  const [selectedContract,setSelectedContract]=useState<string|null>(null);
@@ -92,7 +94,7 @@ export default function LegacyTable({module,token,onProfileChange}:Props){
  if(endpoint==='contractos'&&selectedContract!==null)return <ContractProfile numero={selectedContract} token={token} justCreated={newlyCreatedContract===selectedContract} onBack={()=>{setSelectedContract(null);setNewlyCreatedContract(null);setRefresh(v=>v+1);}}/>;
  if(!endpoint)return <section className="cis-panel cis-module-empty"><LockKeyhole size={32}/><h2>{module}</h2><p>Este módulo ainda não está disponível. As operações financeiras continuam sujeitas a validação.</p></section>;
  return <section className="cis-panel cis-list-panel">
-  <div className="cis-panel-head"><div><h2>{module==='Mutuários'?'Cadastro de mutuários':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
+  <div className="cis-panel-head"><div><h2>{module==='Mutuários'?'Cadastro de mutuários':module==='Extractos'?'Movimentos do extracto':'Carteira de contratos'}</h2><p>Consulta da base MySQL · acesso condicionado ao perfil</p></div><div className="cis-contract-head-actions">{endpoint==='contractos'&&can('contratos.abrir')&&<button className="cis-contract-draft-button" type="button" onClick={()=>setContractDraftOpen(true)}>Preparar contrato <ArrowUpRight size={16}/></button>}<span className="cis-list-tag"><Database size={14}/> MySQL</span></div></div>
   {endpoint==='contractos'&&contractSummary&&<div className="cis-contract-summary" aria-label="Resumo dos contratos por estado">
    <button type="button" className={'cis-contract-summary-card '+(situationFilter===''?'selected':'')} aria-pressed={situationFilter===''} onClick={()=>{setSituationFilter('');setPage(1);}}>
     <span>Todos os contratos</span><strong>{contractSummary.total.toLocaleString('pt-MZ')}</strong><small>Contratos distintos</small>

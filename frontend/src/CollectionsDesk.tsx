@@ -1,4 +1,5 @@
 import {pushToast} from './waBridge';
+import {useCan} from './perms';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
 import {useCompanyProfile} from './company';
 import {createPortal} from 'react-dom';
@@ -119,6 +120,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  useEffect(()=>{if(payWaitUntil<=Date.now())return;const id=window.setInterval(()=>setClock(Date.now()),1000);return()=>window.clearInterval(id);},[payWaitUntil]);
  const payWait=Math.max(0,Math.ceil((payWaitUntil-clock)/1000));
  const company=useCompanyProfile(token);
+ const can=useCan();
  const [receipt,setReceipt]=useState<Receipt|null>(null);
  const [receipts,setReceipts]=useState<ReceiptList|null>(null),[receiptsError,setReceiptsError]=useState('');
  const [receiptBusy,setReceiptBusy]=useState(false);
@@ -457,8 +459,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
       <div className="cis-collections-overview-list">{rows.map(row=><div className="cis-collections-overview-row" key={String(row.Ordem)}>
        <div className="cis-collections-overview-id"><span>Prestação {text(row['Nº da Parcela'])}</span><strong>{fmt(row['Valor a Pagar'])}</strong>{String(row['Situação de Pagamento']??'').toLowerCase().includes('parcial')&&<small className="cis-collections-partial">Pago {fmt(row['Valor Pago'])} · saldo {fmt(num(row['Valor a Pagar'])-num(row['Valor Pago']))}</small>}</div>
        <div className="cis-collections-overview-meta"><span>Vencimento: {date(row['Data de Cobrança'])}</span><span className={isPending(row)?'pending':'settled'}>{estadoPrestacao(row.Estado)} · {text(row['Situação de Pagamento'])}</span></div>
-       <button type="button" disabled={!installmentEligible(row)} onClick={()=>{chooseOrd(String(row.Ordem));setView('tratamento');}}>
-        {installmentEligible(row)?<>Efectuar pagamento <ArrowRight size={15}/></>:<><LockKeyhole size={14}/> Indisponível</>}
+       <button type="button" disabled={!installmentEligible(row)||!can('cobrancas')} onClick={()=>{chooseOrd(String(row.Ordem));setView('tratamento');}}>
+        {!can('cobrancas')?<><LockKeyhole size={14}/> Sem permissão</>:installmentEligible(row)?<>Efectuar pagamento <ArrowRight size={15}/></>:<><LockKeyhole size={14}/> Indisponível</>}
        </button>
       </div>)}</div>
       {!rows.length&&<p>Este contrato ainda não tem prestações registadas.</p>}
@@ -611,7 +613,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   {receipt&&createPortal(<div className="cis-evidence-overlay" role="dialog" aria-modal="true" aria-label="Recibo de pagamento">
    <div className="cis-evidence-bar"><b>Recibo de pagamento</b>
     <button type="button" className="primary" onClick={printReceipt}>Imprimir / Guardar PDF</button>
-    <button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendReceipt()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>
+    {can('mensagens')&&<button type="button" className="cis-receipt-send-btn" disabled={sendBusy} onClick={()=>void sendReceipt()}><MessageSquare size={15}/> {sendBusy?'A preparar…':'Enviar ao mutuário'}</button>}
     <button type="button" onClick={()=>setReceipt(null)}>Fechar</button>
    </div>
    <article ref={receiptRef} className="cis-evidence cis-receipt">

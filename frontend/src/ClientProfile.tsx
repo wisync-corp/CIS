@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
+import {useCan} from './perms';
 import {ArrowLeft,UserRound,MapPin,BriefcaseBusiness,Phone,ShieldCheck,FileText,Save,AlertCircle,CheckCircle2,LockKeyhole} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -66,6 +67,7 @@ function formValue(key:string,value:string|number|null|undefined):string{
 }
 
 export default function ClientProfile({id,token,onBack}:{id:number;token:string;onBack:()=>void}){
+ const can=useCan();
  const [tab,setTab]=useState<Tab>('Identificação');
  const [profile,setProfile]=useState<Profile|null>(null);
  const [draft,setDraft]=useState<Record<string,string>>({});
@@ -163,7 +165,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     <div className="cis-profile-avatar"><UserRound size={34}/></div>
     <div className="cis-profile-heading"><span>FICHA DO MUTUÁRIO</span><h2>{normalized(profile['Nome Completo'])||'Mutuário sem nome'}</h2><p>Mutuário n.º {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id}</p></div>
     <div className="cis-profile-hero-actions">
-      {!editing?<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
+      {!editing?can('mutuarios.editar')&&<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
        <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,formValue(k,v)])));setError('');}}>Cancelar</button>
        <button type="submit" disabled={!hasChanges||saving}><Save size={16}/>{saving?'A guardar…':'Guardar alterações'}</button>
       </>}
