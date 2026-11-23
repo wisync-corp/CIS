@@ -157,7 +157,7 @@ export default function ContractProfile({numero,token,onBack,justCreated=false}:
      <small>{financialSnapshot.pending} ainda por liquidar</small></article>
     <article className="cis-credit-highlight"><span>Próximo vencimento registado</span>
      <strong>{financialSnapshot.nextDue?format(financialSnapshot.nextDue,'Data de Cobrança','date'):'—'}</strong>
-     <small>{financialSnapshot.nextDue?'Prestação '+format(financialSnapshot.nextDue,'Nº da Parcela'):'Sem prestação pendente com data válida'}</small></article>
+     <small>{financialSnapshot.nextDue?'Prestação '+format(financialSnapshot.nextDue,'Nº da Parcela')+' · '+format(financialSnapshot.nextDue,'Valor a Pagar','money'):'Sem prestação pendente com data válida'}</small></article>
    </div>
    {!!data.contract_fields_divergent?.length&&<details className="cis-credit-disclosure">
     <summary><AlertCircle size={16}/> Dados divergentes entre prestações <ChevronDown size={15}/></summary>

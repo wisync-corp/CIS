@@ -1004,6 +1004,15 @@ ok($preview['valor_a_pagar']==='1380.00' && $preview['vencimento']===$creditBefo
 $confirm=['confirmar'=>true,'motivo'=>'Autorizado no ensaio','referencia'=>'DOC-CI','conta_id'=>$changeAccount];
 $reinforce+=['idempotency_key'=>'a0000000-0000-4000-8000-000000004200','valor_confirmado'=>'1380.00']+$confirm;
 $change($reinforce);
+$reinforcedProfile=data((new \App\Http\Controllers\Api\ContractProfileController())->show(req('/x',[],$user),'C-4200'));
+$reinforcedInstallment=$reinforcedProfile['installments'][0];
+ok(count($reinforcedProfile['installments'])===1
+    && (int)$reinforcedInstallment['Ordem']===$creditOrder
+    && (float)$reinforcedInstallment['Capital']===1200.0
+    && (float)$reinforcedInstallment['Valor de Juros']===180.0
+    && (float)$reinforcedInstallment['Valor a Pagar']===1380.0
+    && (string)$reinforcedInstallment['Data de Cobrança']===(string)$creditBefore->{'Data de Cobrança'},
+    'o reforço actualiza capital, juros e valor da prestação na ficha, mantendo o vencimento');
 ok($change($reinforce)['repetido']===true && $db->table('Extracto')->where('Contracto','C-4200')->where('Tipo de Movimento','Saídas')->count()===1,
     'reforço e repetição geram uma saída');
 $beforeAbate=$db->table('Extracto')->count();
