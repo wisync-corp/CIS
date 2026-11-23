@@ -85,6 +85,7 @@ export default function LegacyTable({module,token,onProfileChange,openProposal,o
   const query=new URLSearchParams({page:String(page)});
   if(term.trim())query.set(endpoint==='extracto'?'contracto':'q',term.trim());
   if(endpoint==='extracto'){if(appliedDates.inicio)query.set('inicio',appliedDates.inicio);if(appliedDates.fim)query.set('fim',appliedDates.fim);}
+  if(endpoint==='clientes'&&branchFilter)query.set('agencia',branchFilter);
   if(endpoint==='contractos'){if(stateFilter)query.set('estado',stateFilter);if(situationFilter)query.set('situacao',situationFilter);query.set('sort',contractSort);if(branchFilter)query.set('agencia',branchFilter);query.set('direction',sortDirection);}
   fetch(API+'/cis/'+endpoint+'?'+query.toString(),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:controller.signal})
    .then(async response=>{
@@ -116,6 +117,10 @@ export default function LegacyTable({module,token,onProfileChange,openProposal,o
   </div>}
   {endpoint==='contractos'&&summaryError&&<div className="cis-table-error" role="alert">{summaryError}</div>}
   <div className="cis-table-controls"><form onSubmit={e=>{e.preventDefault();if(endpoint==='extracto'&&startDate&&endDate&&startDate>endDate){setError('A data inicial não pode ser posterior à data final.');return;}setPage(1);setTerm(search.trim());setAppliedDates({inicio:startDate,fim:endDate});}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={endpoint==='clientes'?'Digite ou digitalize o nome ou ID':endpoint==='extracto'?'Digite ou digitalize o contrato':'Pesquise contrato, mutuário ou ID (automático)'} aria-label="Pesquisa automática" autoComplete="off"/><span className="cis-auto-search-hint">Pesquisa automática</span></form><button type="button" className="cis-refresh" onClick={()=>setRefresh(n=>n+1)} aria-label="Actualizar"><RefreshCw size={18}/></button></div>
+  {endpoint==='clientes'&&branches.minha===null&&branches.agencias.length>1&&<div className="cis-contract-filters">
+   <label htmlFor="cis-client-branch">Agência</label><select id="cis-client-branch" value={branchFilter} onChange={e=>{setBranchFilter(e.target.value);setPage(1);}} aria-label="Filtrar mutuários por agência"><option value="">Todas as agências</option>{branches.agencias.map(b=><option key={b.id} value={b.id}>{b.nome}</option>)}</select>
+   <span className="cis-contract-filters-note">Mutuários com contratos na agência ou cadastrados nela</span>
+  </div>}
   {endpoint==='contractos'&&<div className="cis-contract-filters">
    <label htmlFor="cis-contract-state"><Filter size={17}/> Estado do contrato</label>
    <select id="cis-contract-state" value={stateFilter} onChange={e=>{setStateFilter(e.target.value);setPage(1);}} aria-label="Filtrar pelo estado do contrato">

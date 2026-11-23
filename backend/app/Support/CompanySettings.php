@@ -54,6 +54,13 @@ final class CompanySettings
         // Propostas de crédito
         'limite_aprovacao_gestor' => ['scoring','valor',null,'50000'],
         'validade_aprovacao_dias' => ['scoring','inteiro',[1,180],'30'],
+        // Dossier do crédito (exigido para aprovar)
+        'doc_exigir_bi'           => ['scoring','booleano',null,'1'],
+        'doc_exigir_residencia'   => ['scoring','booleano',null,'0'],
+        'doc_exigir_rendimento'   => ['scoring','booleano',null,'0'],
+        'doc_exigir_fotografia'   => ['scoring','booleano',null,'0'],
+        'fiador_a_partir_de'      => ['scoring','valor',null,'0'],
+        'cobertura_garantias_pct' => ['scoring','percentagem',null,'0'],
         // Numeração dos contratos (PREFIXO-ANO-SEQUÊNCIA)
         'contrato_prefixo'        => ['numeracao','prefixo',null,'CAPTA'],
         'contrato_digitos'        => ['numeracao','inteiro',[3,6],'4'],

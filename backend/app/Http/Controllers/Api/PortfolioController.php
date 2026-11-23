@@ -112,6 +112,9 @@ final class PortfolioController extends Controller
             'cobradores' => $cobradores, 'agentes' => $agentes,
             'activos_sem_responsavel' => count(array_diff($active, array_map('strval', array_keys($owners)))),
             'contratos_activos' => count($active), 'cidades' => $cities,
+            'mutuarios_sem_agente' => max(0, (int) $legacy->table('Clientes')->count() - (int) DB::table('cis_client_owner')->count()),
+            'cidades_mutuarios' => $legacy->table('Clientes')->whereNotNull('Cidade')->whereRaw("TRIM(`Cidade`) <> ''")
+                ->selectRaw('TRIM(`Cidade`) AS cidade, COUNT(*) AS mutuarios')->groupBy('cidade')->orderBy('cidade')->get(),
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -142,5 +145,32 @@ final class PortfolioController extends Controller
             foreach ($nums as $n) Portfolio::assignContract($n, (int) $d['user_id'], (int) $r->user()->id);
         });
         return response()->json(['notice' => count($nums).' contrato(s) atribuído(s) a '.self::name((int) $d['user_id'])['nome'].'.', 'atribuidos' => count($nums)]);
+    }
+
+    /** Atribuição em massa: mutuários (de uma cidade e/ou agência) a um agente. */
+    public function assignClientsBulk(Request $r): JsonResponse
+    {
+        Permissions::require($r->user(), 'utilizadores');
+        $this->ready();
+        $d = $r->validate([
+            'user_id' => ['required', 'integer', 'min:1'],
+            'cidade' => ['nullable', 'string', 'max:100'],
+            'agencia' => ['nullable', 'integer', 'min:1'],
+            'so_sem_agente' => ['sometimes', 'boolean'],
+        ]);
+        self::requireRole((int) $d['user_id'], 'agente', 'Agente');
+        abort_if(trim((string) ($d['cidade'] ?? '')) === '' && empty($d['agencia']), 422, 'Escolha a cidade ou a agência.');
+        $q = DB::connection('mysql_legacy')->table('Clientes');
+        if (trim((string) ($d['cidade'] ?? '')) !== '') $q->whereRaw('TRIM(`Cidade`) = ?', [trim($d['cidade'])]);
+        if (!empty($d['agencia'])) Branches::applyToClients($q, (int) $d['agencia']);
+        $ids = $q->pluck('ID')->map(fn ($v) => (int) $v)->all();
+        if ($d['so_sem_agente'] ?? true) {
+            $taken = DB::table('cis_client_owner')->pluck('client_id')->map(fn ($v) => (int) $v)->all();
+            $ids = array_values(array_diff($ids, $taken));
+        }
+        DB::transaction(function () use ($ids, $d, $r) {
+            foreach ($ids as $id) Portfolio::assignClient($id, (int) $d['user_id'], (int) $r->user()->id);
+        });
+        return response()->json(['notice' => count($ids).' mutuário(s) atribuído(s) a '.self::name((int) $d['user_id'])['nome'].'.', 'atribuidos' => count($ids)]);
     }
 }

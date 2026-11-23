@@ -82,6 +82,13 @@ final class ProposalController extends Controller
         return $q;
     }
 
+    /** Proposta visível ao utilizador (dossier do crédito). */
+    public function visible(Request $r, int $id): object
+    {
+        $this->needReady();
+        return $this->find($r, $id);
+    }
+
     private function find(Request $r, int $id): object
     {
         $p = $this->scoped($r)->where('id', $id)->first();
@@ -193,6 +200,7 @@ final class ProposalController extends Controller
         return response()->json(self::out($p, $names) + [
             'limites_agencia' => self::branchLimits($p->branch_id ? (int) $p->branch_id : null),
             'aviso' => self::notice($p),
+            'verificacao' => \App\Support\CreditDossier::checklist($p),
             'historico_mutuario' => $history,
             'analise_actual' => $live,
             'eventos' => $ev->map(fn ($e) => ['accao' => $e->accao, 'de' => $e->de, 'para' => $e->para, 'notas' => $e->notas,
@@ -341,6 +349,8 @@ final class ProposalController extends Controller
             if ($rate !== null) abort_unless(abs($rate - round($rate)) < 0.000001, 422, 'A taxa tem de ser um número inteiro.');
             $lim = self::limitIssues($p->branch_id ? (int) $p->branch_id : null, (float) $amount, $rate);
             abort_if($lim, 422, implode(' ', $lim));
+            $miss = \App\Support\CreditDossier::checklist($p, (float) $amount)['em_falta'];
+            abort_if($miss, 422, 'Dossier incompleto: '.implode('; ', $miss).'.');
             $upd += ['status' => 'aprovada', 'montante_aprovado' => $amount, 'taxa_aprovada' => $rate,
                 'valida_ate' => now('Africa/Maputo')->addDays(max(1, (int) CS::get('validade_aprovacao_dias')))->toDateString()];
         } else {

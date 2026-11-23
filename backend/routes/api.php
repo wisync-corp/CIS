@@ -58,8 +58,18 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('cis/propostas/{id}/cancelar',[\App\Http\Controllers\Api\ProposalController::class,'cancel'])->whereNumber('id')->middleware('throttle:20,1');
     Route::post('cis/propostas/{id}/nao-levantada',[\App\Http\Controllers\Api\ProposalController::class,'notTaken'])->whereNumber('id')->middleware('throttle:20,1');
     Route::post('cis/propostas/{id}/avisado',[\App\Http\Controllers\Api\ProposalController::class,'noticed'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::get('cis/propostas/{id}/dossier',[\App\Http\Controllers\Api\CreditDossierController::class,'show'])->whereNumber('id')->middleware('throttle:60,1');
+    Route::post('cis/propostas/{id}/fiadores',[\App\Http\Controllers\Api\CreditDossierController::class,'addGuarantor'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::delete('cis/propostas/{id}/fiadores/{gid}',[\App\Http\Controllers\Api\CreditDossierController::class,'removeGuarantor'])->whereNumber('id')->whereNumber('gid')->middleware('throttle:30,1');
+    Route::post('cis/propostas/{id}/garantias',[\App\Http\Controllers\Api\CreditDossierController::class,'addCollateral'])->whereNumber('id')->middleware('throttle:30,1');
+    Route::delete('cis/propostas/{id}/garantias/{cid}',[\App\Http\Controllers\Api\CreditDossierController::class,'removeCollateral'])->whereNumber('id')->whereNumber('cid')->middleware('throttle:30,1');
+    Route::get('cis/mutuarios/{id}/documentos',[\App\Http\Controllers\Api\CreditDossierController::class,'clientDocuments'])->whereNumber('id')->middleware('throttle:60,1');
+    Route::post('cis/documentos',[\App\Http\Controllers\Api\CreditDossierController::class,'upload'])->middleware('throttle:30,1');
+    Route::get('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'download'])->whereNumber('id')->middleware('throttle:120,1');
+    Route::delete('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'remove'])->whereNumber('id')->middleware('throttle:30,1');
     Route::get('cis/carteiras',[\App\Http\Controllers\Api\PortfolioController::class,'summary'])->middleware('throttle:30,1');
     Route::post('cis/carteiras/atribuir',[\App\Http\Controllers\Api\PortfolioController::class,'assignBulk'])->middleware('throttle:10,1');
+    Route::post('cis/carteiras/atribuir-mutuarios',[\App\Http\Controllers\Api\PortfolioController::class,'assignClientsBulk'])->middleware('throttle:10,1');
     Route::get('cis/carteiras/contratos/{numero}',[\App\Http\Controllers\Api\PortfolioController::class,'contract'])->middleware('throttle:60,1');
     Route::put('cis/carteiras/contratos/{numero}',[\App\Http\Controllers\Api\PortfolioController::class,'assignContract'])->middleware('throttle:30,1');
     Route::get('cis/carteiras/mutuarios/{id}',[\App\Http\Controllers\Api\PortfolioController::class,'client'])->whereNumber('id')->middleware('throttle:60,1');

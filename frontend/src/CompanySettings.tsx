@@ -60,7 +60,14 @@ const SECTIONS:Section[]=[
    {k:'taxa_esforco_max',label:'Taxa de esforço máxima',type:'number',unit:'%',help:'Encargo mensal (prestação + outras prestações) ÷ rendimento mensal do mutuário.'}]},
   {title:'Propostas de crédito',icon:Gauge,fields:[
    {k:'limite_aprovacao_gestor',label:'Limite de aprovação do gestor de crédito',type:'number',unit:'MT',help:'Propostas até este montante podem ser aprovadas pelo gestor de crédito; acima, só pelo administrador.'},
-   {k:'validade_aprovacao_dias',label:'Validade da aprovação',type:'number',unit:'dias',help:'Depois deste prazo sem desembolso, a proposta aprovada expira.'}]}]},
+   {k:'validade_aprovacao_dias',label:'Validade da aprovação',type:'number',unit:'dias',help:'Depois deste prazo sem desembolso, a proposta aprovada expira.'}]},
+  {title:'Dossier do crédito (exigido para aprovar)',icon:IdCard,fields:[
+   {k:'doc_exigir_bi',label:'Bilhete de identidade',type:'bool',help:'O mutuário tem de ter o BI digitalizado (na ficha ou na proposta).'},
+   {k:'doc_exigir_residencia',label:'Comprovativo de residência',type:'bool'},
+   {k:'doc_exigir_rendimento',label:'Comprovativo de rendimento',type:'bool'},
+   {k:'doc_exigir_fotografia',label:'Fotografia do mutuário',type:'bool'},
+   {k:'fiador_a_partir_de',label:'Fiador obrigatório a partir de',type:'number',unit:'MT',help:'0 = nunca obrigatório.'},
+   {k:'cobertura_garantias_pct',label:'Cobertura mínima das garantias',type:'number',unit:'%',help:'Valor estimado das garantias ÷ montante do crédito. 0 = sem exigência.'}]}]},
  {id:'numeracao',kicker:'Contratos',title:'Numeração dos contratos',icon:Hash,desc:'Código dos contratos e dos recibos por ano: a contagem recomeça em 1 no início de cada ano (contratos pelo desembolso, recibos pelo pagamento).',used:['Novo contrato','Contratos e prestações','Recibos','Extractos','Relatórios'],groups:[
   {title:'Formato',icon:Hash,fields:[
    {k:'contrato_prefixo',label:'Prefixo',type:'text',req:true,placeholder:'CAPTA',help:'Letras ou números, sem espaços (ex.: CAPTA, EMP).'},
