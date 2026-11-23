@@ -2087,3 +2087,4 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-dossier-check.ok{background:#f0fdf4;color:#14532d;border:1px solid #bbf7d0}.cis-dossier-check.warn{background:#fffbeb;color:#78350f;border:1px solid #fde68a}
 .cis-client-docs{max-width:760px}
 @media (max-width:640px){.cis-dossier-row{grid-template-columns:1fr}}
+.cis-panel.cis-analytics{padding:0;background:transparent;border:0;box-shadow:none}.cis-panel.cis-analytics iframe{border-radius:14px}

@@ -43,7 +43,7 @@ final class StreamlitController extends Controller
             Branches::restrict($contracts, $user);
             $clientIds = (clone $contracts)->select('Nº de Cliente')->distinct();
             $fields = [
-                'Ordem', 'Nr do Contracto', 'Nome do Cliente', 'Data de Inicio', 'Data de Cobrança',
+                'Ordem', 'Nr do Contracto', 'Nome do Cliente', 'Nº de Cliente', 'Data de Inicio', 'Data de Cobrança',
                 'Estado', 'Estado do Contrato', 'Prazo/Duração', 'Quantia Creditada', 'Valor Pago',
                 'Valor a Pagar', 'Valor de Juros',
             ];

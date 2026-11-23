@@ -224,6 +224,21 @@ jobs:
       - run: bash -n ../deploy/rehearse-cash-repair.sh
       - run: bash -n ../deploy/apply-cash-repair.sh
 
+  streamlit-dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: streamlit-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m py_compile Dashboard.py
+      - run: python -m pip check
+      - run: PYTHONPATH=. python -m pytest tests -q -W error::DeprecationWarning
+
   streamlit:
     runs-on: ubuntu-latest
     defaults:

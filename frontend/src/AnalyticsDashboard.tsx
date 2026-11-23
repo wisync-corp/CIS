@@ -16,9 +16,9 @@ export default function AnalyticsDashboard({token}:{token:string}){
    .catch(e=>{if(!ctrl.signal.aborted)setError(e instanceof Error?e.message:'Não foi possível abrir o Dashboard.');});
   return ()=>ctrl.abort();
  },[token,attempt]);
- return <section className="cis-panel" aria-label="Dashboard Streamlit">
+ return <section className="cis-panel cis-analytics" aria-label="Dashboard Streamlit">
   {error?<div className="cis-table-error" role="alert">{error} <button type="button" className="cis-edit-action" onClick={()=>setAttempt(v=>v+1)}><RefreshCw size={15}/> Tentar novamente</button></div>
-   :ready?<iframe title="Dashboard Streamlit" src="/dashboard/" style={{display:'block',width:'100%',height:'min(85vh, 1100px)',minHeight:480,border:0}}/>
+   :ready?<iframe title="Dashboard Streamlit" src={'/dashboard/?tema='+encodeURIComponent(document.documentElement.dataset.theme||'fintech')} style={{display:'block',width:'100%',height:'max(85vh, 900px)',minHeight:600,border:0}}/>
    :<p role="status">A abrir o Dashboard…</p>}
  </section>;
 }

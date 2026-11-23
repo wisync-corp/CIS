@@ -1,0 +1,22 @@
+# Aparência do CIS (frontend/src/themes.css, tema «fintech»).
+[theme]
+base = "light"
+primaryColor = "#452D80"
+backgroundColor = "#F7F6FA"
+secondaryBackgroundColor = "#F4F2F9"
+textColor = "#1F1A2E"
+borderColor = "#D9D3E6"
+linkColor = "#452D80"
+font = "DM Sans:https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap, sans-serif"
+baseRadius = "10px"
+showWidgetBorder = true
+chartCategoricalColors = ["#452D80", "#3B7311", "#8B6FD6", "#C08A1E", "#2D7F8C", "#B4537E", "#6B7A8F", "#7FB23A"]
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = "none"
+showSidebarNavigation = false
+
+[browser]
+gatherUsageStats = false
