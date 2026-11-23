@@ -31,6 +31,12 @@ export const situacaoContrato=(v:unknown)=>{const s=String(v??'').trim();return 
 /** Glossário mostrado em Definições › Glossário. */
 export const GLOSSARIO:{termo:string;significado:string}[]=[
  {termo:'Mutuário',significado:'Pessoa ou empresa que recebe o crédito.'},
+ {termo:'Utilizador',significado:'Pessoa da equipa com conta no CIS (email e palavra-passe pessoal).'},
+ {termo:'Função',significado:'Papel do utilizador no CIS (ex.: Gestor de crédito); define o que pode ver e fazer. Ver o separador «Funções».'},
+ {termo:'Permissão',significado:'Acção autorizada a uma função (ex.: registar pagamentos, ver a Caixa).'},
+ {termo:'Agência',significado:'Balcão ou filial da instituição. Quem está numa agência só vê os contratos e as contas dessa agência.'},
+ {termo:'Agência principal (Sede)',significado:'Agência onde ficam os contratos ainda não atribuídos a outra agência.'},
+ {termo:'Palavra-passe temporária',significado:'Palavra-passe dada pelo administrador a uma conta nova ou reposta; é trocada no primeiro acesso.'},
  {termo:'Capital',significado:'Valor emprestado, sem juros.'},
  {termo:'Desembolso',significado:'Entrega do dinheiro ao mutuário.'},
  {termo:'Capital desembolsado',significado:'Montante entregue no desembolso.'},
@@ -61,4 +67,22 @@ export const GLOSSARIO:{termo:string;significado:string}[]=[
  {termo:'Extracto de conta',significado:'Documento com prestações, pagamentos e saldo do mutuário.'},
  {termo:'Data de fecho',significado:'Data até à qual não se podem alterar lançamentos da Caixa.'},
  {termo:'Sistema de amortização',significado:'Forma de calcular as prestações (taxa flat, sistema francês, SAC…).'},
+];
+
+// Funções dos utilizadores (igual à matriz do servidor: App\Support\Permissions).
+export const FUNCOES:{id:string;nome:string;definicao:string;pode:string[];naoPode:string[]}[]=[
+ {id:'administrador',nome:'Administrador',definicao:'Responsável pelo sistema e pela empresa no CIS. Tem acesso total.',
+  pode:['Tudo o que as outras funções fazem','Criar e gerir utilizadores, funções e agências','Alterar as definições da empresa e a parametrização (preços, tipos de movimento, modelos)','Estornar movimentos da Caixa'],naoPode:[]},
+ {id:'gestor',nome:'Gestor de crédito',definicao:'Gere a carteira de crédito: analisa, concede, acompanha e cobra.',
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários','Preparar e abrir contratos (desembolso)','Registar pagamentos e operações de cobrança, também com data passada; emitir recibos','Extractos dos mutuários e extracto geral','Centro de mensagens (WhatsApp/SMS)','Relatórios'],
+  naoPode:['Caixa (contas, movimentos, fecho)','Definições e utilizadores']},
+ {id:'financeiro',nome:'Gestor financeiro',definicao:'Responsável pela Caixa e tesouraria e pelo controlo dos recebimentos.',
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Caixa: contas, movimentos, transferências, conferência e fecho diário','Registar pagamentos (também com data passada) e emitir recibos','Extractos dos mutuários e extracto geral','Relatórios'],
+  naoPode:['Abrir contratos','Editar mutuários','Mensagens','Estornos, definições e utilizadores']},
+ {id:'cobrador',nome:'Cobrador / gestor de carteira',definicao:'Acompanha os mutuários e recebe os pagamentos no dia a dia.',
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Registar pagamentos com a data de hoje e emitir recibos','Extractos dos mutuários','Enviar mensagens (lembretes, recibos, extractos)'],
+  naoPode:['Pagamentos com data passada','Abrir contratos ou editar mutuários','Caixa, relatórios, definições e utilizadores']},
+ {id:'agente',nome:'Agente / promotor de crédito',definicao:'Angaria e cadastra mutuários e faz simulações no terreno.',
+  pode:['Consultar mutuários, contratos, visão geral e simulador','Cadastrar e editar mutuários'],
+  naoPode:['Registar pagamentos','Abrir contratos','Caixa, extractos, mensagens, relatórios, definições e utilizadores']},
 ];
