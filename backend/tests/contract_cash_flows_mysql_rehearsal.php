@@ -1171,6 +1171,64 @@ ok($err(fn()=>$PC->notTaken(req('/x',['notas'=>'Outra vez'],$ag1),$p4['id']))===
 $p4=data($PC->noticed(req('/x',[],$ag1),$p4['id']));
 ok($p4['avisado']===true && $db->table('cis_message_log')->where('group','propostas')->where('contract_number',$p4['numero'])->count()===2,'«Já avisei» regista o aviso no histórico de mensagens');
 
+echo "== Dossier do crédito e mutuários por agência\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000240_cis_credit_dossier.php','--force'=>true]);
+\App\Support\Branches::reset();\App\Support\Portfolio::reset();\App\Support\CreditDossier::reset();
+ok(\App\Support\CreditDossier::ready() && Schema::hasTable('cis_client_branch'),'tabelas do dossier e agência do mutuário instaladas');
+ok(strtolower((string)$db->selectOne("SELECT DATA_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cis_document_files' AND COLUMN_NAME='conteudo'")->t)==='mediumblob','ficheiros guardados em MEDIUMBLOB');
+// Mutuários por agência
+$matClient=(int)$db->table('Contractos')->where('Nr do Contracto','OP-0001')->value('Nº de Cliente');
+$newRow=(array)$db->table('Clientes')->where('ID',7)->first();$newRow['ID']=9901;$newRow['Nome Completo']='Mutuário Sem Contratos';
+if(array_key_exists('Numeração',$newRow))$newRow['Numeração']='9901';if(array_key_exists('Nº de BI',$newRow))$newRow['Nº de BI']='990100000000Z';
+$db->table('Clientes')->insert($newRow);\App\Support\Branches::reset();
+$visMat=(clone $db->table('Clientes'));\App\Support\Branches::applyToClients($visMat,$mat);$visMat=$visMat->pluck('ID')->map(fn($v)=>(int)$v)->all();
+$visSede=(clone $db->table('Clientes'));\App\Support\Branches::applyToClients($visSede,$sede);$visSede=$visSede->pluck('ID')->map(fn($v)=>(int)$v)->all();
+$onlySede=9901;
+ok(in_array($matClient,$visMat,true) && in_array(9901,$visSede,true) && !in_array(9901,$visMat,true),'lista de mutuários por agência: mutuário sem contratos fica na Sede e não aparece na Matola');
+$e5=null;try{\App\Support\Portfolio::requireClient($gmu,$onlySede);}catch(\Symfony\Component\HttpKernel\Exception\HttpException $x){$e5=$x->getStatusCode();}
+ok($e5===403,'ficha de mutuário de outra agência recusada (403)');
+\App\Support\Branches::assignClient($onlySede,$mat,$admin->id);
+$e6=null;try{\App\Support\Portfolio::requireClient($gmu,$onlySede);}catch(\Throwable $x){$e6='erro';}
+ok($e6===null,'mutuário atribuído à agência passa a ser visível nela');
+\App\Support\Branches::assignClient($onlySede,null,$admin->id);
+$ag2=new User();$ag2->forceFill(['name'=>'Beatriz Agente','email'=>'beatriz@ci.test','password'=>bcrypt('x'),'role'=>'agente','active'=>1,'must_change_password'=>false])->save();
+$bk=data($pc->assignClientsBulk($ureq('POST',['user_id'=>$ag2->id,'agencia'=>$sede,'so_sem_agente'=>true],$admin)));
+ok($bk['atribuidos']>=1 && $db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',9901)->exists() && !$db->table('cis_client_owner')->where('user_id',$ag2->id)->where('client_id',7)->exists(),'atribuição em massa de mutuários sem agente a um agente');
+ok($err(fn()=>$pc->assignClientsBulk($ureq('POST',['user_id'=>(int)User::query()->where('email','carla@ci.test')->value('id'),'agencia'=>$mat],$admin)))===422,'atribuição de mutuários só a agentes');
+\App\Support\Portfolio::reset();
+// Dossier
+$DC=new \App\Http\Controllers\Api\CreditDossierController();
+$p5=data($PC->store(req('/x',array_replace($prop,['montante'=>150]),$ag1)));$PC->submit(req('/x',[],$ag1),$p5['id']);
+$ds=data($DC->show(req('/x',[],$ag1),$p5['id']));
+ok($ds['instalado'] && $ds['verificacao']['em_falta']===['Bilhete de identidade'],'por omissão a aprovação exige o BI digitalizado');
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p5['id']))===422,'sem BI a proposta não é aprovada');
+ok($err(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Jo'],$ag1),$p5['id']))===422,'fiador exige nome');
+$ds=data($DC->addGuarantor(req('/x',['nome'=>'João Cossa','bi'=>'110100000000A','contacto'=>'841234567','relacao'=>'Irmão'],$ag1),$p5['id']));
+$ds=data($DC->addCollateral(req('/x',['tipo'=>'viatura','descricao'=>'Motorizada Honda 2015','valor_estimado'=>300],$ag1),$p5['id']));
+ok(count($ds['fiadores'])===1 && count($ds['garantias'])===1 && $ds['verificacao']['cobertura']['pct']==200.0,'fiador e garantia registados; cobertura 200%');
+$pdf="%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n";
+$upReq=function(array $data,string $name,string $content,$u){$f=\Illuminate\Http\UploadedFile::fake()->createWithContent($name,$content);$r=Request::create('/x','POST',$data,[],['ficheiro'=>$f]);$r->setUserResolver(static fn()=>$u);return $r;};
+ok($err(fn()=>$DC->upload($upReq(['client_id'=>7,'tipo'=>'bi'],'bi.exe','MZ binário',$ag1)))===422,'tipo de ficheiro não permitido é recusado');
+$up=data($DC->upload($upReq(['client_id'=>7,'tipo'=>'bi','descricao'=>'Frente e verso'],'BI João.pdf',$pdf,$ag1)));
+$doc=$db->table('cis_documents')->where('id',$up['id'])->first();
+ok($doc && $doc->mime==='application/pdf' && $doc->proposal_id===null && $doc->sha256===hash('sha256',$pdf),'BI anexado na ficha do mutuário (PDF, com hash)');
+$dl=$DC->download(req('/x',[],$admin),$up['id']);
+ok($dl->getContent()===$pdf && $dl->headers->get('Content-Type')==='application/pdf','o documento abre com o conteúdo original');
+$p5=data($PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p5['id']));
+ok($p5['estado']==='aprovada','com o BI no dossier a proposta é aprovada');
+ok($err(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Outro Fiador'],$ag1),$p5['id']))===409,'depois da decisão os fiadores não se alteram');
+$cd=data($DC->clientDocuments(req('/x',[],$ag1),7));
+ok(count($cd['documentos'])===1 && $cd['documentos'][0]['tipo']==='bi','ficha do mutuário lista os seus documentos');
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'cobertura_garantias_pct'],['valor'=>'250','updated_at'=>now(),'created_at'=>now()]);
+$db->table('cis_company_settings')->updateOrInsert(['chave'=>'fiador_a_partir_de'],['valor'=>'100','updated_at'=>now(),'created_at'=>now()]);
+\App\Support\CompanySettings::forget();
+$chk=\App\Support\CreditDossier::checklist($db->table('cis_credit_proposals')->where('id',$p5['id'])->first());
+ok(collect($chk['itens'])->firstWhere('chave','fiador')['ok']===true && collect($chk['itens'])->firstWhere('chave','cobertura')['ok']===false,'regras de fiador e cobertura mínima avaliadas');
+$db->table('cis_company_settings')->whereIn('chave',['cobertura_garantias_pct','fiador_a_partir_de'])->delete();\App\Support\CompanySettings::forget();
+ok($err(fn()=>$DC->remove(req('/x',[],$ag2),$up['id']))===403,'outro agente não retira o documento');
+data($DC->remove(req('/x',[],$ag1),$up['id']));
+ok($db->table('cis_documents')->where('id',$up['id'])->value('deleted_by')==$ag1->id && $err(fn()=>$DC->download(req('/x',[],$admin),$up['id']))===404,'documento retirado fica registado e deixa de abrir');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

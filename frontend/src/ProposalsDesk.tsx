@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
 import {FilePlus2,ClipboardCheck,AlertCircle,CheckCircle2,XCircle,Undo2,Send,Ban,ArrowLeft,FileText,Gauge,UserRound,Search,ArrowUpRight,Clock,MessageCircle,PackageX,Hourglass,Inbox,BellRing,Check} from 'lucide-react';
 import {useCan} from './perms';
+import DossierPanel,{ChecklistView,type Check as DossierCheck} from './CreditDossier';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Analysis={taxa:number|null;prestacoes:number|null;prestacao:string|null;total_a_pagar:string|null;juros_totais:string|null;encargo_mensal:string|null;rendimento_disponivel:string;taxa_esforco:number|null;taxa_esforco_max:number;alertas:string[];recomendacao:string};
@@ -9,7 +10,7 @@ type History={contratos:number;contratos_activos:number;contratos_em_atraso:numb
 export type Proposal={id:number;numero:string;estado:string;mutuario:{id:number;nome:string};montante:number;montante_aprovado:number|null;tipo_juro:string;estrategia:string;periodo_dias:number;prazo:string;modalidade:string;taxa:number|null;taxa_aprovada:number|null;finalidade:string;actividade:string|null;rendimento_mensal:string;despesas_mensais:string;outras_dividas_mensais:string;garantias:string|null;observacoes:string|null;analise:{calculo:Analysis;historico:History}|null;decisao_notas:string|null;decidido_por:string|null;decidido_em:string|null;valida_ate:string|null;contrato:string|null;criado_por:string|null;criado_em:string;submetido_em:string|null;agencia:string|null;avisado:boolean|null};
 type Limits={credito_minimo:number|null;credito_maximo:number|null;taxa_minima:number|null;taxa_maxima:number|null};
 type Notice={estado:string;modelo:string;mensagem:string;contacto:string|null;telefone:string|null;enviado:boolean;enviado_em:string|null};
-type Detail=Proposal&{limites_agencia:Limits;aviso:Notice|null;historico_mutuario:History;analise_actual:Analysis|null;eventos:{accao:string;de:string|null;para:string|null;notas:string|null;por:string;em:string}[];pode:{editar:boolean;submeter:boolean;cancelar:boolean;decidir:boolean;motivo_nao_decidir:string|null;abrir_contrato:boolean;nao_levantada:boolean}};
+type Detail=Proposal&{limites_agencia:Limits;aviso:Notice|null;verificacao?:DossierCheck;historico_mutuario:History;analise_actual:Analysis|null;eventos:{accao:string;de:string|null;para:string|null;notas:string|null;por:string;em:string}[];pode:{editar:boolean;submeter:boolean;cancelar:boolean;decidir:boolean;motivo_nao_decidir:string|null;abrir_contrato:boolean;nao_levantada:boolean}};
 type ListResp={instalado:boolean;data:Proposal[];contagem:Record<string,number>;limite_aprovacao:number|null;validade_dias:number;avisos_por_enviar?:number;limites_agencia?:Limits};
 
 export const ESTADOS:Record<string,{label:string;tone:string}>={rascunho:{label:'Rascunho',tone:'muted'},submetida:{label:'Para decisão',tone:'info'},devolvida:{label:'Devolvida',tone:'warn'},
@@ -200,6 +201,7 @@ function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id
     else if(decision==='nao_levantada')void act('/nao-levantada',{notas:notes},'Proposta marcada como não levantada. Avise o mutuário.');
     else void act('/decisao',{decisao:decision,notas:notes,...(decision==='aprovar'?{montante_aprovado:Number(amount),...(d.tipo_juro!=='Fixo'&&rate?{taxa_aprovada:Number(rate)}:{})}:{})},decision==='aprovar'?'Proposta aprovada.':decision==='devolver'?'Proposta devolvida ao proponente.':'Proposta rejeitada.');}}>
    <h4>{decision==='aprovar'?'Aprovar a proposta':decision==='devolver'?'Devolver para correcção':decision==='rejeitar'?'Rejeitar a proposta':decision==='nao_levantada'?'O mutuário não levantou o crédito':'Cancelar a proposta'}</h4>
+   {decision==='aprovar'&&<ChecklistView c={d.verificacao}/>}
    {decision==='aprovar'&&<div className="cis-profile-fields"><label className="cis-profile-field"><span>Montante aprovado (MT)</span><input type="number" min={1} max={d.montante} step={1} required value={amount} onChange={e=>setAmount(e.target.value)}/><small>Até {mt(d.montante)} (pedido).</small></label>
     {d.tipo_juro!=='Fixo'&&<label className="cis-profile-field"><span>Taxa aprovada (%)</span><input type="number" min={1} max={100} step={1} value={rate} onChange={e=>setRate(e.target.value)}/></label>}</div>}
    <label className="cis-profile-field cis-prop-wide"><span>{decision==='aprovar'?'Notas (opcional)':decision==='devolver'?'O que deve ser corrigido':decision==='nao_levantada'?'Motivo (ex.: desistiu, já não precisa)':'Motivo'}</span><textarea rows={2} required={decision!=='aprovar'} minLength={decision==='aprovar'?0:5} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
@@ -211,6 +213,7 @@ function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id
   {(d.estado==='rejeitada'||d.estado==='devolvida')&&d.decisao_notas&&<div className="cis-prop-reco warn"><AlertCircle size={17}/><div><strong>{d.estado==='rejeitada'?'Rejeitada':'Devolvida'} por {d.decidido_por}:</strong> {d.decisao_notas}</div></div>}
   {d.contrato&&<div className="cis-prop-reco ok"><CheckCircle2 size={17}/><div><strong>Contrato {d.contrato}</strong> aberto e desembolsado a partir desta proposta.</div></div>}
   <AnalysisView a={calc} h={hist}/>
+  <DossierPanel token={token} proposalId={d.id} clientId={d.mutuario.id} onChange={()=>void load()}/>
   <div className="cis-prop-grid">
    <article><h4><FileText size={15}/> Pedido</h4><dl>
     <div><dt>Finalidade</dt><dd>{d.finalidade}</dd></div><div><dt>Sistema</dt><dd>{d.estrategia}</dd></div><div><dt>Período da tabela</dt><dd>{d.periodo_dias} dias</dd></div>

@@ -16,6 +16,7 @@ final class Branches
 {
     private static ?bool $ready = null;
     private static ?array $map = null;
+    private static ?array $clientSets = null;
 
     public static function ready(): bool
     {
@@ -32,6 +33,7 @@ final class Branches
     {
         self::$ready = null;
         self::$map = null;
+        self::$clientSets = null;
     }
 
     public static function principalId(): ?int
@@ -169,5 +171,66 @@ final class Branches
     {
         if ($branch === null || !self::ready()) return null;
         return DB::table('cis_branches')->where('id', $branch)->value('nome');
+    }
+
+    // ---------- Mutuários por agência ----------
+    // Agência gravada (cis_client_branch: mutuários novos ficam na agência de quem os cadastra);
+    // senão as agências dos seus contratos; sem nenhum dos dois → agência principal.
+
+    /** mutuário → [agências] (só os que têm agência gravada ou contratos). */
+    private static function clientSets(): array
+    {
+        if (self::$clientSets !== null) return self::$clientSets;
+        $sets = [];
+        $principal = self::principalId();
+        $map = self::map();
+        $pairs = DB::connection('mysql_legacy')->table('Contractos')->whereNotNull('Nº de Cliente')
+            ->select('Nr do Contracto', 'Nº de Cliente')->distinct()->get();
+        foreach ($pairs as $p) {
+            $b = $map[(string) $p->{'Nr do Contracto'}] ?? $principal;
+            if ($b !== null) $sets[(int) $p->{'Nº de Cliente'}][$b] = true;
+        }
+        if (Schema::hasTable('cis_client_branch')) {
+            foreach (DB::table('cis_client_branch')->get(['client_id', 'branch_id']) as $r) $sets[(int) $r->client_id] = [(int) $r->branch_id => true];
+        }
+        return self::$clientSets = $sets;
+    }
+
+    /** Agências de um mutuário. */
+    public static function clientBranches(int $id): array
+    {
+        if (!self::ready()) return [];
+        $set = self::clientSets()[$id] ?? null;
+        return $set ? array_keys($set) : array_filter([self::principalId()]);
+    }
+
+    /** Restringe uma consulta de Clientes à agência indicada. */
+    public static function applyToClients($query, ?int $branch, string $column = 'ID'): void
+    {
+        if ($branch === null || !self::ready()) return;
+        $sets = self::clientSets();
+        if ($branch === self::principalId()) {
+            $others = array_keys(array_filter($sets, fn ($s) => !isset($s[$branch])));
+            if ($others) $query->whereNotIn($column, $others);
+            return;
+        }
+        $mine = array_keys(array_filter($sets, fn ($s) => isset($s[$branch])));
+        $mine ? $query->whereIn($column, $mine) : $query->whereRaw('1 = 0');
+    }
+
+    /** 403 se o mutuário não tiver nada na agência do utilizador. */
+    public static function requireClient(?object $user, int $id): void
+    {
+        $own = self::userBranch($user);
+        if ($own === null) return;
+        abort_unless(in_array($own, self::clientBranches($id), true), 403, 'Este mutuário pertence a outra agência.');
+    }
+
+    public static function assignClient(int $id, ?int $branch, ?int $by): void
+    {
+        if (!self::ready() || !Schema::hasTable('cis_client_branch')) return;
+        if ($branch === null) DB::table('cis_client_branch')->where('client_id', $id)->delete();
+        else DB::table('cis_client_branch')->updateOrInsert(['client_id' => $id], ['branch_id' => $branch, 'assigned_by' => $by, 'updated_at' => now(), 'created_at' => now()]);
+        self::$clientSets = null;
     }
 }

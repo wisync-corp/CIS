@@ -47,6 +47,7 @@ jobs:
       - run: bash -n ../deploy/enable-client-create.sh
       - run: bash -n ../deploy/install-credit-proposals.sh
       - run: bash -n ../deploy/install-collection-contacts.sh
+      - run: bash -n ../deploy/install-credit-dossier.sh
       - run: cp .env.example .env
       - run: sed -i '/^DB_DATABASE=/d' .env
       - run: touch database/database.sqlite

@@ -234,6 +234,7 @@ final class ClientCreateController extends Controller
         }
         // Quem cadastra fica como agente do mutuário (carteira do agente).
         try { \App\Support\Portfolio::assignClient((int) $result['id'], (int) $user->getKey(), (int) $user->getKey()); } catch (\Throwable) {}
+        try { if (($b = \App\Support\Branches::userBranch($user)) !== null) \App\Support\Branches::assignClient((int) $result['id'], $b, (int) $user->getKey()); } catch (\Throwable) {}
         return response()->json($result + ['mensagem' => 'Mutuário registado.'], 201)
             ->header('Cache-Control', 'no-store, private');
     }

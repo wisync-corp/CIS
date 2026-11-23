@@ -102,6 +102,7 @@ final class Portfolio
 
     public static function requireClient(?object $user, int $id): void
     {
+        Branches::requireClient($user, $id);
         $list = self::clients($user);
         if ($list === null) return;
         abort_unless(in_array($id, $list, true), 403, 'Este mutuário não faz parte da sua carteira.');

@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {useCan} from './perms';
 import PortfolioOwner from './PortfolioOwner';
+import {ClientDocuments} from './CreditDossier';
 import {ArrowLeft,UserRound,MapPin,BriefcaseBusiness,Phone,ShieldCheck,FileText,Save,AlertCircle,CheckCircle2,LockKeyhole} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -193,5 +194,6 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     </div>
    </div>
   </form>}
+  {profile&&<ClientDocuments token={token} clientId={id}/>}
  </section>;
 }

@@ -25,6 +25,7 @@ class CisConsultaController extends Controller
             'ID', 'Numeração', 'Nome Completo', 'Bairro', 'Cidade', 'Provincia'
         ]);
         \App\Support\Portfolio::applyToClients($query, $request->user());
+        \App\Support\Branches::applyToClients($query, \App\Support\Branches::scope($request->user(), $request->query('agencia')));
         if ($term !== '') {
             $query->where(function ($q) use ($term) {
                 $q->where('Nome Completo', 'like', '%'.addcslashes($term, '%_\\').'%');

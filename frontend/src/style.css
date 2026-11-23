@@ -1990,9 +1990,9 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 /* Propostas: indicadores, etapas, avisos ao mutuário e limites da agência */
 .cis-prop-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0 4px}
 .cis-prop-kpi{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;border:1px solid var(--cis-line,#e3e8ef);background:var(--cis-surface,#fff);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
-.cis-prop-kpi svg{grid-row:1/3;width:36px;height:36px;padding:8px;border-radius:10px;background:#f1f5f9;color:#475569}
-.cis-prop-kpi b{font-size:22px;line-height:1.1}.cis-prop-kpi span{font-size:12.5px;color:#64748b;font-weight:600}
-.cis-prop-kpi:hover{border-color:#c4b5fd;box-shadow:0 4px 14px rgba(76,29,149,.08)}.cis-prop-kpi.selected{border-color:#4c1d95;box-shadow:0 0 0 2px rgba(76,29,149,.15)}
+.cis-prop-kpi svg{grid-row:1/3;width:36px;height:36px;padding:8px;border-radius:10px;background:#f1f5f9;color:var(--cis-text-muted,#475569)}
+.cis-prop-kpi b{font-size:22px;line-height:1.1}.cis-prop-kpi span{font-size:12.5px;color:var(--cis-text-muted,#64748b);font-weight:600}
+.cis-prop-kpi:hover{border-color:#c4b5fd;box-shadow:0 4px 14px rgba(76,29,149,.08)}.cis-prop-kpi.selected{border-color:var(--cis-primary,#4c1d95);box-shadow:0 0 0 2px rgba(76,29,149,.15)}
 .cis-prop-kpi.info svg{background:#dbeafe;color:#1e40af}.cis-prop-kpi.warn svg{background:#fef3c7;color:#92400e}.cis-prop-kpi.ok svg{background:#dcfce7;color:#166534}
 .cis-prop-kpi.alert{border-color:#fcd34d;background:#fffbeb}.cis-prop-kpi.alert svg{background:#f59e0b;color:#fff}
 .cis-prop-limits{display:flex;align-items:center;gap:6px;color:#5b21b6;font-size:13px;margin:8px 0 0}
@@ -2003,13 +2003,13 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-prop-stepper li:not(:last-child)::after{content:'';flex:1;height:2px;background:#e2e8f0;border-radius:2px}
 .cis-prop-stepper li span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;border:2px solid #cbd5e1;font-size:12px;flex:none;background:var(--cis-surface,#fff)}
 .cis-prop-stepper li.done{color:#166534}.cis-prop-stepper li.done span{background:#16a34a;border-color:#16a34a;color:#fff}.cis-prop-stepper li.done::after{background:#86efac}
-.cis-prop-stepper li.now{color:#4c1d95}.cis-prop-stepper li.now span{border-color:#4c1d95;background:#4c1d95;color:#fff;box-shadow:0 0 0 4px rgba(76,29,149,.15)}
+.cis-prop-stepper li.now{color:var(--cis-primary,#4c1d95)}.cis-prop-stepper li.now span{border-color:var(--cis-primary,#4c1d95);background:var(--cis-primary,#4c1d95);color:#fff;box-shadow:0 0 0 4px rgba(76,29,149,.15)}
 .cis-prop-stepper li.bad{color:#b91c1c}.cis-prop-stepper li.bad span{border-color:#b91c1c;background:#b91c1c;color:#fff}
 .cis-prop-notice{border:1px solid #86efac;background:#f0fdf4;border-radius:14px;padding:12px 14px;margin:10px 0;display:grid;gap:10px}
 .cis-prop-notice.sent{border-color:#e2e8f0;background:var(--cis-surface,#fff)}
-.cis-prop-notice-head{display:flex;gap:10px;align-items:flex-start;color:#14532d}.cis-prop-notice-head small{display:block;color:#475569;margin-top:2px}
-.cis-prop-notice.sent .cis-prop-notice-head{color:#475569}
-.cis-prop-notice textarea{width:100%;font:inherit;border:1px solid #bbf7d0;border-radius:10px;padding:8px 10px;background:#fff;resize:vertical}
+.cis-prop-notice-head{display:flex;gap:10px;align-items:flex-start;color:#14532d}.cis-prop-notice-head small{display:block;color:var(--cis-text-muted,#475569);margin-top:2px}
+.cis-prop-notice.sent .cis-prop-notice-head{color:var(--cis-text-muted,#475569)}
+.cis-prop-notice textarea{width:100%;font:inherit;border:1px solid #bbf7d0;border-radius:10px;padding:8px 10px;background:var(--cis-surface,#fff);resize:vertical}
 .cis-btn-link{display:inline-flex;align-items:center;gap:6px;text-decoration:none;border-radius:10px;padding:8px 14px;font-weight:700;background:#16a34a;color:#fff}
 .cis-prop-timeline{list-style:none;padding-left:0;position:relative}
 .cis-prop-timeline li{position:relative;padding-left:20px}
@@ -2047,3 +2047,43 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-agenda-section td small{display:block;color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
 .cis-agenda-actions{display:flex;gap:6px;align-items:center;white-space:nowrap}
 .cis-agenda-actions a{text-decoration:none}
+/* Dossier do crédito: fiadores, garantias e documentos */
+.cis-dossier{margin:16px 0}
+.cis-dossier-title{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:16px}
+.cis-dossier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start}
+.cis-dossier-card{border:1px solid var(--cis-line,#e3e8ef);border-radius:14px;padding:14px 16px;background:var(--cis-surface,#fff);display:grid;gap:10px}
+.cis-dossier-card>header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cis-dossier-card h4{display:flex;align-items:center;gap:7px;margin:0}
+.cis-dossier-card h4 b{font-size:11px;background:var(--cis-tint,#ede9fe);color:var(--cis-primary,#4c1d95);border-radius:999px;padding:1px 8px}
+.cis-dossier-card>header button{display:inline-flex;align-items:center;gap:5px;border:1px solid #c4b5fd;background:var(--cis-surface-subtle,#faf5ff);color:var(--cis-primary,#4c1d95);border-radius:9px;padding:5px 10px;font-weight:700;cursor:pointer}
+.cis-dossier-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cis-dossier-list li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--cis-border,#eef2f7);border-radius:10px;padding:8px 10px}
+.cis-dossier-list li b{margin-right:6px}.cis-dossier-list li em{font-style:normal;font-size:11px;font-weight:700;background:#f1f5f9;color:var(--cis-text-muted,#475569);border-radius:999px;padding:1px 8px}
+.cis-dossier-list li small{display:block;color:var(--cis-text-muted,#64748b);font-size:12px;margin-top:2px;word-break:break-word}
+.cis-dossier-ico{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--cis-tint,#ede9fe);color:#5b21b6}
+.cis-dossier-ico.img{background:#e0f2fe;color:#0369a1}
+.cis-dossier-acts{display:flex;gap:4px}.cis-dossier-acts button{border:0;background:transparent;color:var(--cis-text-muted,#475569);padding:6px;border-radius:8px;cursor:pointer}
+.cis-dossier-acts button:hover{background:#f1f5f9;color:var(--cis-primary,#4c1d95)}
+.cis-dossier-form{display:grid;gap:8px;border:1px dashed #c4b5fd;background:var(--cis-surface-subtle,#faf5ff);border-radius:12px;padding:10px 12px}
+.cis-dossier-form label{display:grid;gap:4px;font-size:12.5px;font-weight:700;color:var(--cis-text,#334155)}
+.cis-dossier-form input,.cis-dossier-form select{font:inherit;font-weight:400;border:1px solid var(--cis-line,#d8dee8);border-radius:9px;padding:7px 9px;background:var(--cis-surface,#fff);min-width:0}
+.cis-dossier-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cis-dossier-drop{display:flex!important;align-items:center;gap:10px;border:2px dashed #c4b5fd;border-radius:12px;padding:14px;cursor:pointer;color:#5b21b6;background:var(--cis-surface,#fff);position:relative}
+.cis-dossier-drop.has{border-style:solid;border-color:#16a34a;color:#166534}
+.cis-dossier-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.cis-dossier-scope{display:flex;gap:6px;flex-wrap:wrap}
+.cis-dossier-scope button{flex:1;border:1px solid var(--cis-line,#d8dee8);background:var(--cis-surface,#fff);border-radius:10px;padding:7px 10px;text-align:left;font-weight:700;cursor:pointer}
+.cis-dossier-scope button small{display:block;font-weight:500;color:var(--cis-text-muted,#64748b)}
+.cis-dossier-scope button.on{border-color:var(--cis-primary,#4c1d95);box-shadow:0 0 0 2px rgba(76,29,149,.15)}
+.cis-dossier-cov{display:grid;gap:6px}.cis-dossier-cov div{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.cis-dossier-cov small{color:var(--cis-text-muted,#64748b)}
+.cis-dossier-cov span{color:var(--cis-text-muted,#64748b);font-size:12.5px}
+.cis-dossier-cov i{display:block;height:8px;border-radius:99px;background:#eef2f7;overflow:hidden}
+.cis-dossier-cov i span{display:block;height:100%;background:#16a34a;border-radius:99px}.cis-dossier-cov i span.low{background:#f59e0b}
+.cis-dossier-check{border-radius:12px;padding:10px 14px;margin:8px 0 12px}
+.cis-dossier-check strong{display:flex;align-items:center;gap:7px}
+.cis-dossier-check ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.cis-dossier-check li{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:3px 10px}
+.cis-dossier-check li.ok{background:#dcfce7;color:#166534}.cis-dossier-check li.no{background:#fee2e2;color:#991b1b}
+.cis-dossier-check.ok{background:#f0fdf4;color:#14532d;border:1px solid #bbf7d0}.cis-dossier-check.warn{background:#fffbeb;color:#78350f;border:1px solid #fde68a}
+.cis-client-docs{max-width:760px}
+@media (max-width:640px){.cis-dossier-row{grid-template-columns:1fr}}

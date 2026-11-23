@@ -3,6 +3,8 @@ FROM php:8.3-cli-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends git unzip libzip-dev libsqlite3-dev libonig-dev \
  && docker-php-ext-install pdo_mysql pdo_sqlite mbstring zip \
  && rm -rf /var/lib/apt/lists/*
+# Documentos digitalizados do dossier do crédito: até 5 MB por ficheiro.
+RUN printf 'upload_max_filesize=8M\npost_max_size=10M\n' > /usr/local/etc/php/conf.d/cis-uploads.ini
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /srv/cis
 COPY . .
