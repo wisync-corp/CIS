@@ -68,6 +68,8 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('cis')->middleware(\App\Http\Middleware\AllowPrivateClientPreview::class)->group(function(){
         Route::get('clientes',[CisConsultaController::class,'clientes'])->middleware('throttle:30,1');
         Route::get('contratos/clientes',[ContractClientLookupController::class,'index'])->middleware('throttle:30,1');
+        Route::get('clientes/novo',[\App\Http\Controllers\Api\ClientCreateController::class,'show'])->middleware('throttle:30,1');
+        Route::post('clientes',[\App\Http\Controllers\Api\ClientCreateController::class,'store'])->middleware('throttle:10,1');
         Route::get('clientes/{id}',[CisConsultaController::class,'cliente'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('clientes/{id}/editar',[LegacyClienteEditController::class,'show'])->whereNumber('id')->middleware('throttle:30,1');
         Route::patch('clientes/{id}',[LegacyClienteEditController::class,'update'])->whereNumber('id')->middleware('throttle:10,1');
