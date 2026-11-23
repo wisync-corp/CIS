@@ -174,7 +174,7 @@ final class ReportController extends Controller
     {
         $db=DB::connection('mysql_legacy');
         $have=array_flip($db->getSchemaBuilder()->getColumnListing('Clientes'));
-        $want=['ID','Numeração','Nome Completo','Nº de BI','tipo_documento','validade_documento','nuit','Contacto','Bairro','Cidade','Provincia','Rua','genero','Nacionalidade'];
+        $want=['ID','Numeração','Nome Completo','Nº de BI','tipo_documento','validade_documento','nuit','Contacto','Bairro','Cidade','Provincia','Rua','genero','Nacionalidade','Estado Civil'];
         $cols=array_values(array_filter($want,fn($c)=>isset($have[$c])));
         $out=[];
         foreach ($db->table('Clientes')->get($cols) as $c) $out[(int)$c->ID]=$c;
@@ -212,6 +212,14 @@ final class ReportController extends Controller
         $firstByClient=$byC->map(fn($c)=>['cli'=>(int)$c->first()->{'Nº de Cliente'}?:$c->first()->{'Nome do Cliente'},'d'=>self::d($c->min('Data de Inicio'))])
             ->groupBy('cli')->map(fn($g)=>$g->min('d'));
         $novos=$firstByClient->filter(fn($d)=>$d>=$ini && $d<=$fim)->count();
+        $inicio=CarbonImmutable::parse($ini);
+        $duracao=(int)$inicio->diffInDays(CarbonImmutable::parse($fim))+1;
+        $anteriorIni=$inicio->subDays($duracao)->toDateString();
+        $anteriorFim=$inicio->subDay()->toDateString();
+        $clientesPeriodo=$disb->map(fn($c)=>$c['cli']?:$c['nome'])->unique();
+        $clientesAnteriores=$byC->filter(fn($c)=>($d=self::d($c->min('Data de Inicio')))>=$anteriorIni && $d<=$anteriorFim)
+            ->map(fn($c)=>(int)$c->first()->{'Nº de Cliente'}?:$c->first()->{'Nome do Cliente'})->unique();
+        $retidos=$clientesPeriodo->intersect($clientesAnteriores)->count();
         $refs=$this->reforcos($ini,$fim);
         // Carteira na data de fim.
         $out=$rows->filter(fn($r)=>self::outstandingAt($r,$fim));
@@ -240,6 +248,8 @@ final class ReportController extends Controller
         $cl=$this->clients();
         $gen=$disb->groupBy(fn($c)=>($g=self::v($cl[$c['cli']]??null,'genero'))!==''?ucfirst(mb_strtolower($g)):'Não indicado')
             ->map(fn($g,$k)=>[$k,$g->count(),self::m($g->sum('q'))])->values()->all();
+        $civil=$disb->groupBy(fn($c)=>$c['cli']?:$c['nome'])->map(fn($g)=>self::v($cl[$g->first()['cli']]??null,'Estado Civil')?:'Não indicado')
+            ->countBy()->sortKeys()->map(fn($n,$estado)=>[$estado,$n])->values()->all();
         // Maiores exposições na data de fim (por cliente).
         $top=$out->groupBy(fn($r)=>(int)$r->{'Nº de Cliente'}?:$r->{'Nome do Cliente'})
             ->map(fn($g)=>[$g->first()->{'Nome do Cliente'},$g->pluck('Nr do Contracto')->unique()->count(),self::m($g->sum(fn($r)=>self::principal($r))),self::pct($g->sum(fn($r)=>self::principal($r)),max(1,$cart))])
@@ -247,6 +257,12 @@ final class ReportController extends Controller
         $avgRate=$disb->count()?$disb->avg('tx'):0;
         return [
             'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'estado_civil_dashboard'=>$civil,
+            'mutuarios_dashboard'=>[
+                'com_desembolso'=>$clientesPeriodo->count(),
+                'retencao'=>$clientesAnteriores->isEmpty()?null:self::pct($retidos,$clientesAnteriores->count()),
+                'aquisicao'=>$clientesPeriodo->isEmpty()?null:self::pct($novos,$clientesPeriodo->count()),
+            ],
             'nota'=>'Carteira e carteira em risco reconstituídas à data '.CarbonImmutable::parse($fim)->format('d/m/Y').' (prestação iniciada e não paga até essa data). Capital = Valor a Pagar − Juros.',
             'resumo'=>[
                 ['Contratos desembolsados',(string)$disb->count()],['Valor desembolsado',self::m($disb->sum('q')+$refs->sum('v')).' MT'],
@@ -255,7 +271,7 @@ final class ReportController extends Controller
                 ['Mutuários activos',(string)$activos],['Mutuários novos',(string)$novos],
             ],
             'seccoes'=>[
-                ['titulo'=>'1. Desembolsos','colunas'=>['Indicador','Valor'],'linhas'=>[
+                ['id'=>'desembolsos','titulo'=>'1. Desembolsos','colunas'=>['Indicador','Valor'],'linhas'=>[
                     ['Número de contratos desembolsados',(string)$disb->count()],
                     ['Valor desembolsado em contratos novos (MT)',self::m($disb->sum('q'))],
                     ['Reforços de crédito (n.º / MT)',$refs->count().' / '.self::m($refs->sum('v'))],
@@ -264,27 +280,27 @@ final class ReportController extends Controller
                     ['Taxa de juro média (% por período)',number_format($avgRate,2,'.','')],
                     ['Mutuários novos (primeiro contrato no período)',(string)$novos],
                 ]],
-                ['titulo'=>'2. Carteira à data de '.CarbonImmutable::parse($fim)->format('d/m/Y'),'colunas'=>['Indicador','Valor'],'linhas'=>[
+                ['id'=>'carteira','titulo'=>'2. Carteira à data de '.CarbonImmutable::parse($fim)->format('d/m/Y'),'colunas'=>['Indicador','Valor'],'linhas'=>[
                     ['Contratos em curso',(string)$out->pluck('Nr do Contracto')->unique()->count()],
                     ['Mutuários activos',(string)$activos],
                     ['Carteira em curso — capital (MT)',self::m($cart)],
                     ['Saldo em dívida com juros (MT)',self::m($owed)],
                 ]],
-                ['titulo'=>'3. Carteira em risco (PAR)','tom'=>'risco','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
+                ['id'=>'risco','titulo'=>'3. Carteira em risco (PAR)','tom'=>'risco','colunas'=>['Atraso','Prestações','Contratos','Capital dos contratos (MT)','% da carteira'],'linhas'=>[
                     ['Qualquer atraso',(string)$par1->count(),(string)$par1->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par1)),self::pct($parC($par1),$cart)],
                     ['Mais de 30 dias (PAR 30)',(string)$par30->count(),(string)$par30->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par30)),self::pct($parC($par30),$cart)],
                     ['Mais de 90 dias (PAR 90)',(string)$par90->count(),(string)$par90->pluck('Nr do Contracto')->unique()->count(),self::m($parC($par90)),self::pct($parC($par90),$cart)],
                 ]],
-                ['titulo'=>'4. Recebimentos no período','colunas'=>['Componente','Valor (MT)'],'linhas'=>[
+                ['id'=>'recebimentos','titulo'=>'4. Recebimentos no período','colunas'=>['Componente','Valor (MT)'],'linhas'=>[
                     ['Capital (amortização)',self::m($cap)],['Juros',self::m($jur)],['Juros de mora',self::m($mul)],['Total recebido',self::m($tot)],
                     ['Prestações pagas (n.º)',(string)$paid->count()],['Renovações (n.º)',(string)$ren->count()],['Juros de renovações',self::m($ren->sum(fn($r)=>(float)$r->{'Valor de Juros'}))],
                 ]],
-                ['titulo'=>'5. Distribuição dos desembolsos por montante','colunas'=>['Faixa (MT)','Contratos','Valor (MT)','% do valor'],'linhas'=>$dist,'grafico'=>['Valor (MT)']],
-                ['titulo'=>'6. Desembolsos por género','colunas'=>['Género','Contratos','Valor (MT)'],'linhas'=>$gen],
-                ['titulo'=>'7. Caixa no período (sem transferências internas)','colunas'=>['Movimento','Valor (MT)'],'linhas'=>[
+                ['id'=>'faixas','titulo'=>'5. Distribuição dos desembolsos por montante','colunas'=>['Faixa (MT)','Contratos','Valor (MT)','% do valor'],'linhas'=>$dist,'grafico'=>['Valor (MT)']],
+                ['id'=>'genero','titulo'=>'6. Desembolsos por género','colunas'=>['Género','Contratos','Valor (MT)'],'linhas'=>$gen],
+                ['id'=>'caixa','titulo'=>'7. Caixa no período (sem transferências internas)','colunas'=>['Movimento','Valor (MT)'],'linhas'=>[
                     ['Entradas',self::m((float)($cx->e??0))],['Saídas',self::m((float)($cx->s??0))],['Saldo do período',self::m((float)($cx->e??0)-(float)($cx->s??0))],
                 ]],
-                ['titulo'=>'8. Maiores exposições (10 mutuários)','colunas'=>['Mutuário','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
+                ['id'=>'exposicao','titulo'=>'8. Maiores exposições (10 mutuários)','colunas'=>['Mutuário','Contratos','Capital em curso (MT)','% da carteira'],'linhas'=>$top],
             ],
         ];
     }
@@ -734,7 +750,7 @@ final class ReportController extends Controller
             'ano'=>$ano,
             'nota'=>'Carteira e carteira em risco (> 30 dias) no fim de cada mês. Caixa sem transferências internas.',
             'resumo'=>[['Contratos desembolsados',(string)$tot['n']],['Valor desembolsado',self::m($tot['v']).' MT'],['Recebido',self::m($tot['rec']).' MT'],['Juros recebidos',self::m($tot['jur']).' MT'],['Juros de mora recebidos',self::m($tot['mul']).' MT']],
-            'seccoes'=>[['titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Juros de mora (MT)','Carteira no fim (MT)','PAR 30 (%)','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines,'grafico'=>['Desembolsado (MT)','Recebido (MT)'],'total_final'=>true]],
+            'seccoes'=>[['id'=>'mensal','titulo'=>'Evolução mensal de '.$ano,'colunas'=>['Mês','Contratos','Desembolsado (MT)','Recebido (MT)','Juros (MT)','Juros de mora (MT)','Carteira no fim (MT)','PAR 30 (%)','Entradas Caixa (MT)','Saídas Caixa (MT)'],'linhas'=>$lines,'grafico'=>['Desembolsado (MT)','Recebido (MT)'],'total_final'=>true]],
         ];
     }
 
