@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {ArrowUpRight,Archive,RotateCcw,ChevronRight} from 'lucide-react';
 
 type Row=Record<string,string|number|null>;
 type Operation='reforco'|'abate'|'recuperacao';
@@ -71,17 +72,25 @@ export default function CreditChanges({token,numero,installments,onChanged}:{tok
   finally{setSaving(false);}
  }
 
- if(!fixed.length&&!open.length&&!writtenOff.length&&!success)return null;
  const choices=operation==='recuperacao'?writtenOff:fixed;
- return <section className="cis-collections-panel">
-  <div className="cis-collections-sectionhead"><h3>Alterações de crédito</h3></div>
-  <div className="cis-extracto-actions">
-   {!!fixed.length&&<button type="button" disabled={saving} aria-pressed={operation==='reforco'} onClick={()=>choose('reforco')}>Reforço de crédito</button>}
-   {!!open.length&&<button type="button" disabled={saving} aria-pressed={operation==='abate'} onClick={()=>choose('abate')}>Abate de crédito</button>}
-   {!!writtenOff.length&&<button type="button" disabled={saving} aria-pressed={operation==='recuperacao'} onClick={()=>choose('recuperacao')}>Recuperar saldo abatido</button>}
+ const actions=[
+  {id:'reforco' as const,title:'Reforço de crédito',icon:ArrowUpRight,enabled:fixed.length>0,
+   detail:fixed.length?'Aumentar o capital, mantendo o vencimento.':open.length?'Requer uma prestação em aberto com juro fixo.':'Requer uma prestação em aberto.'},
+  {id:'abate' as const,title:'Abate de crédito',icon:Archive,enabled:open.length>0,
+   detail:open.length?'Retirar o saldo da carteira activa e manter a possibilidade de recuperação.':'Não há prestações em aberto para abater.'},
+  {id:'recuperacao' as const,title:'Recuperar saldo abatido',icon:RotateCcw,enabled:writtenOff.length>0,
+   detail:writtenOff.length?'Registar na Caixa um valor recebido após o abate.':'Disponível após o abate de uma prestação.'},
+ ];
+ return <section className="cis-collections-panel cis-credit-changes" aria-labelledby="cis-credit-changes-title">
+  <div className="cis-collections-sectionhead"><h3 id="cis-credit-changes-title">Alterações de crédito</h3></div>
+  <div className="cis-collections-mode-grid cis-credit-change-options">
+   {actions.map(({id,title,icon:Icon,enabled,detail})=><button key={id} type="button" disabled={!enabled||saving}
+    className={operation===id?'selected':''} aria-pressed={operation===id} onClick={()=>choose(id)}>
+    <Icon size={20}/><span><strong>{title}</strong><small>{detail}</small></span>{enabled&&<ChevronRight size={16}/>}
+   </button>)}
   </div>
   {success&&<p role="status">{success}</p>}
-  {operation&&<fieldset disabled={saving}>
+  {operation&&<fieldset className="cis-credit-change-form" disabled={saving}>
    <legend>{operation==='reforco'?'Reforço de crédito':operation==='abate'?'Abate do contrato':'Recuperação de crédito abatido'}</legend>
    <div className="cis-collections-fields">
     {cash&&<>

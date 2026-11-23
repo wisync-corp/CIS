@@ -1929,3 +1929,15 @@ td.cis-situation.done{color:var(--cis-accent-ink)}
 .cis-branch-filter{display:inline-flex;align-items:center;gap:6px;font-weight:600}
 .cis-branch-filter select{font:inherit}
 .cis-scope-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:#ede9fe;color:#4c1d95;font-size:12px;font-weight:700}
+
+.cis-credit-changes { margin-bottom: 1rem; }
+.cis-credit-change-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cis-credit-change-options button { min-height: 5rem; align-items: flex-start; }
+.cis-credit-change-options button strong { font-size: calc(13px * var(--cis-fs)); }
+.cis-credit-change-options button small { font-size: calc(12px * var(--cis-fs)); line-height: 1.4; }
+.cis-credit-change-options button:disabled { opacity: 1; background: var(--cis-tint); }
+.cis-credit-change-options button:disabled > svg { color: var(--cis-text-muted); }
+.cis-credit-change-form { display: grid; gap: 0.85rem; min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--cis-border); border-radius: 10px; }
+.cis-credit-change-form legend { padding-inline: 0.4rem; font-weight: 700; color: var(--cis-heading); }
+.cis-credit-change-form > button { justify-self: start; }
+@media(max-width: 850px) { .cis-credit-change-options { grid-template-columns: 1fr; } }
