@@ -1320,6 +1320,19 @@ ok($err(fn()=>$calcLate($dispensa))===403 && $calcLate($dispensa,true)['calculad
 $reduzir=['tipo'=>'fixo_unico','valor'=>'20','decisao'=>'reduzir','valor_reduzido'=>'10','motivo'=>'Autorização de ensaio'];
 ok($calcLate($reduzir,true)['cobrado_centimos']===1000,'redução cobra apenas o valor autorizado');
 
+echo "== Conduta do cadastro ligada à lista negra\n";
+$db->statement("ALTER TABLE Clientes ADD COLUMN Conduta VARCHAR(50) NULL");
+$db->table('Clientes')->where('ID',7)->update(['Conduta'=>'Lista Negra']);
+\App\Support\ClientRegistry::reset();
+ok(\App\Support\ClientRegistry::blacklisted(7)!==null && collect(data($RC->index(req('/x',[],$ag1)))['data'])->pluck('client_id')->contains(7),'Conduta «Lista Negra» no cadastro conta como lista negra');
+ok(status(fn()=>$PC->store(req('/x',array_replace($prop,['montante'=>120]),$ag1)))===422,'e bloqueia novas propostas');
+$cv=data($RC->unblacklist(req('/x',['motivo'=>'Conduta revista pela gestão'],$admin),7));
+ok($cv['lista_negra']===null && $db->table('Clientes')->where('ID',7)->value('Conduta')==='Padrão' && $cv['conduta']==='Padrão','voltar a Padrão muda a Conduta no cadastro e guarda o histórico');
+$cb=data($RC->blacklist(req('/x',['motivo'=>'Fugiu com a mercadoria'],$admin),7));
+ok($cb['lista_negra']!==null && $db->table('Clientes')->where('ID',7)->value('Conduta')==='Lista Negra','pôr na lista negra escreve «Lista Negra» na Conduta');
+data($RC->unblacklist(req('/x',['motivo'=>'Acordo de pagamento cumprido'],$admin),7));
+ok($db->table('Clientes')->where('ID',7)->value('Conduta')==='Padrão' && \App\Support\ClientRegistry::blacklisted(7)===null,'e volta a Padrão');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

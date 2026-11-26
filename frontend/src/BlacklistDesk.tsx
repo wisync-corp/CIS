@@ -23,7 +23,7 @@ export default function BlacklistDesk({token,onProfileChange,onCount}:{token:str
  const shown=t?rows.filter(r=>[r.nome,r.bi,r.contacto,r.motivo,r.residencia].some(v=>(v??'').toLowerCase().includes(t))):rows;
  return <section className="cis-panel cis-blacklist">
   <div className="cis-panel-head"><div><h2><Ban size={20}/> Lista negra</h2>
-   <p>Mutuários que não podem receber crédito nem ser avalistas, em todas as agências. Para mudar, abra a ficha do mutuário › Administração › Situação do cliente{d?.pode_gerir?'':' (gestor ou administrador)'}.</p></div>
+   <p>Mutuários que não podem receber crédito nem ser avalistas, em todas as agências. Para mudar, abra a ficha do mutuário › Administração › Conduta{d?.pode_gerir?'':' (gestor ou administrador)'}.</p></div>
    <span className="cis-blacklist-count"><b>{d?.data.length??'…'}</b> na lista</span></div>
   {d&&!d.instalado&&<div className="cis-contract-notice"><AlertCircle size={17}/><span>A lista negra ainda não está instalada. Na VPS execute: <code>bash deploy/install-client-registry.sh</code></span></div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={16}/>{error}</div>}

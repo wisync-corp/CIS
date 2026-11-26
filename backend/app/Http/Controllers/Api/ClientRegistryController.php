@@ -75,6 +75,7 @@ final class ClientRegistryController extends Controller
         $out = ['instalado' => true, 'tipo' => ($p->tipo ?? 'singular') === 'colectiva' ? 'colectiva' : 'singular', 'empresa' => null,
             'tem_foto' => (bool) ($p->foto_document_id ?? null),
             'lista_negra' => $b ? ['motivo' => $b->motivo, 'desde' => $b->created_at, 'por' => $b->por] : null,
+            'conduta' => CR::conduta($id),
             'historico_lista_negra' => $hist, 'avalista_em' => $avalista,
             'formas_juridicas' => CR::FORMAS,
             'pode_editar' => Permissions::can($u, 'mutuarios.editar'),
@@ -164,6 +165,7 @@ final class ClientRegistryController extends Controller
         $d = $r->validate(['motivo' => ['required', 'string', 'min:5', 'max:255']], ['motivo.min' => 'Explique o motivo (mínimo 5 letras).']);
         abort_if(CR::blacklisted($id), 409, 'O mutuário já está na lista negra.');
         DB::table('cis_client_blacklist')->insert(['client_id' => $id, 'motivo' => trim($d['motivo']), 'added_by' => $r->user()->id, 'created_at' => now()]);
+        CR::setConduta($id, CR::CONDUTA_BLACK);
         return response()->json($this->payload($r, $id) + ['notice' => 'Mutuário adicionado à lista negra.'], 201);
     }
 
@@ -173,9 +175,21 @@ final class ClientRegistryController extends Controller
         Permissions::require($r->user(), 'propostas.aprovar');
         $this->needReady();
         $d = $r->validate(['motivo' => ['required', 'string', 'min:5', 'max:255']], ['motivo.min' => 'Explique porque sai da lista (mínimo 5 letras).']);
-        $n = DB::table('cis_client_blacklist')->where('client_id', $id)->whereNull('removed_at')
-            ->update(['removed_at' => now(), 'removed_by' => $r->user()->id, 'removed_motivo' => trim($d['motivo'])]);
-        abort_unless($n > 0, 404, 'O mutuário não está na lista negra.');
+        $legacy = in_array($id, CR::legacyBlackIds(), true);
+        $open = DB::table('cis_client_blacklist')->where('client_id', $id)->whereNull('removed_at')->exists();
+        abort_unless($open || $legacy, 404, 'O mutuário não está na lista negra.');
+        // A «Conduta» do cadastro tem de mudar primeiro; se falhar, nada fica a meio.
+        if ($legacy) abort_unless(CR::setConduta($id, CR::CONDUTA_DEFAULT), 503,
+            'Não foi possível mudar a Conduta no cadastro. Na VPS execute: bash deploy/enable-client-full-edit.sh');
+        elseif (CR::conduta($id) !== null) CR::setConduta($id, CR::CONDUTA_DEFAULT);
+        if ($open) {
+            DB::table('cis_client_blacklist')->where('client_id', $id)->whereNull('removed_at')
+                ->update(['removed_at' => now(), 'removed_by' => $r->user()->id, 'removed_motivo' => trim($d['motivo'])]);
+        } else {
+            // Marcado só no cadastro antigo: fica no histórico a entrada e a saída.
+            DB::table('cis_client_blacklist')->insert(['client_id' => $id, 'motivo' => 'Conduta «Lista Negra» no cadastro', 'created_at' => now(),
+                'removed_at' => now(), 'removed_by' => $r->user()->id, 'removed_motivo' => trim($d['motivo'])]);
+        }
         return response()->json($this->payload($r, $id) + ['notice' => 'Mutuário retirado da lista negra.']);
     }
 
@@ -187,6 +201,12 @@ final class ClientRegistryController extends Controller
         $rows = DB::table('cis_client_blacklist as b')->leftJoin('users as a', 'a.id', '=', 'b.added_by')->leftJoin('users as x', 'x.id', '=', 'b.removed_by')
             ->orderByDesc('b.id')->limit(1000)
             ->get(['b.id', 'b.client_id', 'b.motivo', 'b.created_at', 'a.name as por', 'b.removed_at', 'x.name as retirado_por', 'b.removed_motivo']);
+        // Mutuários marcados só pela «Conduta» do cadastro também entram na lista.
+        $active = $rows->whereNull('removed_at')->pluck('client_id')->map(fn ($v) => (int) $v)->all();
+        foreach (array_diff(CR::legacyBlackIds(), $active) as $lid) {
+            $rows->prepend((object) ['id' => null, 'client_id' => $lid, 'motivo' => 'Conduta «Lista Negra» no cadastro', 'created_at' => null,
+                'por' => null, 'removed_at' => null, 'retirado_por' => null, 'removed_motivo' => null]);
+        }
         $ids = $rows->pluck('client_id')->unique()->values()->all();
         $legacy = DB::connection('mysql_legacy');
         $cols = array_values(array_filter(['ID', 'Nome Completo', 'Contacto', 'Cidade', 'Bairro', 'Nº de BI'], fn ($c) => $c === 'ID' || $legacy->getSchemaBuilder()->hasColumn('Clientes', $c)));

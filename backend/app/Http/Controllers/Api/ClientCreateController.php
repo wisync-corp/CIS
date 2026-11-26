@@ -218,6 +218,7 @@ final class ClientCreateController extends Controller
                 $result = $db->transaction(function () use ($db, $cols, $values, $actor, $user, $tipo, $empresa) {
                     $row = $values;
                     // Colunas complementares do cadastro antigo, quando existem.
+                    if (isset($cols['Conduta']) && ($row['Conduta'] ?? null) === null) $row['Conduta'] = \App\Support\ClientRegistry::CONDUTA_DEFAULT;
                     if (isset($cols['tipo_cliente'])) $row['tipo_cliente'] = $tipo === 'colectiva' ? 'Pessoa colectiva' : 'Pessoa singular';
                     if (isset($cols['nuit']) && !empty($empresa['nuit'])) $row['nuit'] = $empresa['nuit'];
                     $numero = $this->nextNumber($db, $cols);

@@ -9,7 +9,7 @@ export type Registry={instalado:boolean;tipo:'singular'|'colectiva';empresa:Comp
  lista_negra:{motivo:string;desde:string|null;por:string|null}|null;
  historico_lista_negra:{motivo:string;created_at:string|null;por:string|null;removed_at:string|null;retirado_por:string|null;removed_motivo:string|null}[];
  avalista_em:{id:number;numero:string;mutuario:string;estado:string;montante:string}[];
- formas_juridicas:Record<string,string>;pode_editar:boolean;pode_lista_negra:boolean};
+ formas_juridicas:Record<string,string>;pode_editar:boolean;pode_lista_negra:boolean;conduta?:string|null};
 
 async function call<T>(token:string,path:string,method='GET',body?:unknown):Promise<T>{
  const form=body instanceof FormData;
@@ -65,7 +65,7 @@ function BlacklistDialog({token,id,adding,onClose,onDone}:{token:string;id:numbe
  // Portal no <body>: a janela fica centrada mesmo dentro de painéis com layout próprio.
  return createPortal(<div className="cis-msg-overlay" role="dialog" aria-modal="true" aria-label={adding?'Pôr na lista negra':'Voltar à situação padrão'} onClick={onClose}>
   <div className="cis-panel cis-users-form cis-narrow" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')onClose();}}>
-   <div className="cis-users-form-head"><h3>{adding?'Situação: Lista negra':'Situação: Padrão'}</h3><button type="button" aria-label="Fechar" onClick={onClose}><X size={17}/></button></div>
+   <div className="cis-users-form-head"><h3>{adding?'Conduta: Lista Negra':'Conduta: Padrão'}</h3><button type="button" aria-label="Fechar" onClick={onClose}><X size={17}/></button></div>
    <p className="cis-msg-muted">{adding?'O mutuário deixa de poder receber propostas, contratos ou ser avalista, em todas as agências. Fica registado quem o fez e porquê.':'O mutuário sai da lista negra e volta a poder pedir crédito e ser avalista.'}</p>
    <label>{adding?'Motivo':'Porque sai da lista'}<textarea autoFocus required minLength={5} maxLength={255} rows={3} value={motivo} onChange={e=>setMotivo(e.target.value)} placeholder={adding?'Ex.: abandonou o crédito e não atende':'Ex.: dívida regularizada em acordo'}/></label>
    {error&&<p className="cis-pw-error" role="alert"><AlertTriangle size={15}/> {error}</p>}
@@ -86,15 +86,16 @@ export function BlacklistBar({token,id,reg,setReg}:{token:string;id:number;reg:R
  </>;
 }
 
-/** Administração › Situação do cliente: Padrão ou Lista negra (combobox). */
+/** Administração › Conduta: Padrão ou Lista Negra (combobox ligado à lista negra e ao cadastro). */
 export function ClientSituation({token,id,reg,setReg}:{token:string;id:number;reg:Registry;setReg:(r:Registry)=>void}){
  const [target,setTarget]=useState<'padrao'|'lista'|null>(null);
  const current=reg.lista_negra?'lista':'padrao';
- return <><label className={'cis-profile-field cis-situation-field'+(reg.lista_negra?' black':'')}><span>Situação do cliente</span>
+ const other=reg.conduta&&!['padrão','padrao','lista negra'].includes(reg.conduta.trim().toLowerCase())?reg.conduta:null;
+ return <><label className={'cis-profile-field cis-situation-field'+(reg.lista_negra?' black':'')}><span>Conduta</span>
   <select value={target??current} disabled={!reg.pode_lista_negra} onChange={e=>{const v=e.target.value as 'padrao'|'lista';if(v!==current)setTarget(v);}}
-   title={reg.pode_lista_negra?undefined:'Só gestores e administradores mudam a situação.'}>
-   <option value="padrao">Padrão</option><option value="lista">Lista negra</option></select>
-  <small>{reg.lista_negra?<>Na lista negra desde {when(reg.lista_negra.desde)}: {reg.lista_negra.motivo}</>:'Pode pedir crédito e ser avalista.'}{!reg.pode_lista_negra&&' · Só gestores e administradores mudam a situação.'}</small>
+   title={reg.pode_lista_negra?undefined:'Só gestores e administradores mudam a conduta.'}>
+   <option value="padrao">Padrão</option><option value="lista">Lista Negra</option></select>
+  <small>{reg.lista_negra?<>Lista negra{reg.lista_negra.desde?' desde '+when(reg.lista_negra.desde):''}: {reg.lista_negra.motivo}</>:'Pode pedir crédito e ser avalista.'}{other&&<> · No cadastro antigo: «{other}»</>}{!reg.pode_lista_negra&&' · Só gestores e administradores mudam a conduta.'}</small>
  </label>
  {target&&<BlacklistDialog token={token} id={id} adding={target==='lista'} onClose={()=>setTarget(null)} onDone={r=>{setReg(r);setTarget(null);}}/>}</>;
 }

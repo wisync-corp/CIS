@@ -24,7 +24,6 @@ const groups:{name:string;icon:typeof UserRound;fields:Field[]}[]=[
   {key:'Rua',label:'Rua'},
   {key:'Nº da Casa',label:'Número da casa'},
   {key:'Nº de Quarterão',label:'Quarteirão'}]},
- {name:'Outros',icon:FileText,fields:[{key:'Conduta',label:'Conduta'}]}
 ];
 const provincias=['Maputo Cidade','Maputo Província','Gaza','Inhambane','Sofala','Manica','Tete','Zambézia','Nampula','Cabo Delgado','Niassa'];
 const estados=['Solteiro(a)','Casado(a)','União de facto','Divorciado(a)','Viúvo(a)'];
