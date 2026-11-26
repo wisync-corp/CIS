@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
-import {Ban,AlertTriangle,CalendarClock} from 'lucide-react';
+import {Ban,AlertTriangle,CalendarClock,X as XIcon} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
 import LongDelinquency,{type Candidates} from './LongDelinquency';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays, MessageSquare} from 'lucide-react';
@@ -96,6 +96,10 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const [noticeKind,setNoticeKind]=useState<NoticeKind>('atraso');
  const [noticePage,setNoticePage]=useState(1);
  const [noticeOpen,setNoticeOpen]=useState(false);
+ // «Avisos de hoje» é um informe temporário: fechado, fica fechado nesta sessão (até ao dia seguinte).
+ const stripKey='cis_avisos_hoje_fechado_'+new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Maputo'});
+ const [stripClosed,setStripClosed]=useState(()=>{try{return sessionStorage.getItem(stripKey)==='1';}catch{return false;}});
+ const closeStrip=()=>{setStripClosed(true);try{sessionStorage.setItem(stripKey,'1');}catch{/* sem armazenamento */}};
  const noticeDialog=useRef<HTMLDialogElement>(null);
  // Os avisos só aparecem depois do ecrã de entrada (nunca por cima dele).
  useEffect(()=>{
@@ -168,12 +172,12 @@ export default function Dashboard({token, name, role, permissions, agency, theme
     {ldNotice&&<div className="cis-secondary-success" role="status"><Ban size={17}/>{ldNotice}<button type="button" className="cis-edit-action" onClick={()=>setLdNotice('')}>Fechar</button></div>}
     {ldOpen&&ld&&<LongDelinquency token={token} data={ld} onClose={()=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');}}
       onDone={msg=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');setLdNotice(msg);setOvKey(k=>k+1);setLd(v=>v?{...v,candidatos:[]}:v);}}/>}
-    {active==='Visão geral'&&homeTab==='resumo'&&notices&&noticeTotal(notices)>0&&<div className="cis-home-alerts" role="status">
+    {active==='Visão geral'&&homeTab==='resumo'&&!stripClosed&&notices&&noticeTotal(notices)>0&&<div className="cis-home-alerts" role="status">
      <Bell size={18}/><strong>Avisos de hoje</strong>
      {(notices.lista_negra??0)>0&&<button type="button" className="black" onClick={()=>{setNoticeKind('lista_negra');setNoticePage(1);setNoticeOpen(true);}}>{notices.lista_negra} prestação(ões) em lista negra{notices.resumo?.lista_negra.dias_max?` · até ${notices.resumo.lista_negra.dias_max} dias`:''}</button>}
      {notices.atraso>0&&<button type="button" className="bad" onClick={()=>{setNoticeKind('atraso');setNoticePage(1);setNoticeOpen(true);}}>{notices.atraso} pagamento(s) em atraso{notices.resumo?.atraso.dias_max?` · até ${notices.resumo.atraso.dias_max} dias`:''}</button>}
      {notices.cobranca>0&&<button type="button" className="warn" onClick={()=>{setNoticeKind('cobranca');setNoticePage(1);setNoticeOpen(true);}}>{notices.cobranca} cobrança(s) a vencer{notices.antecedencia?` em ${notices.antecedencia} dia(s)`:''}</button>}
-     <button type="button" className="link" onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}>Ver todos os avisos</button>
+     <button type="button" className="link" onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}>Ver todos os avisos</button><button type="button" className="close" onClick={closeStrip} title="Fechar este informe (os avisos continuam no botão «Avisos»)" aria-label="Fechar avisos de hoje"><XIcon size={16}/></button>
     </div>}
     {active==='Mutuários'&&!clientProfileOpen&&blackCount!==null&&<div className="cis-home-tabs cis-mut-tabs" role="tablist" aria-label="Mutuários e lista negra">
      <button type="button" role="tab" aria-selected={mutTab==='cadastro'} className={mutTab==='cadastro'?'selected':''} onClick={()=>setMutTab('cadastro')}><Users size={16}/> Cadastro</button>

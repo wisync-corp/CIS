@@ -2241,3 +2241,6 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-black-facts span.muted{background:transparent;color:var(--cis-muted,#5b6472);padding-left:2px}
 .cis-black-strip .cis-stat-link{margin:0;white-space:nowrap}
 @media(max-width:900px){.cis-black-strip{flex-wrap:wrap}.cis-black-strip .cis-stat-link{margin-left:58px}}
+.cis-home-alerts button.close{display:grid;place-items:center;width:28px;height:28px;padding:0;margin-left:2px;background:transparent;color:var(--cis-muted,#5b6472);border-radius:8px}
+.cis-home-alerts button.close:hover{background:#F4F2F8;color:var(--cis-heading)}
+.cis-home-alerts button.close svg{color:inherit}
