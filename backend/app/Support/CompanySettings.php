@@ -48,6 +48,10 @@ final class CompanySettings
         'lista_negra_automatica'  => ['cobranca','booleano',null,'1'],
         'canal_notificacao'       => ['cobranca','lista',['whatsapp_web','whatsapp','nenhum'],'whatsapp_web'],
         // Credit scoring
+        'provisao_sem_historico' => ['scoring','percentagem_opcional',null,''],
+        'provisao_baixo' => ['scoring','percentagem_opcional',null,''],
+        'provisao_medio' => ['scoring','percentagem_opcional',null,''],
+        'provisao_alto' => ['scoring','percentagem_opcional',null,''],
         'score_minimo'            => ['scoring','inteiro',[0,100],'60'],
         'score_baixo_risco'       => ['scoring','inteiro',[0,100],'80'],
         'score_risco_medio'       => ['scoring','inteiro',[0,100],'60'],

@@ -79,6 +79,7 @@ class CompanySettingsController
             case 'valor':
                 $s = str_replace([' ', ','], ['', '.'], $s);
                 return is_numeric($s) && (float)$s >= 0 && (float)$s < 1e12 ? [null, number_format((float)$s, 2, '.', '')] : ['Valor inválido (≥ 0).', ''];
+            case 'percentagem_opcional':
             case 'percentagem':
                 $s = str_replace(',', '.', $s);
                 return is_numeric($s) && (float)$s >= 0 && (float)$s <= 100 ? [null, rtrim(rtrim(number_format((float)$s, 4, '.', ''), '0'), '.')] : ['Percentagem entre 0 e 100.', ''];

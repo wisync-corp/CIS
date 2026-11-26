@@ -1073,7 +1073,20 @@ $g2=new User();$g2->forceFill(['name'=>'Gestor Sede','email'=>'gsede@ci.test','p
 $db->table('cis_company_settings')->updateOrInsert(['chave'=>'limite_aprovacao_gestor'],['valor'=>'350','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
 ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p1['id']))===403,'acima do limite do gestor: só o administrador');
 ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'rejeitar'],$admin),$p1['id']))===422,'rejeitar exige motivo');
-$p1=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300,'notas'=>'Aprovado com redução'],$admin),$p1['id']));
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300],$admin),$p1['id']))===422,'proposta sem taxa da classe fica por aprovar');
+foreach (['sem_historico','baixo','medio','alto'] as $riskClass) {
+    $db->table('cis_company_settings')->updateOrInsert(['chave'=>'provisao_'.$riskClass],['valor'=>'5','updated_at'=>now(),'created_at'=>now()]);
+}
+\App\Support\CompanySettings::forget();
+$ackRisk=function (int $id,User $u) use ($PC):array {
+    $r=Request::create('/x','GET');
+    $r->setUserResolver(static fn()=>$u);
+    $v=data($PC->show($r,$id))['provisao']['versao'];
+    return ['risco_confirmado'=>true,'risco_versao'=>$v];
+};
+ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300],$admin),$p1['id']))===422,'aprovação exige confirmação de revisão do risco');
+$p1=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300,'notas'=>'Aprovado com redução']+$ackRisk($p1['id'],$admin),$admin),$p1['id']));
+ok(($p1['provisao_aceite']['montante']??null)===300 && ($p1['provisao_aceite']['provisao']??null)==='15.00','aprovação arquiva a provisão do montante reduzido');
 ok($p1['estado']==='aprovada' && $p1['montante_aprovado']===300 && $p1['valida_ate']!==null,'administrador aprova com montante reduzido e validade');
 $ap=collect(data($PC->approved(req('/x',[],$admin)))['data'])->pluck('id');
 ok($ap->contains($p1['id']),'proposta aparece entre as aprovadas para abrir contrato');
@@ -1091,7 +1104,7 @@ $p2=data($PC->store(req('/x',array_replace($prop,['montante'=>200]),$ag1)));$PC-
 $p2=data($PC->decide(req('/x',['decisao'=>'devolver','notas'=>'Falta comprovativo de rendimento'],$g2),$p2['id']));
 ok($p2['estado']==='devolvida','gestor devolve dentro do seu limite, com notas');
 $PC->submit(req('/x',[],$ag1),$p2['id']);
-$p2=data($PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p2['id']));
+$p2=data($PC->decide(req('/x',['decisao'=>'aprovar']+$ackRisk($p2['id'],$g2),$g2),$p2['id']));
 ok($p2['estado']==='aprovada' && $p2['decidido_por']==='Gestor Sede','gestor aprova dentro do limite');
 $db->table('cis_credit_proposals')->where('id',$p2['id'])->update(['valida_ate'=>now($tz)->subDay()->toDateString()]);
 $ix=data($PC->index(req('/x',[],$admin)));
@@ -1154,7 +1167,7 @@ $p4=data($PC->submit(req('/x',[],$ag1),$p4['id']));
 ok($p4['estado']==='submetida','dentro dos limites: submetida');
 $db->table('cis_branches')->where('id',$b4)->update(['credito_maximo'=>350]);
 ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p4['id']))===422,'a aprovação também respeita o máximo da agência');
-$p4=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300],$admin),$p4['id']));
+$p4=data($PC->decide(req('/x',['decisao'=>'aprovar','montante_aprovado'=>300]+$ackRisk($p4['id'],$admin),$admin),$p4['id']));
 $db->table('cis_branches')->where('id',$b4)->update(['credito_maximo'=>null]);
 $d4=data($PC->show(req('/x',[],$ag1),$p4['id']));
 ok($p4['estado']==='aprovada' && $d4['avisado']===false && ($d4['aviso']['modelo']??null)==='Proposta aprovada'
@@ -1216,7 +1229,7 @@ $doc=$db->table('cis_documents')->where('id',$up['id'])->first();
 ok($doc && $doc->mime==='application/pdf' && $doc->proposal_id===null && $doc->sha256===hash('sha256',$pdf),'BI anexado na ficha do mutuário (PDF, com hash)');
 $dl=$DC->download(req('/x',[],$admin),$up['id']);
 ok($dl->getContent()===$pdf && $dl->headers->get('Content-Type')==='application/pdf','o documento abre com o conteúdo original');
-$p5=data($PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p5['id']));
+$p5=data($PC->decide(req('/x',['decisao'=>'aprovar']+$ackRisk($p5['id'],$admin),$admin),$p5['id']));
 ok($p5['estado']==='aprovada','com o BI no dossier a proposta é aprovada');
 ok($err(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Outro Fiador'],$ag1),$p5['id']))===409,'depois da decisão os fiadores não se alteram');
 $cd=data($DC->clientDocuments(req('/x',[],$ag1),7));
