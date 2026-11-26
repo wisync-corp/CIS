@@ -1356,7 +1356,7 @@ $db->table('cis_company_settings')->updateOrInsert(['chave'=>'dias_lista_negra']
 ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9950),'o limite de dias é uma definição da empresa');
 $db->table('cis_company_settings')->where('chave','dias_lista_negra')->delete();\App\Support\CompanySettings::forget();
 ok(status(fn()=>$RC->autoBlacklist(req('/x',['clientes'=>[9950]],$ag1)))===403,'agente não transfere para a lista negra');
-$tr=data($RC->autoBlacklist(req('/x',['clientes'=>[9950,7]],$admin)));
+$tr=data($RC->autoBlacklist(req('/x',['clientes'=>[9950,9901]],$admin)));
 $bl9=$db->table('cis_client_blacklist')->where('client_id',9950)->whereNull('removed_at')->first();
 ok($tr['transferidos']===1 && $tr['ignorados']===1 && $bl9 && $bl9->origem==='automatica' && (int)$bl9->dias_atraso>=120 && str_contains($bl9->motivo,'Incumprimento prolongado'),'«Sim» transfere só quem passa do critério, com motivo de incumprimento prolongado');
 ok($db->table('Clientes')->where('ID',9950)->value('Conduta')==='Lista Negra','a Conduta do cadastro passa a «Lista Negra»');
