@@ -2197,3 +2197,21 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-blacklist .cis-panel-head{margin-top:0}
 .cis-msg-overlay>.cis-users-form.cis-narrow{max-width:520px!important;margin:8vh auto 0}
 .cis-users-form textarea{font:inherit;font-weight:500;border:1px solid var(--cis-border);border-radius:9px;padding:9px 11px;resize:vertical}
+/* Incumprimento prolongado → lista negra */
+.cis-msg-overlay>.cis-users-form.cis-ld{max-width:880px!important;margin:5vh auto 0}
+.cis-ld h3{display:flex;align-items:center;gap:8px;color:#B42318}
+.cis-ld p{margin:0;line-height:1.6}.cis-ld-q{font-size:calc(15px * var(--cis-fs));color:var(--cis-heading)}
+.cis-ld-effects{margin:0;padding-left:18px;color:var(--cis-text-muted);font-size:calc(12.5px * var(--cis-fs));display:grid;gap:4px}
+.cis-ld-table{max-height:44vh;overflow:auto;border:1px solid var(--cis-border);border-radius:12px}
+.cis-ld-table td small{display:block;color:var(--cis-text-muted);font-size:11px}
+.cis-ld-table tr.off{opacity:.5}
+.cis-ld-days{background:#FEF0EE;color:#B42318;border-radius:99px;padding:2px 9px;font-weight:800;font-size:12px;white-space:nowrap}
+.cis-ld .cis-pw-actions{align-items:center;flex-wrap:wrap}
+.cis-ld .cis-pw-actions .danger{display:inline-flex;align-items:center;gap:6px}
+.cis-ld-sum{margin-left:auto;display:inline-flex;align-items:center;gap:5px;color:var(--cis-text-muted);font-size:calc(12px * var(--cis-fs))}
+.cis-ld-credit{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;background:#FEF0EE;border:1px solid #F5C2BC;border-radius:12px;padding:12px 16px;margin:0 0 12px;color:#7A1A12}
+.cis-ld-credit b{font:800 calc(20px * var(--cis-fs)) Manrope}.cis-ld-credit small{color:#7A1A12;opacity:.8}
+.cis-ld-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid #FDE68A;background:#FFFBEB;color:#78350F;border-radius:12px;padding:10px 14px;margin:0 0 12px}
+.cis-ld-banner span{flex:1}.cis-ld-banner button{border:0;background:#B42318;color:#fff;border-radius:9px;padding:7px 12px;font-weight:700}
+.cis-ld-tag{font-style:normal;background:var(--cis-tint);color:var(--cis-primary);border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-right:6px}
+.cis-users-form .cis-pw-actions button.danger{background:#B42318;color:#fff;border-color:#B42318}.cis-users-form .cis-pw-actions button.danger:disabled{opacity:.55}

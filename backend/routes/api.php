@@ -77,6 +77,8 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('cis/mutuarios/{id}/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'blacklist'])->whereNumber('id')->middleware('throttle:20,1');
     Route::delete('cis/mutuarios/{id}/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'unblacklist'])->whereNumber('id')->middleware('throttle:20,1');
     Route::get('cis/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'index'])->middleware('throttle:60,1');
+    Route::get('cis/lista-negra/candidatos',[\App\Http\Controllers\Api\ClientRegistryController::class,'candidates'])->middleware('throttle:30,1');
+    Route::post('cis/lista-negra/automatica',[\App\Http\Controllers\Api\ClientRegistryController::class,'autoBlacklist'])->middleware('throttle:10,1');
     Route::get('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'download'])->whereNumber('id')->middleware('throttle:120,1');
     Route::delete('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'remove'])->whereNumber('id')->middleware('throttle:30,1');
     Route::get('cis/carteiras',[\App\Http\Controllers\Api\PortfolioController::class,'summary'])->middleware('throttle:30,1');

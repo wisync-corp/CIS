@@ -285,6 +285,8 @@ def prepare(data: dict) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     cid = p["Nº de Cliente"] if "Nº de Cliente" in p else pd.Series(pd.NA, index=p.index)
     p["cliente"] = cid.astype("string").fillna("n:" + p["Nome do Cliente"])
     p["pago"] = p["Estado"].str.startswith("Pago")
+    black = {str(x) for x in data.get("lista_negra", [])}
+    p["lista_negra"] = p["cliente"].isin(black)
     today = pd.Timestamp(datetime.now(TZ).date())
     p["vencida"] = (~p["pago"]) & (p["Data de Cobrança"] < today)
     p["com_atraso"] = p["Estado"].isin(["Pago em Atraso", "Pagamento Atrasado"]) | p["vencida"]
@@ -379,9 +381,12 @@ def page_carteira(p: pd.DataFrame, c: pd.DataFrame, per: Period) -> None:
             f"{num(due['com_atraso'].sum())} de {num(len(due))} prestações com vencimento no período", "alert" if (inad or 0) >= 20 else ""),
     ])
 
-    live = p[~p["pago"]]
+    # Carteira corrente: sem o crédito dos mutuários na lista negra (mostrado à parte).
+    live_all = p[~p["pago"]]
+    black = live_all[live_all["lista_negra"]]
+    live = live_all[~live_all["lista_negra"]]
     overdue = live[live["vencida"]]
-    em_curso = c[c["estado"].eq("Em Progresso")]
+    em_curso = c[c["estado"].eq("Em Progresso") & ~c["Nr do Contracto"].isin(black["Nr do Contracto"])]
     par = ratio(overdue["Valor a Pagar"].sum(), live["Valor a Pagar"].sum())
     section("Carteira em curso", "Situação actual (hoje), com os filtros aplicados")
     kpi_row([
@@ -391,7 +396,9 @@ def page_carteira(p: pd.DataFrame, c: pd.DataFrame, per: Period) -> None:
         kpi("Em atraso", mzn_short(overdue["Valor a Pagar"].sum()), "alerta", note=f"{num(len(overdue))} prestações vencidas · {num(overdue['Nr do Contracto'].nunique())} contratos",
             cls="alert" if len(overdue) else ""),
         kpi("Carteira em risco (PAR)", pct(par), "risco", note="Valor vencido ÷ valor por receber", cls="alert" if (par or 0) >= 10 else ""),
-    ])
+    ] + ([kpi("Crédito em lista negra", mzn_short(black["Valor a Pagar"].sum()), "alerta",
+              note=f"{num(black['cliente'].nunique())} mutuário(s) · {num(black['Nr do Contracto'].nunique())} contrato(s) · fora da carteira corrente", cls="alert")]
+         if len(black) else []))
 
     section("Evolução e composição", per.label)
     if cp.empty:

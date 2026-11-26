@@ -30,7 +30,7 @@ def fake_data() -> dict:
                          "Valor Pago": q * 1.2 / n if st.startswith("Pago") else 0, "Valor a Pagar": q * 1.2 / n,
                          "Valor de Juros": q * 0.2 / n, "M. Pagamento": "Mensal", "Intervalo": None})
     rows.append({**rows[0], "Ordem": 9999, "Nr do Contracto": "T-SEM-DATAS", "Data de Inicio": None, "Data de Cobrança": None})
-    return {"contractos": rows, "clientes": [{"Nome Completo": n, "Estado Civil": rnd.choice(["Casado(a)", None])} for n in names]}
+    return {"lista_negra": [1, 2], "contractos": rows, "clientes": [{"Nome Completo": n, "Estado Civil": rnd.choice(["Casado(a)", None])} for n in names]}
 
 
 def serve(payload: dict) -> str:

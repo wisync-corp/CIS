@@ -200,7 +200,8 @@ final class ClientRegistryController extends Controller
         if (!CR::ready()) return response()->json(['instalado' => false, 'data' => [], 'retirados' => []]);
         $rows = DB::table('cis_client_blacklist as b')->leftJoin('users as a', 'a.id', '=', 'b.added_by')->leftJoin('users as x', 'x.id', '=', 'b.removed_by')
             ->orderByDesc('b.id')->limit(1000)
-            ->get(['b.id', 'b.client_id', 'b.motivo', 'b.created_at', 'a.name as por', 'b.removed_at', 'x.name as retirado_por', 'b.removed_motivo']);
+            ->get(array_merge(['b.id', 'b.client_id', 'b.motivo', 'b.created_at', 'a.name as por', 'b.removed_at', 'x.name as retirado_por', 'b.removed_motivo'],
+                \Illuminate\Support\Facades\Schema::hasColumn('cis_client_blacklist', 'origem') ? ['b.origem', 'b.dias_atraso'] : []));
         // Mutuários marcados só pela «Conduta» do cadastro também entram na lista.
         $active = $rows->whereNull('removed_at')->pluck('client_id')->map(fn ($v) => (int) $v)->all();
         foreach (array_diff(CR::legacyBlackIds(), $active) as $lid) {
@@ -211,14 +212,68 @@ final class ClientRegistryController extends Controller
         $legacy = DB::connection('mysql_legacy');
         $cols = array_values(array_filter(['ID', 'Nome Completo', 'Contacto', 'Cidade', 'Bairro', 'Nº de BI'], fn ($c) => $c === 'ID' || $legacy->getSchemaBuilder()->hasColumn('Clientes', $c)));
         $info = $ids ? $legacy->table('Clientes')->whereIn('ID', $ids)->get($cols)->keyBy('ID') : collect();
-        $map = fn ($b) => ['client_id' => (int) $b->client_id, 'nome' => $info[$b->client_id]->{'Nome Completo'} ?? ('#'.$b->client_id),
+        // Crédito em lista negra: o que cada um ainda deve (prestações em aberto), fora da carteira corrente.
+        $debt = $ids ? $legacy->table('Contractos')->whereIn('Nº de Cliente', $ids)->whereRaw("`Estado` IN ('Pendente','Pagamento Atrasado')")
+            ->selectRaw('`Nº de Cliente` AS c, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS divida, COUNT(DISTINCT `Nr do Contracto`) AS contratos')
+            ->groupBy('Nº de Cliente')->get()->keyBy(fn ($x) => (int) $x->c) : collect();
+        $map = fn ($b) => ['client_id' => (int) $b->client_id, 'origem' => $b->origem ?? ($b->id === null ? 'cadastro' : 'manual'),
+            'dias_atraso' => isset($b->dias_atraso) ? (int) $b->dias_atraso : null,
+            'divida' => (float) ($debt[(int) $b->client_id]->divida ?? 0), 'contratos' => (int) ($debt[(int) $b->client_id]->contratos ?? 0), 'nome' => $info[$b->client_id]->{'Nome Completo'} ?? ('#'.$b->client_id),
             'contacto' => $info[$b->client_id]->Contacto ?? null, 'residencia' => trim(implode(', ', array_filter([$info[$b->client_id]->Bairro ?? null, $info[$b->client_id]->Cidade ?? null]))) ?: null,
             'bi' => $info[$b->client_id]->{'Nº de BI'} ?? null, 'motivo' => $b->motivo, 'desde' => $b->created_at, 'por' => $b->por,
             'retirado_em' => $b->removed_at, 'retirado_por' => $b->retirado_por, 'motivo_saida' => $b->removed_motivo];
+        $activeRows = $rows->whereNull('removed_at')->unique('client_id')->map($map)->values();
         return response()->json(['instalado' => true,
-            'data' => $rows->whereNull('removed_at')->map($map)->values(),
+            'credito_lista_negra' => ['mutuarios' => $activeRows->count(), 'contratos' => $activeRows->sum('contratos'), 'valor' => round($activeRows->sum('divida'), 2)],
+            'dias_criterio' => CR::overdueLimit(),
+            'data' => $activeRows,
             'retirados' => $rows->whereNotNull('removed_at')->map($map)->values(),
             'pode_gerir' => Permissions::can($r->user(), 'propostas.aprovar')])->header('Cache-Control', 'no-store, private');
+    }
+
+    /** GET cis/lista-negra/candidatos : mutuários em incumprimento prolongado (critério interno), para decisão. */
+    public function candidates(Request $r)
+    {
+        $u = $r->user();
+        $limit = CR::overdueLimit();
+        if (!CR::ready() || !Permissions::can($u, 'propostas.aprovar')) {
+            return response()->json(['instalado' => CR::ready(), 'pode_decidir' => false, 'dias' => $limit, 'candidatos' => []]);
+        }
+        $c = CR::overdueCandidates($u, $limit);
+        return response()->json(['instalado' => true, 'pode_decidir' => true, 'dias' => $limit,
+            'propor_ao_entrar' => \App\Support\CompanySettings::get('lista_negra_automatica') === '1',
+            'candidatos' => $c, 'total_atraso' => round(array_sum(array_column($c, 'valor_atraso')), 2),
+            'total_divida' => round(array_sum(array_column($c, 'valor_divida')), 2)])->header('Cache-Control', 'no-store, private');
+    }
+
+    /** POST cis/lista-negra/automatica {clientes:[ids]} : transfere, com autorização, quem passa do critério. */
+    public function autoBlacklist(Request $r)
+    {
+        $u = $r->user();
+        Permissions::require($u, 'propostas.aprovar');
+        $this->needReady();
+        $d = $r->validate(['clientes' => ['required', 'array', 'min:1', 'max:2000'], 'clientes.*' => ['integer', 'min:1']]);
+        $limit = CR::overdueLimit();
+        // Volta a verificar no servidor: só entram os que ainda passam do critério.
+        $now = collect(CR::overdueCandidates($u, $limit))->keyBy('id');
+        $ids = array_values(array_unique(array_map('intval', $d['clientes'])));
+        $done = [];
+        $hasOrigin = \Illuminate\Support\Facades\Schema::hasColumn('cis_client_blacklist', 'origem');
+        DB::transaction(function () use ($ids, $now, $limit, $u, $hasOrigin, &$done) {
+            foreach ($ids as $id) {
+                $c = $now[$id] ?? null;
+                if (!$c || CR::blacklisted($id)) continue;
+                $row = ['client_id' => $id, 'motivo' => CR::motivoAutomatico($c['dias'], $limit), 'added_by' => $u->id, 'created_at' => now()];
+                if ($hasOrigin) $row += ['origem' => 'automatica', 'dias_atraso' => $c['dias'], 'valor_em_divida' => $c['valor_divida']];
+                DB::table('cis_client_blacklist')->insert($row);
+                $done[] = $c;
+            }
+        });
+        foreach ($done as $c) CR::setConduta($c['id'], CR::CONDUTA_BLACK);
+        $total = array_sum(array_column($done, 'valor_divida'));
+        return response()->json(['transferidos' => count($done), 'ignorados' => count($ids) - count($done),
+            'valor_divida' => round($total, 2),
+            'notice' => count($done).' mutuário(s) transferido(s) para a lista negra por incumprimento prolongado. Saíram da carteira corrente; o crédito fica em «Crédito em lista negra».']);
     }
 
     /** GET cis/mutuarios/procurar?q= : mutuários da agência (nome, BI, contacto), para escolher um avalista. */
