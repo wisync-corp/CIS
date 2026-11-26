@@ -303,6 +303,17 @@ final class ContractOpeningController extends Controller
                     'Descrição'=>mb_substr('[CAIXA:DESEMBOLSO] Desembolso de Empréstimo '.$number.' | REF:'.$ref,0,255),
                     'usuario'=>$actor,'account_id'=>(int)$account->id,'operation_key'=>$key,
                 ],'Nr');
+                // Taxa de operação (Definições › Encargos do crédito): descontada no desembolso, entra como receita na mesma conta.
+                $feeC=\App\Support\CreditCharges::operationFee((int)$d['montante']*100,true);
+                if ($feeC>0) {
+                    $db->table('Extracto')->insertGetId([
+                        'Contracto'=>$number,'Cliente'=>$buyer->{'Nome Completo'},
+                        'Parcela'=>0,'Data da Operação'=>$d['data_inicio'],
+                        'Valor'=>CashAccountLedger::amount($feeC),'Tipo de Movimento'=>'Entradas',
+                        'Descrição'=>mb_substr('[CAIXA:TAXA] Taxa de operação '.$number.' | REF:'.$ref,0,255),
+                        'usuario'=>$actor,'account_id'=>(int)$account->id,'operation_key'=>$key.':taxa',
+                    ],'Nr');
+                }
                 $created=$db->table('Contractos')->where('Nr do Contracto',$number)->orderBy('Ordem')->get();
                 abort_unless(
                     $created->count()===count($plan['prestacoes'])
@@ -323,8 +334,9 @@ final class ContractOpeningController extends Controller
                 return ['numero'=>$number,'prestacoes'=>count($plan['prestacoes']),
                     'desembolso'=>$d['montante'],'data_inicio'=>$d['data_inicio'],
                     'estado'=>'Em Progresso','repetido'=>false,'extracto_nr'=>(int)$nr,
-                    'conta'=>$account->code,
-                    'saldo_conta_actual'=>CashAccountLedger::amount($accountBalance-(int)$d['montante']*100)];
+                    'conta'=>$account->code,'taxa_operacao'=>CashAccountLedger::amount($feeC),
+                    'valor_entregue'=>CashAccountLedger::amount((int)$d['montante']*100-$feeC),
+                    'saldo_conta_actual'=>CashAccountLedger::amount($accountBalance-(int)$d['montante']*100+$feeC)];
             }, 1);
         } catch (\Illuminate\Database\QueryException $e) {
             report($e);

@@ -1,5 +1,6 @@
 // Propostas de crédito com aprovação: criar, analisar, submeter, decidir e abrir contrato.
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
+import {useCreditCharges} from './encargos';
 import {FilePlus2,ClipboardCheck,AlertCircle,CheckCircle2,XCircle,Undo2,Send,Ban,ArrowLeft,FileText,Gauge,UserRound,Search,ArrowUpRight,Clock,MessageCircle,PackageX,Hourglass,Inbox,BellRing,Check} from 'lucide-react';
 import {useCan} from './perms';
 import DossierPanel,{ChecklistView,type Check as DossierCheck} from './CreditDossier';
@@ -7,7 +8,7 @@ import DossierPanel,{ChecklistView,type Check as DossierCheck} from './CreditDos
 const API=import.meta.env.VITE_API_URL||'/api';
 type Analysis={taxa:number|null;prestacoes:number|null;prestacao:string|null;total_a_pagar:string|null;juros_totais:string|null;encargo_mensal:string|null;rendimento_disponivel:string;taxa_esforco:number|null;taxa_esforco_max:number;alertas:string[];recomendacao:string};
 type History={contratos:number;contratos_activos:number;contratos_em_atraso:number;contratos_abatidos:number;max_dias_atraso:number;capital_em_divida:string;prestacoes_pagas:number;pagas_em_atraso:number;score:number|null;classificacao:string;score_minimo:number};
-export type Proposal={id:number;numero:string;estado:string;mutuario:{id:number;nome:string};montante:number;montante_aprovado:number|null;tipo_juro:string;estrategia:string;periodo_dias:number;prazo:string;modalidade:string;taxa:number|null;taxa_aprovada:number|null;finalidade:string;actividade:string|null;rendimento_mensal:string;despesas_mensais:string;outras_dividas_mensais:string;garantias:string|null;observacoes:string|null;analise:{calculo:Analysis;historico:History}|null;decisao_notas:string|null;decidido_por:string|null;decidido_em:string|null;valida_ate:string|null;contrato:string|null;criado_por:string|null;criado_em:string;submetido_em:string|null;agencia:string|null;avisado:boolean|null};
+export type Proposal={finalidade_categoria?:string|null;encargos?:{taxa_operacao:string;valor_entregue:string};id:number;numero:string;estado:string;mutuario:{id:number;nome:string};montante:number;montante_aprovado:number|null;tipo_juro:string;estrategia:string;periodo_dias:number;prazo:string;modalidade:string;taxa:number|null;taxa_aprovada:number|null;finalidade:string;actividade:string|null;rendimento_mensal:string;despesas_mensais:string;outras_dividas_mensais:string;garantias:string|null;observacoes:string|null;analise:{calculo:Analysis;historico:History}|null;decisao_notas:string|null;decidido_por:string|null;decidido_em:string|null;valida_ate:string|null;contrato:string|null;criado_por:string|null;criado_em:string;submetido_em:string|null;agencia:string|null;avisado:boolean|null};
 type Limits={credito_minimo:number|null;credito_maximo:number|null;taxa_minima:number|null;taxa_maxima:number|null};
 type Notice={estado:string;modelo:string;mensagem:string;contacto:string|null;telefone:string|null;enviado:boolean;enviado_em:string|null};
 type Provision={classe:string;score:number|null;factores:string[];taxa:string|null;montante:number;provisao:string|null;versao:string};
@@ -120,16 +121,17 @@ function AnalysisView({a,h}:{a:Analysis|null;h:History|null}){
 
 function ProposalForm({token,initial,onCancel,onSaved}:{token:string;initial:Proposal|null;onCancel:()=>void;onSaved:(id:number)=>void}){
  const api=useApi(token);
+ const enc=useCreditCharges(token);
  const [client,setClient]=useState<{id:number;nome:string}|null>(initial?initial.mutuario:null);
- const [v,setV]=useState<Record<string,string>>(()=>initial?{montante:String(initial.montante),tipo_juro:initial.tipo_juro,estrategia:initial.estrategia,periodo_dias:String(initial.periodo_dias),prazo:initial.prazo,modalidade:initial.modalidade,taxa:initial.taxa!=null?String(initial.taxa):'',finalidade:initial.finalidade,actividade:initial.actividade??'',rendimento_mensal:String(Number(initial.rendimento_mensal)),despesas_mensais:String(Number(initial.despesas_mensais)),outras_dividas_mensais:String(Number(initial.outras_dividas_mensais)),garantias:initial.garantias??'',observacoes:initial.observacoes??''}
-  :{montante:'',tipo_juro:'Fixo',estrategia:'Amortização fixa com juro fixo',periodo_dias:'30',prazo:'1 Mês',modalidade:'Uma Parcela',taxa:'',finalidade:'',actividade:'',rendimento_mensal:'',despesas_mensais:'0',outras_dividas_mensais:'0',garantias:'',observacoes:''});
+ const [v,setV]=useState<Record<string,string>>(()=>initial?{montante:String(initial.montante),tipo_juro:initial.tipo_juro,estrategia:initial.estrategia,periodo_dias:String(initial.periodo_dias),prazo:initial.prazo,modalidade:initial.modalidade,taxa:initial.taxa!=null?String(initial.taxa):'',finalidade:initial.finalidade,finalidade_categoria:initial.finalidade_categoria??'',actividade:initial.actividade??'',rendimento_mensal:String(Number(initial.rendimento_mensal)),despesas_mensais:String(Number(initial.despesas_mensais)),outras_dividas_mensais:String(Number(initial.outras_dividas_mensais)),garantias:initial.garantias??'',observacoes:initial.observacoes??''}
+  :{montante:'',tipo_juro:'Fixo',estrategia:'Amortização fixa com juro fixo',periodo_dias:'30',prazo:'1 Mês',modalidade:'Uma Parcela',taxa:'',finalidade:'',finalidade_categoria:'',actividade:'',rendimento_mensal:'',despesas_mensais:'0',outras_dividas_mensais:'0',garantias:'',observacoes:''});
  const [an,setAn]=useState<{analise:Analysis;historico_mutuario:History;limites_agencia?:Limits}|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const set=(k:string,val:string)=>setV(p=>{const n={...p,[k]:val};
   if(k==='tipo_juro'){n.estrategia=STRATS[val][0];if(val==='Variável')n.modalidade='Uma Parcela';if(val==='Composto')n.modalidade='Mensal';}
   if(k==='periodo_dias'&&!termsFor(val).includes(n.prazo))n.prazo=termsFor(val)[0];
   if((k==='prazo'||k==='periodo_dias')&&!modesFor(n.prazo).includes(n.modalidade))n.modalidade=modesFor(n.prazo)[0];return n;});
  const body=useMemo(()=>({client_id:client?.id,montante:Number(v.montante),tipo_juro:v.tipo_juro,estrategia:v.estrategia,periodo_dias:Number(v.periodo_dias),prazo:v.prazo,modalidade:v.modalidade,
-  taxa:v.tipo_juro==='Fixo'?null:(v.taxa||null),finalidade:v.finalidade,actividade:v.actividade||null,rendimento_mensal:Number(v.rendimento_mensal||0),despesas_mensais:Number(v.despesas_mensais||0),
+  taxa:v.tipo_juro==='Fixo'?null:(v.taxa||null),finalidade:v.finalidade,finalidade_categoria:v.finalidade_categoria||null,actividade:v.actividade||null,rendimento_mensal:Number(v.rendimento_mensal||0),despesas_mensais:Number(v.despesas_mensais||0),
   outras_dividas_mensais:Number(v.outras_dividas_mensais||0),garantias:v.garantias||null,observacoes:v.observacoes||null}),[client,v]);
  useEffect(()=>{if(!client||!(Number(v.montante)>0)||v.finalidade.trim().length<3||v.rendimento_mensal===''){setAn(null);return;}
   const t=window.setTimeout(()=>{api<{analise:Analysis;historico_mutuario:History;limites_agencia?:Limits}>('/cis/propostas/analise','POST',body).then(setAn).catch(e=>{setAn(null);setError((e as Error).message);});},400);
@@ -152,7 +154,9 @@ function ProposalForm({token,initial,onCancel,onSaved}:{token:string;initial:Pro
     <label className="cis-profile-field"><span>Periodicidade</span><select value={v.modalidade} onChange={e=>set('modalidade',e.target.value)}>{modesFor(v.prazo).map(o=><option key={o}>{o}</option>)}</select></label>
     {v.tipo_juro!=='Fixo'&&F('taxa','Taxa de juro (%)',{type:'number',min:1,max:100,step:1,required:true})}
     {an&&limitsText(an.limites_agencia)&&<p className="cis-prop-limits cis-prop-wide"><AlertCircle size={14}/> Limites da agência: {limitsText(an.limites_agencia)}.</p>}
-    {F('finalidade','Finalidade do crédito',{required:true,minLength:3,maxLength:255,placeholder:'Ex.: compra de stock para a banca'})}
+    <label className="cis-profile-field"><span>Categoria da finalidade</span><select required value={v.finalidade_categoria} onChange={e=>set('finalidade_categoria',e.target.value)}><option value="">Seleccione</option>{(enc?.finalidades??[]).map(o=><option key={o}>{o}</option>)}</select></label>
+    {F('finalidade','Finalidade (detalhe)',{required:true,minLength:3,maxLength:255,placeholder:'Ex.: compra de stock para a banca'})}
+    {enc&&Number(v.montante)>0&&(enc.taxa_operacao>0||enc.taxa_operacao_minima>0)&&(()=>{const cap=Number(v.montante);const fee=Math.min(cap,Math.max(Math.ceil(cap*enc.taxa_operacao/100-1e-9),Math.ceil(enc.taxa_operacao_minima)));return <p className="cis-prop-limits cis-prop-wide"><AlertCircle size={14}/> Taxa de operação: {fee.toLocaleString('pt-PT')} MT, descontada no desembolso. O mutuário recebe {(cap-fee).toLocaleString('pt-PT')} MT.</p>;})()}
    </div></fieldset>
    <fieldset className="cis-newclient-group"><legend><Gauge size={16}/> Situação financeira do mutuário</legend><div className="cis-profile-fields">
     {F('actividade','Actividade / fonte de rendimento',{maxLength:160})}
@@ -237,7 +241,7 @@ function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id
   <DossierPanel token={token} proposalId={d.id} clientId={d.mutuario.id} onChange={()=>void load()}/>
   <div className="cis-prop-grid">
    <article><h4><FileText size={15}/> Pedido</h4><dl>
-    <div><dt>Finalidade</dt><dd>{d.finalidade}</dd></div><div><dt>Sistema</dt><dd>{d.estrategia}</dd></div><div><dt>Período da tabela</dt><dd>{d.periodo_dias} dias</dd></div>
+    <div><dt>Finalidade</dt><dd>{d.finalidade_categoria?<b>{d.finalidade_categoria} · </b>:null}{d.finalidade}</dd></div>{d.encargos&&Number(d.encargos.taxa_operacao)>0&&<div><dt>Taxa de operação</dt><dd>{Number(d.encargos.taxa_operacao).toLocaleString('pt-PT')} MT · entregue {Number(d.encargos.valor_entregue).toLocaleString('pt-PT')} MT</dd></div>}<div><dt>Sistema</dt><dd>{d.estrategia}</dd></div><div><dt>Período da tabela</dt><dd>{d.periodo_dias} dias</dd></div>
     <div><dt>Actividade</dt><dd>{d.actividade||'—'}</dd></div><div><dt>Rendimento / despesas / outras prestações</dt><dd>{mt(d.rendimento_mensal)} / {mt(d.despesas_mensais)} / {mt(d.outras_dividas_mensais)}</dd></div>
     <div><dt>Garantias / fiador</dt><dd>{d.garantias||'—'}</dd></div><div><dt>Observações</dt><dd>{d.observacoes||'—'}</dd></div>
     <div><dt>Proponente</dt><dd>{d.criado_por} · {dt(d.criado_em)}</dd></div></dl></article>

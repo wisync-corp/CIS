@@ -2343,3 +2343,4 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-me-hero p{margin:0;display:flex;align-items:center;gap:6px;opacity:.9}
 .cis-me-tabs{align-self:flex-start}
 .cis-me-actions{display:flex;gap:10px;flex-wrap:wrap}
+.cis-late-company{margin:6px 0 10px;padding:9px 12px;border-radius:10px;background:#F4F2F8;font-size:calc(13px * var(--cis-fs))}

@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('auth/logout',[AuthController::class,'logout']);
     Route::post('auth/palavra-passe',[AuthController::class,'changePassword'])->middleware('throttle:6,1');
     // Utilizadores (permissão «utilizadores»: administrador).
+    Route::get('cis/encargos',\App\Http\Controllers\Api\CreditChargesController::class)->middleware('throttle:60,1');
     Route::get('cis/subscricao/estado',[\App\Http\Controllers\Api\SubscriptionController::class,'summary']);
     Route::get('cis/subscricao',[\App\Http\Controllers\Api\SubscriptionController::class,'show']);
     Route::post('cis/subscricao/pagamentos',[\App\Http\Controllers\Api\SubscriptionController::class,'pay'])->middleware('throttle:6,1');

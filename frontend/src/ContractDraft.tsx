@@ -7,7 +7,7 @@ type Field={key:string;label:string;type?:'date'|'number'|'select';choices?:stri
 type Borrower={ID:number;'Numeração':string|number|null;'Nome Completo':string;Cidade:string|null};
 type InterestQuote={found:boolean;taxa?:string|number;periodo_dias?:number;limite_inferior?:number;limite_superior?:number;message?:string};
 type OperationalStatus={abertura_desembolso_prontos:boolean;cobranca_pronta:boolean;semanal_pronto:boolean;formulas_adicionais_prontas:boolean;nota:string};
-type OpeningReview={cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:boolean;pendencias:string[]};
+type OpeningReview={taxa_operacao?:string;cadastro_confirmado:boolean;cliente:{id:number;numero:string|number|null;nome:string};taxa_tabela:string|null;problemas:string[];dados_verificados:boolean;autorizado_para_gravar:boolean;pendencias:string[]};
 const API=import.meta.env.VITE_API_URL||'/api';
 function todayMaputo():string{
  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Maputo',
@@ -463,7 +463,7 @@ export default function ContractDraft({onBack,onContractCreated,token,proposalId
     </tr>)}</tbody></table></div><p>Total previsto: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalPagar)} MT · Juros: {new Intl.NumberFormat('pt-MZ',{maximumFractionDigits:0}).format(preview.totalJuros)} MT.
     {tipo==='Variável'?' Os juros variáveis são calculados na Cobrança quando for conhecida a data efectiva de pagamento.':''}</p>
    </div>}
-   {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}</p>
+   {review&&<div className="cis-contract-review" role="status"><strong>{review.dados_verificados?'Cadastro e tabela de preços verificados':'Verificação encontrou pendências'}</strong><p>Mutuário: {review.cliente.nome} · ID {review.cliente.id}. {review.taxa_tabela!==null?`Taxa original confirmada: ${review.taxa_tabela}%.`:''}{Number(review.taxa_operacao??0)>0?` Taxa de operação: ${Number(review.taxa_operacao).toLocaleString('pt-PT')} MT, descontada no desembolso — o mutuário recebe ${(Number(values.quantia)-Number(review.taxa_operacao)).toLocaleString('pt-PT')} MT; a taxa entra na mesma conta como receita.`:''}</p>
     {review.problemas.length>0&&<div><strong>Incompatibilidades</strong><ul>{review.problemas.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}
     <div><strong>Requisitos para activar a abertura real</strong><ul>{review.pendencias.map(item=><li key={item}>{item}</li>)}</ul></div>
     <p><strong>{review.autorizado_para_gravar?'Abertura disponível mediante confirmação expressa':'Abertura ainda não activada'}.</strong> A validação isolada não grava contratos, prestações nem extractos.</p></div>}
