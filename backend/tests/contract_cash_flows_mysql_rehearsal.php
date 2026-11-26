@@ -1477,6 +1477,7 @@ echo "\nE-mail institucional por fornecedor\n";
 (require __DIR__.'/../database/migrations/2026_11_26_230001_create_cis_mail_tables.php')->up();
 $mailer=new \App\Http\Controllers\Api\CisMailController();
 $sender='mail@ci.test';
+\Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());
 \Illuminate\Support\Facades\Http::fake([
     'https://oauth2.googleapis.com/token'=>\Illuminate\Support\Facades\Http::response(['access_token'=>'test-gmail','refresh_token'=>'test-refresh','expires_in'=>3600]),
     'https://openidconnect.googleapis.com/v1/userinfo'=>\Illuminate\Support\Facades\Http::response(['email'=>$sender,'email_verified'=>true]),
