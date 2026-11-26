@@ -8,21 +8,22 @@ type Row={client_id:number;nome:string;contacto:string|null;residencia:string|nu
 type Data={instalado:boolean;data:Row[];retirados:Row[];pode_gerir?:boolean};
 const when=(v:string|null)=>v?v.slice(0,10).split('-').reverse().join('/'):'—';
 
-export default function BlacklistDesk({token}:{token:string}){
+export default function BlacklistDesk({token,onProfileChange,onCount}:{token:string;onProfileChange?:(open:boolean)=>void;onCount?:(n:number)=>void}){
  const [d,setD]=useState<Data|null>(null),[error,setError]=useState(''),[q,setQ]=useState(''),[tab,setTab]=useState<'activos'|'retirados'>('activos');
  const [open,setOpen]=useState<number|null>(null),[refresh,setRefresh]=useState(0);
  useEffect(()=>{const c=new AbortController();setError('');
   fetch(API+'/cis/lista-negra',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
-   .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Não foi possível abrir a lista negra.');setD(j as Data);})
+   .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Não foi possível abrir a lista negra.');setD(j as Data);onCount?.((j as Data).data?.length??0);})
    .catch(e=>{if(e.name!=='AbortError')setError(e.message);});
   return()=>c.abort();},[token,refresh]);
- if(open!==null)return <ClientProfile id={open} token={token} onBack={()=>{setOpen(null);setRefresh(v=>v+1);}}/>;
+ useEffect(()=>{onProfileChange?.(open!==null);return()=>onProfileChange?.(false);},[open]);// eslint-disable-line react-hooks/exhaustive-deps
+ if(open!==null)return <ClientProfile id={open} token={token} onBack={()=>{setOpen(null);setRefresh(v=>v+1);}} backLabel="Voltar à lista negra"/>;
  const rows=(tab==='activos'?d?.data:d?.retirados)??[];
  const t=q.trim().toLowerCase();
  const shown=t?rows.filter(r=>[r.nome,r.bi,r.contacto,r.motivo,r.residencia].some(v=>(v??'').toLowerCase().includes(t))):rows;
  return <section className="cis-panel cis-blacklist">
   <div className="cis-panel-head"><div><h2><Ban size={20}/> Lista negra</h2>
-   <p>Mutuários que não podem receber crédito nem ser avalistas, em todas as agências. Para adicionar ou retirar, abra a ficha do mutuário{d?.pode_gerir?'':' (gestor ou administrador)'}.</p></div>
+   <p>Mutuários que não podem receber crédito nem ser avalistas, em todas as agências. Para mudar, abra a ficha do mutuário › Administração › Situação do cliente{d?.pode_gerir?'':' (gestor ou administrador)'}.</p></div>
    <span className="cis-blacklist-count"><b>{d?.data.length??'…'}</b> na lista</span></div>
   {d&&!d.instalado&&<div className="cis-contract-notice"><AlertCircle size={17}/><span>A lista negra ainda não está instalada. Na VPS execute: <code>bash deploy/install-client-registry.sh</code></span></div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={16}/>{error}</div>}

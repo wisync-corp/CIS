@@ -2,7 +2,7 @@ import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {useCan} from './perms';
 import PortfolioOwner from './PortfolioOwner';
 import {ClientDocuments} from './CreditDossier';
-import {useClientRegistry,ClientAvatar,BlacklistBar,CompanyCard} from './ClientRegistry';
+import {useClientRegistry,ClientAvatar,BlacklistBar,CompanyCard,ClientSituation} from './ClientRegistry';
 import {ArrowLeft,UserRound,MapPin,BriefcaseBusiness,Phone,ShieldCheck,FileText,Save,AlertCircle,CheckCircle2,LockKeyhole} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -69,7 +69,7 @@ function formValue(key:string,value:string|number|null|undefined):string{
  return text;
 }
 
-export default function ClientProfile({id,token,onBack}:{id:number;token:string;onBack:()=>void}){
+export default function ClientProfile({id,token,onBack,backLabel='Voltar aos mutuários'}:{id:number;token:string;onBack:()=>void;backLabel?:string}){
  const can=useCan();
  const [tab,setTab]=useState<Tab>('Identificação');
  const [profile,setProfile]=useState<Profile|null>(null);
@@ -161,7 +161,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  }
  const active=sections.find(s=>s.name===tab)!;
  return <section className="cis-profile-page">
-  <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> Voltar aos mutuários</button><span>Cadastro / Ficha individual</span></div>
+  <div className="cis-profile-back"><button type="button" onClick={onBack}><ArrowLeft size={18}/> {backLabel}</button><span>Cadastro / Ficha individual</span></div>
   {loading&&!profile&&<div className="cis-panel">A carregar a ficha do mutuário…</div>}
   {error&&<div className="cis-table-error" role="alert"><AlertCircle size={19}/>{error}</div>}
   {success&&<div className="cis-secondary-success" role="status"><CheckCircle2 size={18}/>{success}</div>}
@@ -170,14 +170,13 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     <ClientAvatar token={token} id={id} reg={reg} photo={photo} firm={firm} onChanged={()=>void reloadReg()}/>
     <div className="cis-profile-heading"><span>FICHA DO MUTUÁRIO{reg?.instalado?(firm?' · PESSOA COLECTIVA':' · PESSOA SINGULAR'):''}</span><h2>{normalized(profile['Nome Completo'])||'Mutuário sem nome'}</h2><p>Mutuário n.º {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id} <span aria-hidden="true">·</span> <PortfolioOwner kind="mutuario" id={id} token={token}/></p></div>
     <div className="cis-profile-hero-actions">
-      {reg?.instalado&&!reg.lista_negra&&!editing&&<BlacklistBar token={token} id={id} reg={reg} setReg={setReg}/>}
       {!editing?can('mutuarios.editar')&&<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
        <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,formValue(k,v)])));setError('');}}>Cancelar</button>
        <button type="submit" disabled={!hasChanges||saving}><Save size={16}/>{saving?'A guardar…':'Guardar alterações'}</button>
       </>}
     </div>
    </div>
-   {reg?.instalado&&reg.lista_negra&&<BlacklistBar token={token} id={id} reg={reg} setReg={setReg}/>}
+   {reg?.instalado&&<BlacklistBar token={token} id={id} reg={reg} setReg={setReg}/>}
    {reg?.instalado&&<CompanyCard token={token} id={id} reg={reg} setReg={setReg}/>}
    <div className="cis-profile-layout">
     <nav className="cis-profile-tabs" aria-label="Secções da ficha">
@@ -185,7 +184,7 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
     </nav>
     <div className="cis-profile-content">
      <header className="cis-profile-section-title"><div><h3>{active.name}</h3><p>Informação do cadastro do mutuário, sem duplicação de campos.</p></div>{editing&&<span>Campos autorizados editáveis</span>}</header>
-     <div className="cis-profile-fields">{active.fields.map(({key,label})=>{
+     <div className="cis-profile-fields">{tab==='Administração'&&reg?.instalado&&<ClientSituation token={token} id={id} reg={reg} setReg={setReg}/>}{active.fields.map(({key,label})=>{
        const isExtra=secondaryFields.has(key);
        const enabled=editing&&canEdit(key);
        const display=isExtra&&!secondaryReady?'Ainda não activado':formValue(key,profile[key])||'Não informado';

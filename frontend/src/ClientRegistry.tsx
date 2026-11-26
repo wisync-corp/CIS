@@ -1,5 +1,6 @@
 // Mutuário ao nível do GEMIC: fotografia, pessoa singular/colectiva (empresa) e lista negra.
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {Camera,Building2,UserRound,Ban,ShieldCheck,AlertTriangle,X,Save,Loader2,Users,ArrowUpRight} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
@@ -55,27 +56,47 @@ export function ClientAvatar({token,id,reg,photo,onChanged,firm}:{token:string;i
  </div>;
 }
 
-/** Faixa da lista negra e botão para adicionar/retirar (gestor ou administrador). */
-export function BlacklistBar({token,id,reg,setReg}:{token:string;id:number;reg:Registry;setReg:(r:Registry)=>void}){
- const [open,setOpen]=useState(false),[motivo,setMotivo]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const b=reg.lista_negra;
+/** Janela para pôr ou tirar da lista negra (sempre com motivo). */
+function BlacklistDialog({token,id,adding,onClose,onDone}:{token:string;id:number;adding:boolean;onClose:()=>void;onDone:(r:Registry)=>void}){
+ const [motivo,setMotivo]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function submit(){if(motivo.trim().length<5){setError('Explique o motivo (mínimo 5 letras).');return;}setBusy(true);setError('');
-  try{setReg(await call<Registry>(token,'/cis/mutuarios/'+id+'/lista-negra',b?'DELETE':'POST',{motivo}));setOpen(false);setMotivo('');}
+  try{onDone(await call<Registry>(token,'/cis/mutuarios/'+id+'/lista-negra',adding?'POST':'DELETE',{motivo}));}
   catch(err){setError((err as Error).message);}finally{setBusy(false);}}
+ // Portal no <body>: a janela fica centrada mesmo dentro de painéis com layout próprio.
+ return createPortal(<div className="cis-msg-overlay" role="dialog" aria-modal="true" aria-label={adding?'Pôr na lista negra':'Voltar à situação padrão'} onClick={onClose}>
+  <div className="cis-panel cis-users-form cis-narrow" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')onClose();}}>
+   <div className="cis-users-form-head"><h3>{adding?'Situação: Lista negra':'Situação: Padrão'}</h3><button type="button" aria-label="Fechar" onClick={onClose}><X size={17}/></button></div>
+   <p className="cis-msg-muted">{adding?'O mutuário deixa de poder receber propostas, contratos ou ser avalista, em todas as agências. Fica registado quem o fez e porquê.':'O mutuário sai da lista negra e volta a poder pedir crédito e ser avalista.'}</p>
+   <label>{adding?'Motivo':'Porque sai da lista'}<textarea autoFocus required minLength={5} maxLength={255} rows={3} value={motivo} onChange={e=>setMotivo(e.target.value)} placeholder={adding?'Ex.: abandonou o crédito e não atende':'Ex.: dívida regularizada em acordo'}/></label>
+   {error&&<p className="cis-pw-error" role="alert"><AlertTriangle size={15}/> {error}</p>}
+   <div className="cis-pw-actions"><button type="button" className={adding?'danger':'primary'} disabled={busy||motivo.trim().length<5} onClick={()=>void submit()}>{busy?'A gravar…':adding?'Pôr na lista negra':'Voltar a Padrão'}</button><button type="button" onClick={onClose}>Cancelar</button></div>
+  </div></div>,document.body);
+}
+
+/** Faixa no topo da ficha quando o mutuário está na lista negra. */
+export function BlacklistBar({token,id,reg,setReg}:{token:string;id:number;reg:Registry;setReg:(r:Registry)=>void}){
+ const [open,setOpen]=useState(false);
+ const b=reg.lista_negra;
+ if(!b)return null;
  return <>
-  {b&&<div className="cis-blacklist-banner" role="alert"><Ban size={20}/><div><strong>Mutuário na lista negra</strong>
+  <div className="cis-blacklist-banner" role="alert"><Ban size={20}/><div><strong>Mutuário na lista negra</strong>
    <span>{b.motivo} · desde {when(b.desde)}{b.por?' · por '+b.por:''}. Não pode receber crédito nem ser avalista.</span></div>
-   {reg.pode_lista_negra&&<button type="button" onClick={()=>setOpen(true)}>Retirar da lista</button>}</div>}
-  {!b&&reg.pode_lista_negra&&<button type="button" className="cis-blacklist-add" onClick={()=>setOpen(true)}><Ban size={15}/> Adicionar à lista negra</button>}
-  {open&&<div className="cis-msg-overlay" role="dialog" aria-modal="true" aria-label={b?'Retirar da lista negra':'Adicionar à lista negra'} onClick={()=>setOpen(false)}>
-   <div className="cis-panel cis-users-form" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')setOpen(false);}}>
-    <div className="cis-users-form-head"><h3>{b?'Retirar da lista negra':'Adicionar à lista negra'}</h3><button type="button" aria-label="Fechar" onClick={()=>setOpen(false)}><X size={17}/></button></div>
-    <p className="cis-msg-muted">{b?'O mutuário volta a poder pedir crédito e ser avalista.':'O mutuário deixa de poder receber propostas, contratos ou ser avalista, em todas as agências. Fica registado quem o fez e porquê.'}</p>
-    <label>{b?'Porque sai da lista':'Motivo'}<textarea required minLength={5} maxLength={255} rows={3} value={motivo} onChange={e=>setMotivo(e.target.value)} placeholder={b?'Ex.: dívida regularizada em acordo':'Ex.: abandonou o crédito e não atende'}/></label>
-    {error&&<p className="cis-pw-error" role="alert"><AlertTriangle size={15}/> {error}</p>}
-    <div className="cis-pw-actions"><button type="button" className={b?'primary':'danger'} disabled={busy||motivo.trim().length<5} onClick={()=>void submit()}>{busy?'A gravar…':b?'Retirar da lista':'Adicionar à lista negra'}</button><button type="button" onClick={()=>setOpen(false)}>Cancelar</button></div>
-   </div></div>}
+   {reg.pode_lista_negra&&<button type="button" onClick={()=>setOpen(true)}>Voltar a Padrão</button>}</div>
+  {open&&<BlacklistDialog token={token} id={id} adding={false} onClose={()=>setOpen(false)} onDone={r=>{setReg(r);setOpen(false);}}/>}
  </>;
+}
+
+/** Administração › Situação do cliente: Padrão ou Lista negra (combobox). */
+export function ClientSituation({token,id,reg,setReg}:{token:string;id:number;reg:Registry;setReg:(r:Registry)=>void}){
+ const [target,setTarget]=useState<'padrao'|'lista'|null>(null);
+ const current=reg.lista_negra?'lista':'padrao';
+ return <><label className={'cis-profile-field cis-situation-field'+(reg.lista_negra?' black':'')}><span>Situação do cliente</span>
+  <select value={target??current} disabled={!reg.pode_lista_negra} onChange={e=>{const v=e.target.value as 'padrao'|'lista';if(v!==current)setTarget(v);}}
+   title={reg.pode_lista_negra?undefined:'Só gestores e administradores mudam a situação.'}>
+   <option value="padrao">Padrão</option><option value="lista">Lista negra</option></select>
+  <small>{reg.lista_negra?<>Na lista negra desde {when(reg.lista_negra.desde)}: {reg.lista_negra.motivo}</>:'Pode pedir crédito e ser avalista.'}{!reg.pode_lista_negra&&' · Só gestores e administradores mudam a situação.'}</small>
+ </label>
+ {target&&<BlacklistDialog token={token} id={id} adding={target==='lista'} onClose={()=>setTarget(null)} onDone={r=>{setReg(r);setTarget(null);}}/>}</>;
 }
 
 /** Tipo de mutuário e dados da empresa (pessoa colectiva). */
