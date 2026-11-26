@@ -1,10 +1,10 @@
 // Definições › Subscrição: plano do CIS, utilizadores, renovação e pagamento por M-Pesa ou e-Mola.
 // Estes pagamentos são da licença do software (para a WiSync) e nunca entram na Caixa nem no Extracto.
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {CreditCard,CheckCircle2,AlertTriangle,Users,Minus,Plus,Smartphone,Loader2,Clock,XCircle,Receipt,Lock,Sparkles,Copy} from 'lucide-react';
+import {CreditCard,CheckCircle2,AlertTriangle,Users,Minus,Plus,Smartphone,Loader2,Clock,XCircle,Receipt,Lock,Copy} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
-type Plan={id:string;nome:string;preco:number;referencia:number;utilizadores:number;extra:number;descricao:string};
+type Plan={id:string;nome:string;preco:number;utilizadores:number;extra:number;descricao:string};
 type Mod={id:string;nome:string;preco:number;disponivel:boolean;descricao:string};
 type Method={id:'mpesa'|'emola';nome:string;operadora:string;prefixos:string;modo:'api'|'manual'|'simulacao';numero_manual:string};
 type Pay={referencia:string;plano:string;plano_nome:string;utilizadores_extra:number;ciclo:string;meses:number;valor:number;metodo:string;modo:string;telefone:string;estado:'pendente'|'confirmado'|'falhado'|'cancelado';comprovativo:string|null;operadora_transacao:string|null;mensagem:string|null;valido_de:string|null;valido_ate:string|null;criado_em:string;confirmado_em:string|null};
@@ -82,12 +82,11 @@ export default function Subscription({token}:{token:string}){
   {error&&<div className="cis-co-alert bad"><AlertTriangle size={17}/>{error}</div>}
 
   <section className="cis-panel cis-co-section">
-   <div className="cis-co-section-head"><div><h3>1. Escolha o plano</h3><p>Preços de lançamento por mês, por instituição. O preço normal aparece riscado. Todos os planos incluem mutuários, propostas, contratos, cobranças, extractos, Caixa e relatórios.</p></div></div>
+   <div className="cis-co-section-head"><div><h3>1. Escolha o plano</h3><p>Preços mensais por instituição. Todos os planos incluem mutuários, propostas, contratos, cobranças, extractos, Caixa e relatórios.</p></div></div>
    <div className="cis-sub-plans" role="radiogroup" aria-label="Planos">
     {data.planos.map(x=><button key={x.id} type="button" role="radio" aria-checked={plan===x.id} className={'cis-sub-plan'+(plan===x.id?' on':'')} onClick={()=>setPlan(x.id)}>
-     <span className="cis-sub-plan-top"><b>{x.nome}</b>{s.plano===x.id&&<em>Actual</em>}{x.referencia>x.preco&&<em className="launch"><Sparkles size={11}/> Lançamento</em>}</span>
+     <span className="cis-sub-plan-top"><b>{x.nome}</b>{s.plano===x.id&&<em>Actual</em>}</span>
      <span className="cis-sub-price">{mt(x.preco)}<small>/mês</small></span>
-     {x.referencia>x.preco?<s>{mt(x.referencia)}</s>:<span className="cis-sub-nostrike">&nbsp;</span>}
      <span className="cis-sub-feat"><Users size={14}/> {x.utilizadores} utilizadores incluídos</span>
      <span className="cis-sub-feat"><Plus size={14}/> {mt(x.extra)} por utilizador extra</span>
      <span className="cis-sub-desc">{x.descricao}</span>
