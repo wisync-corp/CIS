@@ -1,3 +1,4 @@
+import {MailComposer} from './CisMail';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {MessageSquare,Plus,Pencil,Save,X,Trash2,Send,Copy,Users,Search,Bell,AlertTriangle,Receipt,FileText,Bold,Italic,Strikethrough,Smile,Braces,AlertCircle,CheckCircle2,Image as ImageIcon,SkipForward,Puzzle,Square,Loader2,Eye,EyeOff,ExternalLink} from 'lucide-react';
 import MessageLog from './MessageLog';
@@ -265,6 +266,7 @@ export default function MessageCenter({token,contrato,onClose,preset,autoReminde
     {onClose&&<button type="button" className="cis-msg-close" onClick={onClose} aria-label="Fechar"><X size={17}/></button>}
    </div>
   </header>
+  {!contrato&&!sendMode&&<details className="cis-collections-technical"><summary>Enviar e-mail</summary><MailComposer token={token}/></details>}
   {!wa.available&&help&&<div className="cis-msg-help">
    <p><b>Já instalada?</b> Com esta página aberta, clique no ícone <b>CIS WhatsApp</b> na barra do navegador e carregue em <b>«Ligar este endereço»</b> (o endereço aparece preenchido).</p>
    <p><b>Ainda não instalada?</b> <a href="/cis-whatsapp-extension.zip" download>Descarregar a extensão</a> → extrair → <code>edge://extensions</code> ou <code>chrome://extensions</code> → Modo de programador → «Carregar expandida» → escolher a pasta.</p>

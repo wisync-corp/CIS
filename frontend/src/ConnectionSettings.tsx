@@ -1,3 +1,5 @@
+import {Mail} from 'lucide-react';
+import {MailSettings} from './CisMail';
 import {useEffect,useState} from 'react';
 import {Briefcase,ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2,XCircle} from 'lucide-react';
 import {useCan} from './perms';
@@ -27,7 +29,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
  .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});return ()=>ctrl.abort();
  },[token,role,reload]);
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
-  {grupo:'Empresa',items:[...COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))]},
+  {grupo:'Empresa',items:[...COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon})),{id:'email',title:'E-mail',icon:Mail}]},
   {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight},{id:'modelos',title:'Modelos de contrato',icon:FileSignature}]},
   {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'agencias',title:'Agências',icon:Building2},{id:'carteiras',title:'Carteiras',icon:Briefcase},{id:'conta',title:'A minha conta',icon:KeyRound}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
@@ -38,6 +40,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
   {<nav className="cis-settings-nav" aria-label="Secções das definições">{nav.map(g=><div key={g.grupo}><span>{g.grupo}</span>
    <ul>{g.items.map(it=><li key={it.id}><button type="button" className={tab===it.id?'on':''} aria-current={tab===it.id?'page':undefined} onClick={()=>pick(it.id)}><it.icon size={16}/>{it.title}</button></li>)}</ul></div>)}</nav>}
   <div className="cis-settings-content">
+  {admin&&tab==='email'&&<MailSettings token={token}/>}
   {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
   {manageUsers&&tab==='utilizadores'&&<UsersAdmin token={token}/>}
   {admin&&tab==='agencias'&&<BranchesAdmin token={token}/>}

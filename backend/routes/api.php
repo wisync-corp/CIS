@@ -28,7 +28,18 @@ Route::post('pagamentos/emola/callback',[\App\Http\Controllers\Api\SubscriptionC
 Route::get('streamlit/verificar',[\App\Http\Controllers\Api\StreamlitController::class,'verify']);
 Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::class,'data'])->middleware('throttle:60,1');
 
+Route::get('cis/email/oauth/callback',[\App\Http\Controllers\Api\CisMailController::class,'callback'])->middleware('throttle:20,1');
+
 Route::middleware('auth:sanctum')->group(function(){
+    Route::prefix('cis/email')->controller(\App\Http\Controllers\Api\CisMailController::class)->group(function () {
+        Route::get('contas','accounts')->middleware('throttle:60,1');
+        Route::post('contas','save')->middleware('throttle:20,1');
+        Route::post('contas/{id}/autorizar','oauth')->whereNumber('id')->middleware('throttle:10,1');
+        Route::post('contas/{id}/teste','test')->whereNumber('id')->middleware('throttle:10,1');
+        Route::put('predefinicoes','setDefault')->middleware('throttle:20,1');
+        Route::get('opcoes','options')->middleware('throttle:60,1');
+        Route::post('enviar','send')->middleware('throttle:20,1');
+    });
     Route::post('streamlit/sessao',[\App\Http\Controllers\Api\StreamlitController::class,'session'])->middleware('throttle:30,1');
     Route::get('auth/me',[AuthController::class,'me']);
     Route::get('admin/connection-status', ConnectionStatusController::class);

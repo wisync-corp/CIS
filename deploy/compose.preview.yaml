@@ -15,6 +15,7 @@ services:
       APP_KEY: ${APP_KEY:?APP_KEY deve estar definida no ficheiro privado deploy/.env}
       APP_URL: http://localhost:8080
       FRONTEND_URL: http://localhost:8080
+      CIS_MAIL_CALLBACK_URL: ${CIS_MAIL_CALLBACK_URL:-}
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: "3306"
@@ -83,7 +84,7 @@ services:
       CIS_LEGACY_IMPORT_APPROVED: "false"
       CACHE_STORE: file
       SESSION_DRIVER: file
-    networks: [private]
+    networks: [private, mail_egress]
     # API não exposta directamente.
   streamlit-preview:
     build: ../streamlit-dashboard
@@ -100,6 +101,7 @@ services:
     # Apenas loopback do VPS, acessível do PC por SSH -L.
 
 networks:
+  mail_egress: {}
   preview_public:
     # Bridge normal para permitir publicação em loopback; a rede MySQL continua privada.
 

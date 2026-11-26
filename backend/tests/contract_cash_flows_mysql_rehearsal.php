@@ -1472,6 +1472,31 @@ $sm=data($SC->summary(req('/x',[],$ag1)));
 ok($sm['instalado'] && $sm['estado']==='activa' && $sm['pode_gerir']===false && $sm['limite']>=$sm['utilizadores'],'resumo para o aviso no topo (agente vê, não gere)');
 ok(DB::table('Extracto')->where('Descrição','like','%CIS%')->where('Descrição','like','%'.$p1['referencia'].'%')->count()===0,'a subscrição não entra no Extracto nem na Caixa');
 
+
+echo "\nE-mail institucional por fornecedor\n";
+(require __DIR__.'/../database/migrations/2026_11_26_230001_create_cis_mail_tables.php')->up();
+$mailer=new \App\Http\Controllers\Api\CisMailController();
+$sender='mail@ci.test';
+\Illuminate\Support\Facades\Http::fake([
+    'https://oauth2.googleapis.com/token'=>\Illuminate\Support\Facades\Http::response(['access_token'=>'test-gmail','refresh_token'=>'test-refresh','expires_in'=>3600]),
+    'https://openidconnect.googleapis.com/v1/userinfo'=>\Illuminate\Support\Facades\Http::response(['email'=>$sender,'email_verified'=>true]),
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'=>\Illuminate\Support\Facades\Http::response(['id'=>'fake-message']),
+]);
+$mailAccount=data($mailer->save(req('/x',['provider'=>'google','sender'=>$sender,'label'=>'Gmail teste','client_id'=>'test-id','secret'=>'test-secret'],$user)))['accounts'][0];
+ok(!array_key_exists('configuration',$mailAccount)&&!array_key_exists('authorization',$mailAccount),'configuração de e-mail não devolve credenciais');
+ok(status(fn()=>$mailer->setDefault(req('/x',['purpose'=>'geral','account_id'=>$mailAccount['id']],$user)))===422,'conta por testar não pode ser predefinida');
+$oauth=data($mailer->oauth(req('/x',[],$user),$mailAccount['id']));
+parse_str(parse_url($oauth['url'],PHP_URL_QUERY),$oauthParams);
+ok(isset($oauthParams['code_challenge'])&&$oauthParams['code_challenge_method']==='S256','OAuth usa PKCE');
+$mailer->callback(Request::create('/x','GET',['state'=>$oauthParams['state'],'code'=>'fake-code']));
+ok(status(fn()=>$mailer->callback(Request::create('/x','GET',['state'=>$oauthParams['state'],'code'=>'fake-code'])))===422,'OAuth impede reutilizar o estado');
+$mailAccount=data($mailer->test(req('/x',['recipient'=>'destinatario@ci.test'],$user),$mailAccount['id']))['accounts'][0];
+ok($mailAccount['tested_at']!==null,'envio de teste valida a conta');
+$mailer->setDefault(req('/x',['purpose'=>'geral','account_id'=>$mailAccount['id']],$user));
+$sent=data($mailer->send(req('/x',['purpose'=>'documentos','recipient'=>'destinatario@ci.test','subject'=>'Documento','body'=>'Mensagem de ensaio'],$user)));
+ok($sent['status']==='aceite'&&$db->table('cis_mail_history')->where('subject','Documento')->value('status')==='aceite','envio usa a conta predefinida e entra no histórico');
+ok(method_exists(\Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport::class,'setRequireTls'),'SMTP suporta TLS obrigatório');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
