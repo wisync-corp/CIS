@@ -1343,7 +1343,8 @@ $ct=array_replace($ct,['Nr do Contracto'=>'LD-0001','Nome do Cliente'=>'Mutuári
     'Data de Inicio'=>now('Africa/Maputo')->subDays(150)->toDateString(),'Data de Cobrança'=>now('Africa/Maputo')->subDays(120)->toDateString(),
     'Valor a Pagar'=>1000,'Valor de Juros'=>200]);
 if(array_key_exists('Valor Pago',$ct))$ct['Valor Pago']=0;
-$db->table('Contractos')->insert($ct);
+// Colunas com ponto (ex.: «M. Pagamento»): INSERT directo com nomes entre crases.
+$db->insert('INSERT INTO Contractos ('.implode(',',array_map(fn($k)=>'`'.$k.'`',array_keys($ct))).') VALUES ('.implode(',',array_fill(0,count($ct),'?')).')',array_values($ct));
 \App\Support\Branches::reset();\App\Support\ClientRegistry::reset();
 $ovr=function($u){$q=Request::create('/x','GET');$q->setUserResolver(static fn()=>$u);return data((new \App\Http\Controllers\Api\OverviewController())($q));};
 $before=$ovr($admin);
