@@ -1510,6 +1510,7 @@ $mk=function(array $o) use ($db,$tz){$a=$o+['Nome do Cliente'=>'Cliente Encargos
     'Situação de Pagamento'=>'Em Progresso','usuario'=>'vba'];
     [$sql,$bind]=\App\Services\LegacyContractInsert::statement($a);$db->insert($sql,$bind);return (int)$db->getPdo()->lastInsertId();};
 $CCx=new ContractCollectionController();
+$set('penalidades_automaticas','0');$set('mora_tecto_pct','0');$set('limite_mensal_dias_mora','30');$set('taxa_renovacao','0');$set('taxa_operacao','0');$set('taxa_operacao_minima','0');
 $e1=$mk(['Nr do Contracto'=>'ENC-001','Nº'=>9001]);
 $pv=fn(User $u,array $extra=[])=>data($CCx->preview(req('/x',['data_pagamento'=>$td,'cobrar_multa'=>false]+$extra,$u),'ENC-001',$e1));
 ok((float)$pv($admin)['multa']===0.0,'mora automática desligada: sem regra não há juros de mora (como antes)');
