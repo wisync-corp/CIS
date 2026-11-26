@@ -168,7 +168,7 @@ ok($q['total_texto']==='2880.00' && $q['dias_atraso']===5 && $q['estado']==='Pag
 $r=data($col->collect(req('/x',['cobrar_multa'=>true,'mora'=>['tipo'=>'legado'],'valor_recebido'=>'2880.00','conta_id'=>$banco,
     'idempotency_key'=>'44444444-4444-4444-8444-444444444444']+$pay,$user),'C-0101',$late));
 ok($r['registado'] && $r['saldo_conta_actual']==='22880.00','entrada na conta BIM-001 escolhida');
-$stored=json_decode($db->table('cis_contractos_historico')->where('operation_key','44444444-4444-4444-8444-444444444444')->value('after_snapshot'),true);
+$stored=json_decode($db->table('cis_contractos_historico')->where('operation_key','contract:collect:44444444-4444-4444-8444-444444444444')->value('after_snapshot'),true);
 ok(($stored['Regra de mora']['cobrado_centimos']??null)===8000,'histórico guarda a regra legada e a mora cobrada');
 
 echo "== Prestação com entrada já existente no Extracto\n";
