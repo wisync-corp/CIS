@@ -44,6 +44,15 @@ function call(string $method,string $uri,?User $u,array $body=[]):array{
 }
 $tz='Africa/Maputo';$today=now($tz)->toDateString();
 $legacy=DB::connection('mysql_legacy');
+// No CI, a base de ensaio tem tabelas mínimas: completa-se o esquema como o da base real (colunas que a API lê).
+if ($ci) {
+    $add=function(string $t,array $cols) use ($legacy){foreach($cols as $c=>$def) if(!$legacy->getSchemaBuilder()->hasColumn($t,$c)) $legacy->statement("ALTER TABLE `$t` ADD COLUMN `$c` $def");};
+    $add('Clientes',['Numeração'=>'INT NULL','Nº de BI'=>'VARCHAR(50) NULL','Nacionalidade'=>'VARCHAR(60) NULL','Contacto'=>'VARCHAR(40) NULL','Bairro'=>'VARCHAR(100) NULL',
+        'Provincia'=>'VARCHAR(100) NULL','Nº da Casa'=>'VARCHAR(20) NULL','Nº de Quarterão'=>'VARCHAR(20) NULL','Email'=>'VARCHAR(150) NULL','Conduta'=>'VARCHAR(50) NULL',
+        'Data de Emissão'=>'DATE NULL','Estado Civil'=>'VARCHAR(30) NULL','Rua'=>'VARCHAR(120) NULL','Naturalidade'=>'VARCHAR(100) NULL','usuario'=>'VARCHAR(255) NULL']);
+    $legacy->statement('UPDATE Clientes SET `Numeração`=ID WHERE `Numeração` IS NULL');
+    $add('cis_cash_accounts',['identifier'=>'VARCHAR(120) NULL','evidence_reference'=>'VARCHAR(255) NULL','created_by'=>'BIGINT UNSIGNED NULL','validated_by'=>'BIGINT UNSIGNED NULL']);
+}
 
 // ---------- Utilizadores de teste: um por função ----------
 $roles=array_keys(\App\Support\Permissions::ROLES);

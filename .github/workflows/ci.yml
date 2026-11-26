@@ -191,6 +191,21 @@ jobs:
       - run: php tests/contract_cash_flows_mysql_rehearsal.php
       - name: Verificação completa do sistema (todas as leituras por função + fluxo ponta a ponta)
         run: php tests/system_full_check.php
+        env:
+          CLIENT_EDITOR_DB_HOST: 127.0.0.1
+          CLIENT_EDITOR_DB_DATABASE: cis_ci
+          CLIENT_EDITOR_DB_USERNAME: root
+          CLIENT_EDITOR_DB_PASSWORD: root
+          CASH_LEDGER_DB_USERNAME: root
+          CASH_LEDGER_DB_PASSWORD: root
+          CASH_CLOSURES_DB_USERNAME: root
+          CASH_CLOSURES_DB_PASSWORD: root
+          CASH_SETUP_DB_USERNAME: root
+          CASH_SETUP_DB_PASSWORD: root
+          CASH_OPENING_SUBMIT_DB_USERNAME: root
+          CASH_OPENING_SUBMIT_DB_PASSWORD: root
+          CASH_OPENING_VALIDATE_DB_USERNAME: root
+          CASH_OPENING_VALIDATE_DB_PASSWORD: root
       - name: Interface — palavra-passe dos utilizadores de verificação
         run: php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo App\Models\User::query()->where("email","like","verificacao.%@cis.test")->update(["password"=>bcrypt(getenv("CIS_E2E_PASSWORD")),"must_change_password"=>false,"active"=>true])," utilizadores\n";'
         env:
@@ -203,6 +218,20 @@ jobs:
         env:
           CACHE_STORE: array
           APP_DEBUG: 'true'
+          CLIENT_EDITOR_DB_HOST: 127.0.0.1
+          CLIENT_EDITOR_DB_DATABASE: cis_ci
+          CLIENT_EDITOR_DB_USERNAME: root
+          CLIENT_EDITOR_DB_PASSWORD: root
+          CASH_LEDGER_DB_USERNAME: root
+          CASH_LEDGER_DB_PASSWORD: root
+          CASH_CLOSURES_DB_USERNAME: root
+          CASH_CLOSURES_DB_PASSWORD: root
+          CASH_SETUP_DB_USERNAME: root
+          CASH_SETUP_DB_PASSWORD: root
+          CASH_OPENING_SUBMIT_DB_USERNAME: root
+          CASH_OPENING_SUBMIT_DB_PASSWORD: root
+          CASH_OPENING_VALIDATE_DB_USERNAME: root
+          CASH_OPENING_VALIDATE_DB_PASSWORD: root
           CIS_PRIVATE_PREVIEW: 'true'
           CIS_CONTRACTS_READ_APPROVED: 'true'
           CIS_CLIENTES_PREVIEW_APPROVED: 'true'
