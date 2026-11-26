@@ -63,7 +63,9 @@ final class CreditDossier
         if (!self::ready()) return [];
         return DB::table('cis_guarantors')->where('proposal_id', $proposalId)->orderBy('id')->get()
             ->map(fn ($g) => ['id' => (int) $g->id, 'nome' => $g->nome, 'bi' => $g->bi, 'contacto' => $g->contacto, 'relacao' => $g->relacao,
-                'morada' => $g->morada, 'actividade' => $g->actividade, 'rendimento_mensal' => $g->rendimento_mensal])->all();
+                'morada' => $g->morada, 'actividade' => $g->actividade, 'rendimento_mensal' => $g->rendimento_mensal,
+                'mutuario_id' => isset($g->guarantor_client_id) ? (int) $g->guarantor_client_id ?: null : null,
+                'lista_negra' => isset($g->guarantor_client_id) && $g->guarantor_client_id && ClientRegistry::blacklisted((int) $g->guarantor_client_id) !== null])->all();
     }
 
     public static function collaterals(int $proposalId): array

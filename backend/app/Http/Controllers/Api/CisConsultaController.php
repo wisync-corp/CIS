@@ -34,7 +34,18 @@ class CisConsultaController extends Controller
                 }
             });
         }
-        return $query->orderBy('ID')->paginate(20)->withQueryString();
+        $page = $query->orderBy('ID')->paginate(20)->withQueryString();
+        // Marcas da central de risco e do tipo de mutuário (perfil CIS).
+        if (\App\Support\ClientRegistry::ready()) {
+            $ids = $page->getCollection()->pluck('ID')->map(fn ($v) => (int) $v)->all();
+            $black = array_flip(array_intersect(\App\Support\ClientRegistry::blacklistedIds(), $ids));
+            $firms = \Illuminate\Support\Facades\DB::table('cis_client_profile')->whereIn('client_id', $ids ?: [0])->where('tipo', 'colectiva')->pluck('client_id')->flip();
+            $page->getCollection()->each(function ($c) use ($black, $firms) {
+                $c->setAttribute('lista_negra', isset($black[(int) $c->ID]));
+                $c->setAttribute('tipo_mutuario', isset($firms[(int) $c->ID]) ? 'colectiva' : 'singular');
+            });
+        }
+        return $page;
     }
 
 

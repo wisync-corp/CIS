@@ -204,6 +204,7 @@ final class ContractOpeningController extends Controller
                     'Mutuário inexistente ou identificador duplicado.');
                 $buyer = $buyer[0];
                 abort_if(!trim((string)$buyer->{'Nome Completo'}),422,'Mutuário sem nome.');
+                \App\Support\ClientRegistry::requireClear((int)$buyer->ID);
 
                 $rate=(float)$d['taxa_informada'];
                 $band='';

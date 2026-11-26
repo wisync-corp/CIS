@@ -2,6 +2,7 @@ import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {useCan} from './perms';
 import PortfolioOwner from './PortfolioOwner';
 import {ClientDocuments} from './CreditDossier';
+import {useClientRegistry,ClientAvatar,BlacklistBar,CompanyCard} from './ClientRegistry';
 import {ArrowLeft,UserRound,MapPin,BriefcaseBusiness,Phone,ShieldCheck,FileText,Save,AlertCircle,CheckCircle2,LockKeyhole} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -82,6 +83,8 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
  const [secondaryReady,setSecondaryReady]=useState(false);
  const [originalEditReady,setOriginalEditReady]=useState(false);
  const [informed,setInformed]=useState(false);
+ const {reg,setReg,photo,reload:reloadReg}=useClientRegistry(token,id);
+ const firm=reg?.tipo==='colectiva';
 
  const load=useCallback(async(signal?:AbortSignal)=>{
   setLoading(true);setError('');setSuccess('');
@@ -164,15 +167,18 @@ export default function ClientProfile({id,token,onBack}:{id:number;token:string;
   {success&&<div className="cis-secondary-success" role="status"><CheckCircle2 size={18}/>{success}</div>}
   {profile&&<form onSubmit={e=>void save(e)}>
    <div className="cis-profile-hero">
-    <div className="cis-profile-avatar"><UserRound size={34}/></div>
-    <div className="cis-profile-heading"><span>FICHA DO MUTUÁRIO</span><h2>{normalized(profile['Nome Completo'])||'Mutuário sem nome'}</h2><p>Mutuário n.º {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id} <span aria-hidden="true">·</span> <PortfolioOwner kind="mutuario" id={id} token={token}/></p></div>
+    <ClientAvatar token={token} id={id} reg={reg} photo={photo} firm={firm} onChanged={()=>void reloadReg()}/>
+    <div className="cis-profile-heading"><span>FICHA DO MUTUÁRIO{reg?.instalado?(firm?' · PESSOA COLECTIVA':' · PESSOA SINGULAR'):''}</span><h2>{normalized(profile['Nome Completo'])||'Mutuário sem nome'}</h2><p>Mutuário n.º {normalized(profile['Numeração'])||'—'} <span aria-hidden="true">·</span> ID #{id} <span aria-hidden="true">·</span> <PortfolioOwner kind="mutuario" id={id} token={token}/></p></div>
     <div className="cis-profile-hero-actions">
+      {reg?.instalado&&!reg.lista_negra&&!editing&&<BlacklistBar token={token} id={id} reg={reg} setReg={setReg}/>}
       {!editing?can('mutuarios.editar')&&<button type="button" onClick={()=>{setError('');setEditing(true);}}>Editar ficha</button>:<>
        <button type="button" className="secondary" disabled={saving} onClick={()=>{setEditing(false);setDraft(Object.fromEntries(Object.entries(profile).map(([k,v])=>[k,formValue(k,v)])));setError('');}}>Cancelar</button>
        <button type="submit" disabled={!hasChanges||saving}><Save size={16}/>{saving?'A guardar…':'Guardar alterações'}</button>
       </>}
     </div>
    </div>
+   {reg?.instalado&&reg.lista_negra&&<BlacklistBar token={token} id={id} reg={reg} setReg={setReg}/>}
+   {reg?.instalado&&<CompanyCard token={token} id={id} reg={reg} setReg={setReg}/>}
    <div className="cis-profile-layout">
     <nav className="cis-profile-tabs" aria-label="Secções da ficha">
      {sections.map(({name,icon:Icon})=><button key={name} type="button" aria-current={tab===name?'page':undefined} className={tab===name?'selected':''} onClick={()=>setTab(name)}><Icon size={18}/>{name}</button>)}

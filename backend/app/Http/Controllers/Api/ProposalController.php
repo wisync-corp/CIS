@@ -249,6 +249,7 @@ final class ProposalController extends Controller
         Portfolio::requireClient($r->user(), $id);
         $c = DB::connection('mysql_legacy')->table('Clientes')->where('ID', $id)->first(['ID', 'Nome Completo', 'Cidade']);
         abort_unless($c, 422, 'Mutuário inexistente.');
+        \App\Support\ClientRegistry::requireClear($id);
         return $c;
     }
 
@@ -308,6 +309,7 @@ final class ProposalController extends Controller
         Permissions::require($u, 'propostas.criar');
         $this->needReady();
         $p = $this->find($r, $id);
+        \App\Support\ClientRegistry::requireClear((int) $p->client_id);
         abort_unless(in_array($p->status, ['rascunho', 'devolvida'], true), 409, 'A proposta já foi submetida.');
         abort_unless((int) $p->created_by === (int) $u->id || $u->role === 'administrador', 403, 'Só quem criou a proposta a pode submeter.');
         $h = CreditScore::forClient((int) $p->client_id);
@@ -334,6 +336,12 @@ final class ProposalController extends Controller
         ]);
         $p = $this->find($r, $id);
         abort_unless($p->status === 'submetida', 409, 'Só se decidem propostas submetidas.');
+        if ($d['decisao'] === 'aprovar') {
+            \App\Support\ClientRegistry::requireClear((int) $p->client_id);
+            foreach (\App\Support\CreditDossier::guarantors((int) $p->id) as $g) {
+                abort_if($g['lista_negra'] ?? false, 422, 'O avalista '.$g['nome'].' está na lista negra. Retire-o da proposta antes de aprovar.');
+            }
+        }
         [$ok, $why] = self::canDecide($u, $p);
         abort_unless($ok, 403, $why);
         $notes = trim((string) ($d['notas'] ?? ''));

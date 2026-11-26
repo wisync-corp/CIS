@@ -65,8 +65,26 @@ final class CreditDossierController extends Controller
             'contacto' => ['nullable', 'string', 'max:40'], 'relacao' => ['nullable', 'string', 'max:60'],
             'morada' => ['nullable', 'string', 'max:255'], 'actividade' => ['nullable', 'string', 'max:160'],
             'rendimento_mensal' => ['nullable', 'numeric', 'min:0', 'max:1000000000'],
+            'mutuario_id' => ['nullable', 'integer', 'min:1'],
         ]);
         abort_if(DB::table('cis_guarantors')->where('proposal_id', $id)->count() >= 5, 422, 'Máximo de 5 fiadores por proposta.');
+        // Avalista já registado como mutuário: valida e preenche com a ficha (como no GEMIC).
+        $gc = isset($d['mutuario_id']) ? (int) $d['mutuario_id'] : null;
+        unset($d['mutuario_id']);
+        if ($gc !== null) {
+            abort_if($gc === (int) $p->client_id, 422, 'O mutuário não pode ser avalista do próprio crédito.');
+            abort_if(DB::table('cis_guarantors')->where('proposal_id', $id)->where('guarantor_client_id', $gc)->exists(), 422, 'Este avalista já está na proposta.');
+            \App\Support\ClientRegistry::requireClear($gc, 'O avalista escolhido');
+            $legacy = DB::connection('mysql_legacy');
+            $cols = array_values(array_filter(['ID', 'Nome Completo', 'Nº de BI', 'Contacto', 'Bairro', 'Cidade'], fn ($c) => $c === 'ID' || $legacy->getSchemaBuilder()->hasColumn('Clientes', $c)));
+            $c = $legacy->table('Clientes')->where('ID', $gc)->first($cols);
+            abort_unless($c, 422, 'O avalista escolhido não existe.');
+            $d['nome'] = mb_substr((string) $c->{'Nome Completo'}, 0, 160);
+            $d['bi'] = ($d['bi'] ?? null) ?: (isset($c->{'Nº de BI'}) ? mb_substr((string) $c->{'Nº de BI'}, 0, 40) : null);
+            $d['contacto'] = ($d['contacto'] ?? null) ?: (isset($c->Contacto) ? mb_substr((string) $c->Contacto, 0, 40) : null);
+            $d['morada'] = ($d['morada'] ?? null) ?: (trim(implode(', ', array_filter([$c->Bairro ?? null, $c->Cidade ?? null]))) ?: null);
+            if (\Illuminate\Support\Facades\Schema::hasColumn('cis_guarantors', 'guarantor_client_id')) $d['guarantor_client_id'] = $gc;
+        }
         DB::table('cis_guarantors')->insert($d + ['proposal_id' => $id, 'client_id' => $p->client_id, 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
         return response()->json($this->payload($r, $p), 201);
     }
