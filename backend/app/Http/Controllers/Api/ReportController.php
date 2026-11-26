@@ -72,6 +72,9 @@ final class ReportController extends Controller
             ['id'=>'caixa','grupo'=>'Gestão','titulo'=>'Caixa por conta','periodo'=>'intervalo',
              'descricao'=>'Entradas e saídas de cada conta no período, separadas por tipo de movimento.',
              'base_legal'=>'Relatório de gestão interna (tesouraria).'],
+            ['id'=>'finalidades','grupo'=>'Gestão','titulo'=>'Crédito por finalidade e encargos','periodo'=>'intervalo',
+             'descricao'=>'Desembolsos do período e carteira em dívida por categoria de finalidade; taxas de operação recebidas.',
+             'base_legal'=>'Relatório de gestão interna (destino do crédito e concentração por sector).'],
             ['id'=>'novocredito','grupo'=>'Gestão','titulo'=>'Mutuários para novo crédito','periodo'=>'nenhum',
              'descricao'=>'Score de crédito por pontualidade, com os limiares e limites das Configurações da empresa.',
              'base_legal'=>'Relatório de gestão interna (renovação e fidelização).'],
@@ -147,6 +150,7 @@ final class ReportController extends Controller
                 'agentes'=>$this->agentes($ini,$fim),
                 'evolucao'=>$this->evolucao((int)($p['ano']??now('Africa/Maputo')->year)),
                 'caixa'=>$this->caixa($ini,$fim),
+                'finalidades'=>$this->finalidades($ini,$fim),
                 'novocredito'=>$this->novocredito(),
             };
         } catch (\Illuminate\Database\QueryException $e) {
@@ -619,6 +623,47 @@ final class ReportController extends Controller
             'seccoes'=>[
                 ['titulo'=>'Abates no período','colunas'=>['Data','Contrato','Mutuário','Abatido (MT)','Recuperado (MT)','Saldo (MT)','Situação','Motivo','Registado por'],'linhas'=>$l1],
                 ['titulo'=>'Recuperações recebidas no período','colunas'=>['Data','Contrato','Mutuário','Valor (MT)','Registado por'],'linhas'=>$l2],
+            ],
+        ];
+    }
+
+    /** Crédito por categoria de finalidade (das propostas) e taxas de operação recebidas no período. */
+    private function finalidades(string $ini,string $fim): array
+    {
+        abort_if($fim<$ini,422,'A data final tem de ser igual ou posterior à inicial.');
+        $today=now('Africa/Maputo')->toDateString();
+        $cat=[];
+        if (\Illuminate\Support\Facades\Schema::hasTable('cis_credit_proposals')) {
+            $hasCat=\Illuminate\Support\Facades\Schema::hasColumn('cis_credit_proposals','finalidade_categoria');
+            foreach (DB::table('cis_credit_proposals')->whereNotNull('contract_number')->get(array_merge(['contract_number'],$hasCat?['finalidade_categoria']:[])) as $p)
+                $cat[(string)$p->contract_number]=($hasCat?trim((string)($p->finalidade_categoria??'')):'')?:'Sem categoria';
+        }
+        $g=[];
+        foreach ($this->rows()->groupBy('Nr do Contracto') as $num=>$rows) {
+            $k=$cat[(string)$num]??'Sem proposta (contratos anteriores)';
+            $g[$k]??=['n'=>0,'d'=>0.0,'open'=>0.0,'late'=>0.0,'c'=>0];
+            $start=self::d($rows->min('Data de Inicio'));
+            if ($start>=$ini && $start<=$fim) { $g[$k]['n']++; $g[$k]['d']+=(float)$rows->first()->{'Quantia Creditada'}; }
+            $open=$rows->whereIn('Estado',['Pendente','Pagamento Atrasado']);
+            if ($open->count()) $g[$k]['c']++;
+            $g[$k]['open']+=(float)$open->sum(fn($r)=>(float)$r->{'Valor a Pagar'});
+            $g[$k]['late']+=(float)$open->filter(fn($r)=>self::d($r->{'Data de Cobrança'})<$today)->sum(fn($r)=>(float)$r->{'Valor a Pagar'});
+        }
+        uasort($g,fn($a,$b)=>$b['open']<=>$a['open']);
+        $tot=array_sum(array_column($g,'open'));
+        $lines=[];
+        foreach ($g as $k=>$v) $lines[]=[$k,(string)$v['n'],self::m($v['d']),(string)$v['c'],self::m($v['open']),self::m($v['late']),self::pct($v['late'],$v['open']),self::pct($v['open'],$tot)];
+        $fees=$this->extracto()->where('Tipo de Movimento','Entradas')->where('Descrição','like','%Taxa de operação%')
+            ->whereBetween('Data da Operação',[$ini,$fim])->orderBy('Data da Operação')->get(['Data da Operação as d','Contracto','Cliente','Valor']);
+        return [
+            'intervalo'=>['inicio'=>$ini,'fim'=>$fim],
+            'nota'=>'Categoria indicada na proposta de crédito (Definições › Encargos do crédito › Finalidades). Contratos sem proposta no CIS aparecem à parte. Carteira em dívida e atraso à data de hoje.',
+            'resumo'=>[['Desembolsado no período',self::m(array_sum(array_column($g,'d'))).' MT'],['Carteira em dívida',self::m($tot).' MT'],
+                ['Taxas de operação recebidas no período',self::m((float)$fees->sum('Valor')).' MT ('.$fees->count().')']],
+            'seccoes'=>[
+                ['titulo'=>'Por finalidade','colunas'=>['Finalidade','Contratos no período','Desembolsado (MT)','Contratos em curso','Em dívida (MT)','Em atraso (MT)','% em atraso','% da carteira'],'linhas'=>$lines],
+                ['titulo'=>'Taxas de operação recebidas','colunas'=>['Data','Contrato','Mutuário','Valor (MT)'],
+                 'linhas'=>$fees->map(fn($f)=>[self::d($f->d),(string)$f->Contracto,(string)$f->Cliente,self::m((float)$f->Valor)])->all()],
             ],
         ];
     }

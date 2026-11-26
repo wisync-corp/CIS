@@ -163,7 +163,7 @@ ok($st===201 && $cid>0,"1. mutuário registado (ID $cid)".($st!==201?" — $st "
 if ($cid) \App\Support\Portfolio::assignClient($cid,$agent->id,$admin->id);
 // 2. Proposta pelo agente
 $prop=['client_id'=>$cid,'montante'=>1000,'tipo_juro'=>'Fixo','estrategia'=>\App\Services\ContractCalculationStrategy::FIXED_AMORTIZATION,'periodo_dias'=>30,
-    'prazo'=>'1 Mês','modalidade'=>'Uma Parcela','finalidade'=>'Verificação do sistema','rendimento_mensal'=>20000,'despesas_mensais'=>5000,'outras_dividas_mensais'=>0];
+    'prazo'=>'1 Mês','modalidade'=>'Uma Parcela','finalidade'=>'Verificação do sistema','finalidade_categoria'=>'Comércio','rendimento_mensal'=>20000,'despesas_mensais'=>5000,'outras_dividas_mensais'=>0];
 [$st,$p]=call('POST','/api/cis/propostas',$agent,$prop);
 $pid=(int)($p['id']??0);
 ok(in_array($st,[200,201],true) && $pid>0 && ($p['estado']??'')==='rascunho','2. proposta criada pelo agente em rascunho'.(!in_array($st,[200,201],true)?" — $st ".mb_substr(json_encode($p,JSON_UNESCAPED_UNICODE),0,300):''));
@@ -182,6 +182,10 @@ ok(in_array($st,[200,201],true) && ($p['estado']??'')==='aprovada','4. administr
 $marker=(int)($legacy->table('Extracto')->max('Nr')??0);
 $acc=DB::table('cis_cash_accounts')->insertGetId(['code'=>'VERIF-'.$tag,'name'=>'Verificação '.$tag,'type'=>'numerario','currency'=>'MZN','status'=>'activa',
     'opening_balance'=>'100000.00','cut_at'=>now(),'opening_extracto_nr'=>$marker,'validated_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
+// Encargos: taxa de operação de 1,5% (15 MT em 1 000), descontada no desembolso.
+DB::table('cis_company_settings')->updateOrInsert(['chave'=>'taxa_operacao'],['valor'=>'1.5','updated_at'=>now(),'created_at'=>now()]);
+DB::table('cis_company_settings')->updateOrInsert(['chave'=>'taxa_operacao_minima'],['valor'=>'0','updated_at'=>now(),'created_at'=>now()]);
+\App\Support\CompanySettings::forget();
 [$st,$ov0]=call('GET','/api/cis/visao-geral',$admin);
 // 4. Desembolso a partir da proposta
 $open=['cliente_id'=>$cid,'montante'=>1000,'tipo_juro'=>'Fixo','estrategia_calculo'=>\App\Services\ContractCalculationStrategy::FIXED_AMORTIZATION,'periodo_dias'=>30,
@@ -190,7 +194,8 @@ $open=['cliente_id'=>$cid,'montante'=>1000,'tipo_juro'=>'Fixo','estrategia_calcu
 [$st,$o]=call('POST','/api/cis/contractos/abrir',$admin,$open);
 $num=(string)($o['numero']??'');
 ok(in_array($st,[200,201],true) && $num!=='','5. desembolso: contrato '.$num.' aberto'.(!in_array($st,[200,201],true)?" — $st ".mb_substr(json_encode($o,JSON_UNESCAPED_UNICODE),0,400):''));
-ok(abs((float)($o['saldo_conta_actual']??-1)-99000)<0.01,'   Caixa: 100 000 − 1 000 = 99 000');
+ok(abs((float)($o['saldo_conta_actual']??-1)-99015)<0.01 && ($o['taxa_operacao']??'')==='15.00' && ($o['valor_entregue']??'')==='985.00','   Caixa: 100 000 − 1 000 + 15 de taxa de operação = 99 015 (mutuário recebe 985)');
+ok(abs((float)$legacy->table('Extracto')->where('account_id',$acc)->where('Descrição','like','%Taxa de operação%')->sum('Valor')-15)<0.01,'   Extracto: taxa de operação como entrada na mesma conta');
 $pr=DB::table('cis_credit_proposals')->where('id',$pid)->first();
 ok($pr && $pr->status==='desembolsada' && $pr->contract_number===$num,'   proposta passa a «desembolsada» e fica ligada ao contrato');
 $inst=$legacy->table('Contractos')->where('Nr do Contracto',$num)->orderBy('Ordem')->get();
@@ -208,9 +213,9 @@ ok($st===200 && $total!=='','6. prévia da cobrança: '.$total.' MT'.($st!==200?
 [$st,$c]=call('POST',"/api/cis/contractos/$num/prestacoes/{$first->Ordem}/cobrar",$admin,['data_pagamento'=>$today,'cobrar_multa'=>false,'valor_recebido'=>$total,
     'conta_id'=>$acc,'referencia'=>'VERIF-REC-'.$tag,'idempotency_key'=>(string)\Illuminate\Support\Str::uuid(),'confirmacao_recebimento'=>true]);
 ok(in_array($st,[200,201],true) && ($c['registado']??false),'7. pagamento registado'.(!in_array($st,[200,201],true)?" — $st ".mb_substr(json_encode($c,JSON_UNESCAPED_UNICODE),0,300):''));
-ok(abs((float)($c['saldo_conta_actual']??-1)-(99000+(float)$total))<0.01,'   Caixa: 99 000 + '.$total.' = '.number_format(99000+(float)$total,2,'.',''));
+ok(abs((float)($c['saldo_conta_actual']??-1)-(99015+(float)$total))<0.01,'   Caixa: 99 015 + '.$total.' = '.number_format(99015+(float)$total,2,'.',''));
 $in=$legacy->table('Extracto')->where('account_id',$acc)->where('Tipo de Movimento','Entradas')->sum('Valor');
-ok(abs((float)$in-(float)$total)<0.01,'   Extracto: entrada igual ao valor recebido');
+ok(abs((float)$in-(float)$total-15)<0.01,'   Extracto: entradas = valor recebido + taxa de operação');
 ok($legacy->table('Contractos')->where('Ordem',$first->Ordem)->value('Estado')==='Pago','   prestação marcada como Paga');
 [$st,$ov2]=call('GET','/api/cis/visao-geral',$admin);
 $expect=$inst->count()===1?$due:(float)$first->{'Valor a Pagar'};
@@ -225,6 +230,9 @@ ok($st===200 && count($eg['linhas']??[])>=2,'10. extracto geral da conta: desemb
 ok($st===200,'11. histórico de alterações do contrato disponível');
 // 6. Agente vê o seu mutuário; outra agência não
 ok(call('GET',"/api/cis/propostas/$pid",$agent)[0]===200,'12. o agente vê a proposta da sua carteira');
+[$st,$fr]=call('GET','/api/cis/relatorios/finalidades',$admin,['inicio'=>$today,'fim'=>$today]);
+ok($st===200 && (!Schema::hasColumn('cis_credit_proposals','finalidade_categoria') || collect($fr['seccoes'][0]['linhas']??[])->contains(fn($l)=>$l[0]==='Comércio' && (int)$l[1]>=1)),'13. relatório por finalidade: contrato em «Comércio»');
+DB::table('cis_company_settings')->where('chave','taxa_operacao')->update(['valor'=>'0']);\App\Support\CompanySettings::forget();
 
 echo "\n";
 if ($warn) { echo "Módulos por instalar nesta base (503, não é erro):\n"; foreach (array_keys($warn) as $w) echo "  · $w\n"; }

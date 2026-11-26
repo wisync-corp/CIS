@@ -103,6 +103,11 @@ final class GenericSimulatorController extends Controller
         abort_if($capital>$balance,422,'O capital em dívida não pode exceder o saldo da prestação.');
         $due=CarbonImmutable::createFromFormat('!Y-m-d',$d['vencimento']);
         $reference=CarbonImmutable::createFromFormat('!Y-m-d',$d['data_referencia']);
+        if (($d['mora']['tipo']??null)==='empresa') {
+            $auto=\App\Support\CreditCharges::companyLateRule();
+            abort_unless($auto,422,'A mora automática da empresa está desligada (Definições › Cobrança e juros de mora).');
+            $d['mora']=$auto+array_intersect_key($d['mora'],array_flip(['decisao','valor_reduzido','motivo']));
+        }
         $detail=LateCharge::calculate($d['mora'],$due,$reference,$capital,$balance,0,0,false,false);
         return response()->json([
             'tipo_calculo'=>'multa','consulta_apenas'=>true,'contrato_associado'=>false,'movimento_registado'=>false,

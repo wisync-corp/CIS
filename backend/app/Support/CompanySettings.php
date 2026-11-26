@@ -36,6 +36,8 @@ final class CompanySettings
         'tolerancia_dias'         => ['cobranca','inteiro',[0,60],'0'],
         'penalidades_automaticas' => ['cobranca','booleano',null,'0'],
         'taxa_diaria_mora'        => ['cobranca','percentagem',null,'0'],
+        'mora_base'               => ['cobranca','lista',['saldo','capital'],'saldo'],
+        'mora_tecto_pct'          => ['cobranca','percentagem',null,'0'],
         'dias_carencia'           => ['cobranca','inteiro',[0,90],'0'],
         'fim_de_semana'           => ['cobranca','lista',['permitir','adiar','antecipar'],'permitir'],
         'modalidade_calendario'   => ['cobranca','lista',['dias_corridos','mesmo_dia_mes'],'dias_corridos'],
@@ -69,6 +71,14 @@ final class CompanySettings
         'fiador_a_partir_de'      => ['scoring','valor',null,'0'],
         'cobertura_garantias_pct' => ['scoring','percentagem',null,'0'],
         // Numeração dos contratos (PREFIXO-ANO-SEQUÊNCIA)
+        // Encargos do crédito
+        'taxa_operacao'           => ['encargos','percentagem',null,'0'],
+        'taxa_operacao_minima'    => ['encargos','valor',null,'0'],
+        'taxa_renovacao'          => ['encargos','percentagem',null,'0'],
+        'encargos_renovacao'      => ['encargos','lista',['cobrar','capitalizar'],'cobrar'],
+        'renovacao_atraso_max_dias' => ['encargos','inteiro',[0,3650],'365'],
+        'finalidades'             => ['encargos','texto',600,'Comércio,Agricultura e pecuária,Serviços,Indústria e artesanato,Transporte,Construção e habitação,Educação,Saúde,Consumo,Outra'],
+
         'contrato_prefixo'        => ['numeracao','prefixo',null,'CAPTA'],
         'contrato_digitos'        => ['numeracao','inteiro',[3,6],'4'],
         'numeracao_anual_activa'  => ['numeracao','sistema',null,'0'],

@@ -18,6 +18,9 @@ const decimal=(v:string)=>v.trim().replace(',','.');
 export function lateChargeRule(d:Draft,legacy:boolean){
  const tipo=legacy?'legado':d.tipo;
  if(!tipo)return null;
+ // Regra da empresa (mora automática): o servidor aplica a taxa definida; aqui só a decisão.
+ if(tipo==='empresa'){if(d.decisao==='reduzir'&&!numeric(d.valor_reduzido,2))return null;if(d.decisao!=='integral'&&!d.motivo.trim())return null;
+  return {tipo,decisao:d.decisao,...(d.decisao!=='integral'?{motivo:d.motivo.trim(),...(d.decisao==='reduzir'?{valor_reduzido:decimal(d.valor_reduzido)}:{})}:{})};}
  const fixed=tipo.startsWith('fixo')||tipo==='misto', rec=periodic(tipo), pct=percentage(tipo,d);
  const fixedExtra=tipo==='misto'&&d.componente==='fixo';
  if((fixed&&!numeric(d.valor,2))||(pct&&!numeric(d.taxa,4))||(fixedExtra&&!numeric(d.valor_recorrente,2))
@@ -35,7 +38,10 @@ export function lateChargeRule(d:Draft,legacy:boolean){
  };
 }
 const amount=(cents:number)=>new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100)+' MT';
-export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,details,simulation=false}:{draft:Draft;onChange:(d:Draft)=>void;legacy:boolean;canAdjust:boolean;details?:LateChargeDetails|null;simulation?:boolean}){
+/** Regra de mora da empresa (Definições › Cobrança e juros de mora), quando a mora automática está ligada. */
+export type CompanyLate={automatica:boolean;descricao:string}|null;
+export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,details,simulation=false,company=null}:{draft:Draft;onChange:(d:Draft)=>void;legacy:boolean;canAdjust:boolean;details?:LateChargeDetails|null;simulation?:boolean;company?:CompanyLate}){
+ const auto=!!company?.automatica;const locked=auto&&!canAdjust&&!simulation;
  const update=<K extends keyof Draft,>(name:K,value:Draft[K])=>onChange({...d,[name]:value});
  const input=(k:'valor'|'taxa'|'valor_recorrente'|'carencia'|'tecto'|'dias_periodo'|'valor_reduzido',label:string,mode:'decimal'|'numeric'='decimal')=>
   <label>{label}<input inputMode={mode} value={d[k]} onChange={e=>update(k,e.target.value)}/></label>;
@@ -45,9 +51,10 @@ export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,deta
  return <fieldset className="cis-collections-technical">
   <legend>Mora da prestação</legend>
   {legacy?<p>Aplica-se a regra de mora já registada na prestação.</p>:<label>Tratamento de mora
-   <select value={d.tipo} onChange={e=>onChange({...d,tipo:e.target.value,decisao:'integral'})}><option value="">Seleccione o tratamento aplicável</option>{methods.filter(([key])=>!simulation||key!=='sem_mora').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+   <select value={d.tipo} disabled={locked} onChange={e=>onChange({...d,tipo:e.target.value,decisao:'integral'})}>{!auto&&<option value="">Seleccione o tratamento aplicável</option>}{auto&&<option value="empresa">Regra da empresa (automática)</option>}{!locked&&methods.filter(([key])=>!simulation||key!=='sem_mora').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
   </label>}
-  {!legacy&&d.tipo&&d.tipo!=='sem_mora'&&<>
+  {!legacy&&d.tipo==='empresa'&&<p className="cis-late-company">{company?.descricao}{locked?' Definida pela administração.':''}</p>}
+  {!legacy&&d.tipo&&d.tipo!=='sem_mora'&&d.tipo!=='empresa'&&<>
    <div className="cis-collections-fields">
     {(d.tipo.startsWith('fixo')||d.tipo==='misto')&&input('valor',d.tipo==='misto'?'Encargo inicial (MT)':'Valor fixo (MT)')}
     {d.tipo==='misto'&&<label>Componente periódica<select value={d.componente} onChange={e=>update('componente',e.target.value)}><option value="fixo">Valor fixo</option><option value="percentagem">Percentagem</option></select></label>}

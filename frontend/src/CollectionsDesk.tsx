@@ -1,4 +1,5 @@
 import LateChargeFields,{initialLateCharge,lateChargeRule,type LateChargeDetails} from './LateChargeFields';
+import {useCreditCharges} from './encargos';
 import {pushToast} from './waBridge';
 import {useCan} from './perms';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
@@ -28,6 +29,7 @@ type Quote={
  mora_detalhe?:LateChargeDetails|null;
  parcela:number;dias_atraso:number;juros:number;multa:number;total:number;total_texto:string;
  estado?:string;data_pagamento:string;aviso:string;origem?:'cis'|'historico';registo_activo?:boolean;
+ taxa_renovacao?:number;encargos?:'cobrar'|'capitalizar';encargos_capitalizados?:number;
  nova_prestacao?:{parcela:number;data_inicio:string;data_vencimento:string;prazo:string;capital:string;juros:string;valor_a_pagar:string;juros_estimado:boolean}
 };
 type PaymentResult={registado:boolean;repetido:boolean;extracto_nr:number;conta?:string;saldo_conta_actual?:string;contrato_finalizado?:boolean;notice:string;total_texto?:string;valor?:string};
@@ -87,10 +89,14 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [mode,setMode]=useState<Mode>('total');
  const [paymentNature,setPaymentNature]=useState<'recebido'|'nao_recebido'|null>(null);
  const [ord,setOrd]=useState(initialOrder??'');
+ const enc=useCreditCharges(token);
+ const lateInit=enc?.mora.automatica?{...initialLateCharge,tipo:'empresa'}:initialLateCharge;
  const [lateDraft,setLateDraft]=useState(initialLateCharge);
+ useEffect(()=>{if(enc?.mora.automatica)setLateDraft(d=>d.tipo===''?{...d,tipo:'empresa'}:d);},[enc]);
  const [paymentAmount,setPaymentAmount]=useState('');
  const [reviewDate,setReviewDate]=useState(today());
  const [renewStart,setRenewStart]=useState('');
+ const [renewCharges,setRenewCharges]=useState<''|'cobrar'|'capitalizar'>('');
  const [payDate,setPayDate]=useState(today());
  const [canChangeDate,setCanChangeDate]=useState(false);
  useEffect(()=>{const c=new AbortController();fetch(API+'/auth/me',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal}).then(r=>r.ok?r.json():null).then((u:{role?:string}|null)=>{if(!c.signal.aborted)setCanChangeDate(u?.role==='administrador');}).catch(()=>{});return()=>c.abort();},[token]);
@@ -242,13 +248,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const canOpExecute=opMode&&(!showLate||!!lateSignature)&&!!scenarioQuote&&(mode!=='parcial'||(scenarioQuote as Record<string,unknown>).valor!=null)&&!!(scenarioQuote as Record<string,unknown>).registo_activo&&(opCash?(!!activeAccount&&refOk&&payDateOk):true)&&confirmReceipt&&!paying&&payWait===0;
  const canExecute=live&&flowReceived&&(!showLate||!!lateSignature)&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
 
- function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setLateDraft(initialLateCharge);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setLateDraft(lateInit);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  // Início do novo período: o vencimento actual; se já passou (prestação em atraso), a data do pagamento,
  // para a nova prestação não nascer já vencida.
  function defaultStart(){const due=text(selectedInstallment?.['Data de Cobrança']).slice(0,10);const pay=/^\d{4}-\d{2}-\d{2}$/.test(datePayment)?datePayment:today();return due&&due>=pay?due:pay;}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo'||value==='parcial')setRenewStart(defaultStart());setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setLateDraft(initialLateCharge);setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseOrd(value:string){setLateDraft(lateInit);setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  useEffect(()=>{
   if(!selected){setReceipts(null);return;}
   const ctrl=new AbortController();setReceipts(null);setReceiptsError('');
@@ -343,7 +349,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   try{
    const r=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+ord+(renewing?'/renovar':'/cobrar'),{
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart}:{}),valor_recebido:quote.total_texto,
+    body:JSON.stringify({data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart,...(renewCharges?{encargos:renewCharges}:{})}:{}),valor_recebido:quote.total_texto,
      conta_id:Number(accountId),referencia:evidenceRef.trim(),idempotency_key:key,confirmacao_recebimento:true})
    });
    if(r.status===429){
@@ -366,7 +372,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   setMessage('');
   if(live)setQuoting(true);else setScenarioBusy(true);
   const endpoint=live?(renewing?'simular-renovacao':'simular-cobranca'):opMode?'simular-operacao':'simular-cenario';
-  const body=live?{data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart}:{})}:opMode?opBody():{
+  const body=live?{data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart,...(renewCharges?{encargos:renewCharges}:{})}:{})}:opMode?opBody():{
    operacao:mode,
    ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
@@ -388,7 +394,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
   },400);
   return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,selectedInstallment,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,showLate,lateSignature,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
+ },[selected,ord,view,selectedInstallment,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,showLate,lateSignature,renewStart,renewCharges,paymentAmount,interestChoice,reviewDate,token,refresh]);
 
 
  return <section className={'cis-collections'+(embeddedContract?' cis-collections-embedded':'')}>
@@ -505,8 +511,11 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória</span><select value={accountId} onChange={e=>{setAccountId(e.target.value);setConfirmReceipt(false);}}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+fmt(a.saldo_disponivel):''}</option>)}</select><small>{activeAccount?'O valor recebido entra no saldo desta conta.':'Escolha a conta onde o dinheiro foi efectivamente recebido.'}</small></label>}
         {flowReceived&&<label>Referência do comprovativo / operação <span className="cis-collections-required">Obrigatória</span><input type="text" maxLength={60} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>Fica gravada no Extracto e no histórico da prestação.</small></label>}
         {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Por defeito começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}) ou, se este já passou, na data do pagamento.</small></label>}
+        {renewing&&<label>Juros de mora e taxa de renovação<select value={renewCharges||enc?.encargos_renovacao||'cobrar'} onChange={e=>{setRenewCharges(e.target.value as 'cobrar'|'capitalizar');setQuote(null);setConfirmReceipt(false);setPayKey('');}}>
+         <option value="cobrar">Cobrar agora, com os juros</option><option value="capitalizar">Capitalizar na nova prestação</option></select>
+         <small>{enc?.taxa_renovacao?`Taxa de renovação: ${String(enc.taxa_renovacao).replace('.',',')}% do capital. `:''}Por defeito: {enc?.encargos_renovacao==='capitalizar'?'capitalizar':'cobrar agora'} (Definições › Encargos do crédito).</small></label>}
         {showLate&&<LateChargeFields draft={lateDraft} onChange={value=>{setLateDraft(value);setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setPayKey('');}}
-         legacy={legacyFine} canAdjust={can('definicoes')} details={quote?.mora_detalhe??(scenarioQuote?.mora_detalhe as LateChargeDetails|undefined)}/>}
+         legacy={legacyFine} canAdjust={can('definicoes')} company={enc?.mora??null} details={quote?.mora_detalhe??(scenarioQuote?.mora_detalhe as LateChargeDetails|undefined)}/>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setCapitalRate('');setCapitalRateTouched(false);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
         {mode==='capitalizar'&&capitalPeriod&&<label>Juros a cobrar (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote?.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>
@@ -540,7 +549,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        {mode==='actualizar_data'&&<div className="cis-collections-planned"><CalendarDays size={17}/><span>Data seleccionada: {date(reviewDate)}. Vencimento da prestação: {date(selectedInstallment?.['Data de Cobrança'])}. O VBA permite rever datas passadas e recalcular juros variáveis; alterações retroactivas exigem trilho de auditoria e não são executadas aqui.</span></div>}
        {mode==='finalizar_contrato'&&<div className="cis-collections-planned"><ShieldCheck size={17}/><span>{pending.length?'Existem '+pending.length+' prestação(ões) pendentes. Não é possível presumir liquidação integral ou encerrar o contrato.':'A lista não apresenta prestações pendentes. É necessário confirmar todos os pagamentos e o Extracto antes da finalização.'}</span></div>}
        {quote&&live&&<div className="cis-collections-quote"><div className="cis-collections-quote-title"><CheckCircle2 size={18}/><strong>Prévia calculada no servidor</strong></div>
-        <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Juros de mora</dt><dd>{fmt(quote.multa)}</dd></div><div className="total"><dt>{renewing?'Juros a receber agora':'Total proposto'}</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{renewing?'Renovado':quote.estado}</dd></div></dl>
+        <dl><div><dt>Data</dt><dd>{date(quote.data_pagamento)}</dd></div><div><dt>Dias de atraso</dt><dd>{quote.dias_atraso}</dd></div><div><dt>Juros</dt><dd>{fmt(quote.juros)}</dd></div><div><dt>Juros de mora</dt><dd>{fmt(quote.multa)}</dd></div>{renewing&&!!quote.taxa_renovacao&&<div><dt>Taxa de renovação</dt><dd>{fmt(quote.taxa_renovacao)}</dd></div>}{renewing&&!!quote.encargos_capitalizados&&<div><dt>Encargos capitalizados</dt><dd>{fmt(quote.encargos_capitalizados)}</dd></div>}<div className="total"><dt>{renewing?(quote.encargos==='cobrar'&&(quote.multa>0||!!quote.taxa_renovacao)?'Juros e encargos a receber agora':'Juros a receber agora'):'Total proposto'}</dt><dd>{fmt(quote.total)}</dd></div><div><dt>Estado previsto</dt><dd>{renewing?'Renovado':quote.estado}</dd></div></dl>
         {quote.nova_prestacao&&<><h4>Nova prestação no mesmo contrato</h4><dl><div><dt>Prestação</dt><dd>{quote.nova_prestacao.parcela}</dd></div><div><dt>Início</dt><dd>{date(quote.nova_prestacao.data_inicio)}</dd></div><div><dt>Vencimento (automático)</dt><dd>{date(quote.nova_prestacao.data_vencimento)}</dd></div><div><dt>Prazo</dt><dd>{quote.nova_prestacao.prazo}</dd></div><div><dt>Capital</dt><dd>{fmt(quote.nova_prestacao.capital)}</dd></div><div><dt>Juros{quote.nova_prestacao.juros_estimado?' (estimados)':''}</dt><dd>{fmt(quote.nova_prestacao.juros)}</dd></div><div className="total"><dt>Prestação a pagar</dt><dd>{fmt(quote.nova_prestacao.valor_a_pagar)}</dd></div></dl></>}
         {quote.aviso&&<p className="cis-collections-mode-hint">{quote.origem==='historico'?'Contrato histórico (VBA). ':''}{quote.aviso}</p>}
         {!quote.registo_activo&&<div className="cis-collections-planned"><LockKeyhole size={17}/><span>Registo real ainda não activado neste servidor. A prévia está correcta, mas o pagamento não pode ser gravado.</span></div>}</div>}

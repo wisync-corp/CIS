@@ -7,12 +7,15 @@ use Illuminate\Validation\ValidationException;
 
 final class LateCharge
 {
-    private const TYPES = ['fixo_unico','fixo_periodico','percentual_unico','percentual_periodico','escaloes','misto','legado','sem_mora'];
+    private const TYPES = ['fixo_unico','fixo_periodico','percentual_unico','percentual_periodico','escaloes','misto','legado','sem_mora','empresa'];
 
     public static function rules(): array
     {
         return [
-            'mora'=>['sometimes','array:tipo,valor,taxa,base,periodicidade,dias_periodo,carencia,contar_desde_vencimento,periodos_iniciados,tecto,escaloes,acumular,componente,valor_recorrente,decisao,valor_reduzido,motivo'],
+            'mora'=>['sometimes','array:tipo,valor,taxa,base,periodicidade,dias_periodo,carencia,contar_desde_vencimento,periodos_iniciados,tecto,escaloes,acumular,componente,valor_recorrente,decisao,valor_reduzido,motivo,limite_mensal,tecto_pct,origem'],
+            'mora.limite_mensal'=>['sometimes','integer','min:1','max:31'],
+            'mora.tecto_pct'=>['sometimes','numeric','min:0','max:100'],
+            'mora.origem'=>['sometimes','in:empresa'],
             'mora.tipo'=>['required_with:mora','in:'.implode(',', self::TYPES)],
             'mora.valor'=>['required_if:mora.tipo,fixo_unico,fixo_periodico,misto','numeric','min:0','max:9999999','decimal:0,2'],
             'mora.taxa'=>['required_if:mora.tipo,percentual_unico,percentual_periodico','required_if:mora.componente,percentagem','numeric','min:0','max:100','decimal:0,4'],
@@ -60,6 +63,8 @@ final class LateCharge
             $fixed=(float)($rule['valor']??0)*100;
             $pct=$base*(float)($rule['taxa']??0)/100;
             $periods=isset($rule['periodicidade'])?self::periods($rule,$origin,$paid,$days):1;
+            // Limite mensal de dias de mora (Definições): em cada mês civil contam no máximo N dias.
+            if (($rule['periodicidade']??null)==='diaria' && !empty($rule['limite_mensal'])) $periods=self::cappedDays($origin,$paid,(int)$rule['limite_mensal']);
             $charge=match ($type) {
                 'fixo_unico'=>$fixed,
                 'fixo_periodico'=>$fixed*$periods,
@@ -71,6 +76,10 @@ final class LateCharge
             $charge=$whole?(int)ceil(round($charge/100,8))*100:(int)round($charge);
             if (isset($rule['tecto'])) {
                 $cap=CashAccountLedger::cents((string)$rule['tecto']);
+                $charge=min($charge,$whole?intdiv($cap,100)*100:$cap);
+            }
+            if (isset($rule['tecto_pct'])) {
+                $cap=(int)round($balance*(float)$rule['tecto_pct']/100);
                 $charge=min($charge,$whole?intdiv($cap,100)*100:$cap);
             }
         }
@@ -100,6 +109,19 @@ final class LateCharge
             'diaria'=>1,'semanal'=>7,'quinzenal'=>15,'personalizada'=>(int)$r['dias_periodo'],
         };
         return intdiv($days+($started?$unit-1:0),$unit);
+    }
+
+    /** Dias de mora com tecto mensal: soma, por mês civil, min(dias do mês em atraso, limite). */
+    private static function cappedDays(CarbonImmutable $origin, CarbonImmutable $paid, int $limit): int
+    {
+        $total=0;$cur=$origin;
+        while ($cur->lessThan($paid)) {
+            $next=$cur->startOfMonth()->addMonthNoOverflow();
+            $end=$next->lessThan($paid)?$next:$paid;
+            $total+=min($limit,(int)$cur->diffInDays($end));
+            $cur=$end;
+        }
+        return $total;
     }
 
     private static function tiers(array $r, int $days): float

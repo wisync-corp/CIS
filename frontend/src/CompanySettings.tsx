@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Building2,Camera,Trash2,Save,RotateCcw,Gavel,Gauge,Award,MapPin,Phone,UserRound,IdCard,AlertTriangle,CheckCircle2,Info,Loader2,Link2,Hash} from 'lucide-react';
+import {Building2,Camera,Trash2,Save,RotateCcw,Gavel,Gauge,Award,MapPin,Phone,UserRound,IdCard,AlertTriangle,CheckCircle2,Info,Loader2,Link2,Hash,Percent,RefreshCw,Target} from 'lucide-react';
 import {setCompanyProfile} from './company';
 import ContractNumberingPreview from './ContractNumberingPreview';
 
@@ -32,14 +32,16 @@ const SECTIONS:Section[]=[
    {k:'conta_reembolsos',label:'Conta para reembolsos',type:'text',wide:true,placeholder:'Ex.: BIM 347807372, titular CAPTA Microcrédito',help:'Aparece no contrato como {Conta para Reembolsos}.'},
    {k:'foro_judicial',label:'Foro judicial',type:'text',placeholder:'Ex.: Gondola',help:'Tribunal competente: {Foro Judicial}.'}]}]},
  {id:'cobranca',kicker:'Operacional',title:'Cobrança e juros de mora',icon:Gavel,desc:'Regras de mora, calendário das prestações e lembretes aos mutuários.',
-  used:['Política da empresa (registo)','Lembretes › Centro de mensagens'],
-  note:'Hoje o CIS calcula os juros de mora pela taxa de cada contrato e só os cobra quando o gestor marca «Cobrar juros de mora». Estas regras ficam registadas como política da empresa; os juros de mora automáticos só serão ligados depois de aprovados, para não alterar contratos em curso.',
+  used:['Cobrança (mora automática)','Simulador','Lembretes › Centro de mensagens'],
+  note:'Com «Juros de mora automáticos» em Sim, as prestações em atraso SEM taxa de mora no contrato passam a ter os juros de mora calculados por esta regra, sem o gestor escolher. Os contratos com taxa de mora própria continuam com a taxa do contrato. Só o administrador pode reduzir ou dispensar a mora numa cobrança.',
   groups:[
   {title:'Mora',icon:Gavel,fields:[
    {k:'limite_mensal_dias_mora',label:'Limite mensal de dias de mora',type:'number',unit:'dias',help:'Máximo de dias por mês em que a taxa diária é aplicada.'},
    {k:'tolerancia_dias',label:'Período de tolerância',type:'number',unit:'dias',help:'Dias após o vencimento sem juros de mora.'},
    {k:'penalidades_automaticas',label:'Juros de mora automáticos',type:'bool',help:'Sim: os juros de mora são propostos sem intervenção do gestor.'},
    {k:'taxa_diaria_mora',label:'Taxa diária de juros de mora',type:'number',unit:'%',step:'0.01'},
+   {k:'mora_base',label:'Base dos juros de mora',type:'select',options:[['saldo','Valor em dívida da prestação'],['capital','Capital em dívida da prestação']]},
+   {k:'mora_tecto_pct',label:'Tecto dos juros de mora',type:'number',unit:'%',step:'0.01',help:'Máximo da mora em % do valor em dívida da prestação. 0 = sem tecto.'},
    {k:'dias_carencia',label:'Período de carência',type:'number',unit:'dias',help:'Dias entre o desembolso e o início da contagem.'}]},
   {title:'Calendário e avisos',icon:Info,fields:[
    {k:'fim_de_semana',label:'Prestações ao fim de semana',type:'select',options:[['permitir','Permitir sábados e domingos'],['adiar','Adiar para segunda-feira'],['antecipar','Antecipar para sexta-feira']]},
@@ -51,6 +53,19 @@ const SECTIONS:Section[]=[
    {k:'dias_lista_negra',label:'Incumprimento prolongado (lista negra)',type:'number',unit:'dias',help:'Critério interno: mutuários com prestações em atraso há mais destes dias são propostos para a lista negra e saem da carteira corrente.'},
    {k:'lista_negra_automatica',label:'Propor a lista negra ao entrar',type:'bool',help:'Ao entrar no sistema, gestores e administradores vêem os mutuários acima do limite e decidem se os transferem para a lista negra.'},
    {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
+ {id:'encargos',kicker:'Crédito',title:'Encargos do crédito',icon:Percent,desc:'Taxa de operação no desembolso, encargos na renovação e categorias de finalidade.',
+  used:['Propostas de crédito','Novo contrato (desembolso)','Cobrança › Renovação','Relatórios › Crédito por finalidade'],
+  note:'A taxa de operação é descontada no desembolso: o mutuário recebe o capital menos a taxa, o contrato fica com o capital inteiro e a taxa entra na mesma conta da Caixa como receita. Aplica-se só a contratos novos.',
+  groups:[
+  {title:'Taxa de operação',icon:Percent,fields:[
+   {k:'taxa_operacao',label:'Taxa de operação',type:'number',unit:'%',step:'0.01',help:'Percentagem do capital desembolsado. 0 = sem taxa.'},
+   {k:'taxa_operacao_minima',label:'Taxa de operação mínima',type:'number',unit:'MT',step:'1',help:'Valor mínimo por contrato. 0 = sem mínimo.'}]},
+  {title:'Renovação e prorrogação',icon:RefreshCw,fields:[
+   {k:'taxa_renovacao',label:'Taxa de renovação',type:'number',unit:'%',step:'0.01',help:'Percentagem do capital renovado, cobrada em cada renovação. 0 = sem taxa.'},
+   {k:'encargos_renovacao',label:'Juros de mora e taxa na renovação',type:'select',options:[['cobrar','Cobrar agora, com os juros'],['capitalizar','Capitalizar na nova prestação']],help:'Opção por defeito; o gestor pode mudar em cada renovação.'},
+   {k:'renovacao_atraso_max_dias',label:'Atraso máximo para renovar sem o administrador',type:'number',unit:'dias',help:'Prestações em atraso há mais destes dias só podem ser renovadas, capitalizadas ou prorrogadas pelo administrador. 0 = sem limite.'}]},
+  {title:'Finalidades do crédito',icon:Target,fields:[
+   {k:'finalidades',label:'Categorias de finalidade',type:'text',wide:true,placeholder:'Comércio,Agricultura e pecuária,Serviços,…',help:'Separadas por vírgulas. Aparecem na proposta de crédito e no relatório «Crédito por finalidade».'}]}]},
  {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de risco, taxas internas de provisão e limites por mutuário.',used:['Relatórios › Mutuários para novo crédito','Propostas de crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
    {k:'score_minimo',label:'Score mínimo para aprovação',type:'number',unit:'0–100'},
@@ -99,7 +114,7 @@ async function shrink(file:File):Promise<string>{
  c.getContext('2d')!.drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/png');
 }
 
-export type CompanySectionId='perfil'|'cobranca'|'scoring'|'numeracao'|'incentivos';
+export type CompanySectionId='perfil'|'cobranca'|'encargos'|'scoring'|'numeracao'|'incentivos';
 export const COMPANY_SECTIONS=SECTIONS.map(s=>({id:s.id as CompanySectionId,title:s.title,icon:s.icon,desc:s.desc}));
 
 export default function CompanySettings({token,section}:{token:string;section:CompanySectionId}){

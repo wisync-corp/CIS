@@ -56,6 +56,29 @@ final class ContractCollectionController extends Controller
         return CarbonImmutable::createFromFormat('!Y-m-d',$s);
     }
 
+    /**
+     * Mora automática: prestações em atraso sem taxa contratual seguem a regra da empresa
+     * (Definições › Cobrança). «empresa» pede explicitamente essa regra; quem não é administrador
+     * não a pode substituir por outra (só reduzir/dispensar, com permissão).
+     */
+    private static function resolveLateRule(?array $rule,float $fineRate,int $delay,?object $user): ?array
+    {
+        $keep=fn(?array $r)=>array_intersect_key($r??[],array_flip(['decisao','valor_reduzido','motivo']));
+        $auto=\App\Support\CreditCharges::companyLateRule();
+        if ($fineRate>0) {
+            return ($rule['tipo']??null)==='empresa'?['tipo'=>'legado']+$keep($rule):$rule;
+        }
+        if (($rule['tipo']??null)==='empresa') {
+            abort_unless($auto,422,'A mora automática da empresa está desligada (Definições › Cobrança e juros de mora).');
+            return $auto+$keep($rule);
+        }
+        if ($auto && $delay>0) {
+            if ($rule===null) return $auto;
+            if (!\App\Support\Permissions::can($user,'definicoes')) return $auto+$keep($rule);
+        }
+        return $rule;
+    }
+
     /** Cálculo único do valor devido, em cêntimos. */
     private function quote(object $row,string $date,bool $multa,?array $rule=null,?object $user=null,int $alreadyPaid=0): array
     {
@@ -67,6 +90,7 @@ final class ContractCollectionController extends Controller
         $variable=in_array((string)$row->{'Tipo de Juro'},['Variável','Variavel'],true);
         $rate=(float)$row->{'% de Juro'};
         $fineRate=(float)($row->{'% de Multa'}??0);
+        $rule=self::resolveLateRule($rule,$fineRate,$delay,$user);
         if (($rule['tipo']??null)==='legado') $multa=true;
         $avisos=[];
         if (self::isCisContract($row)) {
@@ -324,8 +348,21 @@ final class ContractCollectionController extends Controller
         return ['days',$days,$days.' dia(s)'];
     }
 
+    /**
+     * Renovar, capitalizar ou prorrogar uma prestação em atraso há mais de N dias (Definições › Encargos;
+     * 365 por omissão) exige o administrador: a dívida antiga não se «refresca» sem decisão superior.
+     */
+    private function longDelayGuard(int $delay,?object $user): void
+    {
+        $limit=\App\Support\CreditCharges::renewalLateLimit();
+        if ($limit>0 && $delay>$limit) {
+            abort_unless(\App\Support\Permissions::can($user,'definicoes'),403,
+                "Prestação em atraso há {$delay} dias (mais de {$limit}): renovar ou prorrogar exige autorização do administrador.");
+        }
+    }
+
     /** Cálculo da renovação: juros (+ multa opcional) agora, nova prestação com o mesmo capital. */
-    private function renewalPlan($db,object $row,string $date,bool $multa,string $start,?array $rule=null,?object $user=null): array
+    private function renewalPlan($db,object $row,string $date,bool $multa,string $start,?array $rule=null,?object $user=null,?string $treatment=null): array
     {
         abort_unless(in_array($row->Estado,['Pendente','Pagamento Atrasado'],true),409,'A prestação já não está pendente.');
         $open=$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})
@@ -336,6 +373,13 @@ final class ContractCollectionController extends Controller
         abort_unless($c['juros']>0,409,'Prestação sem juros a cobrar; renovação não aplicável.');
         $principalC=$c['total']-$c['multa']-$c['juros'];
         abort_unless($principalC>0,409,'Prestação sem capital em dívida; use o pagamento integral.');
+        $this->longDelayGuard($q['dias_atraso'],$user);
+        // Encargos da renovação: juros de mora + taxa de renovação, cobrados já ou capitalizados na nova prestação.
+        $feeC=\App\Support\CreditCharges::renewalFee($principalC,self::isCisContract($row));
+        $treat=\App\Support\CreditCharges::renewalTreatment($treatment);
+        $chargesC=$c['multa']+$feeC;
+        $capitalizedC=$treat==='capitalizar'?$chargesC:0;
+        $newPrincipalC=$principalC+$capitalizedC;
         $today=CarbonImmutable::createFromFormat('!Y-m-d',$date);
         $oldStart=self::date($row->{'Data de Inicio'},'Data de início');
         $oldDue=self::date($row->{'Data de Cobrança'},'Data de cobrança');
@@ -359,23 +403,26 @@ final class ContractCollectionController extends Controller
             $avisos[]='A data de início escolhida difere do vencimento anterior ('.$oldDue->format('d/m/Y').').';
         }
         if ($variable) $avisos[]='Juro variável: o valor da nova prestação é estimado e será recalculado no pagamento.';
-        $paidC=$c['juros']+$c['multa'];
+        if ($feeC>0) $avisos[]='Taxa de renovação: '.CashAccountLedger::amount($feeC).' MT.';
+        if ($capitalizedC>0) $avisos[]='Encargos de '.CashAccountLedger::amount($capitalizedC).' MT capitalizados na nova prestação.';
+        $paidC=$c['juros']+($treat==='cobrar'?$chargesC:0);
         $max=(int)$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})->max('Nº da Parcela');
         return [
             'parcela'=>$q['parcela'],'origem'=>$q['origem'],'dias_atraso'=>$q['dias_atraso'],'mora_detalhe'=>$q['mora_detalhe'],
             'juros'=>(float)CashAccountLedger::amount($c['juros']),'multa'=>(float)CashAccountLedger::amount($c['multa']),
+            'taxa_renovacao'=>(float)CashAccountLedger::amount($feeC),'encargos'=>$treat,'encargos_capitalizados'=>(float)CashAccountLedger::amount($capitalizedC),
             'total'=>(float)CashAccountLedger::amount($paidC),'total_texto'=>CashAccountLedger::amount($paidC),
             'data_pagamento'=>$date,
             'nova_prestacao'=>[
                 'parcela'=>$max+1,'data_inicio'=>$startD->toDateString(),'data_vencimento'=>$newDue->toDateString(),
-                'prazo'=>$label,'capital'=>CashAccountLedger::amount($principalC),
+                'prazo'=>$label,'capital'=>CashAccountLedger::amount($newPrincipalC),
                 'juros'=>CashAccountLedger::amount($newInterestC),
-                'valor_a_pagar'=>CashAccountLedger::amount($principalC+$newInterestC),
+                'valor_a_pagar'=>CashAccountLedger::amount($newPrincipalC+$newInterestC),
                 'juros_estimado'=>$variable,
             ],
             'aviso'=>implode(' ',$avisos),
-            '_cents'=>['juros'=>$c['juros'],'multa'=>$c['multa'],'total'=>$paidC,
-                'principal'=>$principalC,'novo_juros'=>$newInterestC],
+            '_cents'=>['juros'=>$c['juros'],'multa'=>$c['multa'],'total'=>$paidC,'taxa'=>$feeC,'capitalizado'=>$capitalizedC,
+                'principal'=>$newPrincipalC,'novo_juros'=>$newInterestC],
         ];
     }
 
@@ -387,6 +434,7 @@ final class ContractCollectionController extends Controller
             'cobrar_multa'=>['required','boolean'],
             ...\App\Services\LateCharge::rules(),
             'data_inicio'=>['required','date_format:Y-m-d'],
+            'encargos'=>['nullable','in:cobrar,capitalizar'],
         ]);
 
         $db=DB::connection('mysql_legacy');
@@ -394,7 +442,7 @@ final class ContractCollectionController extends Controller
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
         $this->paymentDate($row,$data['data_pagamento'],$request->user());
-        $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$request->user());
+        $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$request->user(),$data['encargos']??null);
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
             && CashAccountLedger::flag('CIS_CASH_WRITES_APPROVED')
@@ -413,6 +461,7 @@ final class ContractCollectionController extends Controller
             'cobrar_multa'=>['required','boolean'],
             ...\App\Services\LateCharge::rules(),
             'data_inicio'=>['required','date_format:Y-m-d'],
+            'encargos'=>['nullable','in:cobrar,capitalizar'],
             'valor_recebido'=>['required','string'],
             'conta_id'=>['required','integer','min:1'],
             'referencia'=>['required','string','min:4','max:60'],
@@ -443,7 +492,7 @@ final class ContractCollectionController extends Controller
             $this->eligibility($db,$row);
             $this->paymentDate($row,$data['data_pagamento'],$user);
             $this->cashDateOpen($account,$data['data_pagamento']);
-            $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$user);
+            $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$user,$data['encargos']??null);
             $c=$plan['_cents'];$np=$plan['nova_prestacao'];
             if ($c['total']!==$received) {
                 throw ValidationException::withMessages(['valor_recebido'=>
@@ -493,7 +542,7 @@ final class ContractCollectionController extends Controller
                 'Data da Operação'=>$plan['data_pagamento'],
                 'Valor'=>CashAccountLedger::amount($c['total']),
                 'Tipo de Movimento'=>'Entradas',
-                'Descrição'=>mb_substr('[CAIXA:COBRANCA] Juros de renovação '.$numero.' P'.$plan['parcela'].' | REF:'.$ref,0,255),
+                'Descrição'=>mb_substr('[CAIXA:COBRANCA] Juros de renovação'.($c['taxa']>0&&$plan['encargos']==='cobrar'?' + taxa de renovação':'').($c['multa']>0&&$plan['encargos']==='cobrar'?' + mora':'').' '.$numero.' P'.$plan['parcela'].' | REF:'.$ref,0,255),
                 'usuario'=>mb_substr((string)$user->name,0,255),
                 'account_id'=>(int)$account->id,
                 'operation_key'=>$key,
@@ -507,7 +556,7 @@ final class ContractCollectionController extends Controller
                 'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
                 'amount'=>CashAccountLedger::amount($c['total']),'evidence_reference'=>$ref,
                 'late_charge'=>$plan['mora_detalhe']??null,
-                'reason'=>'Renovação: juros pagos'.($c['multa']>0?' com juros de mora':'').'; novo período de '.$np['prazo'].'.',
+                'reason'=>'Renovação: juros pagos'.($c['multa']>0&&$plan['encargos']==='cobrar'?' com juros de mora':'').($c['taxa']>0?'; taxa de renovação '.CashAccountLedger::amount($c['taxa']).' MT':'').($c['capitalizado']>0?'; encargos capitalizados '.CashAccountLedger::amount($c['capitalizado']).' MT':'').'; novo período de '.$np['prazo'].'.',
                 'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
             ContractHistory::record($db,[
@@ -584,6 +633,10 @@ final class ContractCollectionController extends Controller
     {
         $op=$d['operacao'];
         $this->opBase($db,$row);
+        if (in_array($op,['renovar_juros','capitalizar','prorrogar_15_30'],true)) {
+            $refDay=isset($d['data_pagamento'])?CarbonImmutable::createFromFormat('!Y-m-d',$d['data_pagamento']):CarbonImmutable::now('Africa/Maputo')->startOfDay();
+            $this->longDelayGuard(max(0,(int)self::date($row->{'Data de Cobrança'},'Data de cobrança')->diffInDays($refDay,false)),$user);
+        }
         $already=$this->partialPaid($db,$row);
         $isCis=self::isCisContract($row);
         $C=fn($v)=>$isCis?(int)round((float)$v)*100:CashAccountLedger::legacyCents($v);

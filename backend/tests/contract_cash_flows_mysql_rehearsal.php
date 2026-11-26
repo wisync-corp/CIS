@@ -527,7 +527,7 @@ ok(!isset($pg['valores']) && $pg['perfil']['nome_empresa']==='CAPTA Microcrédit
 echo "== Relatórios regulatórios\n";
 $rc=new \App\Http\Controllers\Api\ReportController();
 $rq=fn(array $q,$u=null)=>tap(Request::create('/x','GET',$q),fn($r)=>$r->setUserResolver(static fn()=>$u??$user));
-ok(count(data($rc->index($rq([])))['relatorios'])===14,'catálogo com 14 relatórios (4 regulatórios + 7 de gestão + 3 de desempenho)');
+ok(count(data($rc->index($rq([])))['relatorios'])===15,'catálogo com 15 relatórios (4 regulatórios + 8 de gestão + 3 de desempenho)');
 $mStart=now($tz)->startOfMonth()->toDateString();
 $ra=data($rc->show($rq(['inicio'=>$mStart,'fim'=>$tod]),'actividade'));
 $ovm=data($ov(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year])));
@@ -1497,6 +1497,67 @@ $mailer->setDefault(req('/x',['purpose'=>'geral','account_id'=>$mailAccount['id'
 $sent=data($mailer->send(req('/x',['purpose'=>'documentos','recipient'=>'destinatario@ci.test','subject'=>'Documento','body'=>'Mensagem de ensaio'],$user)));
 ok($sent['status']==='aceite'&&$db->table('cis_mail_history')->where('subject','Documento')->value('status')==='aceite','envio usa a conta predefinida e entra no histórico');
 ok(method_exists(\Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport::class,'setRequireTls'),'SMTP suporta TLS obrigatório');
+
+echo "== Encargos do crédito: mora automática, renovação com encargos, atraso longo, finalidades\n";
+$td=now($tz)->toDateString();
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_26_000280_cis_credit_charges.php','--force'=>true]);
+$set=function(string $k,string $v) use ($db){$db->table('cis_company_settings')->updateOrInsert(['chave'=>$k],['valor'=>$v,'updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();};
+$mk=function(array $o) use ($db,$tz){$a=$o+['Nome do Cliente'=>'Cliente Encargos','Nº de Cliente'=>7,'Quantia Creditada'=>1000,'M. Pagamento'=>'Uma Parcela','Prazo/Duração'=>'1 Mês',
+    '% de Juro'=>15,'Tipo de Juro'=>'Fixo','% de Multa'=>0,'Forma de Pagamento'=>'Numerário','Disponibilidade'=>'Numerário','Data de Inicio'=>now($tz)->subDays(40)->toDateString(),
+    'Cidade'=>'Maputo','Data Final'=>now($tz)->subDays(10)->toDateString(),'Data de Cobrança'=>now($tz)->subDays(10)->toDateString(),'Capital'=>1000,'Amortização'=>1000,
+    'Valor a Pagar'=>1150,'Data de Pagamento'=>null,'Valor de Juros'=>150,'Valor de Multa'=>0,'Valor Pago'=>0,'Estado'=>'Pagamento Atrasado','Codigo Cliente'=>'007',
+    'Estado do Contrato'=>'Em Progresso','Nº da Parcela'=>1,'Nº de Prestações'=>1,'Estratégia de Cálculo'=>null,'Column1'=>'Mensal','Dias'=>0,'Intervalo'=>'',
+    'Situação de Pagamento'=>'Em Progresso','usuario'=>'vba'];
+    [$sql,$bind]=\App\Services\LegacyContractInsert::statement($a);$db->insert($sql,$bind);return (int)$db->getPdo()->lastInsertId();};
+$CCx=new ContractCollectionController();
+$set('penalidades_automaticas','0');$set('mora_tecto_pct','0');$set('limite_mensal_dias_mora','30');$set('taxa_renovacao','0');$set('taxa_operacao','0');$set('taxa_operacao_minima','0');
+$e1=$mk(['Nr do Contracto'=>'ENC-001','Nº'=>9001]);
+$pv=fn(User $u,array $extra=[])=>data($CCx->preview(req('/x',['data_pagamento'=>$td,'cobrar_multa'=>false]+$extra,$u),'ENC-001',$e1));
+ok((float)$pv($admin)['multa']===0.0,'mora automática desligada: sem regra não há juros de mora (como antes)');
+ok(status(fn()=>$pv($admin,['mora'=>['tipo'=>'empresa']]))===422,'«regra da empresa» com a mora automática desligada é recusada');
+$set('penalidades_automaticas','1');$set('taxa_diaria_mora','0.5');$set('tolerancia_dias','3');$set('mora_base','saldo');
+$q=$pv($admin);
+ok(abs($q['multa']-40.25)<0.001 && ($q['mora_detalhe']['regra']['origem']??null)==='empresa' && $q['mora_detalhe']['dias_sujeitos']===7,'mora automática: 0,5%/dia × 7 dias (10 de atraso − 3 de tolerância) × 1 150 = 40,25 MT');
+$set('mora_tecto_pct','2');
+ok(abs($pv($admin)['multa']-23.0)<0.001,'tecto da mora: no máximo 2% do valor em dívida (23,00 MT)');
+ok(abs($pv($g2,['mora'=>['tipo'=>'fixo_unico','valor'=>'1','carencia'=>0,'decisao'=>'integral']])['multa']-23.0)<0.001,'gestor não substitui a regra da empresa');
+ok(abs($pv($admin,['mora'=>['tipo'=>'fixo_unico','valor'=>'1','carencia'=>0,'decisao'=>'integral']])['multa']-1.0)<0.001,'o administrador pode aplicar outra regra');
+ok((float)$pv($admin,['mora'=>['tipo'=>'empresa','decisao'=>'dispensar','motivo'=>'Acordo']])['multa']===0.0,'o administrador dispensa a mora da regra da empresa (com motivo)');
+// Limite mensal de dias: com 5 dias por mês e atraso a atravessar 2 meses, contam no máximo 10.
+$e9=$mk(['Nr do Contracto'=>'ENC-009','Nº'=>9009,'Data de Cobrança'=>now($tz)->subDays(70)->toDateString(),'Data de Inicio'=>now($tz)->subDays(100)->toDateString()]);
+$set('limite_mensal_dias_mora','5');$set('mora_tecto_pct','0');
+$q9=data($CCx->preview(req('/x',['data_pagamento'=>$td,'cobrar_multa'=>false],$admin),'ENC-009',$e9));
+ok($q9['mora_detalhe']['periodos']<=15 && $q9['mora_detalhe']['periodos']>=10,'limite mensal: no máximo 5 dias de mora por mês civil ('.$q9['mora_detalhe']['periodos'].' dias em ~3 meses)');
+$set('limite_mensal_dias_mora','30');
+// Renovação com encargos
+$set('mora_tecto_pct','2');$set('taxa_renovacao','2');
+$e2=$mk(['Nr do Contracto'=>'ENC-002','Nº'=>9002]);
+$rv=fn(?string $t,User $u=null)=>data($CCx->previewRenewal(req('/x',['data_pagamento'=>$td,'cobrar_multa'=>false,'data_inicio'=>$td]+($t?['encargos'=>$t]:[]),$u??$admin),'ENC-002',$e2));
+$rc=$rv('cobrar');
+ok(abs($rc['total']-193.0)<0.001 && abs($rc['taxa_renovacao']-20.0)<0.001 && (float)$rc['nova_prestacao']['capital']===1000.0,'renovar e cobrar: juros 150 + mora 23 + taxa de renovação 20 = 193 agora; capital 1 000');
+$rk=$rv('capitalizar');
+ok(abs($rk['total']-150.0)<0.001 && abs($rk['encargos_capitalizados']-43.0)<0.001 && (float)$rk['nova_prestacao']['capital']===1043.0,'renovar e capitalizar: só os juros agora; 43 MT de encargos na nova prestação (capital 1 043)');
+ok($rv(null)['encargos']==='cobrar','por defeito segue a definição da empresa (cobrar)');
+// Atraso muito longo: só o administrador renova
+$e3=$mk(['Nr do Contracto'=>'ENC-003','Nº'=>9003,'Data de Cobrança'=>now($tz)->subDays(400)->toDateString(),'Data de Inicio'=>now($tz)->subDays(430)->toDateString()]);
+$lr=fn(User $u)=>$CCx->previewRenewal(req('/x',['data_pagamento'=>$td,'cobrar_multa'=>false,'data_inicio'=>$td,'mora'=>['tipo'=>'empresa','decisao'=>'integral']],$u),'ENC-003',$e3);
+ok(status(fn()=>$lr($g2))===403,'atraso de 400 dias (> 365): o gestor não renova');
+ok(status(fn()=>$lr($admin))===200,'o administrador pode renovar com decisão registada');
+$set('penalidades_automaticas','0');$set('taxa_renovacao','0');$set('mora_tecto_pct','0');
+// Taxa de operação
+$set('taxa_operacao','2');$set('taxa_operacao_minima','50');
+ok(\App\Support\CreditCharges::operationFee(100000,true)===5000 && \App\Support\CreditCharges::operationFee(1000000,true)===20000,'taxa de operação: 2% com mínimo de 50 MT (1 000 → 50; 10 000 → 200)');
+$set('taxa_operacao','0');$set('taxa_operacao_minima','0');
+ok(\App\Support\CreditCharges::operationFee(100000,true)===0,'sem taxa configurada, sem desconto');
+// Finalidades
+ok(Schema::hasColumn('cis_credit_proposals','finalidade_categoria'),'propostas com categoria de finalidade');
+$pf=data($PC->store(req('/x',$prop+['finalidade_categoria'=>'Comércio'],$ag1)));
+ok(($pf['finalidade_categoria']??null)==='Comércio','a proposta guarda a categoria «Comércio»');
+ok(status(fn()=>$PC->store(req('/x',$prop+['finalidade_categoria'=>'Inventada'],$ag1)))===422,'categoria fora da lista é recusada');
+$enc=data((new \App\Http\Controllers\Api\CreditChargesController())(req('/x',[],$ag1)));
+ok(in_array('Agricultura e pecuária',$enc['finalidades'],true) && $enc['mora']['automatica']===false,'encargos em vigor disponíveis a todos (finalidades, mora)');
+$rep=data((new \App\Http\Controllers\Api\ReportController())->show(tap(Request::create('/x','GET',['inicio'=>now($tz)->startOfYear()->toDateString(),'fim'=>$td]),fn($r)=>$r->setUserResolver(static fn()=>$admin)),'finalidades'));
+ok(count($rep['seccoes'][0]['linhas'])>=1 && $rep['titulo']==='Crédito por finalidade e encargos','relatório «Crédito por finalidade e encargos»');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

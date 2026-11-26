@@ -2,6 +2,7 @@ import {useRef,useState,type FormEvent} from 'react';
 import {Calculator,ShieldCheck,Info,AlertCircle,RefreshCw,Landmark,ArrowRight,Layers,Percent,BookOpen} from 'lucide-react';
 
 import LateChargeFields,{initialLateCharge,lateChargeRule,type LateChargeDetails} from './LateChargeFields';
+import {useCreditCharges} from './encargos';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Mode='prestacao'|'juros'|'multa';
@@ -33,6 +34,7 @@ export default function SimulatorDesk({token}:{token:string}){
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  const [late,setLate]=useState(initialLateCharge);
+ const enc=useCreditCharges(token);
  const [due,setDue]=useState('');
  const [reference,setReference]=useState('');
  const [capital,setCapital]=useState('');
@@ -81,7 +83,7 @@ export default function SimulatorDesk({token}:{token:string}){
      </>:<><label>Prazo <span>Obrigatório</span><select value={term} onChange={e=>{setTerm(e.target.value as Term);clearQuote();}}>{terms.map(t=><option key={t} value={t}>{t}</option>)}</select><small>O período da tabela de juros é determinado pelo prazo.</small></label>
      <label className="full">Taxa manual (%) <span>Opcional</span><input type="text" inputMode="decimal" value={manual} onChange={e=>{setManual(e.target.value);clearQuote();}} placeholder="Usar a taxa automática da tabela"/><small>Quando preenchida, substitui a taxa da faixa apenas nesta simulação.</small></label></>}
     </div>
-    {isLate&&<LateChargeFields draft={late} onChange={value=>{setLate(value);clearQuote();}} legacy={false} canAdjust={false} simulation/>}
+    {isLate&&<LateChargeFields draft={late} onChange={value=>{setLate(value);clearQuote();}} legacy={false} canAdjust={false} simulation company={enc?.mora??null}/>}
     {error&&<div className="cis-simulator-error" role="alert"><AlertCircle size={18}/>{error}</div>}
     <div className="cis-simulator-actions"><button type="button" onClick={()=>{setAmount('');setManual('');setMode('prestacao');setTerm('2 Semanas');setLate(initialLateCharge);setDue('');setReference('');setCapital('');clearQuote();}}>Limpar</button>
      <button className="cis-simulator-primary" type="submit" disabled={!valid||busy}>{busy?<RefreshCw size={17} className="cis-cash-spin"/>:<Calculator size={17}/>} {busy?'A calcular…':'Calcular simulação'} <ArrowRight size={16}/></button></div>

@@ -145,7 +145,9 @@ final class ProposalController extends Controller
             'montante' => (int) $p->montante, 'montante_aprovado' => $p->montante_aprovado !== null ? (int) $p->montante_aprovado : null,
             'tipo_juro' => $p->tipo_juro, 'estrategia' => $p->estrategia, 'periodo_dias' => (int) $p->periodo_dias, 'prazo' => $p->prazo,
             'modalidade' => $p->modalidade, 'taxa' => $p->taxa !== null ? (float) $p->taxa : null, 'taxa_aprovada' => $p->taxa_aprovada !== null ? (float) $p->taxa_aprovada : null,
-            'finalidade' => $p->finalidade, 'actividade' => $p->actividade,
+            'finalidade' => $p->finalidade, 'finalidade_categoria' => $p->finalidade_categoria ?? null, 'actividade' => $p->actividade,
+            'encargos' => (function () use ($p) { $cap = (int) ($p->montante_aprovado ?? $p->montante) * 100; $fee = \App\Support\CreditCharges::operationFee($cap, true);
+                return ['taxa_operacao' => \App\Services\CashAccountLedger::amount($fee), 'valor_entregue' => \App\Services\CashAccountLedger::amount($cap - $fee)]; })(),
             'rendimento_mensal' => $p->rendimento_mensal, 'despesas_mensais' => $p->despesas_mensais, 'outras_dividas_mensais' => $p->outras_dividas_mensais,
             'garantias' => $p->garantias, 'observacoes' => $p->observacoes, 'analise' => $a,
             'decisao_notas' => $p->decisao_notas, 'decidido_por' => $p->decided_by ? ($names[$p->decided_by] ?? null) : null, 'decidido_em' => $p->decided_at,
@@ -234,6 +236,7 @@ final class ProposalController extends Controller
             'modalidade' => ['required', 'in:Semanal,Mensal,Uma Parcela'],
             'taxa' => ['nullable', 'numeric', 'gt:0', 'max:100'],
             'finalidade' => ['required', 'string', 'min:3', 'max:255'],
+            'finalidade_categoria' => ['nullable', \Illuminate\Validation\Rule::in(\App\Support\CreditCharges::purposes())],
             'actividade' => ['nullable', 'string', 'max:160'],
             'rendimento_mensal' => ['required', 'numeric', 'min:0', 'max:1000000000'],
             'despesas_mensais' => ['nullable', 'numeric', 'min:0', 'max:1000000000'],
@@ -246,6 +249,8 @@ final class ProposalController extends Controller
         if ($d['tipo_juro'] !== 'Fixo') abort_if(empty($d['taxa']), 422, 'Indique a taxa de juro.');
         $d['despesas_mensais'] ??= 0; $d['outras_dividas_mensais'] ??= 0;
         $d['taxa'] = $d['taxa'] ?? null;
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('cis_credit_proposals', 'finalidade_categoria')) unset($d['finalidade_categoria']);
+        else $d['finalidade_categoria'] = $d['finalidade_categoria'] ?? null;
         return $d;
     }
 

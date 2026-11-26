@@ -261,6 +261,7 @@ final class ContractOpeningReviewController extends Controller
                 'nome' => $rows[0]->{'Nome Completo'},
             ],
             'taxa_tabela' => $rate,
+            'taxa_operacao' => \App\Services\CashAccountLedger::amount(\App\Support\CreditCharges::operationFee((int) $values['montante'] * 100, true)),
             'problemas' => $issues,
             'dados_verificados' => count($issues) === 0,
             'autorizado_para_gravar' => $authorized,
