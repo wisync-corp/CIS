@@ -55,7 +55,9 @@ final class ExtractoController extends Controller
             'contrato'=>['nullable','string','max:155'],
             'conta_id'=>['nullable','integer','min:1'],
             'tipo'=>['nullable','in:todos,entradas,saidas'],
-            'estado'=>['nullable','in:todos,aberta,vencida,paga'],
+            'estado'=>['nullable','in:todos,aberta,vencida,paga,em_divida'],
+            // Só prestações de mutuários em lista negra (cartão «Crédito em lista negra» da Visão geral).
+            'lista_negra'=>['nullable','in:0,1'],
             // Período da Visão geral (mês/ano, «todos» = sem restrição) e data de referência.
             'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
             'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
@@ -282,6 +284,7 @@ final class ExtractoController extends Controller
             if ($ano!=='todos') $q->whereRaw('YEAR(`'.$col.'`) = ?',[(int)$ano]);
             if ($mes!=='todos') $q->whereRaw('MONTH(`'.$col.'`) = ?',[(int)$mes]);
         }
+        if (($f['lista_negra']??'0')==='1') $q->whereIn('Nº de Cliente',\App\Support\ClientRegistry::blacklistedIds() ?: [0]);
         if ($f['cliente']!=='') $q->where('Nome do Cliente',$f['cliente']);
         if ($f['contrato']!=='') $q->where('Nr do Contracto',$f['contrato']);
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
@@ -299,7 +302,8 @@ final class ExtractoController extends Controller
         $out=[];
         foreach ($rows as $r) {
             $sit=self::situation($r,$today);
-            if ($estado && $estado!=='todos' && $sit!==$estado) continue;
+            if ($estado==='em_divida') { if (!in_array($sit,['aberta','vencida'],true)) continue; }
+            elseif ($estado && $estado!=='todos' && $sit!==$estado) continue;
             $juros=(float)$r->{'Valor de Juros'};$multa=(float)($r->{'Valor de Multa'}??0);
             if ($sit==='aberta') { $tot['aberto']+=self::owed($r); $tot['juros_aberto']+=$juros; $tot['n_aberto']++; }
             if ($sit==='vencida') { $tot['vencido']+=self::owed($r); $tot['juros_vencido']+=$juros+$multa; $tot['n_vencido']++; }

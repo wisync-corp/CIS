@@ -18,7 +18,7 @@ const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ago
 const nowMaputo=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Maputo',year:'numeric',month:'numeric'}).formatToParts(new Date());return {y:p.find(x=>x.type==='year')!.value,m:p.find(x=>x.type==='month')!.value};};
 const periodLabel=(m:string,y:string)=>m==='todos'&&y==='todos'?'todo o período':m==='todos'?'o ano '+y:y==='todos'?MONTHS[Number(m)-1].toLowerCase()+' (todos os anos)':MONTHS[Number(m)-1].toLowerCase()+' de '+y;
 
-export type ExtractoPreset={mes:string;ano:string;base:'cobranca'|'pagamento'|'desembolso';estado:'todos'|'aberta'|'vencida'|'paga';rotulo:string};
+export type ExtractoPreset={mes:string;ano:string;base:'cobranca'|'pagamento'|'desembolso';estado:'todos'|'aberta'|'vencida'|'paga'|'em_divida';rotulo:string;lista_negra?:boolean};
 export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{token:string;onNavigate:(page:string)=>void;onOpenExtracto?:(p:ExtractoPreset)=>void;onLoaded?:()=>void}){
  const [data,setData]=useState<Data|null>(null);
  const [error,setError]=useState('');
@@ -50,7 +50,6 @@ export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{tok
   {name:'Prestações em curso',icon:Clock,value:c?String(c.pendentes_periodo):'—',hint:c?`${mt(c.valor_pendente_periodo)} a receber · ${c.contratos_pendentes_periodo} contrato(s) · vencimento em ${per}`:'Ainda dentro do prazo',go:{base:'cobranca',estado:'aberta'} as const}
  ] as {name:string;icon:typeof Landmark;value:string;hint:string;alert?:boolean;go?:Omit<ExtractoPreset,'mes'|'ano'|'rotulo'>}[];
  const ln=data?.lista_negra;
- if(ln&&ln.mutuarios>0)stats.push({name:'Crédito em lista negra',icon:Ban,value:mt(ln.valor),hint:`${ln.mutuarios} mutuário(s) · ${ln.contratos} contrato(s) · capital ${mt(ln.capital)} · fora da carteira corrente`,alert:true});
  const ledger:[string,string,string|undefined][]=[
   ['Capital','Desembolsado no período',c?.desembolsado_periodo],
   ['Amortização','Capital recuperado no período',r?.capital_recuperado_mes],
@@ -77,6 +76,11 @@ export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{tok
   <div className="cis-stat-grid">{stats.map(({name,icon:Icon,value,hint,alert,go})=>{const body=<><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>{loading&&!data?'…':value}</strong><small>{hint}</small>{onOpenExtracto&&<em className="cis-stat-link">Ver no extracto <ArrowUpRight size={13}/></em>}</>;
    return onOpenExtracto&&go?<button type="button" className={'cis-stat cis-stat-button'+(alert?' cis-stat-alert':'')} key={name} title={`Abrir o extracto: ${name.toLowerCase()} em ${per}`} onClick={()=>onOpenExtracto({mes,ano,...go,rotulo:`${name} · ${per}`})}>{body}</button>
     :<article className={'cis-stat'+(alert?' cis-stat-alert':'')} key={name}>{body}</article>;})}</div>
+  {ln&&ln.mutuarios>0&&(()=>{const inner=<><span className="cis-black-ico"><Ban size={20}/></span>
+    <span className="cis-black-main"><span>Crédito em lista negra</span><strong>{loading&&!data?'…':mt(ln.valor)}</strong></span>
+    <span className="cis-black-facts"><span><b>{ln.mutuarios}</b> mutuário(s)</span><span><b>{ln.contratos}</b> contrato(s)</span><span><b>{ln.prestacoes}</b> prestação(ões)</span><span>capital <b>{mt(ln.capital)}</b></span><span className="muted">fora da carteira corrente · critério {ln.dias_criterio} dias</span></span>
+    {onOpenExtracto&&<em className="cis-stat-link">Ver no extracto <ArrowUpRight size={13}/></em>}</>;
+   return onOpenExtracto?<button type="button" className="cis-black-strip" title="Abrir o extracto só com os mutuários em lista negra" onClick={()=>onOpenExtracto({mes:'todos',ano:'todos',base:'cobranca',estado:'em_divida',lista_negra:true,rotulo:'Crédito em lista negra · todas as datas'})}>{inner}</button>:<div className="cis-black-strip">{inner}</div>;})()}
   <div className="cis-home-grid"><section className="cis-panel"><div className="cis-panel-head"><div><h2>Registos do sistema</h2><p>Recebido em {per}: <b>{mt(r?.recebido_mes)}</b> · total geral: <b>{mt(r?.total_recebido)}</b>.</p></div></div><div className="cis-action-row"><button type="button" onClick={()=>onNavigate('Mutuários')}><Users size={20}/><span><b>Mutuários</b><small>Consultar o cadastro</small></span><ArrowUpRight size={18}/></button><button type="button" onClick={()=>onNavigate('Contratos e prestações')}><FileText size={20}/><span><b>Contratos</b><small>{c?`${c.prestacoes_por_receber} prestações por receber`:'Consultar prestações e saldos'}</small></span><ArrowUpRight size={18}/></button></div></section>
   <section className="cis-panel"><h2>Distribuição dos pagamentos</h2><p>Componentes financeiros separados e rastreáveis.</p><div className="cis-ledger">{ledger.map(([title,sub,v])=><div key={title}><span className="cis-ledger-dot"/><span><b>{title}</b><small>{sub}</small></span><strong>{loading&&!data?'…':mt(v)}</strong></div>)}</div>
    {data&&<p className="cis-overview-note">{data.nota}</p>}</section></div>

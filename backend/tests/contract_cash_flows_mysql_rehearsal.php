@@ -1386,6 +1386,14 @@ ok(collect($na['linhas'])->every(fn($r)=>(int)$r['dias']>0),'em atraso: dias pos
 $nc=$nv('cobranca');
 ok(collect($nc['linhas'])->every(fn($r)=>(int)$r['dias']<=0 && -(int)$r['dias']<=$nc['antecedencia']),'a vencer: faltam tantos dias (0 = vence hoje)');
 
+echo "== Extracto: crédito em lista negra\n";
+$xq=tap(Request::create('/x','GET',['lista_negra'=>'1','estado'=>'em_divida','mes'=>'todos','ano'=>'todos','base'=>'cobranca','por_pagina'=>200]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$xl=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($xq));
+$xb=\App\Support\ClientRegistry::blacklistedIds();
+$xn=collect($xl['linhas'])->pluck('contrato')->unique()->all();
+$xc=DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$xn)->pluck('Nº de Cliente')->map(fn($v)=>(int)$v)->unique()->all();
+ok(in_array('LD-0001',$xn,true) && !array_diff($xc,$xb) && collect($xl['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'«Ver no extracto» da lista negra: só mutuários em lista negra, prestações em dívida');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

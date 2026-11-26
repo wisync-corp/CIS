@@ -2228,3 +2228,16 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-days.black{background:#1F2328;color:#fff}
 .cis-days.warn{background:#FFF6E5;color:#B54708}
 .cis-days.ok{background:#ECFDF3;color:#067647}
+/* Crédito em lista negra: faixa a toda a largura, por baixo dos indicadores */
+.cis-black-strip{display:flex;align-items:center;gap:18px;width:100%;margin:12px 0 16px;padding:12px 18px;background:#fff;border:1px solid #E4E0EE;border-left:4px solid #1F2328;border-radius:14px;text-align:left;font:inherit;color:var(--cis-heading)}
+button.cis-black-strip{cursor:pointer;transition:box-shadow .15s,border-color .15s}
+button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,35,40,.08)}
+.cis-black-ico{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#1F2328;color:#fff;flex-shrink:0}
+.cis-black-main{display:flex;flex-direction:column;min-width:180px}
+.cis-black-main>span{font-size:calc(12px * var(--cis-fs));font-weight:700;color:var(--cis-muted,#5b6472)}
+.cis-black-main strong{font-family:inherit;font-size:calc(22px * var(--cis-fs));color:#9b2c1c;white-space:nowrap}
+.cis-black-facts{display:flex;flex-wrap:wrap;gap:6px 8px;flex:1;align-items:center}
+.cis-black-facts span{background:#F4F2F8;border-radius:99px;padding:4px 10px;font-size:calc(12px * var(--cis-fs))}
+.cis-black-facts span.muted{background:transparent;color:var(--cis-muted,#5b6472);padding-left:2px}
+.cis-black-strip .cis-stat-link{margin:0;white-space:nowrap}
+@media(max-width:900px){.cis-black-strip{flex-wrap:wrap}.cis-black-strip .cis-stat-link{margin-left:58px}}
