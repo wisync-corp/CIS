@@ -114,7 +114,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
  const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction,ordenar:sortField});
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
-  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
+  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period?.lista_negra)p.set('lista_negra','1');if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
   if(agencia)p.set('agencia',agencia);
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
  const datesOk=!(inicio&&fim&&fim<inicio);
@@ -231,7 +231,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
    <div className="cis-extracto-actions"><button type="button" onClick={()=>onOpenContracts()}><FileText size={15}/> Ir para Contratos e prestações</button></div>
 
-   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
+   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.lista_negra?' — só mutuários em lista negra, prestações em dívida':period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
     <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Vencimento de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
@@ -242,7 +242,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
      <label>Tipo<select value={tipo} onChange={e=>{setTipo(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="entradas">Entradas</option><option value="saidas">Saídas</option></select></label>
      <BranchFilter token={token} value={agencia} onChange={v=>{setAgencia(v);setPage(1);}}/>
      {accounts.length>0&&<label>Conta<select value={contaId} onChange={e=>{setContaId(e.target.value);setPage(1);}}><option value="">Todas</option>{accounts.map(a=><option key={a.id} value={String(a.id)}>{a.code} · {a.name}</option>)}</select></label>}
-    </>:<label>Estado<select value={estado} onChange={e=>{setEstado(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="aberta">Em curso</option><option value="vencida">Em atraso</option><option value="paga">Pagas</option></select></label>}
+    </>:<label>Estado<select value={estado} onChange={e=>{setEstado(e.target.value);setPage(1);}}><option value="todos">Todos</option><option value="aberta">Em curso</option><option value="vencida">Em atraso</option><option value="em_divida">Em dívida (curso + atraso)</option><option value="paga">Pagas</option></select></label>}
     <button type="button" className="cis-extracto-clear" onClick={clearAll}>Limpar</button>
    </div>
 

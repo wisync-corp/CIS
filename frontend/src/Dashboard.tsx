@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
-import {Ban} from 'lucide-react';
+import {Ban,AlertTriangle,CalendarClock} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
 import LongDelinquency,{type Candidates} from './LongDelinquency';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays, MessageSquare} from 'lucide-react';
@@ -26,8 +26,17 @@ import CollectionAgenda from './CollectionAgenda';
 import ProposalsDesk from './ProposalsDesk';
 
 const noticesApi=import.meta.env.VITE_API_URL||'/api';
-type NoticeKind='cobranca'|'atraso';
-type NoticeData={atraso:number;cobranca:number;antecedencia:number;paginas:number;linhas:{contrato:string;parcela:number;mutuário:string;vencimento:string;valor:string|null}[]};
+type NoticeKind='cobranca'|'atraso'|'lista_negra';
+type NoticeData={atraso:number;cobranca:number;lista_negra?:number;antecedencia:number;paginas:number;resumo?:{atraso:{valor:number;dias_max:number|null};cobranca:{valor:number;dias_min:number|null};lista_negra:{valor:number;dias_max:number|null;mutuarios:number}};linhas:{contrato:string;parcela:number;mutuário:string;vencimento:string;valor:string|null;dias?:number|null}[]};
+const NOTICE_TABS:{kind:NoticeKind;label:string}[]=[{kind:'lista_negra',label:'Lista negra'},{kind:'atraso',label:'Pagamentos em atraso'},{kind:'cobranca',label:'Cobranças a vencer'}];
+function noticeDays(d:number|null|undefined):{text:string;tone:string}{
+ if(d==null||Number.isNaN(Number(d)))return{text:'—',tone:''};
+ const n=Number(d);
+ if(n>0)return{text:n+(n===1?' dia em atraso':' dias em atraso'),tone:n>90?'black':'bad'};
+ if(n===0)return{text:'Vence hoje',tone:'warn'};
+ return{text:'Faltam '+(-n)+(n===-1?' dia':' dias'),tone:'ok'};
+}
+const noticeTotal=(n:NoticeData|null)=>n?n.atraso+n.cobranca+(n.lista_negra??0):0;
 const noticeMoney=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const nav:{label:string;icon:typeof Users;perm?:Perm}[]=[
@@ -136,13 +145,14 @@ export default function Dashboard({token, name, role, permissions, agency, theme
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}{agency?' · '+agency:''}</small></div><button type="button" className="cis-profile-key" onClick={()=>setPwOpen(true)} title="Alterar a minha palavra-passe" aria-label="Alterar a minha palavra-passe"><KeyRound size={15}/></button><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
-   <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><img className="cis-top-logo" src={logoCompactaClaro} alt="CIS" width={92} height={30}/><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right">{can('ver')&&<button type="button" className="cis-client-edit" aria-haspopup="dialog" aria-controls="cis-notice-dialog" aria-expanded={noticeOpen} onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}><Bell size={16}/> Avisos {notices&&'('+String(notices.atraso+notices.cobranca)+')'}</button>}<span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
+   <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><img className="cis-top-logo" src={logoCompactaClaro} alt="CIS" width={92} height={30}/><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right">{can('ver')&&<button type="button" className="cis-client-edit" aria-haspopup="dialog" aria-controls="cis-notice-dialog" aria-expanded={noticeOpen} onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}><Bell size={16}/> Avisos {notices&&'('+String(noticeTotal(notices))+')'}</button>}<span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
    <main className="cis-main">{can('ver')&&<dialog id="cis-notice-dialog" ref={noticeDialog} className="cis-panel cis-notice-dialog" aria-labelledby="cis-payment-notices" onCancel={event=>{event.preventDefault();setNoticeOpen(false);}}>
     <div className="cis-panel-head"><div><h2 id="cis-payment-notices">Avisos de cobrança e atraso</h2><p>Antecedência do aviso: {notices?.antecedencia??'—'} dia(s).</p></div><button type="button" className="cis-client-edit" onClick={()=>setNoticeOpen(false)}>Fechar avisos</button></div>
-    <div className="cis-extracto-modes">{(['atraso','cobranca'] as const).map(kind=><button key={kind} type="button" aria-pressed={noticeKind===kind} className={noticeKind===kind?'selected':''} onClick={()=>{setNoticeKind(kind);setNoticePage(1);}}>{kind==='atraso'?'Pagamentos em atraso':'Cobranças a vencer'} {notices&&'('+notices[kind]+')'}</button>)}</div>
+    <div className="cis-extracto-modes cis-notice-tabs" role="tablist" aria-label="Tipo de aviso">{NOTICE_TABS.map(({kind,label})=><button key={kind} type="button" role="tab" aria-selected={noticeKind===kind} className={(noticeKind===kind?'selected ':'')+'k-'+kind} onClick={()=>{setNoticeKind(kind);setNoticePage(1);}}>{kind==='lista_negra'?<Ban size={15}/>:kind==='atraso'?<AlertTriangle size={15}/>:<CalendarClock size={15}/>}{label}<em>{notices?(notices[kind]??0):'…'}</em></button>)}</div>
+    {notices?.resumo&&<p className="cis-notice-summary">{noticeKind==='lista_negra'?<>{notices.resumo.lista_negra.mutuarios} mutuário(s) em lista negra · {noticeMoney.format(notices.resumo.lista_negra.valor)} MT por cobrar{notices.resumo.lista_negra.dias_max!=null&&notices.resumo.lista_negra.dias_max>0?<> · atraso máximo de <b>{notices.resumo.lista_negra.dias_max} dias</b></>:null}. Fora da carteira corrente.</>:noticeKind==='atraso'?<>{noticeMoney.format(notices.resumo.atraso.valor)} MT em atraso{notices.resumo.atraso.dias_max!=null?<> · atraso máximo de <b>{notices.resumo.atraso.dias_max} dias</b></>:null}.</>:<>{noticeMoney.format(notices.resumo.cobranca.valor)} MT a cobrar nos próximos {notices.antecedencia} dia(s){notices.resumo.cobranca.dias_min!=null?<> · a próxima {notices.resumo.cobranca.dias_min===0?<b>vence hoje</b>:<>vence em <b>{notices.resumo.cobranca.dias_min} dia(s)</b></>}</>:null}.</>}</p>}
     {noticeBusy?<p role="status">A consultar avisos…</p>:noticeError?<p role="alert">Não foi possível consultar os avisos.</p>:!notices?.linhas.length?<p>Sem prestações a apresentar.</p>:<>
-     <div className="cis-table-scroll"><table><thead><tr><th>Contrato</th><th>Mutuário</th><th>Prestação</th><th>Vencimento</th><th>Valor previsto</th><th>Acção</th></tr></thead><tbody>
-      {notices.linhas.map((row,index)=><tr key={row.contrato+'-'+row.parcela+'-'+index}><td>{row.contrato}</td><td>{row.mutuário}</td><td>{row.parcela}</td><td>{row.vencimento?.slice(0,10)}</td><td>{row.valor!=null?noticeMoney.format(Number(row.valor))+' MT':'—'}</td><td><button type="button" className="cis-client-edit" aria-label={'Abrir contrato '+row.contrato} onClick={()=>{setExtractoContract(row.contrato);setActive('Contratos e prestações');setNoticeOpen(false);window.scrollTo({top:0});}}>Abrir contrato <ArrowUpRight size={15}/></button></td></tr>)}
+     <div className="cis-table-scroll"><table><thead><tr><th>Contrato</th><th>Mutuário</th><th>Prestação</th><th>Vencimento</th><th>Dias</th><th>Valor previsto</th><th>Acção</th></tr></thead><tbody>
+      {notices.linhas.map((row,index)=><tr key={row.contrato+'-'+row.parcela+'-'+index}><td>{row.contrato}</td><td>{row.mutuário}</td><td>{row.parcela}</td><td>{row.vencimento?.slice(0,10)}</td><td>{(()=>{const d=noticeDays(row.dias);return <span className={'cis-days '+d.tone}>{d.text}</span>;})()}</td><td>{row.valor!=null?noticeMoney.format(Number(row.valor))+' MT':'—'}</td><td><button type="button" className="cis-client-edit" aria-label={'Abrir contrato '+row.contrato} onClick={()=>{setExtractoContract(row.contrato);setActive('Contratos e prestações');setNoticeOpen(false);window.scrollTo({top:0});}}>Abrir contrato <ArrowUpRight size={15}/></button></td></tr>)}
      </tbody></table></div>
      {notices.paginas>1&&<div className="cis-collections-pagination"><button type="button" disabled={noticePage<=1} onClick={()=>setNoticePage(p=>p-1)}>Anterior</button><span>{noticePage} / {notices.paginas}</span><button type="button" disabled={noticePage>=notices.paginas} onClick={()=>setNoticePage(p=>p+1)}>Seguinte</button></div>}
     </>}
@@ -158,9 +168,10 @@ export default function Dashboard({token, name, role, permissions, agency, theme
     {ldNotice&&<div className="cis-secondary-success" role="status"><Ban size={17}/>{ldNotice}<button type="button" className="cis-edit-action" onClick={()=>setLdNotice('')}>Fechar</button></div>}
     {ldOpen&&ld&&<LongDelinquency token={token} data={ld} onClose={()=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');}}
       onDone={msg=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');setLdNotice(msg);setOvKey(k=>k+1);setLd(v=>v?{...v,candidatos:[]}:v);}}/>}
-    {active==='Visão geral'&&homeTab==='resumo'&&notices&&notices.atraso+notices.cobranca>0&&<div className="cis-home-alerts" role="status">
+    {active==='Visão geral'&&homeTab==='resumo'&&notices&&noticeTotal(notices)>0&&<div className="cis-home-alerts" role="status">
      <Bell size={18}/><strong>Avisos de hoje</strong>
-     {notices.atraso>0&&<button type="button" className="bad" onClick={()=>{setNoticeKind('atraso');setNoticePage(1);setNoticeOpen(true);}}>{notices.atraso} pagamento(s) em atraso</button>}
+     {(notices.lista_negra??0)>0&&<button type="button" className="black" onClick={()=>{setNoticeKind('lista_negra');setNoticePage(1);setNoticeOpen(true);}}>{notices.lista_negra} prestação(ões) em lista negra{notices.resumo?.lista_negra.dias_max?` · até ${notices.resumo.lista_negra.dias_max} dias`:''}</button>}
+     {notices.atraso>0&&<button type="button" className="bad" onClick={()=>{setNoticeKind('atraso');setNoticePage(1);setNoticeOpen(true);}}>{notices.atraso} pagamento(s) em atraso{notices.resumo?.atraso.dias_max?` · até ${notices.resumo.atraso.dias_max} dias`:''}</button>}
      {notices.cobranca>0&&<button type="button" className="warn" onClick={()=>{setNoticeKind('cobranca');setNoticePage(1);setNoticeOpen(true);}}>{notices.cobranca} cobrança(s) a vencer{notices.antecedencia?` em ${notices.antecedencia} dia(s)`:''}</button>}
      <button type="button" className="link" onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}>Ver todos os avisos</button>
     </div>}
