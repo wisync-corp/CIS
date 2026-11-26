@@ -1451,11 +1451,11 @@ $kp=openssl_pkey_new(['private_key_bits'=>1024,'private_key_type'=>OPENSSL_KEYTY
 $b64=trim(preg_replace('/-----[^-]+-----|\s+/','',$pub));
 openssl_private_decrypt(base64_decode(\App\Support\Payments\MpesaGateway::bearer('chave-de-teste',$b64)),$plain,$kp,OPENSSL_PKCS1_PADDING);
 ok($plain==='chave-de-teste','M-Pesa Open API: token cifrado com a chave pública do portal');
-\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-2006','output_ResponseDesc'=>'Insufficient balance'],422)]);
+\Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-2006','output_ResponseDesc'=>'Insufficient balance'],422)]);
 config(['cis_subscription.mpesa.api_key'=>'k','cis_subscription.mpesa.public_key'=>$b64,'cis_subscription.mpesa.service_provider_code'=>'171717']);
-ok(status(fn()=>$SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin)))===422
+ok($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin))->getStatusCode()===422
   && DB::table('cis_subscription_payments')->orderByDesc('id')->value('operadora_mensagem')==='Saldo M-Pesa insuficiente.','M-Pesa recusa por saldo: pagamento falhado com mensagem clara');
-\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-0','output_ResponseDesc'=>'Request processed successfully','output_TransactionID'=>'TX55'],201)]);
+\Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-0','output_ResponseDesc'=>'Request processed successfully','output_TransactionID'=>'TX55'],201)]);
 $before=$S::current()->valido_ate;
 $r3=data($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin)));
 ok($r3['pagamento']['estado']==='confirmado' && $r3['pagamento']['operadora_transacao']==='TX55' && $S::current()->valido_ate>$before,'M-Pesa INS-0: confirmado e acesso renovado na hora');

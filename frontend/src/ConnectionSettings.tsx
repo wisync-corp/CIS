@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {CreditCard,Briefcase,ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2,XCircle} from 'lucide-react';
+import {Briefcase,ShieldCheck,AlertCircle,RefreshCw,CheckCircle2,Palette,Table2,ArrowLeftRight,Server,BookA,FileSignature,UsersRound,KeyRound,Building2,XCircle} from 'lucide-react';
 import {useCan} from './perms';
 import UsersAdmin from './UsersAdmin';
 import BranchesAdmin from './BranchesAdmin';
@@ -8,7 +8,6 @@ import {themeOptions,fontSizeOptions,getFontSize,applyFontSize,type ThemeId,type
 import CompanySettings,{COMPANY_SECTIONS,type CompanySectionId} from './CompanySettings';
 import {PriceTable,MovementTypes} from './Parametrizacao';
 import ContractTemplates from './ContractTemplates';
-import Subscription from './Subscription';
 import {GLOSSARIO,FUNCOES} from './glossario';
 
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -28,7 +27,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
  .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});return ()=>ctrl.abort();
  },[token,role,reload]);
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
-  {grupo:'Empresa',items:[...COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon})),{id:'subscricao',title:'Subscrição',icon:CreditCard}]},
+  {grupo:'Empresa',items:[...COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))]},
   {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight},{id:'modelos',title:'Modelos de contrato',icon:FileSignature}]},
   {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'agencias',title:'Agências',icon:Building2},{id:'carteiras',title:'Carteiras',icon:Briefcase},{id:'conta',title:'A minha conta',icon:KeyRound}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];
@@ -41,7 +40,6 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
   <div className="cis-settings-content">
   {admin&&<div hidden={!isCompany}><CompanySettings token={token} section={(isCompany?tab:'perfil') as CompanySectionId}/></div>}
   {manageUsers&&tab==='utilizadores'&&<UsersAdmin token={token}/>}
-  {admin&&tab==='subscricao'&&<Subscription token={token}/>}
   {admin&&tab==='agencias'&&<BranchesAdmin token={token}/>}
   {manageUsers&&tab==='carteiras'&&<PortfoliosAdmin token={token}/>}
   {tab==='conta'&&<section className="cis-panel cis-co-section"><div className="cis-co-section-head"><div><h3>A minha conta</h3><p>Sessão iniciada como <b>{role}</b>. Pode alterar a sua palavra-passe a qualquer momento.</p></div></div>

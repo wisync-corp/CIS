@@ -2332,3 +2332,14 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-sub-total strong{white-space:nowrap}
 @media(max-width:1000px){.cis-sub-config{grid-template-columns:1fr}}
 .cis-sub-cycle button{text-align:left;flex:1}
+/* Perfil do utilizador (nome na barra lateral) */
+.cis-profile-open{border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:4px 6px;margin:-4px -6px;border-radius:8px;min-width:0}
+.cis-profile-open:hover,.cis-profile-open.on{background:#ffffff14}
+.cis-me{display:flex;flex-direction:column;gap:16px}
+.cis-me-hero{display:flex;align-items:center;gap:18px;padding:22px 26px;border-radius:16px;color:#fff;background:linear-gradient(125deg,var(--cis-hero-from,var(--cis-primary)),var(--cis-hero-to,#2b1d5c))}
+.cis-me-avatar{display:grid;place-items:center;width:62px;height:62px;border-radius:18px;background:#ffffff22;border:1px solid #ffffff33;font-size:calc(26px * var(--cis-fs));font-weight:800}
+.cis-me-hero span:not(.cis-me-avatar){font-size:calc(11px * var(--cis-fs));letter-spacing:1.8px;font-weight:800;opacity:.8}
+.cis-me-hero h1{margin:4px 0;color:#fff;font-size:calc(26px * var(--cis-fs))}
+.cis-me-hero p{margin:0;display:flex;align-items:center;gap:6px;opacity:.9}
+.cis-me-tabs{align-self:flex-start}
+.cis-me-actions{display:flex;gap:10px;flex-wrap:wrap}
