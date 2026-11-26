@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
-import {Ban,AlertTriangle,CalendarClock,X as XIcon} from 'lucide-react';
+import {Ban,AlertTriangle,CalendarClock,X as XIcon,CreditCard} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
 import LongDelinquency,{type Candidates} from './LongDelinquency';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays, MessageSquare} from 'lucide-react';
@@ -18,6 +18,7 @@ import BootScreen,{type BootStep} from './BootScreen';
 import Overview,{type ExtractoPreset} from './Overview';
 import SimulatorDesk from './SimulatorDesk';
 import ConnectionSettings from './ConnectionSettings';
+import AdminProfile,{type ProfileTab} from './AdminProfile';
 import type {ThemeId} from './theme';
 import {PermsContext,type Perm} from './perms';
 import PasswordChange from './PasswordChange';
@@ -50,6 +51,9 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const allowedNav=nav.filter(n=>can(n.perm));
  const [active,setActiveRaw]=useState(()=>allowedNav[0]?.label??'Definições'),[open,setOpen]=useState(false);
  const setActive=(label:string)=>{if(allowedNav.some(n=>n.label===label))setActiveRaw(label);};
+ // «Perfil» não está no menu: abre-se pelo nome do utilizador (conta e, para o administrador, a subscrição).
+ const [profileTab,setProfileTab]=useState<{tab:ProfileTab;key:number}>({tab:'conta',key:0});
+ const openProfile=(tab:ProfileTab)=>{setProfileTab({tab,key:Date.now()});setActiveRaw('Perfil');setOpen(false);};
  const [pwOpen,setPwOpen]=useState(false);
  // Visão geral e Dashboard num só separador; o ecrã de entrada prepara os dois antes de mostrar o sistema.
  const hasDash=can('relatorios'),hasOverview=can('ver');
@@ -60,6 +64,14 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const [ldReady,setLdReady]=useState(!canDecideBlack);
  const [ldOpen,setLdOpen]=useState(false);
  const [ldNotice,setLdNotice]=useState('');
+ // Subscrição do CIS: aviso de teste, vencimento próximo ou expiração (fecha-se por sessão).
+ const [sub,setSub]=useState<{instalado:boolean;estado?:string;dias?:number;plano_nome?:string;valido_ate?:string;pode_gerir?:boolean}|null>(null);
+ const [subHidden,setSubHidden]=useState(()=>{try{return sessionStorage.getItem('cis_sub_aviso')==='1';}catch{return false;}});
+ useEffect(()=>{const c=new AbortController();
+  fetch(noticesApi+'/cis/subscricao/estado',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(r=>r.ok?r.json():null).then(v=>{if(!c.signal.aborted)setSub(v);}).catch(()=>{});
+  return()=>c.abort();},[token,active]);
+ const subShow=!!sub?.instalado&&!subHidden&&(sub.estado==='carencia'||sub.estado==='expirada'||(!!sub.pode_gerir&&(sub.estado==='teste'||sub.estado==='a_vencer')));
  const [ovKey,setOvKey]=useState(0);
  const ldKey='cis_ld_'+new Date().toISOString().slice(0,10);
  useEffect(()=>{if(!canDecideBlack)return;const c=new AbortController();
@@ -146,7 +158,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
    <div className="cis-brand"><img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
    <nav aria-label="Navegação principal">{allowedNav.map(({label,icon:Icon})=><button type="button" key={label} className={active===label?'current':''} onClick={()=>{setExtractoContract(null);setRemindersMode(0);setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
-   <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><div className="cis-profile-name"><strong>{name}</strong><small>{role}{agency?' · '+agency:''}</small></div><button type="button" className="cis-profile-key" onClick={()=>setPwOpen(true)} title="Alterar a minha palavra-passe" aria-label="Alterar a minha palavra-passe"><KeyRound size={15}/></button><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
+   <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><button type="button" className={'cis-profile-name cis-profile-open'+(active==='Perfil'?' on':'')} onClick={()=>openProfile('conta')} title="Abrir o meu perfil"><strong>{name}</strong><small>{role}{agency?' · '+agency:''}</small></button><button type="button" className="cis-profile-key" onClick={()=>setPwOpen(true)} title="Alterar a minha palavra-passe" aria-label="Alterar a minha palavra-passe"><KeyRound size={15}/></button><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
    <header className="cis-top"><div className="cis-breadcrumb"><button type="button" className="cis-hamburger" onClick={()=>setOpen(!open)} aria-label="Abrir navegação"><Menu size={22}/></button><img className="cis-top-logo" src={logoCompactaClaro} alt="CIS" width={92} height={30}/><span>Plataforma CIS</span><span className="cis-separator">/</span><strong>{active}</strong></div><div className="cis-top-right">{can('ver')&&<button type="button" className="cis-client-edit" aria-haspopup="dialog" aria-controls="cis-notice-dialog" aria-expanded={noticeOpen} onClick={()=>{setNoticeOpen(true);setNoticeRefresh(v=>v+1);}}><Bell size={16}/> Avisos {notices&&'('+String(noticeTotal(notices))+')'}</button>}<span className="cis-env"><span/> Desenvolvimento</span><span className="cis-avatar">{name.charAt(0).toUpperCase()}</span></div></header>
@@ -160,7 +172,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
      </tbody></table></div>
      {notices.paginas>1&&<div className="cis-collections-pagination"><button type="button" disabled={noticePage<=1} onClick={()=>setNoticePage(p=>p-1)}>Anterior</button><span>{noticePage} / {notices.paginas}</span><button type="button" disabled={noticePage>=notices.paginas} onClick={()=>setNoticePage(p=>p+1)}>Seguinte</button></div>}
     </>}
-   </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Caixa'&&active!=='Simulador'&&active!=='Visão geral'&&<><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
+   </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Perfil'&&active!=='Caixa'&&active!=='Simulador'&&active!=='Visão geral'&&<><div className="cis-kicker">CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO</div>
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?(homeTab==='dashboard'?'Dashboard de análise: carteira, mutuários e desempenho financeiro.':'Visão integrada da carteira de microcrédito e das operações financeiras.') :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Agenda de cobrança'?'Folha de cobrança do dia: promessas de pagamento, contactos agendados, atrasos sem contacto e lembretes automáticos.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Agenda de cobrança'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
     {active==='Visão geral'&&<div className="cis-home-head">
      <div><span className="cis-kicker">CIS · {homeTab==='dashboard'?'DASHBOARD DE ANÁLISE':'VISÃO GERAL'}</span><h1>Bem-vindo, {name.split(' ')[0]}</h1></div>
@@ -169,6 +181,11 @@ export default function Dashboard({token, name, role, permissions, agency, theme
       <button type="button" role="tab" aria-selected={homeTab==='dashboard'} className={homeTab==='dashboard'?'selected':''} onClick={()=>setHomeTab('dashboard')}><BarChart3 size={16}/> Dashboard{dashDone&&!dashDone.ok?<em>!</em>:null}</button>
      </div>}
     </div>}
+    {subShow&&sub&&<div className={'cis-sub-banner '+(sub.estado==='carencia'||sub.estado==='expirada'?'bad':'warn')} role="status"><CreditCard size={18}/>
+     <span>{sub.estado==='teste'?<>Período de teste do CIS (plano {sub.plano_nome}): {sub.dias===0?'termina hoje':`faltam ${sub.dias} dia(s)`}.</>:sub.estado==='a_vencer'?<>A subscrição do CIS vence {sub.dias===0?'hoje':`dentro de ${sub.dias} dia(s)`}.</>:sub.estado==='carencia'?<>A subscrição do CIS venceu: está em período de carência.</>:<>A subscrição do CIS expirou: não é possível activar novos utilizadores.</>}
+      {!sub.pode_gerir&&' Fale com o administrador.'}</span>
+     {sub.pode_gerir&&<button type="button" className="go" onClick={()=>openProfile('subscricao')}>{sub.estado==='teste'?'Escolher plano':'Renovar agora'}</button>}
+     <button type="button" className="close" aria-label="Fechar aviso da subscrição" onClick={()=>{setSubHidden(true);try{sessionStorage.setItem('cis_sub_aviso','1');}catch{/* */}}}><XIcon size={16}/></button></div>}
     {ldNotice&&<div className="cis-secondary-success" role="status"><Ban size={17}/>{ldNotice}<button type="button" className="cis-edit-action" onClick={()=>setLdNotice('')}>Fechar</button></div>}
     {ldOpen&&ld&&<LongDelinquency token={token} data={ld} onClose={()=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');}}
       onDone={msg=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');setLdNotice(msg);setOvKey(k=>k+1);setLd(v=>v?{...v,candidatos:[]}:v);}}/>}
@@ -183,7 +200,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
      <button type="button" role="tab" aria-selected={mutTab==='cadastro'} className={mutTab==='cadastro'?'selected':''} onClick={()=>setMutTab('cadastro')}><Users size={16}/> Cadastro</button>
      <button type="button" role="tab" aria-selected={mutTab==='lista'} className={mutTab==='lista'?'selected':''} onClick={()=>setMutTab('lista')}><Ban size={16}/> Lista negra{blackCount>0&&<em>{blackCount}</em>}</button>
     </div>}
-    {active==='Visão geral'?(hasOverview?<div className="cis-home-overview" hidden={homeTab!=='resumo'}><Overview key={ovKey} token={token} onNavigate={setActive} onLoaded={()=>setOvReady(true)} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/></div>:null):active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:active==='Mutuários'&&mutTab==='lista'?<BlacklistDesk token={token} onProfileChange={setClientProfileOpen} onCount={setBlackCount}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
+    {active==='Visão geral'?(hasOverview?<div className="cis-home-overview" hidden={homeTab!=='resumo'}><Overview key={ovKey} token={token} onNavigate={setActive} onLoaded={()=>setOvReady(true)} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/></div>:null):active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Perfil'?<AdminProfile key={profileTab.key} token={token} name={name} role={role} agency={agency} initialTab={profileTab.tab} onChangePassword={()=>setPwOpen(true)} onLogout={onLogout}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:active==='Mutuários'&&mutTab==='lista'?<BlacklistDesk token={token} onProfileChange={setClientProfileOpen} onCount={setBlackCount}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
     {hasDash&&<AnalyticsDashboard token={token} visible={active==='Visão geral'&&homeTab==='dashboard'} onProgress={setDash} onReady={(ok,msg)=>setDashDone({ok,msg})}/>}
    </main>
   </div>

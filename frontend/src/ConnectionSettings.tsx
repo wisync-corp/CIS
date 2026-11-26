@@ -27,7 +27,7 @@ export default function ConnectionSettings({token,role,theme,onThemeChange,onCha
  .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});return ()=>ctrl.abort();
  },[token,role,reload]);
  const NAV:{grupo:string;items:{id:string;title:string;icon:any}[]}[]=[
-  {grupo:'Empresa',items:COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))},
+  {grupo:'Empresa',items:[...COMPANY_SECTIONS.map(s=>({id:s.id,title:s.title,icon:s.icon}))]},
   {grupo:'Parametrização',items:[{id:'precos',title:'Tabela de preços',icon:Table2},{id:'movimentos',title:'Tipos de movimento',icon:ArrowLeftRight},{id:'modelos',title:'Modelos de contrato',icon:FileSignature}]},
   {grupo:'Equipa',items:[{id:'utilizadores',title:'Utilizadores',icon:UsersRound},{id:'agencias',title:'Agências',icon:Building2},{id:'carteiras',title:'Carteiras',icon:Briefcase},{id:'conta',title:'A minha conta',icon:KeyRound}]},
   {grupo:'Sistema',items:[{id:'aparencia',title:'Aparência',icon:Palette},{id:'glossario',title:'Glossário',icon:BookA},{id:'ligacao',title:'Ligação ao servidor',icon:Server}]}];

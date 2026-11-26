@@ -1407,6 +1407,71 @@ $xn=collect($xl['linhas'])->pluck('contrato')->unique()->all();
 $xc=DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$xn)->pluck('Nº de Cliente')->map(fn($v)=>(int)$v)->unique()->all();
 ok(in_array('LD-0001',$xn,true) && !array_diff($xc,$xb) && collect($xl['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'«Ver no extracto» da lista negra: só mutuários em lista negra, prestações em dívida');
 
+echo "== Subscrição do CIS: planos, utilizadores e pagamentos M-Pesa / e-Mola\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_26_000270_cis_subscription.php','--force'=>true]);
+\App\Support\Subscription::reset();
+$SC=new \App\Http\Controllers\Api\SubscriptionController();
+$S=\App\Support\Subscription::class;
+ok($S::ready(),'tabelas da subscrição instaladas');
+$sub=$S::current();
+ok($sub->plano==='essencial' && $sub->estado==='teste' && $S::status($sub)['estado']==='teste' && $S::status($sub)['dias']===14,'primeiro acesso: 14 dias de teste no plano Essencial');
+$q=$S::quote('essencial',2,'anual');
+ok(abs($q['mensal']-2600)<0.01 && abs($q['total']-26000)<0.01 && $q['meses']===12 && abs($q['poupanca']-5200)<0.01 && $q['utilizadores']===5,'preço: 1.900 + 2×350 = 2.600/mês; anual paga 10 meses e usa 12');
+ok($S::msisdn('+258 84 123 4567')==='841234567' && $S::msisdn('87 1234567')==='871234567' && $S::msisdn('21123456')===null,'números moçambicanos normalizados');
+$act=$S::activeUsers();
+$need=max(0,$act-3);
+ok(status(fn()=>$SC->pay(req('/x',['plano'=>'essencial','utilizadores_extra'=>$need,'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$ag1)))===403,'só o administrador paga a subscrição');
+ok(status(fn()=>$SC->pay(req('/x',['plano'=>'essencial','utilizadores_extra'=>$need,'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'861234567'],$admin)))===422,'M-Pesa exige número Vodacom (84/85)');
+if($act>3) ok(status(fn()=>$SC->pay(req('/x',['plano'=>'essencial','utilizadores_extra'=>0,'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin)))===422,'não deixa escolher menos utilizadores do que os activos');
+// Limite de utilizadores: no limite, não cria nem reactiva contas.
+DB::table('cis_subscription')->update(['utilizadores_extra'=>max(0,$act-3)]);
+ok(status(fn()=>$S::requireSeat())===402,"limite atingido ({$act} activos): novo utilizador recusado com indicação de Definições › Subscrição");
+DB::table('cis_subscription')->update(['utilizadores_extra'=>$act]);
+ok(status(fn()=>$S::requireSeat())===200,'com lugares livres o utilizador é criado');
+// Pagamento manual (sem chaves da operadora): referência pendente, comprovativo, confirmação pela WiSync.
+config(['cis_subscription.simulacao'=>false,'cis_subscription.mpesa.api_key'=>'','cis_subscription.emola.wsdl'=>'']);
+$r1=data($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'emola','telefone'=>'87 123 4567'],$admin)));
+$p1=$r1['pagamento'];
+ok($p1['estado']==='pendente' && $p1['modo']==='manual' && abs($p1['valor']-(3500+300*max(0,$act-10)))<0.01 && str_contains($p1['telefone'],'*'),'e-Mola sem integração: referência pendente, valor calculado no servidor, número mascarado');
+ok(status(fn()=>$SC->proof(req('/x',['comprovativo'=>'ab'],$admin),$p1['referencia']))===422,'comprovativo curto recusado');
+$SC->proof(req('/x',['comprovativo'=>'MP9KJ3XYZ1'],$admin),$p1['referencia']);
+ok(DB::table('cis_subscription_payments')->where('referencia',$p1['referencia'])->value('comprovativo')==='MP9KJ3XYZ1','comprovativo do SMS registado');
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('cis:subscricao',['referencia'=>$p1['referencia'],'--confirmar'=>true,'--transacao'=>'EM123']);
+$sub=$S::current();$today=$S::today();
+ok($sub->plano==='profissional' && $sub->estado==='activa' && $sub->valido_ate===$today->addMonthsNoOverflow(1)->toDateString(),'WiSync confirma na VPS: plano Profissional activo por 1 mês a contar de hoje (o teste não soma)');
+$S::confirm($p1['referencia'],'outra vez');
+ok($S::current()->valido_ate===$sub->valido_ate,'confirmar duas vezes não prolonga duas vezes');
+// Simulação (testes): confirma na hora e soma ao fim actual.
+config(['cis_subscription.simulacao'=>true]);
+$r2=data($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'anual','metodo'=>'mpesa','telefone'=>'258851234567'],$admin)));
+ok($r2['pagamento']['estado']==='confirmado' && $S::current()->valido_ate===\Carbon\CarbonImmutable::parse($sub->valido_ate)->addMonthsNoOverflow(12)->toDateString(),'renovação anual soma 12 meses ao fim actual, sem perder dias');
+config(['cis_subscription.simulacao'=>false]);
+// M-Pesa: token = API key cifrada com a chave pública (RSA PKCS#1).
+$kp=openssl_pkey_new(['private_key_bits'=>1024,'private_key_type'=>OPENSSL_KEYTYPE_RSA]);$pub=openssl_pkey_get_details($kp)['key'];
+$b64=trim(preg_replace('/-----[^-]+-----|\s+/','',$pub));
+openssl_private_decrypt(base64_decode(\App\Support\Payments\MpesaGateway::bearer('chave-de-teste',$b64)),$plain,$kp,OPENSSL_PKCS1_PADDING);
+ok($plain==='chave-de-teste','M-Pesa Open API: token cifrado com a chave pública do portal');
+\Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-2006','output_ResponseDesc'=>'Insufficient balance'],422)]);
+config(['cis_subscription.mpesa.api_key'=>'k','cis_subscription.mpesa.public_key'=>$b64,'cis_subscription.mpesa.service_provider_code'=>'171717']);
+ok($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin))->getStatusCode()===422
+  && DB::table('cis_subscription_payments')->orderByDesc('id')->value('operadora_mensagem')==='Saldo M-Pesa insuficiente.','M-Pesa recusa por saldo: pagamento falhado com mensagem clara');
+\Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());\Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['output_ResponseCode'=>'INS-0','output_ResponseDesc'=>'Request processed successfully','output_TransactionID'=>'TX55'],201)]);
+$before=$S::current()->valido_ate;
+$r3=data($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'mpesa','telefone'=>'841234567'],$admin)));
+ok($r3['pagamento']['estado']==='confirmado' && $r3['pagamento']['operadora_transacao']==='TX55' && $S::current()->valido_ate>$before,'M-Pesa INS-0: confirmado e acesso renovado na hora');
+ok(\Illuminate\Support\Facades\Http::recorded(fn($rq)=>str_contains($rq->url(),':18352/ipg/v1x/c2bPayment/singleStage/') && $rq['input_CustomerMSISDN']==='258841234567' && $rq['input_ServiceProviderCode']==='171717' && str_starts_with($rq->header('Authorization')[0],'Bearer '))->count()>=1,'pedido C2B single stage com MSISDN 258…, código do fornecedor e token');
+config(['cis_subscription.mpesa.api_key'=>'']);
+// Callback e-Mola (modo assíncrono).
+$r4=data($SC->pay(req('/x',['plano'=>'profissional','utilizadores_extra'=>max(0,$act-10),'ciclo'=>'mensal','metodo'=>'emola','telefone'=>'861234567'],$admin)))['pagamento'];
+$cb=fn(array $b,string $tok)=>Request::create('/x?token='.$tok,'POST',$b);
+config(['cis_subscription.emola.callback_secret'=>'segredo-123']);
+ok(status(fn()=>$SC->emolaCallback($cb(['transId'=>$r4['referencia'],'errorCode'=>'0'],'errado')))===403,'callback e-Mola sem o segredo é recusado');
+$SC->emolaCallback($cb(['transId'=>$r4['referencia'],'errorCode'=>'0','requestId'=>'EM777'],'segredo-123'));
+ok(DB::table('cis_subscription_payments')->where('referencia',$r4['referencia'])->value('estado')==='confirmado','callback e-Mola com sucesso confirma o pagamento');
+$sm=data($SC->summary(req('/x',[],$ag1)));
+ok($sm['instalado'] && $sm['estado']==='activa' && $sm['pode_gerir']===false && $sm['limite']>=$sm['utilizadores'],'resumo para o aviso no topo (agente vê, não gere)');
+ok(DB::table('Extracto')->where('Descrição','like','%CIS%')->where('Descrição','like','%'.$p1['referencia'].'%')->count()===0,'a subscrição não entra no Extracto nem na Caixa');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
