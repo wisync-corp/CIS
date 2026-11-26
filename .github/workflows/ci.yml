@@ -188,6 +188,55 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate
       - run: php -l app/Services/CashAccountLedger.php && php -l app/Services/ContractHistory.php
       - run: php tests/contract_cash_flows_mysql_rehearsal.php
+      - name: Verificação completa do sistema (todas as leituras por função + fluxo ponta a ponta)
+        run: php tests/system_full_check.php
+      - name: Interface — palavra-passe dos utilizadores de verificação
+        run: php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo App\Models\User::query()->where("email","like","verificacao.%@cis.test")->update(["password"=>bcrypt(getenv("CIS_E2E_PASSWORD")),"must_change_password"=>false,"active"=>true])," utilizadores\n";'
+        env:
+          CIS_E2E_PASSWORD: Verificacao-CIS-2026
+      - name: Interface — arrancar a API real
+        run: |
+          nohup php artisan serve --host=127.0.0.1 --port=8000 > /tmp/cis-api.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8000/up >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/up >/dev/null
+        env:
+          CACHE_STORE: array
+          APP_DEBUG: 'true'
+          CIS_PRIVATE_PREVIEW: 'true'
+          CIS_CONTRACTS_READ_APPROVED: 'true'
+          CIS_CLIENTES_PREVIEW_APPROVED: 'true'
+          CIS_CLIENTES_EDIT_APPROVED: 'true'
+          CIS_CASH_WRITES_APPROVED: 'true'
+          CIS_CASH_CONTRACT_FLOWS_APPROVED: 'true'
+          CIS_COLLECTION_WRITES_APPROVED: 'true'
+          CIS_NEW_CONTRACTS_APPROVED: 'true'
+          CIS_EXTENDED_CALCULATIONS_APPROVED: 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Interface — construir e pré-visualizar o frontend (mesma origem que a VPS)
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          VITE_API_URL=/api npm run build
+          npm i --no-save --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+          nohup env CIS_E2E_API=http://127.0.0.1:8000 npx vite preview --port 4175 --strictPort > /tmp/cis-web.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4175/ >/dev/null && break; sleep 1; done
+      - name: Interface — todas as páginas por função (administrador, gestor, agente)
+        working-directory: frontend
+        run: node e2e/system-ui.mjs
+        env:
+          CIS_E2E_PASSWORD: Verificacao-CIS-2026
+      - name: Interface — registo da API em caso de falha
+        if: failure()
+        run: tail -n 120 /tmp/cis-api.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verificacao-interface
+          path: frontend/e2e-report
+          if-no-files-found: ignore
       - run: bash -n ../deploy/install-contract-history.sh && bash -n ../deploy/install-company-settings.sh && bash -n ../deploy/install-user-management.sh && bash -n ../deploy/enable-client-full-edit.sh && bash -n ../deploy/renumber-contracts.sh && bash -n ../deploy/activate-collection-operations.sh
       - run: bash -n ../deploy/activate-contract-cash-flows.sh
       - run: bash -n ../deploy/disable-contract-cash-flows.sh
