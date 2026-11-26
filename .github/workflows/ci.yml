@@ -48,6 +48,7 @@ jobs:
       - run: bash -n ../deploy/install-credit-proposals.sh
       - run: bash -n ../deploy/install-collection-contacts.sh
       - run: bash -n ../deploy/install-subscription.sh
+      - run: bash -n ../deploy/rehearse-full-system.sh
       - run: bash -n ../deploy/install-credit-dossier.sh
       - run: bash -n ../deploy/install-client-registry.sh
       - run: cp .env.example .env
