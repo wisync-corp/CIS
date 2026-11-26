@@ -1336,10 +1336,10 @@ ok($db->table('Clientes')->where('ID',7)->value('Conduta')==='Padrão' && \App\S
 echo "== Incumprimento prolongado: lista negra automática com autorização\n";
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_26_000260_cis_blacklist_origin.php','--force'=>true]);
 ok(Schema::hasColumn('cis_client_blacklist','origem') && Schema::hasColumn('cis_client_blacklist','dias_atraso'),'lista negra regista a origem e os dias de atraso');
-$row=(array)$db->table('Clientes')->where('ID',7)->first();$row['ID']=9902;$row['Nome Completo']='Mutuário Muito Atrasado';$row['Conduta']='Padrão';
+$row=(array)$db->table('Clientes')->where('ID',7)->first();$row['ID']=9950;$row['Nome Completo']='Mutuário Muito Atrasado';$row['Conduta']='Padrão';
 $db->table('Clientes')->insert($row);
 $ct=(array)$db->table('Contractos')->orderBy('Ordem')->first();unset($ct['Ordem']);
-$ct=array_replace($ct,['Nr do Contracto'=>'LD-0001','Nome do Cliente'=>'Mutuário Muito Atrasado','Nº de Cliente'=>9902,'Estado'=>'Pagamento Atrasado',
+$ct=array_replace($ct,['Nr do Contracto'=>'LD-0001','Nome do Cliente'=>'Mutuário Muito Atrasado','Nº de Cliente'=>9950,'Estado'=>'Pagamento Atrasado',
     'Data de Inicio'=>now('Africa/Maputo')->subDays(150)->toDateString(),'Data de Cobrança'=>now('Africa/Maputo')->subDays(120)->toDateString(),
     'Valor a Pagar'=>1000,'Valor de Juros'=>200]);
 if(array_key_exists('Valor Pago',$ct))$ct['Valor Pago']=0;
@@ -1348,23 +1348,23 @@ $db->table('Contractos')->insert($ct);
 $ovr=function($u){$q=Request::create('/x','GET');$q->setUserResolver(static fn()=>$u);return data((new \App\Http\Controllers\Api\OverviewController())($q));};
 $before=$ovr($admin);
 $cd=data($RC->candidates(req('/x',[],$admin)));
-$c9=collect($cd['candidatos'])->firstWhere('id',9902);
+$c9=collect($cd['candidatos'])->firstWhere('id',9950);
 ok($cd['pode_decidir'] && $cd['dias']===90 && $c9 && $c9['dias']>=120 && abs($c9['valor_divida']-1000)<0.01,'ao entrar: mostra quem tem mais de 90 dias de atraso, com a dívida');
 ok(data($RC->candidates(req('/x',[],$ag1)))['pode_decidir']===false,'só quem aprova propostas decide (autorização)');
 $db->table('cis_company_settings')->updateOrInsert(['chave'=>'dias_lista_negra'],['valor'=>'200','updated_at'=>now(),'created_at'=>now()]);\App\Support\CompanySettings::forget();
-ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9902),'o limite de dias é uma definição da empresa');
+ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9950),'o limite de dias é uma definição da empresa');
 $db->table('cis_company_settings')->where('chave','dias_lista_negra')->delete();\App\Support\CompanySettings::forget();
-ok(status(fn()=>$RC->autoBlacklist(req('/x',['clientes'=>[9902]],$ag1)))===403,'agente não transfere para a lista negra');
-$tr=data($RC->autoBlacklist(req('/x',['clientes'=>[9902,7]],$admin)));
-$bl9=$db->table('cis_client_blacklist')->where('client_id',9902)->whereNull('removed_at')->first();
+ok(status(fn()=>$RC->autoBlacklist(req('/x',['clientes'=>[9950]],$ag1)))===403,'agente não transfere para a lista negra');
+$tr=data($RC->autoBlacklist(req('/x',['clientes'=>[9950,7]],$admin)));
+$bl9=$db->table('cis_client_blacklist')->where('client_id',9950)->whereNull('removed_at')->first();
 ok($tr['transferidos']===1 && $tr['ignorados']===1 && $bl9 && $bl9->origem==='automatica' && (int)$bl9->dias_atraso>=120 && str_contains($bl9->motivo,'Incumprimento prolongado'),'«Sim» transfere só quem passa do critério, com motivo de incumprimento prolongado');
-ok($db->table('Clientes')->where('ID',9902)->value('Conduta')==='Lista Negra','a Conduta do cadastro passa a «Lista Negra»');
+ok($db->table('Clientes')->where('ID',9950)->value('Conduta')==='Lista Negra','a Conduta do cadastro passa a «Lista Negra»');
 $after=$ovr($admin);
 ok(abs(((float)$before['carteira']['valor_a_receber']-(float)$after['carteira']['valor_a_receber'])-1000)<0.01 && $after['lista_negra']['mutuarios']>=1 && (float)$after['lista_negra']['valor']>=1000,'o crédito sai da carteira corrente e aparece em «Crédito em lista negra»');
 $li=data($RC->index(req('/x',[],$ag1)));
-$r9=collect($li['data'])->firstWhere('client_id',9902);
+$r9=collect($li['data'])->firstWhere('client_id',9950);
 ok($r9 && $r9['origem']==='automatica' && abs($r9['divida']-1000)<0.01 && $li['credito_lista_negra']['valor']>=1000,'a lista negra mostra a dívida de cada um e o total');
-ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9902),'depois de transferido já não volta a ser proposto');
+ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9950),'depois de transferido já não volta a ser proposto');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
