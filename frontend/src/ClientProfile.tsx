@@ -37,7 +37,7 @@ const sections:{name:Tab;icon:typeof UserRound;fields:{key:string;label:string}[
   {key:'pessoa_referencia_contacto',label:'Contacto de emergência'},
   {key:'grau_parentesco_referencia',label:'Grau de parentesco'}]},
  {name:'Administração',icon:FileText,fields:[
-  {key:'ID',label:'ID interno'}, {key:'Conduta',label:'Conduta'},
+  {key:'ID',label:'ID interno'},
   {key:'usuario',label:'Utilizador associado'}]}
 ];
 // Ficha original: tudo editável excepto o n.º do mutuário (Numeração), o ID interno e o utilizador associado.
