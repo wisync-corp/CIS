@@ -18,7 +18,7 @@ final class ContractListController extends Controller
         $due = 'Data de Cobrança';
         $pending = DB::connection('mysql_legacy')->table('Contractos')
             ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado'])
-            ->whereNotIn('Estado do Contrato', ['Finalizado', 'Liquidado', 'Cancelado', 'Anulado']);
+            ->where(fn ($q) => $q->whereNull('Estado do Contrato')->orWhereNotIn('Estado do Contrato', ['Finalizado', 'Liquidado', 'Cancelado', 'Anulado']));
         \App\Support\Branches::restrict($pending, $request->user(), $request->query('agencia'));
         // Lista negra: separada (fora da carteira corrente); atraso e cobrança são só da carteira corrente.
         $black = \App\Support\ClientRegistry::blacklistedIds();
