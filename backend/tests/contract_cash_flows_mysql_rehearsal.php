@@ -165,9 +165,11 @@ echo "== Contrato histórico atrasado, juro variável, com multa\n";
 $q=data($col->preview(req('/x',['data_pagamento'=>$today,'cobrar_multa'=>true],$user),'C-0101',$late));
 // capital 2000 × 1% × 40 dias = 800; base 2800; multa 10% de 800 = 80; total 2880
 ok($q['total_texto']==='2880.00' && $q['dias_atraso']===5 && $q['estado']==='Pago em Atraso','variável: 2000×1%×40d=800 + multa 80 = 2880.00');
-$r=data($col->collect(req('/x',['cobrar_multa'=>true,'valor_recebido'=>'2880.00','conta_id'=>$banco,
+$r=data($col->collect(req('/x',['cobrar_multa'=>true,'mora'=>['tipo'=>'legado'],'valor_recebido'=>'2880.00','conta_id'=>$banco,
     'idempotency_key'=>'44444444-4444-4444-8444-444444444444']+$pay,$user),'C-0101',$late));
 ok($r['registado'] && $r['saldo_conta_actual']==='22880.00','entrada na conta BIM-001 escolhida');
+$stored=json_decode($db->table('cis_contractos_historico')->where('operation_key','contract:collect:44444444-4444-4444-8444-444444444444')->value('after_snapshot'),true);
+ok(($stored['Regra de mora']['cobrado_centimos']??null)===8000,'histórico guarda a regra legada e a mora cobrada');
 
 echo "== Prestação com entrada já existente no Extracto\n";
 ok(status(fn()=>$col->collect(req('/x',['idempotency_key'=>'55555555-5555-4555-8555-555555555555']+$pay,$user),'C-0102',$dupe))===409,'bloqueada (409) — evita cobrar duas vezes');
@@ -1286,6 +1288,37 @@ ok(count($hist)===2 && $hist[1]['removed_motivo']==='Dívida regularizada em aco
 $sr=Request::create('/x?q=Mutu','GET');$sr->setUserResolver(static fn()=>$admin);
 $found=collect(data($RC->search($sr))['data']);
 ok($found->firstWhere('id',9901)['lista_negra']===true,'pesquisa de avalista marca quem está na lista negra');
+
+echo "\nMora por tratamento e periodicidade\n";
+$lcDue=\Carbon\CarbonImmutable::parse('2026-01-31');
+$lcPaid=\Carbon\CarbonImmutable::parse('2026-02-15');
+$calcLate=static fn(array $rule,bool $adjust=false)=>\App\Services\LateCharge::calculate(
+    $rule,$lcDue,$lcPaid,100000,120000,0,0,false,$adjust
+);
+$examples=[
+    'fixo_unico'=>[['valor'=>'20.00'],2000],
+    'fixo_periodico'=>[['valor'=>'20','periodicidade'=>'semanal','carencia'=>2],2000],
+    'percentual_unico'=>[['taxa'=>'5','base'=>'capital'],5000],
+    'percentual_periodico'=>[['taxa'=>'2','base'=>'saldo','periodicidade'=>'semanal','periodos_iniciados'=>true],7200],
+    'escaloes'=>[['escaloes'=>[['dias'=>8,'valor'=>'35'],['dias'=>1,'valor'=>'10']]],3500],
+    'misto'=>[['valor'=>'10','componente'=>'fixo','valor_recorrente'=>'2','periodicidade'=>'diaria','tecto'=>'35'],3500],
+];
+foreach ($examples as $type=>[$rule,$expected]) {
+    ok($calcLate(['tipo'=>$type]+$rule)['cobrado_centimos']===$expected,'mora '.$type);
+}
+$tiers=['tipo'=>'escaloes','escaloes'=>[['dias'=>8,'valor'=>'35'],['dias'=>1,'valor'=>'10']],'acumular'=>true];
+ok($calcLate($tiers)['cobrado_centimos']===4500,'escalões acumulam apenas os limiares atingidos');
+ok($calcLate(['tipo'=>'fixo_periodico','valor'=>'10','periodicidade'=>'mensal','periodos_iniciados'=>true])['periodos']===1,
+    'mês de calendário iniciado entre 31 de Janeiro e 15 de Fevereiro');
+ok($calcLate(['tipo'=>'fixo_periodico','valor'=>'10','periodicidade'=>'quinzenal','carencia'=>2,'contar_desde_vencimento'=>true])['periodos']===1,
+    'carência ultrapassada pode contar desde o vencimento');
+ok($calcLate(['tipo'=>'fixo_periodico','valor'=>'10','periodicidade'=>'personalizada','dias_periodo'=>4])['periodos']===3,
+    'periodicidade personalizada considera os períodos completos');
+$dispensa=['tipo'=>'fixo_unico','valor'=>'20','decisao'=>'dispensar','motivo'=>'Autorização de ensaio'];
+ok($err(fn()=>$calcLate($dispensa))===403 && $calcLate($dispensa,true)['calculado_centimos']===2000
+    && $calcLate($dispensa,true)['cobrado_centimos']===0,'dispensa preserva o cálculo e exige permissão');
+$reduzir=['tipo'=>'fixo_unico','valor'=>'20','decisao'=>'reduzir','valor_reduzido'=>'10','motivo'=>'Autorização de ensaio'];
+ok($calcLate($reduzir,true)['cobrado_centimos']===1000,'redução cobra apenas o valor autorizado');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

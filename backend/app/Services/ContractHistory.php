@@ -28,13 +28,15 @@ final class ContractHistory
             abort_unless(isset($e[$required]) && $e[$required]!=='',500,'Histórico incompleto; operação cancelada.');
         }
         $json=fn($v)=>$v===null?null:json_encode($v,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+        $after=self::snapshot($e['after']??null);
+        if (isset($e['late_charge'])) $after['Regra de mora']=$e['late_charge'];
         return (int)$db->table('cis_contractos_historico')->insertGetId([
             'contract_number'=>(string)$e['contract_number'],
             'installment_ordem'=>$e['installment_ordem']??null,
             'installment_number'=>$e['installment_number']??null,
             'operation'=>(string)$e['operation'],
             'before_snapshot'=>$json(self::snapshot($e['before']??null)),
-            'after_snapshot'=>$json(self::snapshot($e['after']??null)),
+            'after_snapshot'=>$json($after),
             'extracto_nr'=>$e['extracto_nr']??null,
             'account_id'=>$e['account_id']??null,
             'amount'=>$e['amount']??null,
