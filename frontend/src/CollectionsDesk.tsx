@@ -248,7 +248,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  // para a nova prestação não nascer já vencida.
  function defaultStart(){const due=text(selectedInstallment?.['Data de Cobrança']).slice(0,10);const pay=/^\d{4}-\d{2}-\d{2}$/.test(datePayment)?datePayment:today();return due&&due>=pay?due:pay;}
  function chooseMode(value:Mode){if(!eligibleModes.includes(value))return;setMode(value);setInterestChoice('');setQuote(null);setConfirmReceipt(false);setPayKey('');setPaymentDone(null);if(value==='renovar_emprestimo'||value==='parcial')setRenewStart(defaultStart());setScenarioQuote(null);setPaymentAmount('');setCapitalPeriod('');setReviewDate(today());setMessage('');}
- function chooseOrd(value:string){setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
+ function chooseOrd(value:string){setLateDraft(initialLateCharge);setPayDate(today());setConfirmReceipt(false);setPayKey('');setPaymentDone(null);setOrd(value);setPaymentNature(null);setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');setMessage('');}
  useEffect(()=>{
   if(!selected){setReceipts(null);return;}
   const ctrl=new AbortController();setReceipts(null);setReceiptsError('');
