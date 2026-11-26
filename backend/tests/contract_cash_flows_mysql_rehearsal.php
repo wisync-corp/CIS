@@ -1303,7 +1303,13 @@ $examples=[
     'escaloes'=>[['escaloes'=>[['dias'=>8,'valor'=>'35'],['dias'=>1,'valor'=>'10']]],3500],
     'misto'=>[['valor'=>'10','componente'=>'fixo','valor_recorrente'=>'2','periodicidade'=>'diaria','tecto'=>'35'],3500],
 ];
+$simulator=new \App\Http\Controllers\Api\GenericSimulatorController();
+$simParams=['tipo_calculo'=>'multa','montante'=>'1200.00','capital'=>'1000.00','vencimento'=>'2026-01-31','data_referencia'=>'2026-02-15'];
 foreach ($examples as $type=>[$rule,$expected]) {
+    $simulation=data($simulator->preview(req('/x',$simParams+['mora'=>['tipo'=>$type]+$rule],$user)));
+    ok($simulation['mora_detalhe']['cobrado_centimos']===$expected
+        && $simulation['total_estimado']===\App\Services\CashAccountLedger::amount(120000+$expected)
+        && $simulation['movimento_registado']===false,'simulador de mora '.$type);
     ok($calcLate(['tipo'=>$type]+$rule)['cobrado_centimos']===$expected,'mora '.$type);
 }
 $tiers=['tipo'=>'escaloes','escaloes'=>[['dias'=>8,'valor'=>'35'],['dias'=>1,'valor'=>'10']],'acumular'=>true];

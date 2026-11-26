@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\LateCharge;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -40,6 +42,9 @@ final class GenericSimulatorController extends Controller
         \App\Support\Permissions::require($user,'ver');
         abort_unless(filter_var(env('CIS_PRIVATE_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),503,
             'Simulador disponível apenas na pré-visualização privada.');
+        if ($request->input('tipo_calculo')==='multa' && $request->has('mora')) {
+            return $this->previewLateCharge($request);
+        }
         $d=$request->validate([
             'montante'=>['required','string','max:24'],
             'prazo'=>['required','in:1 Semana,2 Semanas,3 Semanas,Mês'],
@@ -79,4 +84,36 @@ final class GenericSimulatorController extends Controller
             'aviso'=>'Simulação genérica, independente de contratos. Não corresponde a valor exigível, juros de mora aprovados, pagamento ou nova prestação registada.',
         ])->header('Cache-Control','no-store, private');
     }
+    private function previewLateCharge(Request $request)
+    {
+        $rules=LateCharge::rules();
+        $d=$request->validate([
+            ...$rules,
+            'mora'=>['required',...$rules['mora']],
+            'mora.tipo'=>['required','in:fixo_unico,fixo_periodico,percentual_unico,percentual_periodico,escaloes,misto'],
+            'mora.decisao'=>['sometimes','in:integral'],
+            'montante'=>['required','string','max:24'],
+            'capital'=>['required_if:mora.base,capital','nullable','string','max:24'],
+            'vencimento'=>['required','date_format:Y-m-d'],
+            'data_referencia'=>['required','date_format:Y-m-d'],
+        ]);
+        $balance=self::decimal($d['montante'],'montante');
+        $capital=isset($d['capital'])?self::decimal($d['capital'],'capital'):0;
+        abort_unless($balance>0,422,'O saldo da prestação deve ser superior a zero.');
+        abort_if($capital>$balance,422,'O capital em dívida não pode exceder o saldo da prestação.');
+        $due=CarbonImmutable::createFromFormat('!Y-m-d',$d['vencimento']);
+        $reference=CarbonImmutable::createFromFormat('!Y-m-d',$d['data_referencia']);
+        $detail=LateCharge::calculate($d['mora'],$due,$reference,$capital,$balance,0,0,false,false);
+        return response()->json([
+            'tipo_calculo'=>'multa','consulta_apenas'=>true,'contrato_associado'=>false,'movimento_registado'=>false,
+            'valor_base'=>self::amount($detail['base_centimos']),'saldo_prestacao'=>self::amount($balance),
+            'vencimento'=>$d['vencimento'],'data_referencia'=>$d['data_referencia'],
+            'dias_atraso'=>max(0,(int)$due->diffInDays($reference,false)),
+            'mora_detalhe'=>$detail,'acrescimo_calculado'=>self::amount($detail['cobrado_centimos']),
+            'total_estimado'=>self::amount($balance+$detail['cobrado_centimos']),
+            'arredondamento'=>'Estimativa arredondada a duas casas decimais',
+            'aviso'=>'Simulação informativa. O valor definitivo depende das condições do contrato e da data de pagamento.',
+        ])->header('Cache-Control','no-store, private');
+    }
+
 }
