@@ -71,6 +71,8 @@ final class StreamlitController extends Controller
             return response()->json([
                 'contractos' => $contracts->get(),
                 'clientes' => $clients->get(),
+                // Mutuários na lista negra: o Dashboard tira o seu crédito da carteira corrente e mostra-o à parte.
+                'lista_negra' => \App\Support\ClientRegistry::blacklistedIds(),
             ])->header('Cache-Control', 'no-store, private');
         });
     }

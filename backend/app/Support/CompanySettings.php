@@ -43,6 +43,9 @@ final class CompanySettings
         'lembrete_no_dia'         => ['cobranca','booleano',null,'1'],
         'lembretes_atraso_dias'   => ['cobranca','texto',40,'1,7,15,30'],
         'dias_sem_contacto'       => ['cobranca','inteiro',[1,90],'7'],
+        // Critério interno: incumprimento prolongado → proposta de lista negra ao entrar.
+        'dias_lista_negra'        => ['cobranca','inteiro',[30,720],'90'],
+        'lista_negra_automatica'  => ['cobranca','booleano',null,'1'],
         'canal_notificacao'       => ['cobranca','lista',['whatsapp_web','whatsapp','nenhum'],'whatsapp_web'],
         // Credit scoring
         'score_minimo'            => ['scoring','inteiro',[0,100],'60'],

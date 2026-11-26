@@ -103,6 +103,54 @@ final class ClientRegistry
         return array_values(array_unique(array_merge($ids, self::legacyBlackIds())));
     }
 
+    /** Dias do critério interno de incumprimento prolongado (Definições › Cobrança). */
+    public static function overdueLimit(): int
+    {
+        return max(1, (int) CompanySettings::num('dias_lista_negra'));
+    }
+
+    public static function motivoAutomatico(int $days, int $limit): string
+    {
+        return 'Incumprimento prolongado: '.$days.' dias de atraso no pagamento (critério interno: mais de '.$limit.' dias).';
+    }
+
+    /**
+     * Mutuários com prestações em atraso há mais de $limit dias (fora da lista negra), na agência/carteira do utilizador.
+     * @return array<int,array{id:int,nome:string,dias:int,contratos:int,prestacoes:int,valor_atraso:float,valor_divida:float}>
+     */
+    public static function overdueCandidates(?object $user, ?int $limit = null): array
+    {
+        $limit ??= self::overdueLimit();
+        $tz = 'Africa/Maputo';
+        $today = now($tz)->toDateString();
+        $cut = now($tz)->subDays($limit)->toDateString();
+        $legacy = DB::connection('mysql_legacy');
+        $pending = "`Estado` IN ('Pendente','Pagamento Atrasado')";
+        $q = $legacy->table('Contractos')->whereRaw($pending)->whereNotNull('Nº de Cliente');
+        Branches::restrict($q, $user);
+        $late = (clone $q)->where('Data de Cobrança', '<', $cut)
+            ->selectRaw('`Nº de Cliente` AS c, MIN(`Data de Cobrança`) AS mais_antiga, COUNT(DISTINCT `Nr do Contracto`) AS contratos, COUNT(*) AS prestacoes')
+            ->groupBy('Nº de Cliente')->get()->keyBy(fn ($r) => (int) $r->c);
+        if ($late->isEmpty()) return [];
+        $black = array_flip(self::blacklistedIds());
+        $ids = array_values(array_filter($late->keys()->all(), fn ($id) => !isset($black[$id])));
+        if (!$ids) return [];
+        $sums = (clone $q)->whereIn('Nº de Cliente', $ids)
+            ->selectRaw('`Nº de Cliente` AS c, ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS atraso, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS divida', [$today])
+            ->groupBy('Nº de Cliente')->get()->keyBy(fn ($r) => (int) $r->c);
+        $names = $legacy->table('Clientes')->whereIn('ID', $ids)->pluck('Nome Completo', 'ID');
+        $out = [];
+        foreach ($ids as $id) {
+            $l = $late[$id];
+            $out[] = ['id' => $id, 'nome' => (string) ($names[$id] ?? '#'.$id),
+                'dias' => (int) \Carbon\CarbonImmutable::parse(substr((string) $l->mais_antiga, 0, 10))->diffInDays(\Carbon\CarbonImmutable::parse($today)),
+                'contratos' => (int) $l->contratos, 'prestacoes' => (int) $l->prestacoes,
+                'valor_atraso' => (float) ($sums[$id]->atraso ?? 0), 'valor_divida' => (float) ($sums[$id]->divida ?? 0)];
+        }
+        usort($out, fn ($a, $b) => $b['dias'] <=> $a['dias']);
+        return $out;
+    }
+
     /** 422 se o mutuário estiver na lista negra. */
     public static function requireClear(int $id, string $who = 'Este mutuário'): void
     {

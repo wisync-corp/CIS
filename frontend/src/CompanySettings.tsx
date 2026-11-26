@@ -48,6 +48,8 @@ const SECTIONS:Section[]=[
    {k:'lembrete_no_dia',label:'Lembrete no dia do vencimento',type:'bool',help:'Sim: o mutuário recebe um lembrete no próprio dia do vencimento.'},
    {k:'lembretes_atraso_dias',label:'Lembretes de atraso',type:'text',placeholder:'1,7,15,30',help:'Dias de atraso em que é enviado o lembrete «Pagamento atrasado», separados por vírgulas.'},
    {k:'dias_sem_contacto',label:'Alerta de atraso sem contacto',type:'number',unit:'dias',help:'Na Agenda de cobrança, contratos em atraso sem contacto registado há este número de dias.'},
+   {k:'dias_lista_negra',label:'Incumprimento prolongado (lista negra)',type:'number',unit:'dias',help:'Critério interno: mutuários com prestações em atraso há mais destes dias são propostos para a lista negra e saem da carteira corrente.'},
+   {k:'lista_negra_automatica',label:'Propor a lista negra ao entrar',type:'bool',help:'Ao entrar no sistema, gestores e administradores vêem os mutuários acima do limite e decidem se os transferem para a lista negra.'},
    {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
  {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito','Propostas de crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[

@@ -3,6 +3,7 @@ import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
 import {Ban} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
+import LongDelinquency,{type Candidates} from './LongDelinquency';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays, MessageSquare} from 'lucide-react';
 import LegacyTable from './LegacyTable';
 import CashDesk from './CashDesk';
@@ -44,6 +45,23 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  // Visão geral e Dashboard num só separador; o ecrã de entrada prepara os dois antes de mostrar o sistema.
  const hasDash=can('relatorios'),hasOverview=can('ver');
  const [booted,setBooted]=useState(false);
+ // Incumprimento prolongado (critério interno): verificado na entrada para quem pode decidir.
+ const canDecideBlack=can('propostas.aprovar');
+ const [ld,setLd]=useState<Candidates|null>(null);
+ const [ldReady,setLdReady]=useState(!canDecideBlack);
+ const [ldOpen,setLdOpen]=useState(false);
+ const [ldNotice,setLdNotice]=useState('');
+ const [ovKey,setOvKey]=useState(0);
+ const ldKey='cis_ld_'+new Date().toISOString().slice(0,10);
+ useEffect(()=>{if(!canDecideBlack)return;const c=new AbortController();
+  fetch((import.meta.env.VITE_API_URL||'/api')+'/cis/lista-negra/candidatos',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(r=>r.ok?r.json():null).then(j=>{if(j)setLd(j as Candidates);}).catch(()=>{}).finally(()=>{if(!c.signal.aborted)setLdReady(true);});
+  return()=>c.abort();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[token]);
+ useEffect(()=>{if(booted&&ld?.pode_decidir&&ld.propor_ao_entrar&&ld.candidatos.length>0&&!sessionStorage.getItem(ldKey))setLdOpen(true);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[booted,ld]);
  const [homeTab,setHomeTab]=useState<'resumo'|'dashboard'>('resumo');
  const [ovReady,setOvReady]=useState(!hasOverview);
  const [dash,setDash]=useState<BootProgress>({pct:hasDash?5:100,text:'A aguardar'});
@@ -74,9 +92,9 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  useEffect(()=>{
   const dialog=noticeDialog.current;
   if(!dialog)return;
-  if(noticeOpen&&booted&&!dialog.open)dialog.showModal();
-  if((!noticeOpen||!booted)&&dialog.open)dialog.close();
- },[noticeOpen,role,booted]);
+  if(noticeOpen&&booted&&!ldOpen&&!dialog.open)dialog.showModal();
+  if((!noticeOpen||!booted||ldOpen)&&dialog.open)dialog.close();
+ },[noticeOpen,role,booted,ldOpen]);
  const [noticeReady,setNoticeReady]=useState(false);
  const [noticeBusy,setNoticeBusy]=useState(false);
  const [noticeError,setNoticeError]=useState(false);
@@ -99,12 +117,13 @@ export default function Dashboard({token, name, role, permissions, agency, theme
    .finally(()=>{if(!ctrl.signal.aborted){setNoticeBusy(false);setNoticeReady(true);}});
   return()=>ctrl.abort();
  },[token,role,noticeKind,noticePage,noticeRefresh]);
- const avisosOk=!hasOverview||noticeReady;
+ const avisosOk=(!hasOverview||noticeReady)&&ldReady;
  const bootPct=Math.round(8+(avisosOk?7:0)+(ovReady?(hasDash?15:85):0)+(hasDash?Math.min(100,dash.pct)*0.7:0));
  const bootSteps:BootStep[]=[
   {key:'sessao',label:'Sessão e permissões validadas',detail:role,state:'done'},
   ...(hasOverview?[{key:'visao',label:'Visão geral da carteira',detail:ovReady?'Indicadores do mês calculados':'A calcular carteira, recebimentos e Caixa',state:ovReady?'done':'now'} as BootStep]:[]),
   ...(hasOverview?[{key:'avisos',label:'Avisos de cobrança e atraso',detail:noticeReady?(notices?`${notices.atraso} em atraso · ${notices.cobranca} a vencer`:'Verificados'):'A verificar prestações em atraso e a vencer',state:noticeReady?'done':'now'} as BootStep]:[]),
+  ...(canDecideBlack?[{key:'ld',label:'Incumprimento prolongado',detail:ldReady?(ld&&ld.candidatos.length?`${ld.candidatos.length} mutuário(s) com mais de ${ld.dias} dias de atraso`:'Nenhum mutuário acima do critério'):'A verificar atrasos acima do critério interno',state:ldReady?(ld&&ld.candidatos.length?'warn':'done'):'now'} as BootStep]:[]),
   ...(hasDash?[{key:'dash',label:'Dashboard de análise',detail:dashDone?(dashDone.ok?'Pronto':dashDone.msg):dash.text,state:dashDone?(dashDone.ok?'done':'warn'):'now'} as BootStep]:[]),
  ];
  const bootCurrent=!avisosOk?'A verificar os avisos de cobrança':!ovReady?'A calcular a visão geral da carteira':!dashDone?dash.text:dashDone.ok?'Tudo pronto. A entrar…':'A entrar (o Dashboard abre quando estiver pronto)';
@@ -136,6 +155,9 @@ export default function Dashboard({token, name, role, permissions, agency, theme
       <button type="button" role="tab" aria-selected={homeTab==='dashboard'} className={homeTab==='dashboard'?'selected':''} onClick={()=>setHomeTab('dashboard')}><BarChart3 size={16}/> Dashboard{dashDone&&!dashDone.ok?<em>!</em>:null}</button>
      </div>}
     </div>}
+    {ldNotice&&<div className="cis-secondary-success" role="status"><Ban size={17}/>{ldNotice}<button type="button" className="cis-edit-action" onClick={()=>setLdNotice('')}>Fechar</button></div>}
+    {ldOpen&&ld&&<LongDelinquency token={token} data={ld} onClose={()=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');}}
+      onDone={msg=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');setLdNotice(msg);setOvKey(k=>k+1);setLd(v=>v?{...v,candidatos:[]}:v);}}/>}
     {active==='Visão geral'&&homeTab==='resumo'&&notices&&notices.atraso+notices.cobranca>0&&<div className="cis-home-alerts" role="status">
      <Bell size={18}/><strong>Avisos de hoje</strong>
      {notices.atraso>0&&<button type="button" className="bad" onClick={()=>{setNoticeKind('atraso');setNoticePage(1);setNoticeOpen(true);}}>{notices.atraso} pagamento(s) em atraso</button>}
@@ -146,7 +168,7 @@ export default function Dashboard({token, name, role, permissions, agency, theme
      <button type="button" role="tab" aria-selected={mutTab==='cadastro'} className={mutTab==='cadastro'?'selected':''} onClick={()=>setMutTab('cadastro')}><Users size={16}/> Cadastro</button>
      <button type="button" role="tab" aria-selected={mutTab==='lista'} className={mutTab==='lista'?'selected':''} onClick={()=>setMutTab('lista')}><Ban size={16}/> Lista negra{blackCount>0&&<em>{blackCount}</em>}</button>
     </div>}
-    {active==='Visão geral'?(hasOverview?<div className="cis-home-overview" hidden={homeTab!=='resumo'}><Overview token={token} onNavigate={setActive} onLoaded={()=>setOvReady(true)} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/></div>:null):active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:active==='Mutuários'&&mutTab==='lista'?<BlacklistDesk token={token} onProfileChange={setClientProfileOpen} onCount={setBlackCount}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
+    {active==='Visão geral'?(hasOverview?<div className="cis-home-overview" hidden={homeTab!=='resumo'}><Overview key={ovKey} token={token} onNavigate={setActive} onLoaded={()=>setOvReady(true)} onOpenExtracto={p=>{setExtractoPreset({...p,key:Date.now()});setActive('Extractos');}}/></div>:null):active==='Caixa'?<CashDesk token={token}/>:active==='Simulador'?<SimulatorDesk token={token}/>:active==='Mensagens'?<MessageCenter key={remindersMode} token={token} autoReminders={remindersMode>0?remindersGroup:false}/>:active==='Agenda de cobrança'?<CollectionAgenda token={token} onOpenContract={n=>{setExtractoContract(n);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendReminders={()=>{setRemindersGroup(true);setRemindersMode(Date.now());setActive('Mensagens');}}/>:active==='Relatórios'?<ReportsDesk token={token}/>:active==='Propostas'?<ProposalsDesk token={token} onOpenContract={p=>{setExtractoContract(null);setProposalToOpen(p.id);setActive('Contratos e prestações');window.scrollTo({top:0});}} onSendNotices={can('mensagens')?()=>{setRemindersGroup('propostas');setRemindersMode(Date.now());setActive('Mensagens');}:undefined}/>:active==='Extractos'?<ExtractoDesk key={extractoPreset?.key??0} token={token} role={can('extractos.geral')?'administrador':role} preset={extractoPreset} onClearPreset={()=>setExtractoPreset(null)} onOpenContracts={numero=>{setExtractoContract(numero??null);setActive('Contratos e prestações');window.scrollTo({top:0});}}/>:active==='Definições'?<ConnectionSettings token={token} role={role} theme={theme} onThemeChange={onThemeChange} onChangePassword={()=>setPwOpen(true)}/>:active==='Contratos e prestações'&&extractoContract?<ContractProfile numero={extractoContract} token={token} onBack={()=>setExtractoContract(null)}/>:active==='Mutuários'&&mutTab==='lista'?<BlacklistDesk token={token} onProfileChange={setClientProfileOpen} onCount={setBlackCount}/>:<LegacyTable module={active} token={token} onProfileChange={setClientProfileOpen} openProposal={active==='Contratos e prestações'?proposalToOpen:null} onProposalHandled={()=>setProposalToOpen(null)}/>}
     {hasDash&&<AnalyticsDashboard token={token} visible={active==='Visão geral'&&homeTab==='dashboard'} onProgress={setDash} onReady={(ok,msg)=>setDashDone({ok,msg})}/>}
    </main>
   </div>

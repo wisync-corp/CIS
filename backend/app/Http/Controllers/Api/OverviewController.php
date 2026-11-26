@@ -77,9 +77,26 @@ final class OverviewController extends Controller
             COUNT(DISTINCT CASE WHEN $pending AND `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_em_atraso
         ",array_merge([$today,$today],$pb,$pb,$pb,$pb,[$today]))->first();
 
+        // Lista negra: o crédito destes mutuários sai da carteira corrente e é mostrado à parte.
+        $black=\App\Support\ClientRegistry::blacklistedIds();
+        $bl=null;
+        if ($black) {
+            $bl=$contracts()->whereRaw($pending)->whereIn('Nº de Cliente',$black)->selectRaw("
+                ROUND(SUM($principal),2) AS capital, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS valor, COUNT(*) AS prestacoes,
+                SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS vencidas,
+                ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS vencidas_valor,
+                COUNT(DISTINCT `Nr do Contracto`) AS contratos,
+                COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_atraso,
+                COUNT(DISTINCT `Nº de Cliente`) AS mutuarios",[$today,$today,$today])->first();
+            foreach (['capital_carteira'=>'capital','a_receber'=>'valor','prestacoes_por_receber'=>'prestacoes','vencidas'=>'vencidas',
+                'vencidas_valor'=>'vencidas_valor','contratos_activos'=>'contratos','contratos_em_atraso'=>'contratos_atraso'] as $k=>$b) {
+                $p->$k=max(0,(float)$p->$k-(float)($bl->$b??0));
+            }
+        }
+
         // Prestações em aberto com VENCIMENTO no período: vencidas (< hoje) e pendentes (>= hoje).
         [$dc,$dcb]=$period('Data de Cobrança');
-        $due=$contracts()->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
+        $due=$contracts()->when($black,fn($q)=>$q->whereNotIn('Nº de Cliente',$black))->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
             SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS v_n,
             ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS v_valor,
             COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS v_contratos,
@@ -165,6 +182,8 @@ final class OverviewController extends Controller
                 'total_recebido'=>$this->money($p->recebido),'recebido_mes'=>$this->money($p->recebido_mes),
             ],
             'caixa'=>$cash,
+            'lista_negra'=>['mutuarios'=>(int)($bl->mutuarios??0),'contratos'=>(int)($bl->contratos??0),'prestacoes'=>(int)($bl->prestacoes??0),
+                'capital'=>$this->money($bl->capital??0),'valor'=>$this->money($bl->valor??0),'dias_criterio'=>\App\Support\ClientRegistry::overdueLimit()],
             'nota'=>'Valores do registo de prestações (Contractos) e do Extracto. Pagamentos parciais do VBA contam os juros da linha paga.',
         ])->header('Cache-Control','no-store, private');
     }
