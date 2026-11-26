@@ -27,6 +27,16 @@ config(['app.debug'=>true,'cache.default'=>'array']);
 $http=$app->make(\Illuminate\Contracts\Http\Kernel::class);
 $pass=0;$fail=0;$warn=[];$tokens=[];
 function ok(bool $c,string $m):void{global $pass,$fail;if($c){$pass++;echo "  OK  $m\n";}else{$fail++;echo "  FALHA $m\n";}}
+/** Envio de ficheiro (multipart) pela pilha HTTP. */
+function upload(string $uri,User $u,array $fields,string $field,string $name,string $content):array{
+    global $http,$tokens;
+    app('cache')->store()->flush();app('auth')->forgetGuards();
+    $hdr=['HTTP_ACCEPT'=>'application/json','HTTP_AUTHORIZATION'=>'Bearer '.($tokens[$u->id]??=$u->createToken('verificacao-sistema')->plainTextToken)];
+    $r=Request::create($uri,'POST',$fields,[],[$field=>\Illuminate\Http\UploadedFile::fake()->createWithContent($name,$content)],$hdr);
+    $res=$http->handle($r);$http->terminate($r,$res);
+    $j=json_decode((string)$res->getContent(),true);
+    return [$res->getStatusCode(),is_array($j)?$j:[]];
+}
 /** Pedido pela pilha HTTP completa, autenticado como $u. Devolve [status, json]. */
 function call(string $method,string $uri,?User $u,array $body=[]):array{
     global $app,$http;
@@ -87,7 +97,7 @@ $query=[
 $skip=['api/cis/email/oauth/callback'];                   // redireccionamento OAuth externo
 $routes=collect(Route::getRoutes()->getRoutes())->filter(fn($r)=>in_array('GET',$r->methods(),true) && str_starts_with($r->uri(),'api/'))
     ->reject(fn($r)=>in_array($r->uri(),$skip,true))->values();
-$codes=[];$errors=[];$noSample=[];
+$codes=[];$errors=[];$noSample=[];$other=[];
 foreach ($routes as $route) {
     $uri=$route->uri();$missing=false;
     $path=preg_replace_callback('/\{(\w+)\??\}/',function($m) use ($uri,$sample,&$missing){
@@ -109,11 +119,13 @@ foreach ($routes as $route) {
         $codes[$st]=($codes[$st]??0)+1;
         if ($st>=500 && $st!==503) $errors[]="$st GET /$path [$role] ".mb_substr((string)($j['message']??''),0,220).(isset($j['file'])?' @ '.basename($j['file']).':'.($j['line']??''):'');
         if ($st===503) $warn[$uri.' → '.mb_substr((string)($j['message']??''),0,120)]=true;
+        if (in_array($st,[401,404,409,422],true)) $other["$st $uri"]=mb_substr((string)($j['message']??''),0,140);
     }
 }
 ksort($codes);
 echo '  Pedidos: '.array_sum($codes).' em '.count($routes).' rotas × '.count($users).' funções · estados: '.json_encode($codes)."\n";
 foreach ($errors as $e) echo "    ✗ $e\n";
+foreach ($other as $k=>$m) echo "    · $k — $m\n";
 ok(!$errors,'nenhuma leitura com erro do servidor (5xx) em nenhuma função');
 ok(($codes[200]??0)>count($routes),'a maioria das leituras responde 200');
 if ($noSample) echo '  (sem dados de amostra, não testadas: '.implode(', ',$noSample).")\n";
@@ -138,6 +150,9 @@ $prop=['client_id'=>$cid,'montante'=>1000,'tipo_juro'=>'Fixo','estrategia'=>\App
 [$st,$p]=call('POST','/api/cis/propostas',$agent,$prop);
 $pid=(int)($p['id']??0);
 ok(in_array($st,[200,201],true) && $pid>0 && ($p['estado']??'')==='rascunho','2. proposta criada pelo agente em rascunho'.(!in_array($st,[200,201],true)?" — $st ".mb_substr(json_encode($p,JSON_UNESCAPED_UNICODE),0,300):''));
+$png=base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+[$st,$d]=upload('/api/cis/documentos',$agent,['client_id'=>$cid,'proposal_id'=>$pid,'tipo'=>'bi','descricao'=>'BI (verificação)'],'ficheiro','bi.png',$png);
+ok(in_array($st,[200,201],true),'   dossier: bilhete de identidade anexado'.(!in_array($st,[200,201],true)?" — $st ".mb_substr(json_encode($d,JSON_UNESCAPED_UNICODE),0,300):''));
 [$st,$p]=call('POST',"/api/cis/propostas/$pid/submeter",$agent);
 ok(in_array($st,[200,201],true) && ($p['estado']??'')==='submetida','3. proposta submetida com análise'.($st!==200?" — $st ".mb_substr(json_encode($p,JSON_UNESCAPED_UNICODE),0,300):''));
 ok(call('POST',"/api/cis/propostas/$pid/decisao",$agent,['decisao'=>'aprovar'])[0]===403,'   o agente não aprova');
