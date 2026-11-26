@@ -51,11 +51,17 @@ const SECTIONS:Section[]=[
    {k:'dias_lista_negra',label:'Incumprimento prolongado (lista negra)',type:'number',unit:'dias',help:'Critério interno: mutuários com prestações em atraso há mais destes dias são propostos para a lista negra e saem da carteira corrente.'},
    {k:'lista_negra_automatica',label:'Propor a lista negra ao entrar',type:'bool',help:'Ao entrar no sistema, gestores e administradores vêem os mutuários acima do limite e decidem se os transferem para a lista negra.'},
    {k:'canal_notificacao',label:'Canal de notificação ao mutuário',type:'select',options:[['whatsapp_web','WhatsApp Web (extensão)'],['whatsapp','Ligação WhatsApp'],['nenhum','Não notificar']]}]}]},
- {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de aprovação e limites de crédito por mutuário.',used:['Relatórios › Mutuários para novo crédito','Propostas de crédito'],groups:[
+ {id:'scoring',kicker:'Risco',title:'Credit scoring',icon:Gauge,desc:'Limiares de risco, taxas internas de provisão e limites por mutuário.',used:['Relatórios › Mutuários para novo crédito','Propostas de crédito'],groups:[
   {title:'Score',icon:Gauge,fields:[
    {k:'score_minimo',label:'Score mínimo para aprovação',type:'number',unit:'0–100'},
    {k:'score_baixo_risco',label:'Limiar de baixo risco',type:'number',unit:'0–100'},
    {k:'score_risco_medio',label:'Limiar de risco médio',type:'number',unit:'0–100',help:'Abaixo deste valor: alto risco.'}]},
+  {title:'Matriz interna de provisões',icon:Gauge,fields:[
+   {k:'provisao_sem_historico',label:'Sem histórico',type:'number',unit:'%',step:'0.0001'},
+   {k:'provisao_baixo',label:'Baixo risco',type:'number',unit:'%',step:'0.0001'},
+   {k:'provisao_medio',label:'Risco médio',type:'number',unit:'%',step:'0.0001'},
+   {k:'provisao_alto',label:'Alto risco',type:'number',unit:'%',step:'0.0001'},
+  ]},
   {title:'Limites por mutuário',icon:UserRound,fields:[
    {k:'max_creditos_activos',label:'Máximo de créditos activos',type:'number'},
    {k:'max_creditos_atraso',label:'Máximo de créditos em atraso',type:'number'},

@@ -10,12 +10,13 @@ type History={contratos:number;contratos_activos:number;contratos_em_atraso:numb
 export type Proposal={id:number;numero:string;estado:string;mutuario:{id:number;nome:string};montante:number;montante_aprovado:number|null;tipo_juro:string;estrategia:string;periodo_dias:number;prazo:string;modalidade:string;taxa:number|null;taxa_aprovada:number|null;finalidade:string;actividade:string|null;rendimento_mensal:string;despesas_mensais:string;outras_dividas_mensais:string;garantias:string|null;observacoes:string|null;analise:{calculo:Analysis;historico:History}|null;decisao_notas:string|null;decidido_por:string|null;decidido_em:string|null;valida_ate:string|null;contrato:string|null;criado_por:string|null;criado_em:string;submetido_em:string|null;agencia:string|null;avisado:boolean|null};
 type Limits={credito_minimo:number|null;credito_maximo:number|null;taxa_minima:number|null;taxa_maxima:number|null};
 type Notice={estado:string;modelo:string;mensagem:string;contacto:string|null;telefone:string|null;enviado:boolean;enviado_em:string|null};
-type Detail=Proposal&{limites_agencia:Limits;aviso:Notice|null;verificacao?:DossierCheck;historico_mutuario:History;analise_actual:Analysis|null;eventos:{accao:string;de:string|null;para:string|null;notas:string|null;por:string;em:string}[];pode:{editar:boolean;submeter:boolean;cancelar:boolean;decidir:boolean;motivo_nao_decidir:string|null;abrir_contrato:boolean;nao_levantada:boolean}};
+type Provision={classe:string;score:number|null;factores:string[];taxa:string|null;montante:number;provisao:string|null;versao:string};
+type Detail=Proposal&{provisao?:Provision|null;provisao_aceite?:Provision|null;limites_agencia:Limits;aviso:Notice|null;verificacao?:DossierCheck;historico_mutuario:History;analise_actual:Analysis|null;eventos:{accao:string;de:string|null;para:string|null;notas:string|null;por:string;em:string}[];pode:{editar:boolean;submeter:boolean;cancelar:boolean;decidir:boolean;motivo_nao_decidir:string|null;abrir_contrato:boolean;nao_levantada:boolean}};
 type ListResp={instalado:boolean;data:Proposal[];contagem:Record<string,number>;limite_aprovacao:number|null;validade_dias:number;avisos_por_enviar?:number;limites_agencia?:Limits};
 
 export const ESTADOS:Record<string,{label:string;tone:string}>={rascunho:{label:'Rascunho',tone:'muted'},submetida:{label:'Para decisão',tone:'info'},devolvida:{label:'Devolvida',tone:'warn'},
  aprovada:{label:'Aprovada',tone:'ok'},rejeitada:{label:'Rejeitada',tone:'bad'},cancelada:{label:'Cancelada',tone:'muted'},desembolsada:{label:'Desembolsada',tone:'ok'},expirada:{label:'Expirada',tone:'muted'},nao_levantada:{label:'Não levantada',tone:'muted'}};
-const ACCOES:Record<string,string>={criada:'Criada',alterada:'Alterada',submetida:'Submetida para decisão',aprovada:'Aprovada',rejeitada:'Rejeitada',devolvida:'Devolvida para correcção',cancelada:'Cancelada',desembolsada:'Desembolsada',expirou:'Aprovação expirou',nao_levantada:'Não levantada pelo mutuário'};
+const ACCOES:Record<string,string>={risco_aceite:'Risco e provisão aceites',criada:'Criada',alterada:'Alterada',submetida:'Submetida para decisão',aprovada:'Aprovada',rejeitada:'Rejeitada',devolvida:'Devolvida para correcção',cancelada:'Cancelada',desembolsada:'Desembolsada',expirou:'Aprovação expirou',nao_levantada:'Não levantada pelo mutuário'};
 const STRATS:Record<string,string[]>={Fixo:['Amortização fixa com juro fixo','Prestação fixa pelo total','Prestação fixa simples'],Composto:['Amortização fixa com juro decrescente','Tabela Price'],Variável:['Juro variável na cobrança']};
 const termsFor=(p:string)=>p==='15'?['1 Semana','2 Semanas']:['1 Semana','2 Semanas','3 Semanas','1 Mês','2 Meses','3 Meses'];
 const modesFor=(t:string)=>t==='1 Semana'?['Uma Parcela']:['2 Semanas','3 Semanas','1 Mês'].includes(t)?['Semanal','Uma Parcela']:['Semanal','Mensal','Uma Parcela'];
@@ -169,11 +170,23 @@ function ProposalForm({token,initial,onCancel,onSaved}:{token:string;initial:Pro
  </section>;
 }
 
+function ProvisionView({assessment,amount,accepted}:{assessment:Provision;amount:number;accepted:boolean}){
+ const estimate=assessment.taxa===null||!Number.isInteger(amount)||amount<=0?null:Math.round(amount*Number(assessment.taxa))/100;
+ const value=accepted?assessment.provisao:estimate;
+ return <article className="cis-panel cis-prop-decision" aria-label="Risco e provisão">
+  <h4>{accepted?'Risco e provisão aceites':'Risco e provisão'}</h4>
+  <p><strong>{assessment.classe}</strong>{assessment.score!==null&&' · Score '+assessment.score+'/100'}</p>
+  <ul>{assessment.factores.map(f=><li key={f}>{f}</li>)}</ul>
+  {assessment.taxa===null?<p role="status">Falta configurar a taxa desta classe em Definições › Credit scoring.</p>
+   :<p>Montante {mt(amount)} · Taxa {assessment.taxa}% · <strong>Provisão estimada {value===null?'—':mt(Number(value))}</strong></p>}
+ </article>;
+}
 function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id:number;onBack:()=>void;onEdit:(p:Proposal)=>void;onOpenContract:(p:Proposal)=>void}){
  const api=useApi(token);
  const [d,setD]=useState<Detail|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const [decision,setDecision]=useState<'aprovar'|'devolver'|'rejeitar'|'cancelar'|'nao_levantada'|null>(null),[notes,setNotes]=useState(''),[amount,setAmount]=useState(''),[rate,setRate]=useState('');
- const load=useCallback(async()=>{try{setD(await api<Detail>('/cis/propostas/'+id));}catch(e){setError((e as Error).message);}},[api,id]);
+ const [riskConfirmed,setRiskConfirmed]=useState(false);
+ const load=useCallback(async()=>{setRiskConfirmed(false);try{setD(await api<Detail>('/cis/propostas/'+id));}catch(e){setError((e as Error).message);}},[api,id]);
  useEffect(()=>{void load();},[load]);
  async function act(path:string,body:unknown,msg:string){setBusy(true);setError('');try{setD(await api<Detail>('/cis/propostas/'+id+path,'POST',body));setNotice(msg);setDecision(null);setNotes('');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  if(!d)return <section className="cis-panel">{error?<div className="cis-table-error"><AlertCircle size={16}/>{error}</div>:<p className="cis-msg-muted">A carregar…</p>}</section>;
@@ -185,13 +198,15 @@ function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id
    <div className="cis-prop-actions">
     {d.pode.editar&&<button type="button" onClick={()=>onEdit(d)}>Editar</button>}
     {d.pode.submeter&&<button type="button" className="primary" disabled={busy} onClick={()=>void act('/submeter',{},'Proposta submetida para decisão.')}><Send size={15}/> Submeter</button>}
-    {d.pode.decidir&&<><button type="button" className="primary" onClick={()=>{setDecision('aprovar');setAmount(String(d.montante));setRate(d.taxa!=null?String(d.taxa):'');}}><CheckCircle2 size={15}/> Aprovar</button>
+    {d.pode.decidir&&<><button type="button" className="primary" onClick={()=>{setDecision('aprovar');setRiskConfirmed(false);setAmount(String(d.montante));setRate(d.taxa!=null?String(d.taxa):'');}}><CheckCircle2 size={15}/> Aprovar</button>
      <button type="button" onClick={()=>setDecision('devolver')}><Undo2 size={15}/> Devolver</button><button type="button" className="danger" onClick={()=>setDecision('rejeitar')}><XCircle size={15}/> Rejeitar</button></>}
     {d.pode.abrir_contrato&&<button type="button" className="primary" onClick={()=>onOpenContract(d)}><ArrowUpRight size={15}/> Abrir contrato</button>}
     {d.pode.nao_levantada&&<button type="button" onClick={()=>setDecision('nao_levantada')}><PackageX size={15}/> Não levantada</button>}
     {d.pode.cancelar&&<button type="button" className="danger-link" onClick={()=>setDecision('cancelar')}><Ban size={15}/> Cancelar</button>}
    </div></header>
   <Stepper estado={d.estado}/>
+  {d.provisao&&decision!=='aprovar'&&<ProvisionView assessment={d.provisao} amount={d.montante} accepted={false}/>}
+  {d.provisao_aceite&&<ProvisionView assessment={d.provisao_aceite} amount={d.provisao_aceite.montante} accepted/>}
   {d.aviso&&<NoticeCard n={d.aviso} busy={busy} onSent={()=>void act('/avisado',{},'Aviso registado como enviado.')}/>}
   {d.pode.motivo_nao_decidir&&<div className="cis-contract-notice"><AlertCircle size={17}/><span>{d.pode.motivo_nao_decidir}</span></div>}
   {notice&&<div className="cis-msg-notice" role="status"><CheckCircle2 size={16}/>{notice}</div>}
@@ -199,13 +214,19 @@ function ProposalDetail({token,id,onBack,onEdit,onOpenContract}:{token:string;id
   {decision&&<form className="cis-prop-decision" onSubmit={e=>{e.preventDefault();
     if(decision==='cancelar')void act('/cancelar',{notas:notes},'Proposta cancelada.');
     else if(decision==='nao_levantada')void act('/nao-levantada',{notas:notes},'Proposta marcada como não levantada. Avise o mutuário.');
-    else void act('/decisao',{decisao:decision,notas:notes,...(decision==='aprovar'?{montante_aprovado:Number(amount),...(d.tipo_juro!=='Fixo'&&rate?{taxa_aprovada:Number(rate)}:{})}:{})},decision==='aprovar'?'Proposta aprovada.':decision==='devolver'?'Proposta devolvida ao proponente.':'Proposta rejeitada.');}}>
+    else void act('/decisao',{decisao:decision,notas:notes,...(decision==='aprovar'?{montante_aprovado:Number(amount),risco_confirmado:riskConfirmed,risco_versao:d.provisao?.versao,...(d.tipo_juro!=='Fixo'&&rate?{taxa_aprovada:Number(rate)}:{})}:{})},decision==='aprovar'?'Proposta aprovada.':decision==='devolver'?'Proposta devolvida ao proponente.':'Proposta rejeitada.');}}>
    <h4>{decision==='aprovar'?'Aprovar a proposta':decision==='devolver'?'Devolver para correcção':decision==='rejeitar'?'Rejeitar a proposta':decision==='nao_levantada'?'O mutuário não levantou o crédito':'Cancelar a proposta'}</h4>
    {decision==='aprovar'&&<ChecklistView c={d.verificacao}/>}
-   {decision==='aprovar'&&<div className="cis-profile-fields"><label className="cis-profile-field"><span>Montante aprovado (MT)</span><input type="number" min={1} max={d.montante} step={1} required value={amount} onChange={e=>setAmount(e.target.value)}/><small>Até {mt(d.montante)} (pedido).</small></label>
+   {decision==='aprovar'&&<div className="cis-profile-fields"><label className="cis-profile-field"><span>Montante aprovado (MT)</span><input type="number" min={1} max={d.montante} step={1} required value={amount} onChange={e=>{setAmount(e.target.value);setRiskConfirmed(false);}}/><small>Até {mt(d.montante)} (pedido).</small></label>
     {d.tipo_juro!=='Fixo'&&<label className="cis-profile-field"><span>Taxa aprovada (%)</span><input type="number" min={1} max={100} step={1} value={rate} onChange={e=>setRate(e.target.value)}/></label>}</div>}
+   {decision==='aprovar'&&d.provisao&&<>
+    <ProvisionView assessment={d.provisao} amount={Number(amount)} accepted={false}/>
+    <label className="cis-collections-check"><input type="checkbox" checked={riskConfirmed} disabled={d.provisao.taxa===null} onChange={e=>setRiskConfirmed(e.target.checked)}/>
+     Confirmo que revi a classe de risco e a provisão estimada para o montante aprovado.</label>
+    <button type="button" className="cis-edit-action" onClick={()=>void load()} disabled={busy}>Actualizar avaliação</button>
+   </>}
    <label className="cis-profile-field cis-prop-wide"><span>{decision==='aprovar'?'Notas (opcional)':decision==='devolver'?'O que deve ser corrigido':decision==='nao_levantada'?'Motivo (ex.: desistiu, já não precisa)':'Motivo'}</span><textarea rows={2} required={decision!=='aprovar'} minLength={decision==='aprovar'?0:5} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
-   <div className="cis-pw-actions"><button type="submit" className={decision==='rejeitar'||decision==='cancelar'||decision==='nao_levantada'?'danger':'primary'} disabled={busy}>{busy?'A gravar…':'Confirmar'}</button><button type="button" onClick={()=>setDecision(null)}>Voltar</button></div>
+   <div className="cis-pw-actions"><button type="submit" className={decision==='rejeitar'||decision==='cancelar'||decision==='nao_levantada'?'danger':'primary'} disabled={busy||(decision==='aprovar'&&(!riskConfirmed||d.provisao?.taxa==null))}>{busy?'A gravar…':'Confirmar'}</button><button type="button" onClick={()=>setDecision(null)}>Voltar</button></div>
   </form>}
   {d.estado==='aprovada'&&<div className="cis-prop-reco ok"><CheckCircle2 size={17}/><div><strong>Aprovada: {mt(d.montante_aprovado)}{d.taxa_aprovada!=null?' a '+d.taxa_aprovada+'%':''}</strong> por {d.decidido_por} em {dt(d.decidido_em)}. Válida até {dt(d.valida_ate)}.{d.decisao_notas?' '+d.decisao_notas:''}</div></div>}
   {d.estado==='aprovada'&&(()=>{const n=daysLeft(d.valida_ate);return n!=null&&n<=3?<div className="cis-contract-notice"><Hourglass size={17}/><span>A aprovação {n<=0?'expira hoje':'expira em '+n+' dia(s)'}. Abra o contrato ou marque como não levantada.</span></div>:null;})()}

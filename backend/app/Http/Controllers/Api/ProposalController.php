@@ -8,6 +8,7 @@ use App\Support\CompanySettings as CS;
 use App\Support\CreditScore;
 use App\Support\Permissions;
 use App\Support\Portfolio;
+use App\Support\ProposalProvision;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -197,13 +198,17 @@ final class ProposalController extends Controller
         $history = CreditScore::forClient((int) $p->client_id);
         $live = in_array($p->status, ['rascunho', 'devolvida'], true) ? CreditScore::analyse((array) $p, $history) : null;
         if ($live) $live['alertas'] = array_merge(self::limitIssues($p->branch_id ? (int) $p->branch_id : null, (float) $p->montante, $live['taxa'] !== null ? (float) $live['taxa'] : null), $live['alertas']);
+        $accepted=$ev->last(fn ($event)=>$event->accao==='risco_aceite');
         return response()->json(self::out($p, $names) + [
+            'provisao'=>in_array($p->status,['rascunho','devolvida','submetida'],true)
+                ? ProposalProvision::assess($id,$history,(int)$p->montante) : null,
+            'provisao_aceite'=>$accepted ? json_decode((string)$accepted->notas,true) : null,
             'limites_agencia' => self::branchLimits($p->branch_id ? (int) $p->branch_id : null),
             'aviso' => self::notice($p),
             'verificacao' => \App\Support\CreditDossier::checklist($p),
             'historico_mutuario' => $history,
             'analise_actual' => $live,
-            'eventos' => $ev->map(fn ($e) => ['accao' => $e->accao, 'de' => $e->de, 'para' => $e->para, 'notas' => $e->notas,
+            'eventos' => $ev->map(fn ($e) => ['accao' => $e->accao, 'de' => $e->de, 'para' => $e->para, 'notas' => $e->accao==='risco_aceite' ? 'Classe de risco e provisão confirmadas na aprovação.' : $e->notas,
                 'por' => $e->user_id ? ($names[$e->user_id] ?? '—') : 'Sistema', 'em' => $e->created_at])->all(),
             'pode' => [
                 'editar' => $mine && in_array($p->status, ['rascunho', 'devolvida'], true) && Permissions::can($u, 'propostas.criar'),
@@ -333,6 +338,8 @@ final class ProposalController extends Controller
             'notas' => ['nullable', 'string', 'max:2000'],
             'montante_aprovado' => ['nullable', 'integer', 'min:1'],
             'taxa_aprovada' => ['nullable', 'numeric', 'gt:0', 'max:100'],
+            'risco_confirmado' => ['sometimes','accepted'],
+            'risco_versao' => ['nullable','string','size:64'],
         ]);
         $p = $this->find($r, $id);
         abort_unless($p->status === 'submetida', 409, 'Só se decidem propostas submetidas.');
@@ -346,6 +353,7 @@ final class ProposalController extends Controller
         abort_unless($ok, 403, $why);
         $notes = trim((string) ($d['notas'] ?? ''));
         if ($d['decisao'] !== 'aprovar') abort_if(mb_strlen($notes) < 5, 422, $d['decisao'] === 'rejeitar' ? 'Indique o motivo da rejeição.' : 'Indique o que deve ser corrigido.');
+        $provision=null;
         $upd = ['decided_by' => $u->id, 'decided_at' => now(), 'decisao_notas' => $notes ?: null, 'updated_at' => now()];
         if ($d['decisao'] === 'aprovar') {
             $amount = (int) ($d['montante_aprovado'] ?? $p->montante);
@@ -359,15 +367,25 @@ final class ProposalController extends Controller
             abort_if($lim, 422, implode(' ', $lim));
             $miss = \App\Support\CreditDossier::checklist($p, (float) $amount)['em_falta'];
             abort_if($miss, 422, 'Dossier incompleto: '.implode('; ', $miss).'.');
+            CS::load(true);
+            $provision=ProposalProvision::assess($id,CreditScore::forClient((int)$p->client_id),$amount);
+            abort_if($provision['taxa']===null,422,'Configure a taxa de provisão desta classe em Definições › Credit scoring.');
+            abort_unless(!empty($d['risco_confirmado']),422,'Confirme a revisão da classe de risco e da provisão.');
+            abort_unless(hash_equals($provision['versao'],$d['risco_versao']??''),409,'A avaliação de risco mudou. Actualize a ficha e reveja a provisão.');
             $upd += ['status' => 'aprovada', 'montante_aprovado' => $amount, 'taxa_aprovada' => $rate,
                 'valida_ate' => now('Africa/Maputo')->addDays(max(1, (int) CS::get('validade_aprovacao_dias')))->toDateString()];
         } else {
             $upd += ['status' => $d['decisao'] === 'rejeitar' ? 'rejeitada' : 'devolvida'];
         }
-        $n = DB::table('cis_credit_proposals')->where('id', $id)->where('status', 'submetida')->update($upd);
-        abort_unless($n === 1, 409, 'A proposta foi decidida entretanto.');
-        self::event($id, ['aprovar' => 'aprovada', 'rejeitar' => 'rejeitada', 'devolver' => 'devolvida'][$d['decisao']], 'submetida', $upd['status'],
-            $notes.($d['decisao'] === 'aprovar' && ($upd['montante_aprovado'] ?? 0) !== (int) $p->montante ? ' (montante aprovado: '.$upd['montante_aprovado'].' MT)' : ''), (int) $u->id);
+        DB::transaction(function () use ($id,$p,$upd,$d,$notes,$u,$provision) {
+            $n=DB::table('cis_credit_proposals')->where('id',$id)->where('status','submetida')->update($upd);
+            abort_unless($n===1,409,'A proposta foi decidida entretanto.');
+            self::event($id,['aprovar'=>'aprovada','rejeitar'=>'rejeitada','devolver'=>'devolvida'][$d['decisao']],
+                'submetida',$upd['status'],$notes.($d['decisao']==='aprovar' && $upd['montante_aprovado']!==(int)$p->montante
+                    ? ' (montante aprovado: '.$upd['montante_aprovado'].' MT)' : ''),(int)$u->id);
+            if ($provision!==null) self::event($id,'risco_aceite',null,null,
+                json_encode($provision,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),(int)$u->id);
+        });
         return $this->show($r, $id);
     }
 
