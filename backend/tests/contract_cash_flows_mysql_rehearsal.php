@@ -1229,6 +1229,64 @@ ok($err(fn()=>$DC->remove(req('/x',[],$ag2),$up['id']))===403,'outro agente não
 data($DC->remove(req('/x',[],$ag1),$up['id']));
 ok($db->table('cis_documents')->where('id',$up['id'])->value('deleted_by')==$ag1->id && $err(fn()=>$DC->download(req('/x',[],$admin),$up['id']))===404,'documento retirado fica registado e deixa de abrir');
 
+echo "== Mutuários ao nível do GEMIC: empresa, fotografia, lista negra e avalista registado\n";
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_26_000250_cis_client_registry.php','--force'=>true]);
+\App\Support\ClientRegistry::reset();
+ok(\App\Support\ClientRegistry::ready() && Schema::hasColumn('cis_guarantors','guarantor_client_id'),'perfil, lista negra e ligação do avalista instalados');
+$RC=new \App\Http\Controllers\Api\ClientRegistryController();
+$pf=data($RC->show(req('/x',[],$admin),7));
+ok($pf['instalado'] && $pf['tipo']==='singular' && $pf['lista_negra']===null && $pf['pode_lista_negra']===true,'ficha: pessoa singular por omissão, sem lista negra');
+ok(status(fn()=>$RC->update(req('/x',['tipo'=>'colectiva','nuit'=>'400123456'],$admin),7))===422,'empresa exige representante legal');
+ok(status(fn()=>$RC->update(req('/x',['tipo'=>'colectiva','nuit'=>'12345','representante_nome'=>'João Cossa'],$admin),7))===422,'NUIT tem 9 algarismos');
+$pf=data($RC->update(req('/x',['tipo'=>'colectiva','nuit'=>'400123456','forma_juridica'=>'Lda','actividade'=>'Comércio','representante_nome'=>'João Cossa','representante_cargo'=>'Sócio-gerente'],$admin),7));
+ok($pf['tipo']==='colectiva' && $pf['empresa']['nuit']==='400123456' && $pf['empresa']['forma_juridica']==='Lda','mutuário passa a pessoa colectiva com dados da empresa');
+data($RC->update(req('/x',['tipo'=>'singular'],$admin),7));
+// Novo mutuário pessoa colectiva (cadastro)
+$_ENV['CIS_CLIENTES_EDIT_APPROVED']='true';$_SERVER['CIS_CLIENTES_EDIT_APPROVED']='true';putenv('CIS_CLIENTES_EDIT_APPROVED=true');
+config(['database.connections.mysql_editor'=>config('database.connections.'.config('database.default'))]);DB::purge('mysql_editor');
+$CC2=new \App\Http\Controllers\Api\ClientCreateController();
+$firm=['dados'=>['Nome Completo'=>'Agro Boane Lda','Cidade'=>'Boane'],'tipo'=>'colectiva','empresa'=>['nuit'=>'400999888','forma_juridica'=>'Lda','representante_nome'=>'Rui Bila']];
+ok(status(fn()=>$CC2->store(req('/x',array_replace_recursive($firm,['empresa'=>['nuit'=>'']]),$admin)))===422,'nova empresa exige NUIT');
+$nf=$CC2->store(req('/x',$firm,$admin));$nfId=(int)(data($nf)['id']??0);
+ok($nf->getStatusCode()===201 && $db->table('cis_client_profile')->where('client_id',$nfId)->value('tipo')==='colectiva','nova ficha de pessoa colectiva registada com o perfil da empresa');
+$dupF=$CC2->store(req('/x',array_replace_recursive($firm,['dados'=>['Nome Completo'=>'Outra Firma']]),$admin));
+ok($dupF->getStatusCode()===409,'NUIT repetido é recusado');
+// Fotografia
+$png=base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+$ph=Request::create('/x','POST',[],[],['foto'=>\Illuminate\Http\UploadedFile::fake()->createWithContent('eu.png',$png)]);$ph->setUserResolver(static fn()=>$ag1);
+ok($RC->uploadPhoto($ph,7)->getStatusCode()===201 && $RC->photo(req('/x',[],$admin),7)->getContent()===$png && data($RC->show(req('/x',[],$admin),7))['tem_foto']===true,'fotografia da ficha gravada e servida');
+$bad=Request::create('/x','POST',[],[],['foto'=>\Illuminate\Http\UploadedFile::fake()->createWithContent('x.pdf',"%PDF-1.4\n%%EOF\n")]);$bad->setUserResolver(static fn()=>$ag1);
+ok(status(fn()=>$RC->uploadPhoto($bad,7))===422,'a fotografia tem de ser imagem');
+// Lista negra
+ok(status(fn()=>$RC->blacklist(req('/x',['motivo'=>'Abandonou o crédito'],$ag1),9901))===403,'agente não mexe na lista negra');
+ok(status(fn()=>$RC->blacklist(req('/x',['motivo'=>'x'],$admin),9901))===422,'lista negra exige motivo');
+$bl=data($RC->blacklist(req('/x',['motivo'=>'Abandonou o crédito e não atende'],$admin),9901));
+ok($bl['lista_negra']['motivo']==='Abandonou o crédito e não atende' && status(fn()=>$RC->blacklist(req('/x',['motivo'=>'Outra vez aqui'],$admin),9901))===409,'mutuário adicionado à lista negra (uma só vez)');
+$ix=data($RC->index(req('/x',[],$ag1)));
+ok(collect($ix['data'])->pluck('client_id')->contains(9901),'central de risco lista o mutuário para todos');
+ok(status(fn()=>$PC->store(req('/x',array_replace($prop,['client_id'=>9901]),$admin)))===422,'não se cria proposta para mutuário na lista negra');
+$p6=data($PC->store(req('/x',array_replace($prop,['montante'=>140]),$ag1)));
+$DC=new \App\Http\Controllers\Api\CreditDossierController();
+ok(status(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Eu Mesmo','mutuario_id'=>7],$ag1),$p6['id']))===422,'o mutuário não é avalista de si próprio');
+ok(status(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Bloqueado','mutuario_id'=>9901],$ag1),$p6['id']))===422,'avalista na lista negra é recusado');
+ok(status(fn()=>$RC->unblacklist(req('/x',['motivo'=>'ok'],$admin),9901))===422,'saída da lista exige motivo');
+data($RC->unblacklist(req('/x',['motivo'=>'Dívida regularizada em acordo'],$admin),9901));
+$gd=data($DC->addGuarantor(req('/x',['nome'=>'Avalista','relacao'=>'Vizinho','mutuario_id'=>9901],$ag1),$p6['id']));
+$gg=collect($gd['fiadores'])->firstWhere('mutuario_id',9901);
+ok($gg && $gg['nome']==='Mutuário Sem Contratos' && $gg['relacao']==='Vizinho','avalista escolhido entre os mutuários (dados vêm da ficha)');
+ok(status(fn()=>$DC->addGuarantor(req('/x',['nome'=>'Avalista','mutuario_id'=>9901],$ag1),$p6['id']))===422,'o mesmo avalista não entra duas vezes');
+ok(collect(data($RC->show(req('/x',[],$admin),9901))['avalista_em'])->pluck('id')->contains($p6['id']),'a ficha do avalista mostra as propostas em que é avalista');
+$PC->submit(req('/x',[],$ag1),$p6['id']);
+data($RC->blacklist(req('/x',['motivo'=>'Fraude detectada'],$admin),9901));
+$msg='';try{$PC->decide(req('/x',['decisao'=>'aprovar'],$admin),$p6['id']);}catch(HttpExceptionInterface $e){$msg=$e->getMessage();}
+ok(str_contains($msg,'lista negra'),'não se aprova com um avalista na lista negra');
+ok(data($PC->decide(req('/x',['decisao'=>'rejeitar','notas'=>'Avalista bloqueado'],$admin),$p6['id']))['estado']==='rejeitada','mas pode rejeitar-se');
+$hist=data($RC->show(req('/x',[],$admin),9901))['historico_lista_negra'];
+ok(count($hist)===2 && $hist[1]['removed_motivo']==='Dívida regularizada em acordo','histórico guarda entradas e saídas da lista negra');
+$sr=Request::create('/x?q=Mutu','GET');$sr->setUserResolver(static fn()=>$admin);
+$found=collect(data($RC->search($sr))['data']);
+ok($found->firstWhere('id',9901)['lista_negra']===true,'pesquisa de avalista marca quem está na lista negra');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

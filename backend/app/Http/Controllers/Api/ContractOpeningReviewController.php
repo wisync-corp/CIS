@@ -129,6 +129,9 @@ final class ContractOpeningReviewController extends Controller
 
         $issues = [];
         $rate = null;
+        if ($black = \App\Support\ClientRegistry::blacklisted((int) $values['cliente_id'])) {
+            $issues[] = 'O mutuário está na lista negra (central de risco): '.$black->motivo.'.';
+        }
         if (!in_array($values['estrategia_calculo'], ContractCalculationStrategy::OPTIONS, true)) {
             $issues[] = 'Estratégia de cálculo não reconhecida.';
         } elseif (!ContractCalculationStrategy::compatible($values['tipo_juro'], $values['estrategia_calculo'])) {

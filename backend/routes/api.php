@@ -69,6 +69,14 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::delete('cis/propostas/{id}/garantias/{cid}',[\App\Http\Controllers\Api\CreditDossierController::class,'removeCollateral'])->whereNumber('id')->whereNumber('cid')->middleware('throttle:30,1');
     Route::get('cis/mutuarios/{id}/documentos',[\App\Http\Controllers\Api\CreditDossierController::class,'clientDocuments'])->whereNumber('id')->middleware('throttle:60,1');
     Route::post('cis/documentos',[\App\Http\Controllers\Api\CreditDossierController::class,'upload'])->middleware('throttle:30,1');
+    Route::get('cis/mutuarios/procurar',[\App\Http\Controllers\Api\ClientRegistryController::class,'search'])->middleware('throttle:60,1');
+    Route::get('cis/mutuarios/{id}/perfil',[\App\Http\Controllers\Api\ClientRegistryController::class,'show'])->whereNumber('id')->middleware('throttle:60,1');
+    Route::put('cis/mutuarios/{id}/perfil',[\App\Http\Controllers\Api\ClientRegistryController::class,'update'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::get('cis/mutuarios/{id}/foto',[\App\Http\Controllers\Api\ClientRegistryController::class,'photo'])->whereNumber('id')->middleware('throttle:120,1');
+    Route::post('cis/mutuarios/{id}/foto',[\App\Http\Controllers\Api\ClientRegistryController::class,'uploadPhoto'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('cis/mutuarios/{id}/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'blacklist'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::delete('cis/mutuarios/{id}/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'unblacklist'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::get('cis/lista-negra',[\App\Http\Controllers\Api\ClientRegistryController::class,'index'])->middleware('throttle:60,1');
     Route::get('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'download'])->whereNumber('id')->middleware('throttle:120,1');
     Route::delete('cis/documentos/{id}',[\App\Http\Controllers\Api\CreditDossierController::class,'remove'])->whereNumber('id')->middleware('throttle:30,1');
     Route::get('cis/carteiras',[\App\Http\Controllers\Api\PortfolioController::class,'summary'])->middleware('throttle:30,1');

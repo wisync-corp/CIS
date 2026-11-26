@@ -4,7 +4,8 @@ import {Paperclip,FileText,Image as ImageIcon,Eye,Trash2,Upload,UserPlus,ShieldC
 
 const API=import.meta.env.VITE_API_URL||'/api';
 export type Doc={id:number;tipo:string;tipo_label:string;descricao:string|null;nome:string;mime:string;tamanho:number;em:string|null;por:string|null;da_proposta:boolean};
-type Guarantor={id:number;nome:string;bi:string|null;contacto:string|null;relacao:string|null;morada:string|null;actividade:string|null;rendimento_mensal:string|null};
+type Guarantor={id:number;nome:string;bi:string|null;contacto:string|null;relacao:string|null;morada:string|null;actividade:string|null;rendimento_mensal:string|null;mutuario_id?:number|null;lista_negra?:boolean};
+type Found={id:number;nome:string;bi:string|null;contacto:string|null;cidade:string|null;lista_negra:boolean};
 type Collateral={id:number;tipo:string;tipo_label:string;descricao:string;valor_estimado:string;localizacao:string|null};
 export type Check={itens:{chave:string;label:string;ok:boolean}[];em_falta:string[];cobertura:{valor:string;necessario:string;pct_exigida:number;pct:number|null}|null};
 type Dossier={instalado:boolean;fiadores:Guarantor[];garantias:Collateral[];documentos:Doc[];verificacao:Check;pode_editar:boolean;pode_anexar:boolean;tipos_documento:Record<string,string>;tipos_garantia:Record<string,string>;max_kb:number};
@@ -98,15 +99,21 @@ export default function DossierPanel({token,proposalId,clientId,onChange}:{token
   <div className="cis-dossier-grid">
    <article className="cis-dossier-card">
     <header><h4><Users size={15}/> Fiadores <b>{d.fiadores.length}</b></h4>{d.pode_editar&&form!=='fiador'&&<button type="button" onClick={()=>setForm('fiador')}><UserPlus size={14}/> Adicionar</button>}</header>
-    {form==='fiador'&&<form className="cis-dossier-form" onSubmit={e=>{e.preventDefault();void post('/fiadores',{...g,rendimento_mensal:g.rendimento_mensal||null},()=>setG({}));}}>
-     <div className="cis-dossier-row">{G('nome','Nome completo',{required:true,minLength:3,maxLength:160,autoFocus:true})}{G('bi','N.º do BI',{maxLength:40})}</div>
-     <div className="cis-dossier-row">{G('contacto','Contacto',{maxLength:40,inputMode:'tel'})}{G('relacao','Relação com o mutuário',{maxLength:60,placeholder:'Ex.: irmão, colega'})}</div>
+    {form==='fiador'&&<form className="cis-dossier-form" onSubmit={e=>{e.preventDefault();if(g.__existente&&!g.mutuario_id){setError('Escolha o mutuário que será avalista.');return;}
+      const {__existente:_x,...body}=g;void _x;void post('/fiadores',{...body,mutuario_id:g.mutuario_id?Number(g.mutuario_id):null,rendimento_mensal:g.rendimento_mensal||null},()=>setG({}));}}>
+     <div className="cis-dossier-scope" role="radiogroup" aria-label="Origem do avalista">
+      <button type="button" role="radio" aria-checked={!g.__existente} className={!g.__existente?'on':''} onClick={()=>setG({})}>Nova pessoa <small>escrever os dados</small></button>
+      <button type="button" role="radio" aria-checked={!!g.__existente} className={g.__existente?'on':''} onClick={()=>setG({__existente:'1'})}>Mutuário já registado <small>procurar no cadastro</small></button></div>
+     {g.__existente?<GuarantorSearch token={token} exclude={clientId} chosen={g.mutuario_id?{id:Number(g.mutuario_id),nome:g.nome??''}:null}
+       onPick={c=>setG(v=>({...v,mutuario_id:c?String(c.id):'',nome:c?.nome??'',bi:c?.bi??'',contacto:c?.contacto??''}))}/>
+      :<div className="cis-dossier-row">{G('nome','Nome completo',{required:true,minLength:3,maxLength:160,autoFocus:true})}{G('bi','N.º do BI',{maxLength:40})}</div>}
+     <div className="cis-dossier-row">{!g.__existente&&G('contacto','Contacto',{maxLength:40,inputMode:'tel'})}{G('relacao','Relação com o mutuário',{maxLength:60,placeholder:'Ex.: irmão, colega'})}</div>
      <div className="cis-dossier-row">{G('actividade','Actividade',{maxLength:160})}{G('rendimento_mensal','Rendimento mensal (MT)',{type:'number',min:0,step:'0.01'})}</div>
      {G('morada','Morada',{maxLength:255})}
      <div className="cis-pw-actions"><button type="submit" className="primary" disabled={busy}>Guardar fiador</button><button type="button" onClick={()=>setForm(null)}>Cancelar</button></div></form>}
     {d.fiadores.length===0?<p className="cis-msg-muted">Sem fiadores.</p>:<ul className="cis-dossier-list">{d.fiadores.map(f=><li key={f.id}>
      <span className="cis-dossier-ico"><Users size={16}/></span>
-     <div><b>{f.nome}</b>{f.relacao&&<em>{f.relacao}</em>}<small>{[f.bi&&'BI '+f.bi,f.contacto,f.actividade,f.rendimento_mensal&&'rend. '+mt(f.rendimento_mensal),f.morada].filter(Boolean).join(' · ')||'—'}</small></div>
+     <div><b>{f.nome}</b>{f.relacao&&<em>{f.relacao}</em>}{f.mutuario_id&&<em className="cis-dossier-reg">mutuário #{f.mutuario_id}</em>}{f.lista_negra&&<em className="cis-dossier-black">lista negra</em>}<small>{[f.bi&&'BI '+f.bi,f.contacto,f.actividade,f.rendimento_mensal&&'rend. '+mt(f.rendimento_mensal),f.morada].filter(Boolean).join(' · ')||'—'}</small></div>
      {d.pode_editar&&<span className="cis-dossier-acts"><button type="button" aria-label={'Retirar '+f.nome} onClick={()=>void del('/fiadores/'+f.id,'o fiador '+f.nome)}><Trash2 size={15}/></button></span>}</li>)}</ul>}
    </article>
    <article className="cis-dossier-card">
@@ -136,4 +143,22 @@ export function ClientDocuments({token,clientId}:{token:string;clientId:number})
  useEffect(()=>{void load();},[load]);
  if(!d||!d.instalado)return null;
  return <div className="cis-dossier cis-client-docs"><DocumentsBox token={token} clientId={clientId} docs={d.documentos} types={d.tipos_documento??{}} canAttach={!!d.pode_anexar} maxKb={d.max_kb??5120} onChanged={()=>void load()} title="Documentos do mutuário"/></div>;
+}
+
+/** Procura de um mutuário já registado para ser avalista (como no GEMIC). */
+function GuarantorSearch({token,exclude,chosen,onPick}:{token:string;exclude:number;chosen:{id:number;nome:string}|null;onPick:(c:Found|null)=>void}){
+ const [q,setQ]=useState(''),[res,setRes]=useState<Found[]>([]),[busy,setBusy]=useState(false),[err,setErr]=useState('');
+ useEffect(()=>{if(q.trim().length<2){setRes([]);return;}const c=new AbortController();const t=window.setTimeout(()=>{setBusy(true);setErr('');
+  fetch(API+'/cis/mutuarios/procurar?q='+encodeURIComponent(q.trim()),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'Pesquisa falhou.');setRes((j.data as Found[]).filter(x=>x.id!==exclude));})
+   .catch(e=>{if(e.name!=='AbortError')setErr(e.message);}).finally(()=>setBusy(false));},300);
+  return()=>{c.abort();window.clearTimeout(t);};},[q,token,exclude]);
+ if(chosen)return <div className="cis-dossier-picked"><Users size={15}/><b>{chosen.nome}</b><small>mutuário #{chosen.id}</small><button type="button" className="cis-edit-action" onClick={()=>onPick(null)}>Trocar</button></div>;
+ return <div className="cis-dossier-search">
+  <label>Procurar mutuário<input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Nome, N.º do BI ou ID"/></label>
+  {busy&&<small className="cis-msg-muted">A procurar…</small>}{err&&<small className="cis-pw-error">{err}</small>}
+  {res.length>0&&<ul>{res.map(c=><li key={c.id}><button type="button" disabled={c.lista_negra} onClick={()=>onPick(c)} title={c.lista_negra?'Na lista negra: não pode ser avalista':undefined}>
+   <b>{c.nome}</b><small>#{c.id}{c.bi?' · BI '+c.bi:''}{c.cidade?' · '+c.cidade:''}</small>{c.lista_negra&&<em className="cis-dossier-black">lista negra</em>}</button></li>)}</ul>}
+  {q.trim().length>=2&&!busy&&!err&&res.length===0&&<small className="cis-msg-muted">Nenhum mutuário encontrado.</small>}
+ </div>;
 }

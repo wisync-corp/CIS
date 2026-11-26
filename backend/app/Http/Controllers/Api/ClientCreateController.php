@@ -107,6 +107,8 @@ final class ClientCreateController extends Controller
             'campos' => array_values(array_filter(self::FIELDS, fn ($f) => isset($cols[$f]))),
             'obrigatorios' => $required,
             'proximo_numero' => $this->nextNumber($db, $cols),
+            'colectiva' => \App\Support\ClientRegistry::ready(),
+            'formas_juridicas' => \App\Support\ClientRegistry::FORMAS,
             'limites' => array_filter(array_map(fn ($f) => $cols[$f]['len'] ?? null, array_combine(self::FIELDS, self::FIELDS))),
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -119,7 +121,20 @@ final class ClientCreateController extends Controller
             'dados' => ['required', 'array'],
             'dados.*' => ['nullable', 'string', 'max:155'],
             'confirmar_duplicado' => ['sometimes', 'boolean'],
+            'tipo' => ['sometimes', 'in:singular,colectiva'],
+            'empresa' => ['sometimes', 'array'],
         ]);
+        // Pessoa colectiva (empresa, associação, cooperativa…): dados próprios no perfil CIS.
+        $tipo = $input['tipo'] ?? 'singular';
+        $empresa = [];
+        if ($tipo === 'colectiva' || !empty($input['empresa'])) {
+            $empresa = validator($input['empresa'] ?? [], ClientRegistryController::companyRules(), ClientRegistryController::MESSAGES)->validate();
+        }
+        if ($tipo === 'colectiva') {
+            if (empty($empresa['nuit'])) throw ValidationException::withMessages(['nuit' => 'Indique o NUIT da empresa (9 algarismos).']);
+            if (trim((string) ($empresa['representante_nome'] ?? '')) === '') throw ValidationException::withMessages(['representante_nome' => 'Indique o representante legal.']);
+            if (empty($empresa['forma_juridica'])) throw ValidationException::withMessages(['forma_juridica' => 'Escolha a forma jurídica.']);
+        }
         $values = [];
         foreach ($input['dados'] as $field => $value) {
             if (!in_array($field, self::FIELDS, true)) {
@@ -161,6 +176,18 @@ final class ClientCreateController extends Controller
                 $values[$f] = $digits;
             }
         }
+        if ($tipo === 'colectiva') {
+            // Empresa: sem BI nem estado civil; se o cadastro antigo exigir BI, usa-se o NUIT.
+            unset($values['Estado Civil'], $values['Data de Emissão']);
+            if (($values['Nº de BI'] ?? null) === null && isset($cols['Nº de BI']) && !$cols['Nº de BI']['nullable'] && $cols['Nº de BI']['default'] === null) {
+                $values['Nº de BI'] = $empresa['nuit'];
+            }
+            $dupNuit = \App\Support\ClientRegistry::ready() ? \Illuminate\Support\Facades\DB::table('cis_client_profile')->where('nuit', $empresa['nuit'])->value('client_id') : null;
+            if ($dupNuit === null && isset($cols['nuit'])) $dupNuit = $db->table('Clientes')->where('nuit', $empresa['nuit'])->value('ID');
+            if ($dupNuit !== null) {
+                return response()->json(['message' => 'Já existe um mutuário com este NUIT (ID '.$dupNuit.').', 'existente' => (int) $dupNuit], 409);
+            }
+        }
         foreach (self::FIELDS as $f) {
             if (isset($cols[$f]) && !$cols[$f]['nullable'] && $cols[$f]['default'] === null && ($values[$f] ?? null) === null) {
                 throw ValidationException::withMessages([$f => "«{$f}» é obrigatório no cadastro original."]);
@@ -188,8 +215,11 @@ final class ClientCreateController extends Controller
             abort_unless((int) ($db->selectOne('SELECT GET_LOCK(?, 10) l', [self::LOCK])->l ?? 0) === 1, 423,
                 'Outro registo está a ser gravado. Tente de novo dentro de instantes.');
             try {
-                $result = $db->transaction(function () use ($db, $cols, $values, $actor, $user) {
+                $result = $db->transaction(function () use ($db, $cols, $values, $actor, $user, $tipo, $empresa) {
                     $row = $values;
+                    // Colunas complementares do cadastro antigo, quando existem.
+                    if (isset($cols['tipo_cliente'])) $row['tipo_cliente'] = $tipo === 'colectiva' ? 'Pessoa colectiva' : 'Pessoa singular';
+                    if (isset($cols['nuit']) && !empty($empresa['nuit'])) $row['nuit'] = $empresa['nuit'];
                     $numero = $this->nextNumber($db, $cols);
                     if ($numero !== null) $row['Numeração'] = $numero;
                     if (isset($cols['ID']) && !$cols['ID']['auto']) $row['ID'] = (int) $db->table('Clientes')->max('ID') + 1;
@@ -231,6 +261,9 @@ final class ClientCreateController extends Controller
                 ? 'sem permissão para criar fichas. Na VPS execute: bash deploy/enable-client-create.sh'
                 : ($code === 1062 ? 'número de mutuário repetido; tente de novo.' : LegacyClienteEditController::mysqlMessage($e));
             return response()->json(['message' => 'Não registado: '.$msg], 503);
+        }
+        if (\App\Support\ClientRegistry::ready() && ($tipo === 'colectiva' || $empresa)) {
+            try { ClientRegistryController::saveProfile((int) $result['id'], $tipo, $empresa, (int) $user->getKey()); } catch (\Throwable $e) { report($e); }
         }
         // Quem cadastra fica como agente do mutuário (carteira do agente).
         try { \App\Support\Portfolio::assignClient((int) $result['id'], (int) $user->getKey(), (int) $user->getKey()); } catch (\Throwable) {}
