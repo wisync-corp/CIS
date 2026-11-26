@@ -2187,3 +2187,13 @@ a.cis-agenda-card:hover{border-color:var(--cis-primary);background:var(--cis-sur
 .cis-dossier-search li button:hover:not(:disabled){border-color:var(--cis-primary)}.cis-dossier-search li button:disabled{opacity:.6}
 .cis-dossier-search li small{color:var(--cis-text-muted)}
 @media (max-width:640px){.cis-newclient-type{grid-template-columns:1fr}}
+/* Mutuários: separadores Cadastro | Lista negra e situação do cliente */
+.cis-mut-tabs{margin:-6px 0 16px}
+.cis-mut-tabs em{font-style:normal;background:#B42318;color:#fff;border-radius:99px;font-size:10.5px;padding:0 7px;margin-left:2px}
+.cis-mut-tabs button.selected em{background:#fff;color:#B42318}
+.cis-situation-field select{border:1px solid var(--cis-border);border-radius:10px;padding:10px 12px;font:inherit;font-weight:700;background:#fff;color:var(--cis-heading)}
+.cis-situation-field.black select{border-color:#F5C2BC;background:#FEF0EE;color:#B42318}
+.cis-situation-field small{display:block;margin-top:5px;color:var(--cis-text-muted);font-size:calc(11.5px * var(--cis-fs))}
+.cis-blacklist .cis-panel-head{margin-top:0}
+.cis-msg-overlay>.cis-users-form.cis-narrow{max-width:520px!important;margin:8vh auto 0}
+.cis-users-form textarea{font:inherit;font-weight:500;border:1px solid var(--cis-border);border-radius:9px;padding:9px 11px;resize:vertical}
