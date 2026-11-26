@@ -23,6 +23,8 @@ use App\Http\Controllers\Api\CashClosureController;
 use App\Http\Controllers\Api\CashReversalController;
 use App\Http\Controllers\Api\CashPostingController;
 Route::post('auth/login', [AuthController::class,'login'])->middleware('throttle:5,1');
+// Callback da e-Mola (Movitel) para a subscrição do CIS: sem sessão, protegido por segredo partilhado.
+Route::post('pagamentos/emola/callback',[\App\Http\Controllers\Api\SubscriptionController::class,'emolaCallback'])->middleware('throttle:60,1');
 Route::get('streamlit/verificar',[\App\Http\Controllers\Api\StreamlitController::class,'verify']);
 Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::class,'data'])->middleware('throttle:60,1');
 
@@ -36,6 +38,11 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('auth/logout',[AuthController::class,'logout']);
     Route::post('auth/palavra-passe',[AuthController::class,'changePassword'])->middleware('throttle:6,1');
     // Utilizadores (permissão «utilizadores»: administrador).
+    Route::get('cis/subscricao/estado',[\App\Http\Controllers\Api\SubscriptionController::class,'summary']);
+    Route::get('cis/subscricao',[\App\Http\Controllers\Api\SubscriptionController::class,'show']);
+    Route::post('cis/subscricao/pagamentos',[\App\Http\Controllers\Api\SubscriptionController::class,'pay'])->middleware('throttle:6,1');
+    Route::post('cis/subscricao/pagamentos/{ref}/comprovativo',[\App\Http\Controllers\Api\SubscriptionController::class,'proof'])->where('ref','[A-Z0-9]+')->middleware('throttle:10,1');
+    Route::post('cis/subscricao/pagamentos/{ref}/cancelar',[\App\Http\Controllers\Api\SubscriptionController::class,'cancel'])->where('ref','[A-Z0-9]+')->middleware('throttle:10,1');
     Route::get('cis/utilizadores/funcoes',[\App\Http\Controllers\Api\UserController::class,'roles']);
     Route::get('cis/utilizadores',[\App\Http\Controllers\Api\UserController::class,'index']);
     Route::post('cis/utilizadores',[\App\Http\Controllers\Api\UserController::class,'store'])->middleware('throttle:20,1');

@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
-import {Ban,AlertTriangle,CalendarClock,X as XIcon} from 'lucide-react';
+import {Ban,AlertTriangle,CalendarClock,X as XIcon,CreditCard} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
 import LongDelinquency,{type Candidates} from './LongDelinquency';
 import {LayoutDashboard, Users, FileText, Wallet, ReceiptText, BarChart3, Settings, ShieldCheck, Menu, Search, Bell, Landmark, ArrowUpRight, ArrowDownRight, LockKeyhole, CalendarDays, MessageSquare} from 'lucide-react';
@@ -60,6 +60,14 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const [ldReady,setLdReady]=useState(!canDecideBlack);
  const [ldOpen,setLdOpen]=useState(false);
  const [ldNotice,setLdNotice]=useState('');
+ // Subscrição do CIS: aviso de teste, vencimento próximo ou expiração (fecha-se por sessão).
+ const [sub,setSub]=useState<{instalado:boolean;estado?:string;dias?:number;plano_nome?:string;valido_ate?:string;pode_gerir?:boolean}|null>(null);
+ const [subHidden,setSubHidden]=useState(()=>{try{return sessionStorage.getItem('cis_sub_aviso')==='1';}catch{return false;}});
+ useEffect(()=>{const c=new AbortController();
+  fetch(noticesApi+'/cis/subscricao/estado',{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(r=>r.ok?r.json():null).then(v=>{if(!c.signal.aborted)setSub(v);}).catch(()=>{});
+  return()=>c.abort();},[token,active]);
+ const subShow=!!sub?.instalado&&!subHidden&&(sub.estado==='carencia'||sub.estado==='expirada'||(!!sub.pode_gerir&&(sub.estado==='teste'||sub.estado==='a_vencer')));
  const [ovKey,setOvKey]=useState(0);
  const ldKey='cis_ld_'+new Date().toISOString().slice(0,10);
  useEffect(()=>{if(!canDecideBlack)return;const c=new AbortController();
@@ -169,6 +177,11 @@ export default function Dashboard({token, name, role, permissions, agency, theme
       <button type="button" role="tab" aria-selected={homeTab==='dashboard'} className={homeTab==='dashboard'?'selected':''} onClick={()=>setHomeTab('dashboard')}><BarChart3 size={16}/> Dashboard{dashDone&&!dashDone.ok?<em>!</em>:null}</button>
      </div>}
     </div>}
+    {subShow&&sub&&<div className={'cis-sub-banner '+(sub.estado==='carencia'||sub.estado==='expirada'?'bad':'warn')} role="status"><CreditCard size={18}/>
+     <span>{sub.estado==='teste'?<>Período de teste do CIS (plano {sub.plano_nome}): {sub.dias===0?'termina hoje':`faltam ${sub.dias} dia(s)`}.</>:sub.estado==='a_vencer'?<>A subscrição do CIS vence {sub.dias===0?'hoje':`dentro de ${sub.dias} dia(s)`}.</>:sub.estado==='carencia'?<>A subscrição do CIS venceu: está em período de carência.</>:<>A subscrição do CIS expirou: não é possível activar novos utilizadores.</>}
+      {!sub.pode_gerir&&' Fale com o administrador.'}</span>
+     {sub.pode_gerir&&<button type="button" className="go" onClick={()=>{try{sessionStorage.setItem('cis_settings_tab','subscricao');}catch{/* */}setActive('Definições');}}>{sub.estado==='teste'?'Escolher plano':'Renovar agora'}</button>}
+     <button type="button" className="close" aria-label="Fechar aviso da subscrição" onClick={()=>{setSubHidden(true);try{sessionStorage.setItem('cis_sub_aviso','1');}catch{/* */}}}><XIcon size={16}/></button></div>}
     {ldNotice&&<div className="cis-secondary-success" role="status"><Ban size={17}/>{ldNotice}<button type="button" className="cis-edit-action" onClick={()=>setLdNotice('')}>Fechar</button></div>}
     {ldOpen&&ld&&<LongDelinquency token={token} data={ld} onClose={()=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');}}
       onDone={msg=>{setLdOpen(false);sessionStorage.setItem(ldKey,'1');setLdNotice(msg);setOvKey(k=>k+1);setLd(v=>v?{...v,candidatos:[]}:v);}}/>}

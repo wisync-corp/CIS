@@ -588,3 +588,23 @@ Artisan::command('cis:actualizar-contratos {--aplicar : Gravar o recálculo das 
     ->timezone('Africa/Maputo')
     ->withoutOverlapping()
     ->when(static fn () => \App\Services\CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED'));
+
+/** Subscrição do CIS: estado e confirmação manual de pagamentos (executado pela WiSync na VPS). */
+Artisan::command('cis:subscricao {referencia?} {--confirmar} {--falhar=} {--transacao=}', function (?string $referencia = null) {
+    if (!\App\Support\Subscription::ready()) { $this->error('Subscrição não instalada: bash deploy/install-subscription.sh'); return 1; }
+    if ($referencia === null) {
+        $s = \App\Support\Subscription::current();
+        $st = \App\Support\Subscription::status($s);
+        $this->info("Plano {$s->plano} · {$st['estado']} · válido até {$s->valido_ate} ({$st['dias']} dia(s)) · utilizadores ".\App\Support\Subscription::activeUsers().'/'.\App\Support\Subscription::limit($s));
+        $rows = \Illuminate\Support\Facades\DB::table('cis_subscription_payments')->orderByDesc('id')->limit(15)
+            ->get(['referencia', 'plano', 'ciclo', 'valor', 'metodo', 'modo', 'estado', 'comprovativo', 'created_at'])->map(fn ($r) => (array) $r)->all();
+        $this->table(['Referência', 'Plano', 'Ciclo', 'Valor', 'Método', 'Modo', 'Estado', 'Comprovativo', 'Criado'], $rows);
+        return 0;
+    }
+    if ($motivo = $this->option('falhar')) { \App\Support\Subscription::fail($referencia, 'manual', $motivo); $this->info("Pagamento {$referencia} marcado como falhado."); return 0; }
+    if (!$this->option('confirmar')) { $this->error('Use --confirmar (depois de ver o dinheiro na conta) ou --falhar="motivo".'); return 1; }
+    $p = \App\Support\Subscription::confirm($referencia, 'WiSync (manual)', $this->option('transacao'));
+    if (!$p) { $this->error('Referência desconhecida.'); return 1; }
+    $this->info("Pagamento {$referencia}: {$p->estado}".($p->valido_ate ? " · válido até {$p->valido_ate}" : ''));
+    return 0;
+})->purpose('Estado da subscrição e confirmação manual de pagamentos M-Pesa/e-Mola');

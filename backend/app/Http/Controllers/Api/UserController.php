@@ -89,6 +89,7 @@ final class UserController extends Controller
             'role' => ['required', Rule::in(Permissions::roleKeys())],
             'branch_id' => ['nullable', 'integer', Rule::exists('cis_branches', 'id')],
         ], ['email.unique' => 'Já existe um utilizador com este email.']);
+        \App\Support\Subscription::requireSeat();
         $temp = self::temporaryPassword();
         $u = DB::transaction(function () use ($d, $temp, $r) {
             $u = User::create(['name' => trim($d['name']), 'email' => strtolower(trim($d['email'])), 'password' => $temp,
@@ -117,6 +118,7 @@ final class UserController extends Controller
         $me = $r->user();
         $role = $d['role'] ?? $u->role;
         $active = array_key_exists('active', $d) ? (bool) $d['active'] : (bool) $u->active;
+        if ($active && !$u->active) \App\Support\Subscription::requireSeat();
         if ($u->id === $me->id) {
             abort_if($role !== $u->role, 422, 'Não pode alterar a sua própria função.');
             abort_if(!$active, 422, 'Não pode desactivar a sua própria conta.');
