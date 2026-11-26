@@ -89,9 +89,15 @@ $sample=[
 $query=[
     'api/cis/extractos/informacao'=>['contrato'=>$sample['contrato']],
     'api/cis/extractos/evidencia'=>['contrato'=>$sample['contrato']],
-    'api/cis/extractos/contratos'=>['termo'=>'a'],
-    'api/cis/mutuarios/procurar'=>['q'=>'a'],
     'api/admin/interest-quote'=>['montante'=>1000,'periodo_dias'=>30],
+    'api/cis/mutuarios/procurar'=>['q'=>'Cl'],
+    'api/cis/extractos/contratos'=>['termo'=>'Cl'],
+    'api/cis/caixa/relatorio'=>['from'=>now('Africa/Maputo')->startOfMonth()->toDateString(),'to'=>now('Africa/Maputo')->toDateString()],
+    'api/cis/caixa/conferencia-diaria'=>['date'=>now('Africa/Maputo')->toDateString()],
+    'api/cis/caixa/fecho-diario'=>['date'=>now('Africa/Maputo')->toDateString(),'account_id'=>(int)(Schema::hasTable('cis_cash_accounts')?DB::table('cis_cash_accounts')->where('status','activa')->value('id'):0)],
+    'api/cis/mensagens/preview'=>['contrato'=>$sample['contrato']],
+    'api/cis/mensagens/historico'=>['contrato'=>$sample['contrato']],
+    'api/cis/mensagens/destinatarios'=>['grupo'=>'atrasados'],
     'api/cis/contractos/saldo-conta'=>['conta_id'=>(int)(Schema::hasTable('cis_cash_accounts')?DB::table('cis_cash_accounts')->value('id'):0),'data'=>$today],
 ];
 $skip=['api/cis/email/oauth/callback'];                   // redireccionamento OAuth externo
@@ -106,13 +112,14 @@ foreach ($routes as $route) {
             $m[1]==='nr'=>$sample['extracto'],
             str_contains($uri,'propostas')=>$sample['proposta'],
             str_contains($uri,'documentos/{')=>$sample['documento'],
-            str_contains($uri,'relatorios/')=>'cobrancas',
+            str_contains($uri,'relatorios/')=>'__todos__',
             default=>$sample['cliente'],
         };
         if(!$v)$missing=true;
         return rawurlencode((string)$v);
     },$uri);
     if ($missing) { $noSample[]=$uri; continue; }
+    if (str_contains($path,'__todos__')) continue;
     foreach ($users as $role=>$u) {
         try { [$st,$j]=call('GET','/'.$path,$u,$query[$uri]??[]); }
         catch (\Throwable $e) { $st=599;$j=['message'=>get_class($e).': '.$e->getMessage()]; }
@@ -122,6 +129,16 @@ foreach ($routes as $route) {
         if (in_array($st,[401,404,409,422],true)) $other["$st $uri"]=mb_substr((string)($j['message']??''),0,140);
     }
 }
+// Cada relatório do catálogo (gestão e regulatórios), com o período do mês, para cada função com acesso.
+$rep=call('GET','/api/cis/relatorios',$users['administrador'])[1]['relatorios']??[];
+foreach ($rep as $def) foreach ($users as $role=>$u) {
+    try { [$st,$j]=call('GET','/api/cis/relatorios/'.rawurlencode($def['id']),$u,['mes'=>now('Africa/Maputo')->month,'ano'=>now('Africa/Maputo')->year]); }
+    catch (\Throwable $e) { $st=599;$j=['message'=>$e->getMessage()]; }
+    $codes[$st]=($codes[$st]??0)+1;
+    if ($st>=500 && $st!==503) $errors[]="$st GET relatório {$def['id']} [$role] ".mb_substr((string)($j['message']??''),0,220).(isset($j['file'])?' @ '.basename($j['file']).':'.($j['line']??''):'');
+    if (in_array($st,[404,409,422],true)) $other["$st relatório {$def['id']}"]=mb_substr((string)($j['message']??''),0,140);
+}
+echo '  Relatórios do catálogo: '.count($rep)."\n";
 ksort($codes);
 echo '  Pedidos: '.array_sum($codes).' em '.count($routes).' rotas × '.count($users).' funções · estados: '.json_encode($codes)."\n";
 foreach ($errors as $e) echo "    ✗ $e\n";

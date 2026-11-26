@@ -251,8 +251,10 @@ jobs:
           VITE_API_URL=/api npm run build
           npm i --no-save --no-audit --no-fund playwright@1.49.1
           npx playwright install --with-deps chromium
-          nohup env CIS_E2E_API=http://127.0.0.1:8000 npx vite preview --port 4175 --strictPort > /tmp/cis-web.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4175/ >/dev/null && break; sleep 1; done
+          nohup env CIS_E2E_API=http://127.0.0.1:8000 npx vite preview --host 127.0.0.1 --port 4175 --strictPort > /tmp/cis-web.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:4175/ >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:4175/ >/dev/null || { cat /tmp/cis-web.log; exit 1; }
+          curl -sf http://127.0.0.1:4175/api/cis/subscricao/estado -o /dev/null -w 'proxy /api → API: %{http_code}\n' || true
       - name: Interface — todas as páginas por função (administrador, gestor, agente)
         working-directory: frontend
         run: node e2e/system-ui.mjs
