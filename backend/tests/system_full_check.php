@@ -15,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Laravel\Sanctum\Sanctum;
 
 $ci=filter_var(env('CIS_CI_CONTRACT_REHEARSAL',false),FILTER_VALIDATE_BOOLEAN) && DB::connection()->getDatabaseName()==='cis_ci';
 $vps=filter_var(env('CIS_ISOLATED_REHEARSAL',false),FILTER_VALIDATE_BOOLEAN) && config('database.connections.mysql.host')==='cis-full-check-mysql';
@@ -26,15 +25,17 @@ foreach (['CIS_PRIVATE_PREVIEW','CIS_CONTRACTS_READ_APPROVED','CIS_CLIENTES_PREV
 }
 config(['app.debug'=>true,'cache.default'=>'array']);
 $http=$app->make(\Illuminate\Contracts\Http\Kernel::class);
-$pass=0;$fail=0;$warn=[];
+$pass=0;$fail=0;$warn=[];$tokens=[];
 function ok(bool $c,string $m):void{global $pass,$fail;if($c){$pass++;echo "  OK  $m\n";}else{$fail++;echo "  FALHA $m\n";}}
 /** Pedido pela pilha HTTP completa, autenticado como $u. Devolve [status, json]. */
 function call(string $method,string $uri,?User $u,array $body=[]):array{
     global $app,$http;
     app('cache')->store()->flush();                       // sem limites de ritmo entre pedidos do teste
+    global $tokens;
     app('auth')->forgetGuards();
-    if ($u) Sanctum::actingAs($u,['*']);
-    $r=Request::create($uri,$method,$method==='GET'?$body:[],[],[],['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json'],
+    $hdr=['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json'];
+    if ($u) $hdr['HTTP_AUTHORIZATION']='Bearer '.($tokens[$u->id]??=$u->createToken('verificacao-sistema')->plainTextToken);
+    $r=Request::create($uri,$method,$method==='GET'?$body:[],[],[],$hdr,
         $method==='GET'?null:json_encode($body));
     $res=$http->handle($r);
     $http->terminate($r,$res);
