@@ -10,7 +10,7 @@ final class ContractListController extends Controller
     public function notices(Request $request)
     {
         $params = $request->validate([
-            'tipo' => ['nullable', 'in:cobranca,atraso'],
+            'tipo' => ['nullable', 'in:cobranca,atraso,lista_negra'],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $today = now('Africa/Maputo')->startOfDay();
@@ -20,17 +20,32 @@ final class ContractListController extends Controller
             ->whereIn('Estado', ['Pendente', 'Pagamento Atrasado'])
             ->whereNotIn('Estado do Contrato', ['Finalizado', 'Liquidado', 'Cancelado', 'Anulado']);
         \App\Support\Branches::restrict($pending, $request->user(), $request->query('agencia'));
+        // Lista negra: separada (fora da carteira corrente); atraso e cobrança são só da carteira corrente.
+        $black = \App\Support\ClientRegistry::blacklistedIds();
+        $blackQ = (clone $pending)->whereIn('Nº de Cliente', $black ?: [0]);
+        if ($black) $pending->where(fn ($q) => $q->whereNull('Nº de Cliente')->orWhereNotIn('Nº de Cliente', $black));
         $late = (clone $pending)->where($due, '<', $today->toDateString());
         $upcoming = (clone $pending)->where($due, '>=', $today->toDateString())
             ->where($due, '<', $today->copy()->addDays($days + 1)->toDateString());
         $type = $params['tipo'] ?? 'atraso';
-        $rows = ($type === 'atraso' ? $late : $upcoming)->orderBy($due)->orderBy('Ordem')->paginate(20, [
+        $source = match ($type) { 'atraso' => $late, 'cobranca' => $upcoming, default => $blackQ };
+        // Dias: positivo = em atraso; negativo = faltam para o vencimento.
+        $diff = DB::raw("DATEDIFF('".$today->toDateString()."', `Data de Cobrança`) as dias");
+        $rows = $source->orderBy($due)->orderBy('Ordem')->paginate(20, [
             'Nr do Contracto as contrato', 'Nº da Parcela as parcela', 'Nome do Cliente as mutuário',
-            'Data de Cobrança as vencimento', 'Valor a Pagar as valor',
+            'Data de Cobrança as vencimento', 'Valor a Pagar as valor', $diff,
         ]);
+        $agg = fn ($q) => (clone $q)->selectRaw("COUNT(*) AS n, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS v, MAX(DATEDIFF(?, `Data de Cobrança`)) AS maxd, MIN(DATEDIFF(?, `Data de Cobrança`)) AS mind", [$today->toDateString(), $today->toDateString()])->first();
+        $a = $agg($late); $c = $agg($upcoming); $b = $agg($blackQ);
         return response()->json([
-            'atraso' => $type === 'atraso' ? $rows->total() : $late->count(),
-            'cobranca' => $type === 'cobranca' ? $rows->total() : $upcoming->count(),
+            'atraso' => (int) $a->n,
+            'cobranca' => (int) $c->n,
+            'lista_negra' => (int) $b->n,
+            'resumo' => [
+                'atraso' => ['valor' => (float) $a->v, 'dias_max' => $a->maxd !== null ? (int) $a->maxd : null],
+                'cobranca' => ['valor' => (float) $c->v, 'dias_min' => $c->maxd !== null ? max(0, -(int) $c->maxd) : null],
+                'lista_negra' => ['valor' => (float) $b->v, 'dias_max' => $b->maxd !== null ? (int) $b->maxd : null, 'mutuarios' => count($black)],
+            ],
             'antecedencia' => $days,
             'linhas' => $rows->items(),
             'paginas' => $rows->lastPage(),

@@ -1373,6 +1373,17 @@ $r9=collect($li['data'])->firstWhere('client_id',9950);
 ok($r9 && $r9['origem']==='automatica' && abs($r9['divida']-1000)<0.01 && $li['credito_lista_negra']['valor']>=1000,'a lista negra mostra a dívida de cada um e o total');
 ok(!collect(data($RC->candidates(req('/x',[],$admin)))['candidatos'])->pluck('id')->contains(9950),'depois de transferido já não volta a ser proposto');
 
+echo "== Avisos: três separadores (lista negra, atraso, a vencer) com dias\n";
+$nv=function(string $k)use($admin){$q=Request::create('/x','GET',['tipo'=>$k]);$q->setUserResolver(static fn()=>$admin);return data((new \App\Http\Controllers\Api\ContractListController())->notices($q));};
+$nb=$nv('lista_negra');
+$ln=collect($nb['linhas'])->firstWhere('contrato','LD-0001');
+ok($nb['lista_negra']>=1 && $ln && (int)$ln['dias']>=120 && $nb['resumo']['lista_negra']['dias_max']>=120 && $nb['resumo']['lista_negra']['valor']>=1000,'separador «Lista negra» com os dias de atraso de cada prestação');
+$na=$nv('atraso');
+ok(!collect($na['linhas'])->pluck('contrato')->contains('LD-0001') && $na['lista_negra']===$nb['lista_negra'],'a lista negra não entra nos pagamentos em atraso');
+ok(collect($na['linhas'])->every(fn($r)=>(int)$r['dias']>0),'em atraso: dias positivos (tantos dias em atraso)');
+$nc=$nv('cobranca');
+ok(collect($nc['linhas'])->every(fn($r)=>(int)$r['dias']<=0 && -(int)$r['dias']<=$nc['antecedencia']),'a vencer: faltam tantos dias (0 = vence hoje)');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
