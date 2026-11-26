@@ -1,3 +1,4 @@
+import LateChargeFields,{initialLateCharge,lateChargeRule,type LateChargeDetails} from './LateChargeFields';
 import {pushToast} from './waBridge';
 import {useCan} from './perms';
 import CompanyBrand,{PoweredBy} from './CompanyBrand';
@@ -24,6 +25,7 @@ type ProfileResponse={
 };
 type ScenarioQuote={resultado:string;aviso:string;consulta_apenas:boolean;[key:string]:unknown};
 type Quote={
+ mora_detalhe?:LateChargeDetails|null;
  parcela:number;dias_atraso:number;juros:number;multa:number;total:number;total_texto:string;
  estado?:string;data_pagamento:string;aviso:string;origem?:'cis'|'historico';registo_activo?:boolean;
  nova_prestacao?:{parcela:number;data_inicio:string;data_vencimento:string;prazo:string;capital:string;juros:string;valor_a_pagar:string;juros_estimado:boolean}
@@ -85,7 +87,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const [mode,setMode]=useState<Mode>('total');
  const [paymentNature,setPaymentNature]=useState<'recebido'|'nao_recebido'|null>(null);
  const [ord,setOrd]=useState(initialOrder??'');
- const [penalty,setPenalty]=useState(false);
+ const [lateDraft,setLateDraft]=useState(initialLateCharge);
  const [paymentAmount,setPaymentAmount]=useState('');
  const [reviewDate,setReviewDate]=useState(today());
  const [renewStart,setRenewStart]=useState('');
@@ -102,11 +104,6 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  useEffect(()=>{setCapitalRate('');setCapitalRateTouched(false);},[mode,ord,selected]);
  const rateValid=(v:string)=>/^\d{1,3}([.,]\d{1,4})?$/.test(v.trim())&&Number(v.trim().replace(',','.'))>0&&Number(v.trim().replace(',','.'))<=100;
  const [interestChoice,setInterestChoice]=useState('');
- const [fineRate,setFineRate]=useState('');
- const [fineGrace,setFineGrace]=useState('');
- const [fineCap,setFineCap]=useState('');
- const [finePreview,setFinePreview]=useState<ScenarioQuote|null>(null);
- const [fineError,setFineError]=useState('');
  const [accountId,setAccountId]=useState('');
  const [channel,setChannel]=useState('');
  const [evidenceRef,setEvidenceRef]=useState('');
@@ -220,24 +217,32 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
  const partialValid=/^\d+(?:[.,]\d{1,2})?$/.test(paymentAmount.trim())&&Number.isFinite(partialNum)&&partialNum>0;
  const activeAccount=accounts.find(a=>String(a.id)===accountId&&a.status==='activa');
  const partialInterest=partialValid?Math.min(partialNum,interests):null;
- const partialCapital=partialValid?Math.max(0,partialNum-interests):null;
+ const partialCapital=partialValid?Math.max(0,partialNum-interests-Number(scenarioQuote?.juros_mora??0)):null;
  const renewing=mode==='renovar_emprestimo';
  const live=mode==='total'||renewing;
  // Operações activadas pelo endpoint /operacao (prévia em /simular-operacao).
  const opMode=(['parcial','remanescente','renovar_juros','capitalizar','prorrogar_15_30'] as Mode[]).includes(mode);
  const opCash=mode==='parcial'||mode==='remanescente';
  const modeLocked=!live&&!opMode;
+ const late=payDateOk&&/^\d{4}-\d{2}-\d{2}$/.test(String(selectedInstallment?.['Data de Cobrança']??'').slice(0,10))
+  &&datePayment>String(selectedInstallment?.['Data de Cobrança']).slice(0,10);
+ const legacyFine=num(selectedInstallment?.['% de Multa']??profile?.contract['% de Multa'])>0;
+ const showLate=late&&(live||opCash)&&paymentNature==='recebido';
+ const lateRule=showLate?lateChargeRule(lateDraft,legacyFine):null;
+ const lateSignature=lateRule?JSON.stringify(lateRule):'';
+ const penalty=showLate&&legacyFine;
+ const latePayload={cobrar_multa:penalty,...(lateRule?{mora:lateRule}:{})};
  const flowReceived=paymentNature==='recebido';
  const flowNoReceipt=paymentNature==='nao_recebido';
  const hasChoice=flowReceived||flowNoReceipt;
  const modeAllowed=eligibleModes.includes(mode);
  const activeOrder=ord&&rows.some(r=>String(r.Ordem)===ord&&installmentEligible(r));
- const canQuote=live&&flowReceived&&payDateOk&&(!renewing||/^\d{4}-\d{2}-\d{2}$/.test(renewStart))&&!!selectedInstallment&&installmentEligible(selectedInstallment);
+ const canQuote=live&&flowReceived&&payDateOk&&(!showLate||!!lateSignature)&&(!renewing||/^\d{4}-\d{2}-\d{2}$/.test(renewStart))&&!!selectedInstallment&&installmentEligible(selectedInstallment);
  const refOk=evidenceRef.trim().length>=4;
- const canOpExecute=opMode&&!!scenarioQuote&&(mode!=='parcial'||(scenarioQuote as Record<string,unknown>).valor!=null)&&!!(scenarioQuote as Record<string,unknown>).registo_activo&&(opCash?(!!activeAccount&&refOk&&payDateOk):true)&&confirmReceipt&&!paying&&payWait===0;
- const canExecute=live&&flowReceived&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
+ const canOpExecute=opMode&&(!showLate||!!lateSignature)&&!!scenarioQuote&&(mode!=='parcial'||(scenarioQuote as Record<string,unknown>).valor!=null)&&!!(scenarioQuote as Record<string,unknown>).registo_activo&&(opCash?(!!activeAccount&&refOk&&payDateOk):true)&&confirmReceipt&&!paying&&payWait===0;
+ const canExecute=live&&flowReceived&&(!showLate||!!lateSignature)&&!!quote&&!!quote.registo_activo&&!!activeAccount&&refOk&&confirmReceipt&&!paying&&payWait===0;
 
- function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setPenalty(false);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
+ function selectContract(numero:string){setSelected(numero);setEvents(null);setProfile(null);setPaymentNature(null);setMode('total');setView('resumo');setAccountId('');setChannel('');setEvidenceRef('');setLateDraft(initialLateCharge);setQuote(null);setScenarioQuote(null);window.scrollTo({top:0,behavior:'smooth'});}
  function back(){setSelected(null);setProfile(null);setMessage('');setRefresh(v=>v+1);}
  // Início do novo período: o vencimento actual; se já passou (prestação em atraso), a data do pagamento,
  // para a nova prestação não nascer já vencida.
@@ -302,8 +307,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  function opBody(){
   return {operacao:mode,
-   ...(mode==='parcial'?{data_pagamento:datePayment,...(/^\d{4}-\d{2}-\d{2}$/.test(renewStart)?{data_inicio:renewStart}:{}),...(partialValid?{valor_recebido:paymentAmount.trim().replace(',','.')}:{}),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
-   ...(mode==='remanescente'?{data_pagamento:datePayment,cobrar_multa:penalty}:{}),
+   ...(mode==='parcial'?{data_pagamento:datePayment,...latePayload,...(/^\d{4}-\d{2}-\d{2}$/.test(renewStart)?{data_inicio:renewStart}:{}),...(partialValid?{valor_recebido:paymentAmount.trim().replace(',','.')}:{}),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
+   ...(mode==='remanescente'?{data_pagamento:datePayment,...latePayload}:{}),
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
    ...(mode==='prorrogar_15_30'?{tratamento_juros:interestChoice}:{})};
  }
@@ -338,7 +343,7 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
   try{
    const r=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+ord+(renewing?'/renovar':'/cobrar'),{
     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
-    body:JSON.stringify({data_pagamento:datePayment,cobrar_multa:penalty,...(renewing?{data_inicio:renewStart}:{}),valor_recebido:quote.total_texto,
+    body:JSON.stringify({data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart}:{}),valor_recebido:quote.total_texto,
      conta_id:Number(accountId),referencia:evidenceRef.trim(),idempotency_key:key,confirmacao_recebimento:true})
    });
    if(r.status===429){
@@ -355,13 +360,13 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
 
  useEffect(()=>{
   setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setQuoting(false);setScenarioBusy(false);
-  if(view!=='tratamento'||!selected||!ord||!activeOrder||!modeAllowed||paymentDone)return;
+  if(view!=='tratamento'||!selected||!ord||!activeOrder||!modeAllowed||paymentDone||(showLate&&!lateSignature))return;
   if(live?!canQuote:(mode==='parcial'&&(!payDateOk||(capitalRateTouched&&!rateValid(capitalRate))))||(mode==='remanescente'&&!payDateOk)||(mode==='prorrogar_15_30'&&!interestChoice)||(mode==='capitalizar'&&(!capitalPeriod||(capitalRateTouched&&!rateValid(capitalRate)))))return;
   const ctrl=new AbortController();
   setMessage('');
   if(live)setQuoting(true);else setScenarioBusy(true);
   const endpoint=live?(renewing?'simular-renovacao':'simular-cobranca'):opMode?'simular-operacao':'simular-cenario';
-  const body=live?{data_pagamento:datePayment,cobrar_multa:penalty,...(renewing?{data_inicio:renewStart}:{})}:opMode?opBody():{
+  const body=live?{data_pagamento:datePayment,...latePayload,...(renewing?{data_inicio:renewStart}:{})}:opMode?opBody():{
    operacao:mode,
    ...(mode==='parcial'?{valor_pago:paymentAmount.trim()}:{}),
    ...(mode==='capitalizar'?{periodo_referencia:Number(capitalPeriod),...(capitalRateTouched&&capitalRate.trim()?{taxa_informada:capitalRate.trim().replace(',','.')}:{})}:{}),
@@ -383,27 +388,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
    finally{if(!ctrl.signal.aborted){setQuoting(false);setScenarioBusy(false);}}
   },400);
   return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,selectedInstallment,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
+ },[selected,ord,view,selectedInstallment,activeOrder,modeAllowed,paymentDone,live,canQuote,mode,partialValid,capitalPeriod,capitalRate,capitalRateTouched,renewing,datePayment,penalty,showLate,lateSignature,renewStart,paymentAmount,interestChoice,reviewDate,token,refresh]);
 
- useEffect(()=>{
-  setFinePreview(null);setFineError('');
-  if(view!=='tratamento'||!selected||!activeOrder||paymentDone||!payDateOk
-     ||!/^\d{1,3}(?:\.\d{1,4})?$/.test(fineRate)||Number(fineRate)>100
-     ||!/^\d+$/.test(fineGrace)||!/^\d+(?:\.\d{1,2})?$/.test(fineCap))return;
-  const ctrl=new AbortController();
-  const timer=window.setTimeout(async()=>{
-   try{
-    const response=await fetch(API+'/cis/contractos/'+encodeURIComponent(selected)+'/prestacoes/'+encodeURIComponent(ord)+'/simular-cenario',{
-     method:'POST',headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},signal:ctrl.signal,
-     body:JSON.stringify({operacao:'mora_diaria',data_referencia:payDate,taxa_mora_diaria:fineRate,carencia_dias:Number(fineGrace),tecto_mora:fineCap})
-    });
-    const data=await response.json().catch(()=>({})) as ScenarioQuote&{errors?:Record<string,string[]>;message?:string};
-    if(!response.ok)throw new Error(Object.values(data.errors??{}).flat()[0]||data.message||'Não foi possível calcular a mora.');
-    if(!ctrl.signal.aborted)setFinePreview(data);
-   }catch(err){if(!ctrl.signal.aborted)setFineError(err instanceof Error?err.message:'Falha no cálculo da mora.');}
-  },400);
-  return()=>{window.clearTimeout(timer);ctrl.abort();};
- },[selected,ord,view,selectedInstallment,activeOrder,paymentDone,payDate,payDateOk,fineRate,fineGrace,fineCap,token,refresh]);
 
  return <section className={'cis-collections'+(embeddedContract?' cis-collections-embedded':'')}>
   {!embeddedContract&&<div className="cis-collections-hero"><div><span className="cis-collections-kicker"><ReceiptText size={14}/> CAPTA · OPERAÇÕES DE CRÉDITO</span>
@@ -496,16 +482,6 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
        </>}
       </div>
       <div className="cis-collections-panel">
-       {activeOrder&&<details className="cis-collections-technical"><summary>Mora diária</summary>
-        <div className="cis-collections-fields">
-         <label>Taxa diária (%)<input inputMode="decimal" value={fineRate} onChange={e=>setFineRate(e.target.value.replace(',','.'))}/></label>
-         <label>Carência (dias)<input inputMode="numeric" value={fineGrace} onChange={e=>setFineGrace(e.target.value)}/></label>
-         <label>Tecto acumulado (MT)<input inputMode="decimal" value={fineCap} onChange={e=>setFineCap(e.target.value.replace(',','.'))}/></label>
-        </div>
-        <p>Prévia à data de {date(payDate)}. Introduza os parâmetros da política aplicável.</p>
-        {fineError&&<p role="alert">{fineError}</p>}
-        {finePreview&&<p role="status">Mora calculada: <strong>{fmt(String(finePreview.mora))}</strong> · {String(finePreview.dias_sujeitos_a_mora)} dia(s) sujeitos a mora.</p>}
-       </details>}
        <div className="cis-collections-sectionhead"><div><h3>2. Qual é a natureza desta operação?</h3><p>O tratamento depende primeiro de saber se houve recebimento efectivo.</p></div></div>
        <div className="cis-collections-nature" role="group" aria-label="Natureza do tratamento">
         <button type="button" aria-pressed={flowReceived} className={flowReceived?'selected':''} onClick={()=>{setPaymentNature('recebido');setMode('total');setQuote(null);setScenarioQuote(null);setPaymentAmount('');}}>
@@ -529,7 +505,8 @@ export default function CollectionsDesk({token,embeddedContract,embeddedProfile,
         {flowReceived&&<label>Conta receptora na Caixa <span className="cis-collections-required">Obrigatória</span><select value={accountId} onChange={e=>{setAccountId(e.target.value);setConfirmReceipt(false);}}><option value="">Seleccionar conta activa</option>{accounts.filter(a=>a.status==='activa').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}{a.saldo_disponivel?' · saldo '+fmt(a.saldo_disponivel):''}</option>)}</select><small>{activeAccount?'O valor recebido entra no saldo desta conta.':'Escolha a conta onde o dinheiro foi efectivamente recebido.'}</small></label>}
         {flowReceived&&<label>Referência do comprovativo / operação <span className="cis-collections-required">Obrigatória</span><input type="text" maxLength={60} value={evidenceRef} onChange={e=>setEvidenceRef(e.target.value)} placeholder="Número de operação ou recibo"/><small>Fica gravada no Extracto e no histórico da prestação.</small></label>}
         {renewing&&<label>Data de início do novo período <span className="cis-collections-required">Obrigatória</span><input type="date" value={renewStart} onChange={e=>{setRenewStart(e.target.value);setQuote(null);setConfirmReceipt(false);}}/><small>O vencimento é calculado automaticamente: início + {currentTerm||'o mesmo prazo'}. Por defeito começa no vencimento anterior ({date(selectedInstallment?.['Data de Cobrança'])}) ou, se este já passou, na data do pagamento.</small></label>}
-        {flowReceived&&(live||mode==='remanescente')&&<label className="cis-collections-check"><input type="checkbox" checked={penalty} onChange={e=>{setPenalty(e.target.checked);setQuote(null);}}/> Cobrar juros de mora quando aplicável</label>}
+        {showLate&&<LateChargeFields draft={lateDraft} onChange={value=>{setLateDraft(value);setQuote(null);setScenarioQuote(null);setConfirmReceipt(false);setPayKey('');}}
+         legacy={legacyFine} canAdjust={can('definicoes')} details={quote?.mora_detalhe??(scenarioQuote?.mora_detalhe as LateChargeDetails|undefined)}/>}
         {mode==='actualizar_data'&&<label>Data a rever (não gravada)<input type="date" value={reviewDate} max={today()} onChange={e=>setReviewDate(e.target.value)}/><small>A rotina VBA altera estado e juros variáveis; o CAPTA não grava esta revisão sem auditoria e validação.</small></label>}
         {mode==='capitalizar'&&<label>Período de referência para nova taxa <span className="cis-collections-required">Escolha explícita obrigatória</span><select value={capitalPeriod} onChange={e=>{setCapitalPeriod(e.target.value);setCapitalRate('');setCapitalRateTouched(false);setScenarioQuote(null);}}><option value="">Seleccionar período</option><option value="15">15 dias</option><option value="30">30 dias</option></select><small>O VBA privilegia 30 dias, mas a simulação CAPTA exige uma escolha explícita para evitar taxa presumida.</small></label>}
         {mode==='capitalizar'&&capitalPeriod&&<label>Juros a cobrar (taxa por período) <span className="cis-collections-required">{capitalRateTouched&&scenarioQuote?.taxa_alterada?'Taxa alterada':'Taxa da tabela'}</span>

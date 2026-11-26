@@ -57,7 +57,7 @@ final class ContractCollectionController extends Controller
     }
 
     /** Cálculo único do valor devido, em cêntimos. */
-    private function quote(object $row,string $date,bool $multa): array
+    private function quote(object $row,string $date,bool $multa,?array $rule=null,?object $user=null,int $alreadyPaid=0): array
     {
         $today=CarbonImmutable::createFromFormat('!Y-m-d',$date);
         $due=self::date($row->{'Data de Cobrança'},'Data de cobrança');
@@ -67,6 +67,7 @@ final class ContractCollectionController extends Controller
         $variable=in_array((string)$row->{'Tipo de Juro'},['Variável','Variavel'],true);
         $rate=(float)$row->{'% de Juro'};
         $fineRate=(float)($row->{'% de Multa'}??0);
+        if (($rule['tipo']??null)==='legado') $multa=true;
         $avisos=[];
         if (self::isCisContract($row)) {
             // Contratos CIS: meticais inteiros, arredondamento para cima (motor homologado).
@@ -101,12 +102,24 @@ final class ContractCollectionController extends Controller
             $origem='historico';
         }
         abort_unless($baseC>0,409,'Valor a pagar inválido nesta prestação.');
+        $lateCharge=null;
+        if ($rule!==null) {
+            $principal=max(0,$baseC-$interestC);
+            $lateCharge=\App\Services\LateCharge::calculate(
+                $rule,$due,$today,max(0,$principal-max(0,$alreadyPaid-$interestC)),
+                max(0,$baseC-$alreadyPaid),$fineRate,$fineC,$origem==='cis',
+                \App\Support\Permissions::can($user,'definicoes')
+            );
+            if ($lateCharge['tipo']==='legado') $lateCharge['base_centimos']=$interestC;
+            $fineC=$lateCharge['cobrado_centimos'];
+        } else {
+            $avisos[]='Liquidação total. Juros de mora opcionais sobre os juros (Parcelas.frm).';
+        }
         $total=$baseC+$fineC;
-        $avisos[]='Liquidação total. Juros de mora opcionais sobre os juros (Parcelas.frm).';
         return [
             'parcela'=>(int)$row->{'Nº da Parcela'},
             'origem'=>$origem,
-            'dias_atraso'=>$delay,
+            'dias_atraso'=>$delay,'mora_detalhe'=>$lateCharge,
             'juros'=>(float)CashAccountLedger::amount($interestC),
             'multa'=>(float)CashAccountLedger::amount($fineC),
             'total'=>(float)CashAccountLedger::amount($total),
@@ -168,6 +181,7 @@ final class ContractCollectionController extends Controller
         $data=$request->validate([
             'data_pagamento'=>['required','date_format:Y-m-d'],
             'cobrar_multa'=>['required','boolean'],
+            ...\App\Services\LateCharge::rules(),
         ]);
 
         $db=DB::connection('mysql_legacy');
@@ -175,7 +189,7 @@ final class ContractCollectionController extends Controller
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
         $this->paymentDate($row,$data['data_pagamento'],$request->user());
-        $q=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
+        $q=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['mora']??null,$request->user());
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
             && CashAccountLedger::flag('CIS_CASH_WRITES_APPROVED')
@@ -192,6 +206,7 @@ final class ContractCollectionController extends Controller
         $data=$request->validate([
             'data_pagamento'=>['required','date_format:Y-m-d'],
             'cobrar_multa'=>['required','boolean'],
+            ...\App\Services\LateCharge::rules(),
             'valor_recebido'=>['required','string'],
             'conta_id'=>['required','integer','min:1'],
             'referencia'=>['required','string','min:4','max:60'],
@@ -224,7 +239,7 @@ final class ContractCollectionController extends Controller
             $this->eligibility($db,$row);
             $this->paymentDate($row,$data['data_pagamento'],$user);
             $this->cashDateOpen($account,$data['data_pagamento']);
-            $calc=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa']);
+            $calc=$this->quote($row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['mora']??null,$user);
             $c=$calc['_cents'];
             if ($c['total']!==$received) {
                 throw ValidationException::withMessages(['valor_recebido'=>
@@ -263,6 +278,7 @@ final class ContractCollectionController extends Controller
                 'installment_number'=>$calc['parcela'],'operation'=>'cobranca_total',
                 'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
                 'amount'=>CashAccountLedger::amount($c['total']),'evidence_reference'=>$ref,
+                'late_charge'=>$calc['mora_detalhe']??null,
                 'reason'=>$calc['origem']==='historico'?'Liquidação total de prestação histórica (VBA).':'Liquidação total.',
                 'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
@@ -309,13 +325,13 @@ final class ContractCollectionController extends Controller
     }
 
     /** Cálculo da renovação: juros (+ multa opcional) agora, nova prestação com o mesmo capital. */
-    private function renewalPlan($db,object $row,string $date,bool $multa,string $start): array
+    private function renewalPlan($db,object $row,string $date,bool $multa,string $start,?array $rule=null,?object $user=null): array
     {
         abort_unless(in_array($row->Estado,['Pendente','Pagamento Atrasado'],true),409,'A prestação já não está pendente.');
         $open=$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})
             ->whereIn('Estado',['Pendente','Pagamento Atrasado'])->count();
         abort_unless($open===1,409,'Só é possível renovar quando esta é a única prestação em curso do contrato.');
-        $q=$this->quote($row,$date,$multa);
+        $q=$this->quote($row,$date,$multa,$rule,$user);
         $c=$q['_cents'];
         abort_unless($c['juros']>0,409,'Prestação sem juros a cobrar; renovação não aplicável.');
         $principalC=$c['total']-$c['multa']-$c['juros'];
@@ -346,7 +362,7 @@ final class ContractCollectionController extends Controller
         $paidC=$c['juros']+$c['multa'];
         $max=(int)$db->table('Contractos')->where('Nr do Contracto',$row->{'Nr do Contracto'})->max('Nº da Parcela');
         return [
-            'parcela'=>$q['parcela'],'origem'=>$q['origem'],'dias_atraso'=>$q['dias_atraso'],
+            'parcela'=>$q['parcela'],'origem'=>$q['origem'],'dias_atraso'=>$q['dias_atraso'],'mora_detalhe'=>$q['mora_detalhe'],
             'juros'=>(float)CashAccountLedger::amount($c['juros']),'multa'=>(float)CashAccountLedger::amount($c['multa']),
             'total'=>(float)CashAccountLedger::amount($paidC),'total_texto'=>CashAccountLedger::amount($paidC),
             'data_pagamento'=>$date,
@@ -369,6 +385,7 @@ final class ContractCollectionController extends Controller
         $data=$request->validate([
             'data_pagamento'=>['required','date_format:Y-m-d'],
             'cobrar_multa'=>['required','boolean'],
+            ...\App\Services\LateCharge::rules(),
             'data_inicio'=>['required','date_format:Y-m-d'],
         ]);
 
@@ -377,7 +394,7 @@ final class ContractCollectionController extends Controller
         abort_unless($row,404,'Prestação não encontrada.');
         $this->eligibility($db,$row);
         $this->paymentDate($row,$data['data_pagamento'],$request->user());
-        $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
+        $q=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$request->user());
         unset($q['_cents']);
         $q['registo_activo']=CashAccountLedger::flag('CIS_COLLECTION_WRITES_APPROVED')
             && CashAccountLedger::flag('CIS_CASH_WRITES_APPROVED')
@@ -394,6 +411,7 @@ final class ContractCollectionController extends Controller
         $data=$request->validate([
             'data_pagamento'=>['required','date_format:Y-m-d'],
             'cobrar_multa'=>['required','boolean'],
+            ...\App\Services\LateCharge::rules(),
             'data_inicio'=>['required','date_format:Y-m-d'],
             'valor_recebido'=>['required','string'],
             'conta_id'=>['required','integer','min:1'],
@@ -425,7 +443,7 @@ final class ContractCollectionController extends Controller
             $this->eligibility($db,$row);
             $this->paymentDate($row,$data['data_pagamento'],$user);
             $this->cashDateOpen($account,$data['data_pagamento']);
-            $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio']);
+            $plan=$this->renewalPlan($db,$row,$data['data_pagamento'],(bool)$data['cobrar_multa'],$data['data_inicio'],$data['mora']??null,$user);
             $c=$plan['_cents'];$np=$plan['nova_prestacao'];
             if ($c['total']!==$received) {
                 throw ValidationException::withMessages(['valor_recebido'=>
@@ -488,6 +506,7 @@ final class ContractCollectionController extends Controller
                 'installment_number'=>$plan['parcela'],'operation'=>'renovar_juros',
                 'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>(int)$account->id,
                 'amount'=>CashAccountLedger::amount($c['total']),'evidence_reference'=>$ref,
+                'late_charge'=>$plan['mora_detalhe']??null,
                 'reason'=>'Renovação: juros pagos'.($c['multa']>0?' com juros de mora':'').'; novo período de '.$np['prazo'].'.',
                 'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
@@ -574,25 +593,25 @@ final class ContractCollectionController extends Controller
         $principalC=$dueC-$interestC-$fineC;
         if ($op==='parcial'||$op==='remanescente') {
             $this->paymentDate($row,$d['data_pagamento'],$user);
-            $q=$this->quote($row,$d['data_pagamento'],$op==='remanescente'&&!empty($d['cobrar_multa']));
+            $q=$this->quote($row,$d['data_pagamento'],!empty($d['cobrar_multa'])&&($op==='remanescente'||isset($d['mora'])),$d['mora']??null,$user,$already);
             $c=$q['_cents'];
             if ($op==='parcial') {
                 // Pagamento parcial = paga os juros da prestação e parte do capital; o CAPITAL QUE FICA
                 // + juros (taxa da tabela para esse capital, editável) passa a ser uma NOVA PRESTAÇÃO
                 // no mesmo contrato, com início escolhido e vencimento = início + mesmo prazo.
                 abort_unless($already===0,409,'Esta prestação tem pagamentos parciais antigos; liquide o saldo.');
-                $juros=$c['juros'];$baseC=$c['total'];
+                $juros=$c['juros'];$charges=$juros+$c['multa'];$baseC=$c['total'];
                 $raw=trim((string)($d['valor_recebido']??''));
                 $paid=$raw===''?null:CashAccountLedger::cents($raw,'valor_recebido');
                 if ($paid!==null) {
                     if ($isCis&&$paid%100!==0) throw ValidationException::withMessages(['valor_recebido'=>'Nos contratos do CIS os valores são em meticais inteiros.']);
-                    if ($paid<$juros||$paid>=$baseC) {
+                    if ($paid<$charges||$paid>=$baseC) {
                         throw ValidationException::withMessages(['valor_recebido'=>
-                            'O pagamento parcial tem de cobrir pelo menos os juros ('.CashAccountLedger::amount($juros).' MT) e ser inferior ao valor da prestação ('
+                            'O pagamento parcial tem de cobrir os juros e a mora ('.CashAccountLedger::amount($charges).' MT) e ser inferior ao valor da prestação ('
                             .CashAccountLedger::amount($baseC).' MT). Para pagar tudo use a liquidação.']);
                     }
                 }
-                $p=$paid??$juros;
+                $p=$paid??$charges;
                 $remainingC=$baseC-$p; // capital que fica em dívida
                 $term=mb_strtolower(trim((string)($row->{'Prazo/Duração'}??'')));
                 $period=preg_match('/^(?:15\s*dias?|2\s*semanas)$/u',$term)?15:30;
@@ -618,22 +637,22 @@ final class ContractCollectionController extends Controller
                 $fmtR=fn($r)=>$r===null?null:rtrim(rtrim(number_format($r,4,'.',''),'0'),'.');
                 return ['operacao'=>$op,'parcela'=>$q['parcela'],'data_pagamento'=>$d['data_pagamento'],'dias_atraso'=>$q['dias_atraso'],
                     'valor'=>$paid===null?null:CashAccountLedger::amount($paid),'juros_cobertos'=>CashAccountLedger::amount($juros),
-                    'amortizacao'=>$paid===null?null:CashAccountLedger::amount($p-$juros),'valor_prestacao'=>CashAccountLedger::amount($baseC),
+                    'amortizacao'=>$paid===null?null:CashAccountLedger::amount($p-$charges),'valor_prestacao'=>CashAccountLedger::amount($baseC),'juros_mora'=>CashAccountLedger::amount($c['multa']),'mora_detalhe'=>$q['mora_detalhe'],
                     'estado'=>$q['estado'],
                     'nova_prestacao'=>['parcela'=>$max+1,'capital'=>CashAccountLedger::amount($remainingC),'taxa'=>$fmtR($rate),
                         'juros'=>CashAccountLedger::amount($newInterestC),'valor_a_pagar'=>CashAccountLedger::amount($remainingC+$newInterestC),
                         'data_inicio'=>$start->toDateString(),'data_vencimento'=>$newDue->toDateString(),'prazo'=>$label],
                     'taxa_editavel'=>true,'taxa_tabela'=>$fmtR($tableRate),'taxa'=>$fmtR($rate),'taxa_alterada'=>$altered,
                     'proximo_valor'=>CashAccountLedger::amount($remainingC+$newInterestC),'proximo_vencimento'=>$newDue->toDateString(),
-                    'aviso'=>'Juros primeiro, depois capital. O capital que fica ('.CashAccountLedger::amount($remainingC).' MT) mais os juros ('
+                    'aviso'=>'Juros e mora primeiro, depois capital. O capital que fica ('.CashAccountLedger::amount($remainingC).' MT) mais os juros ('
                         .$fmtR($rate).'%'.($altered?', taxa indicada':', taxa da tabela').') passa a ser a nova prestação P'.($max+1).'.',
-                    '_cents'=>['valor'=>$paid,'juros'=>$juros,'restante'=>$remainingC,'novo_juros'=>$newInterestC],'_rate'=>$rate];
+                    '_cents'=>['valor'=>$paid,'juros'=>$juros,'multa'=>$c['multa'],'restante'=>$remainingC,'novo_juros'=>$newInterestC],'_rate'=>$rate];
             }
             abort_unless($already>0,409,'Esta prestação não tem pagamentos parciais; use a liquidação da prestação.');
             $remaining=$c['total']-$already;
             abort_unless($remaining>0,409,'Não há saldo em dívida nesta prestação.');
             return ['operacao'=>$op,'parcela'=>$q['parcela'],'data_pagamento'=>$d['data_pagamento'],'dias_atraso'=>$q['dias_atraso'],
-                'valor'=>CashAccountLedger::amount($remaining),'ja_pago'=>CashAccountLedger::amount($already),
+                'valor'=>CashAccountLedger::amount($remaining),'ja_pago'=>CashAccountLedger::amount($already),'mora_detalhe'=>$q['mora_detalhe'],
                 'juros'=>CashAccountLedger::amount($c['juros']),'juros_mora'=>CashAccountLedger::amount($c['multa']),
                 'valor_prestacao'=>CashAccountLedger::amount($c['total']),'estado'=>$q['estado'],
                 'aviso'=>'Liquida o saldo da prestação depois dos pagamentos parciais'.($c['multa']>0?', com juros de mora':'').'.',
@@ -709,6 +728,7 @@ final class ContractCollectionController extends Controller
             'operacao'=>['required','in:'.implode(',',self::OPERATIONS)],
             'data_pagamento'=>['required_if:operacao,parcial,remanescente','nullable','date_format:Y-m-d'],
             'cobrar_multa'=>['nullable','boolean'],
+            ...\App\Services\LateCharge::rules(),
             'valor_recebido'=>['nullable','string','max:20'],
             'periodo_referencia'=>['required_if:operacao,capitalizar','nullable','integer','in:15,30'],
             'taxa_informada'=>['nullable','numeric','gt:0','max:100','regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
@@ -782,7 +802,7 @@ final class ContractCollectionController extends Controller
             $m=fn(int $cents)=>self::money($row,$cents);
             $q=$db->table('Contractos')->where('Ordem',$ordem)->where('Nr do Contracto',$numero)->whereIn('Estado',['Pendente','Pagamento Atrasado']);
             $upd=match ($op) {
-                'parcial'=>['Valor de Juros'=>$m($c['juros']),'Valor de Multa'=>0,'Valor a Pagar'=>$m($c['valor']),'Valor Pago'=>$m($c['valor']),'Data de Pagamento'=>$plan['data_pagamento'],
+                'parcial'=>['Valor de Juros'=>$m($c['juros']),'Valor de Multa'=>$m($c['multa']),'Valor a Pagar'=>$m($c['valor']),'Valor Pago'=>$m($c['valor']),'Data de Pagamento'=>$plan['data_pagamento'],
                     'Estado'=>$plan['estado'],'Dias'=>$plan['dias_atraso'],'Situação de Pagamento'=>'Pago parcialmente - saldo na P'.$plan['nova_prestacao']['parcela']],
                 'remanescente'=>['Valor de Juros'=>$m($c['juros']),'Valor de Multa'=>$m($c['multa']),'Valor a Pagar'=>$m($c['total']),'Valor Pago'=>$m($c['total']),
                     'Data de Pagamento'=>$plan['data_pagamento'],'Estado'=>$plan['estado'],'Dias'=>$plan['dias_atraso'],'Situação de Pagamento'=>'Pagamento Completo'],
@@ -842,6 +862,7 @@ final class ContractCollectionController extends Controller
                 'contract_number'=>$numero,'installment_ordem'=>$ordem,'installment_number'=>$plan['parcela'],'operation'=>$labels[$op],
                 'before'=>$row,'after'=>$after,'extracto_nr'=>$nr,'account_id'=>$account?(int)$account->id:null,
                 'amount'=>$cash?$plan['valor']:($plan['valor_a_pagar']??null),'evidence_reference'=>$cash?$ref:null,
+                'late_charge'=>$plan['mora_detalhe']??null,
                 'reason'=>trim($reasons[$op].($motivo!==''?' Motivo: '.$motivo:'')),'operation_key'=>$key,'performed_by'=>(int)$user->id,
             ]);
             if ($newOrdem) {
