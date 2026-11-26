@@ -1377,7 +1377,7 @@ echo "== Avisos: três separadores (lista negra, atraso, a vencer) com dias\n";
 $nv=function(string $k,int $pg=1)use($admin){$q=Request::create('/x','GET',['tipo'=>$k,'page'=>$pg]);$q->setUserResolver(static fn()=>$admin);return data((new \App\Http\Controllers\Api\ContractListController())->notices($q));};
 $nb=$nv('lista_negra');
 $ln=null;for($pg=1;$pg<=$nb['paginas']&&!$ln;$pg++)$ln=collect($nv('lista_negra',$pg)['linhas'])->firstWhere('contrato','LD-0001');
-if(!$ln||(int)$ln['dias']<120)echo '  diag: '.json_encode(['n'=>$nb['lista_negra'],'paginas'=>$nb['paginas'],'resumo'=>$nb['resumo'],'ln'=>$ln,'primeira'=>$nb['linhas'][0]??null])."\n";
+if(!$ln||(int)$ln['dias']<120)echo '  diag: '.json_encode(['n'=>$nb['lista_negra'],'paginas'=>$nb['paginas'],'resumo'=>$nb['resumo'],'ln'=>$ln,'primeira'=>$nb['linhas'][0]??null,'ids'=>\App\Support\ClientRegistry::blacklistedIds(),'ld'=>DB::connection('mysql_legacy')->table('Contractos')->where('Nr do Contracto','LD-0001')->first()])."\n";
 ok($nb['lista_negra']>=1 && $ln && (int)$ln['dias']>=120 && $nb['resumo']['lista_negra']['dias_max']>=120 && $nb['resumo']['lista_negra']['valor']>=1000,'separador «Lista negra» com os dias de atraso de cada prestação');
 $na=$nv('atraso');
 ok(!collect($na['linhas'])->pluck('contrato')->contains('LD-0001') && $na['lista_negra']===$nb['lista_negra'],'a lista negra não entra nos pagamentos em atraso');
