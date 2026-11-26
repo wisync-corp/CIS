@@ -1113,7 +1113,7 @@ $p3=data($PC->store(req('/x',array_replace($prop,['montante'=>100]),$g2)));$PC->
 ok($err(fn()=>$PC->decide(req('/x',['decisao'=>'aprovar'],$g2),$p3['id']))===403,'ninguém (excepto o administrador) aprova a própria proposta');
 ok($err(fn()=>$PC->show(req('/x',[],$gmu),$p3['id']))===404,'gestora de outra agência não vê a proposta');
 $ev=$db->table('cis_credit_proposal_events')->where('proposal_id',$p1['id'])->pluck('accao')->all();
-ok($ev===['criada','submetida','aprovada','desembolsada'],'histórico da proposta: '.implode(' → ',$ev));
+ok($ev===['criada','submetida','aprovada','risco_aceite','desembolsada'],'histórico da proposta: '.implode(' → ',$ev));
 
 echo "== Contactos, promessas e lembretes\n";
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->call('migrate',['--path'=>'database/migrations/2026_11_23_000220_cis_collection_contacts.php','--force'=>true]);
