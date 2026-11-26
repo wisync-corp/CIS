@@ -35,7 +35,7 @@ export function lateChargeRule(d:Draft,legacy:boolean){
  };
 }
 const amount=(cents:number)=>new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100)+' MT';
-export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,details}:{draft:Draft;onChange:(d:Draft)=>void;legacy:boolean;canAdjust:boolean;details?:LateChargeDetails|null}){
+export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,details,simulation=false}:{draft:Draft;onChange:(d:Draft)=>void;legacy:boolean;canAdjust:boolean;details?:LateChargeDetails|null;simulation?:boolean}){
  const update=<K extends keyof Draft,>(name:K,value:Draft[K])=>onChange({...d,[name]:value});
  const input=(k:'valor'|'taxa'|'valor_recorrente'|'carencia'|'tecto'|'dias_periodo'|'valor_reduzido',label:string,mode:'decimal'|'numeric'='decimal')=>
   <label>{label}<input inputMode={mode} value={d[k]} onChange={e=>update(k,e.target.value)}/></label>;
@@ -45,7 +45,7 @@ export default function LateChargeFields({draft:d,onChange,legacy,canAdjust,deta
  return <fieldset className="cis-collections-technical">
   <legend>Mora da prestação</legend>
   {legacy?<p>Aplica-se a regra de mora já registada na prestação.</p>:<label>Tratamento de mora
-   <select value={d.tipo} onChange={e=>onChange({...d,tipo:e.target.value,decisao:'integral'})}><option value="">Seleccione o tratamento aplicável</option>{methods.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+   <select value={d.tipo} onChange={e=>onChange({...d,tipo:e.target.value,decisao:'integral'})}><option value="">Seleccione o tratamento aplicável</option>{methods.filter(([key])=>!simulation||key!=='sem_mora').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
   </label>}
   {!legacy&&d.tipo&&d.tipo!=='sem_mora'&&<>
    <div className="cis-collections-fields">
