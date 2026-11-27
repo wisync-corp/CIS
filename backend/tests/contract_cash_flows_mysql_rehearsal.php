@@ -1790,6 +1790,29 @@ $emptyRh=data($rhReport->index(req('/x',['period'=>'2026-02','company'=>'Outra e
 ok($emptyRh['employees']===0 && $emptyRh['current']['total']===0 && $emptyRh['indemnities']['balance']==='0.00',
     'o filtro de empresa aplica-se a todas as secções do relatório');
 
+
+echo "\nIntegrações do cadastro RH\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060009_create_rh_integrations.php')->up();
+$rhApi=new \App\Http\Controllers\Api\RhIntegrationController();
+$rhRecords->employee(req('/x',['company'=>'Outra empresa fictícia','code'=>'OUT-1']+$employee,$user));
+$issued=data($rhApi->issue(req('/x',['name'=>'Sistema de ensaio','company'=>'Empresa fictícia','valid_days'=>10],$user)));
+$adminIntegrations=data($rhApi->index(req('/x',[],$user)));
+ok(!isset($adminIntegrations['accounts']['data'][0]['token_hash'])&&
+    DB::table('cis_rh_integrations')->where('id',$issued['id'])->value('token_hash')===hash('sha256',$issued['token']),
+    'credencial de RH só é revelada na criação e é guardada por hash');
+$readRh=fn (array $query=[])=>Request::create('/x','GET',$query,[],[],['HTTP_AUTHORIZATION'=>'Bearer '.$issued['token']]);
+$readPage=data($rhApi->employees($readRh(['limit'=>1,'company'=>'Outra empresa fictícia'])));
+ok(count($readPage['data'])===1&&$readPage['data'][0]['company']==='Empresa fictícia'
+    && array_keys($readPage['data'][0])===['id','code','name','company','category','status']
+    && $readPage['next']!==null,'credencial RH é limitada à empresa e ao cadastro mínimo');
+$readNext=data($rhApi->employees($readRh(['after'=>$readPage['next']])));
+ok(count($readNext['data'])===1&&$readNext['data'][0]['company']==='Empresa fictícia'&&$readNext['next']===null,
+    'paginação mantém o âmbito da conta técnica');
+$rhApi->revoke(req('/x',[],$user),$issued['id']);
+ok(status(fn()=>$rhApi->employees($readRh()))===401
+    && DB::table('cis_rh_integration_events')->where('integration_id',$issued['id'])->where('operation','ler_colaboradores')->count()===2,
+    'revogação bloqueia leituras e mantém auditoria por origem');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

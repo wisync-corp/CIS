@@ -30,7 +30,14 @@ Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::cla
 
 Route::get('cis/email/oauth/callback',[\App\Http\Controllers\Api\CisMailController::class,'callback'])->middleware('throttle:20,1');
 
+Route::get('cis/rh/api/v1/colaboradores',[\App\Http\Controllers\Api\RhIntegrationController::class,'employees'])->middleware('throttle:60,1');
+
 Route::middleware('auth:sanctum')->group(function(){
+    Route::prefix('cis/rh/integracoes')->controller(\App\Http\Controllers\Api\RhIntegrationController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:60,1');
+        Route::post('/','issue')->middleware('throttle:10,1');
+        Route::post('{id}/revogar','revoke')->whereNumber('id')->middleware('throttle:10,1');
+    });
     Route::get('cis/rh/relatorios',[\App\Http\Controllers\Api\RhReportsController::class,'index'])->middleware('throttle:60,1');
     Route::prefix('cis/rh/folha')->controller(\App\Http\Controllers\Api\RhPayrollController::class)->group(function () {
         Route::get('/','index')->middleware('throttle:60,1');
