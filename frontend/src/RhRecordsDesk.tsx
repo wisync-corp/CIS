@@ -50,9 +50,9 @@ function RhUserLink({employee,token,onClose,onSaved}:{employee:Employee;token:st
    onSaved();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- return <form className="cis-prop-decision" onSubmit={e=>void save(e)}>
+ return <form className="rh-form" onSubmit={e=>void save(e)}>
   <h4>Conta do CIS · {employee.name}</h4>
-  <div className="cis-profile-fields">
+  <div className="rh-fields">
    {employee.status==='activo'&&<label className="cis-profile-field"><span>Pesquisar conta activa</span><input type="search" value={query} maxLength={160} disabled={busy} onChange={e=>{setUserId(current);setQuery(e.target.value);}}/></label>}
    <label className="cis-profile-field"><span>Conta associada</span><select value={userId} disabled={busy||loading} onChange={e=>setUserId(e.target.value)}>
     <option value="">Sem associação</option>
@@ -87,10 +87,10 @@ function TermsReview({row,section,token,mode,onClose,onSaved}:{row:Row;section:R
    onSaved();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- return <form className="cis-prop-decision" onSubmit={e=>void save(e)}>
+ return <form className="rh-form" onSubmit={e=>void save(e)}>
   <h4>{editing?'Editar termos':mode==='aprovar'?'Aprovar termos':'Rejeitar termos'} · {row.name} · #{row.id}</h4>
   {!editing&&<p>Referência {row.reference_date} · {details(row)}</p>}
-  <div className="cis-profile-fields">
+  <div className="rh-fields">
    {editing&&<><label className="cis-profile-field"><span>Data de referência</span><input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label>
     {section!=='ferias'&&<label className="cis-profile-field"><span>Valor unitário (MT)</span><input type="number" min="0" step="0.01" required value={rate} onChange={e=>setRate(e.target.value)}/></label>}
     {section==='ferias'&&<label className="cis-profile-field"><span>Data final</span><input type="date" required value={end} onChange={e=>setEnd(e.target.value)}/></label>}
@@ -119,10 +119,10 @@ function InstallmentPayment({row,token,onClose,onSaved}:{row:Row;token:string;on
    onSaved();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- return <form className="cis-prop-decision" onSubmit={e=>void save(e)}>
+ return <form className="rh-form" onSubmit={e=>void save(e)}>
   <h4>Confirmar pagamento da prestação #{row.id}</h4>
   <p>{row.name} · {mt(row.details.amount??'')} · Registo em RH de um pagamento já efectuado.</p>
-  <div className="cis-profile-fields">
+  <div className="rh-fields">
    <label className="cis-profile-field"><span>Data efectiva</span><input type="date" required max={today} value={date} onChange={e=>setDate(e.target.value)}/></label>
    <label className="cis-profile-field"><span>Referência do comprovativo</span><input required minLength={4} maxLength={120} value={reference} onChange={e=>setReference(e.target.value)}/></label>
   </div>
@@ -221,7 +221,7 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
  type Col={h:string;v:(x:Row&Employee)=>ReactNode;num?:boolean;wrap?:boolean};
  const cols:Col[]=worker?[
   {h:'Categoria',v:x=>x.category||'—'},{h:'Admissão',v:x=>date(x.admission)},{h:'Estado',v:x=><Badge state={x.status}/>},
-  {h:'Ficha',v:x=><button type="button" className="cis-edit-action" disabled={busyRow||!!employeeProfile} onClick={()=>setEmployeeProfile({id:x.id})}>Abrir ficha</button>},
+  {h:'',v:x=><div className="rh-row-actions"><button type="button" className="cis-edit-action" disabled={busyRow||!!employeeProfile} onClick={()=>setEmployeeProfile({id:x.id})}>Abrir ficha</button></div>},
   ...(can('utilizadores')?[{h:'Conta do CIS',v:(x:Employee)=><div className="rh-row-actions" style={{justifyContent:'flex-start'}}><span className={x.user?'':'muted'}>{x.user?.name??'Sem conta associada'}</span>
    <button type="button" className="cis-edit-action" disabled={editing||!!linking||!!employeeProfile} onClick={()=>setLinking(x)}>{x.user?'Alterar':'Associar'}</button></div>}]:[])]
  :section==='contratos'?[
@@ -252,8 +252,9 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
   {payment&&<InstallmentPayment key={payment.id} row={payment} token={token} onClose={()=>setPayment(null)} onSaved={()=>{setPayment(null);setRev(v=>v+1);setStatus('Pagamento registado em RH.');}}/>}
   {review&&<TermsReview key={review.row.id+'-'+review.mode} row={review.row} section={section} token={token} mode={review.mode} onClose={()=>setReview(null)}
    onSaved={()=>{setReview(null);setRev(v=>v+1);setStatus('Revisão registada.');}}/>}
-  {!overview&&editing&&<form className="cis-prop-decision" onSubmit={e=>void save(e)}>
-   <div className="cis-profile-fields">{worker?<>{field('name','Nome completo')}{field('company','Empresa')}{field('code','Código')}{field('category','Categoria','text',false)}{field('admission','Admissão','date')}
+  {!overview&&editing&&<form className="rh-form" onSubmit={e=>void save(e)}>
+   <div className="rh-form-head"><h4>{NEW_LABEL[section]}</h4><button type="button" className="cis-edit-action" disabled={busy} onClick={()=>setEditing(false)}>Fechar</button></div>
+   <div className="rh-fields">{worker?<>{field('name','Nome completo')}{field('company','Empresa')}{field('code','Código')}{field('category','Categoria','text',false)}{field('admission','Admissão','date')}
     <label className="cis-profile-field"><span>Estado</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>
    </>:<>
     <label className="cis-profile-field"><span>Colaborador</span><input value={candidate} required placeholder="Pesquise por nome ou código" onChange={e=>{setCandidate(e.target.value);setChosen(null);setPlan(null);setForm({...form,parent_id:''});}}/></label>
@@ -271,7 +272,7 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
     <table><thead><tr><th>Vencimento</th><th>Valor</th></tr></thead><tbody>{plan.installments.map(row=><tr key={row.date}><td>{row.date}</td><td>{mt(String(row.cents/100))}</td></tr>)}</tbody></table></div>}
    <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy||(!worker&&!chosen)}>{section==='indemnizacoes'?(plan?'Guardar plano':'Calcular prévia'):'Guardar'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancelar</button></div>
   </form>}
-  {data&&<>
+  {data&&!employeeProfile&&<>
    <div className="rh-toolbar">
     <SearchBar value={query} onChange={setQuery} onSubmit={()=>{setPage(1);setSearch(query.trim());}} placeholder="Pesquisar por nome ou código do colaborador"/>
     <div className="rh-toolbar-end">{chips.length>0&&<Chips label="Filtrar por estado" items={chips} value={filter} onChange={setFilter}/>}

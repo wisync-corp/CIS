@@ -2373,3 +2373,5 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 @media(max-width:750px){.cis-side-toggle{display:none}}
 .rh-group-tabs{margin-bottom:8px}
 .cis-side.mini .cis-brand img.cis-brand-symbol{width:30px!important;height:auto!important;max-width:30px}
+/* Telemóvel: a barra do topo não pode ser mais larga do que o ecrã */
+@media(max-width:750px){.cis-top .cis-env{display:none}.cis-top .cis-breadcrumb{min-width:0;overflow:hidden}.cis-top .cis-breadcrumb strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cis-top-right{flex-shrink:0;gap:8px}}
