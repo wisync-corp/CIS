@@ -20,14 +20,17 @@ export default function RhPayrollDesk({token}:{token:string}){
  const [period,setPeriod]=useState(today),[rows,setRows]=useState<Line[]>([]),[page,setPage]=useState(1),[lastPage,setLastPage]=useState(1),[reload,setReload]=useState(0);
  const [search,setSearch]=useState(''),[found,setFound]=useState<Employee[]>([]),[employee,setEmployee]=useState<Employee|null>(null),[edit,setEdit]=useState<Line|null>(null);
  const [form,setForm]=useState(blank),[preview,setPreview]=useState<Preview|null>(null),[closing,setClosing]=useState<Line|null>(null);
+ const [periodStatus,setPeriodStatus]=useState<'por_abrir'|'aberto'|'fechado'|null>(null);
+ const [monthConfirm,setMonthConfirm]=useState(false),[restoreRow,setRestoreRow]=useState<Line|null>(null),[progress,setProgress]=useState('');
+ const [issues,setIssues]=useState<{id:number;message:string}[]>([]);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  useEffect(()=>{
   if(!period)return;
-  const c=new AbortController();setRows([]);
+  const c=new AbortController();setRows([]);setPeriodStatus(null);
   fetch(API+'/cis/rh/folha?'+new URLSearchParams({period,page:String(page)}),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
    .then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.message);return d;})
-   .then(d=>{if(!c.signal.aborted){setRows(d.data);setLastPage(d.last_page);}})
+   .then(d=>{if(!c.signal.aborted){setRows(d.data);setLastPage(d.last_page);setPeriodStatus(d.period_status);}})
    .catch(e=>{if(!c.signal.aborted)setError(e.message);});
   return ()=>c.abort();
  },[token,period,page,reload]);
@@ -66,6 +69,33 @@ export default function RhPayrollDesk({token}:{token:string}){
   try{await call('/'+closing.id+'/finalizar',{version:closing.version,confirm:true});setClosing(null);setReload(v=>v+1);setNotice('Lançamento finalizado.');}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
+ async function periodAction(action:'abrir'|'fechar'){
+  if(busy||!period)return;
+  setBusy(true);setError('');setNotice('');
+  try{await call('/mes/'+action,{period,...(action==='fechar'?{confirm:true}:{})});setMonthConfirm(false);reset();setReload(v=>v+1);setNotice(action==='abrir'?'Mês aberto.':'Mês fechado.');}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ async function recalculate(){
+  if(busy||periodStatus!=='aberto')return;
+  setBusy(true);setError('');setNotice('');setIssues([]);setProgress('A carregar os lançamentos pendentes…');
+  let next:number|null=0,changed=0,skipped=0;
+  const errors:{id:number;message:string}[]=[];
+  try{
+   while(next!==null){
+    const d=await call('/mes/recalcular',{period,after:next});
+    changed+=d.changed;skipped+=d.skipped;errors.push(...d.issues);next=d.next;
+    setProgress('Pendentes verificados '+(changed+skipped+errors.length));
+   }
+   setNotice(changed+' recalculado(s) · '+skipped+' sem alteração · '+errors.length+' por conferir.');
+  }catch(e){setError((e as Error).message);}
+  finally{setIssues(errors);setProgress('');setReload(v=>v+1);setBusy(false);}
+ }
+ async function restore(){
+  if(!restoreRow||busy)return;
+  setBusy(true);setError('');setNotice('');
+  try{await call('/'+restoreRow.id+'/repor',{version:restoreRow.version,confirm:true});setRestoreRow(null);reset();setReload(v=>v+1);setNotice('Versão inicial reposta. O lançamento voltou a Pendente.');}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  function loadEdit(row:Line){
   setEdit(row);setEmployee({id:row.employee_id,name:row.name,code:row.code,company:row.company});setSearch(row.name+' · '+row.code);
   const values={...blank};for(const k of Object.keys(blank) as (keyof typeof blank)[]){
@@ -75,10 +105,21 @@ export default function RhPayrollDesk({token}:{token:string}){
  }
  return <section className="cis-panel cis-proposals">
   <div className="cis-prop-head"><div><h3>Folha salarial</h3><p>Lançamentos por colaborador para o período de 21 a 20.</p></div>
-   <label className="cis-profile-field"><span>Mês de referência</span><input type="month" value={period} disabled={busy} onChange={e=>{setPeriod(e.target.value);setPage(1);reset();setError('');}}/></label>
+   <label className="cis-profile-field"><span>Mês de referência</span><input type="month" value={period} disabled={busy} onChange={e=>{setPeriod(e.target.value);setPage(1);reset();setError('');setNotice('');setIssues([]);setMonthConfirm(false);setRestoreRow(null);}}/></label>
   </div>
   {error&&<p role="alert" className="cis-table-error">{error}</p>}{notice&&<p role="status" className="cis-msg-notice">{notice}</p>}
-  <form className="cis-prop-decision" onSubmit={e=>void calculate(e)}>
+  {progress&&<p role="status" className="cis-msg-notice">{progress}</p>}
+  {!!issues.length&&<ul>{issues.map(x=><li key={x.id}>Lançamento #{x.id} · {x.message}</li>)}</ul>
+  {periodStatus&&<div className="cis-prop-actions" aria-label="Operações do mês">
+   <strong>{periodStatus==='aberto'?'Mês aberto':periodStatus==='fechado'?'Mês fechado':'Mês por abrir'}</strong>
+   {periodStatus==='por_abrir'&&<button type="button" disabled={busy} onClick={()=>void periodAction('abrir')}>Abrir mês</button>}
+   {periodStatus==='aberto'&&<><button type="button" disabled={busy} onClick={()=>void recalculate()}>Recalcular pendentes</button>
+    <button type="button" disabled={busy} onClick={()=>setMonthConfirm(true)}>Fechar mês</button></>}
+  </div>}
+  {monthConfirm&&<div className="cis-prop-decision"><p>Fechar a folha de {period}? Todos os lançamentos têm de estar finalizados.</p>
+   <div className="cis-prop-actions"><button type="button" className="primary" disabled={busy} onClick={()=>void periodAction('fechar')}>Confirmar fecho mensal</button><button type="button" disabled={busy} onClick={()=>setMonthConfirm(false)}>Cancelar</button></div>
+  </div>}
+  {periodStatus==='aberto'&&<form className="cis-prop-decision" onSubmit={e=>void calculate(e)}>
    <h4>{edit?'Editar lançamento':'Novo lançamento'}</h4>
    <fieldset disabled={busy} style={{border:0,padding:0,minWidth:0}}>
     <div className="cis-profile-fields">
@@ -90,16 +131,17 @@ export default function RhPayrollDesk({token}:{token:string}){
     </div>
     <div className="cis-prop-actions"><button type="submit" disabled={!employee||!period}><Calculator size={15}/> Calcular prévia</button><button type="button" onClick={reset}>Limpar</button></div>
    </fieldset>
-  </form>
-  {preview&&<div className="cis-prop-decision">
+  </form>}
+  {periodStatus==='aberto'&&preview&&<div className="cis-prop-decision">
    <h4>Prévia do cálculo</h4><p>Data das regras {preview.rules.reference} · Contrato #{String(preview.input.contract_id)}{preview.input.amendment_id?' · Adenda #'+preview.input.amendment_id:''}</p>
    <dl>{Object.entries(amounts).map(([k,label])=><div key={k}><dt>{label}</dt><dd>{money(preview.amounts[k])}</dd></div>)}</dl>
    <button className="cis-edit-action" type="button" disabled={busy} onClick={()=>void save()}><Save size={15}/> Guardar lançamento</button>
   </div>}
   {!rows.length?<p>Sem lançamentos neste mês.</p>:<div className="cis-table-scroll"><table><thead><tr><th>Colaborador</th><th>Empresa</th><th>Estado</th><th>Vencimento base</th><th>Salário líquido</th><th>Acções</th></tr></thead>
    <tbody>{rows.map(row=><tr key={row.id}><td>{row.name} · {row.code}</td><td>{row.company}</td><td>{row.status}</td><td>{money(row.calculation.amounts.base)}</td><td>{money(row.calculation.amounts.net)}</td>
-    <td>{row.status!=='finalizado'&&<div className="cis-prop-actions"><button type="button" disabled={busy} onClick={()=>loadEdit(row)}>Editar</button><button type="button" disabled={busy} onClick={()=>setClosing(row)}><CheckCircle2 size={15}/> Finalizar</button></div>}</td></tr>)}</tbody></table></div>}
+    <td>{periodStatus==='aberto'&&row.status!=='finalizado'&&<div className="cis-prop-actions"><button type="button" disabled={busy} onClick={()=>loadEdit(row)}>Editar</button><button type="button" disabled={busy} onClick={()=>setClosing(row)}><CheckCircle2 size={15}/> Finalizar</button>{row.status==='alterado'&&<button type="button" disabled={busy} onClick={()=>setRestoreRow(row)}>Repor inicial</button>}</div>}</td></tr>)}</tbody></table></div>}
   {lastPage>1&&<div className="cis-prop-actions"><button type="button" disabled={page===1} onClick={()=>setPage(v=>v-1)}>Anterior</button><span>{page} / {lastPage}</span><button type="button" disabled={page===lastPage} onClick={()=>setPage(v=>v+1)}>Seguinte</button></div>}
+  {restoreRow&&<div className="cis-prop-decision"><p>Repor os valores da primeira versão de {restoreRow.name}?</p><div className="cis-prop-actions"><button className="primary" type="button" disabled={busy} onClick={()=>void restore()}>Confirmar reposição</button><button type="button" disabled={busy} onClick={()=>setRestoreRow(null)}>Cancelar</button></div></div>}
   {closing&&<div className="cis-prop-decision"><h4>Finalizar lançamento de {closing.name}</h4><p>Salário líquido {money(closing.calculation.amounts.net)}. O lançamento ficará fechado para edição.</p>
    <div className="cis-prop-actions"><button type="button" className="primary" disabled={busy} onClick={()=>void finalize()}>Confirmar fecho</button><button type="button" disabled={busy} onClick={()=>setClosing(null)}>Cancelar</button></div></div>}
  </section>;

@@ -1599,7 +1599,9 @@ ok((int)DB::table('cis_rh_record_audit')->where('record_id',$adenda)->value('use
 
 echo "\nFolha salarial no MySQL\n";
 (require __DIR__.'/../database/migrations/2026_11_27_060003_create_rh_payroll.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_27_060005_create_rh_payroll_periods.php')->up();
 $rhPay=new \App\Http\Controllers\Api\RhPayrollController();
+$rhPay->openPeriod(req('/x',['period'=>'2026-02'],$user));
 foreach (['BASE_DIAS_MES'=>'30','BASE_HORAS_DIA'=>'8','INSS_CONDICAO_CANALIZAR'=>'Sim','INSS_TAXA_EMP'=>'0.04',
     'INSS_EMP_ARRED_CASAS'=>'0','ARRED_CASAS_DEFAULT'=>'2','IRPS_ISENCAO_DEPARTAMENTO'=>'ISPC','IRPS_DEPENDENTES_MAX'=>'4'] as $key=>$value) {
     $rh->parameter(req('/x',['code'=>$key,'value'=>$value]+$rhParam,$user));
@@ -1628,6 +1630,33 @@ $rhRecords->linkUser(req('/x',['user_id'=>null,'previous_user_id'=>(int)$user->i
 ok(!DB::table('cis_rh_user_links')->where('employee_id',$created)->exists()
     && DB::table('cis_rh_record_audit')->where('employee_id',$created)->where('action','utilizador_associado')->count()===2,
     'remoção do vínculo fica auditada e mantém a conta disponível');
+
+
+echo "\nOperações mensais da folha\n";
+$month=['period'=>'2026-03'];
+$rhPay->openPeriod(req('/x',$month,$user));
+$march=$month+$prh;
+$qMarch=data($rhPay->preview(req('/x',$march,$user)));
+$marchId=data($rhPay->save(req('/x',['signature'=>$qMarch['signature']]+$march,$user)))['id'];
+ok(status(fn()=>$rhPay->closePeriod(req('/x',['confirm'=>true]+$month,$user)))===422,'mês exige lançamentos finalizados');
+$rh->parameter(req('/x',['value'=>'0.05','effective_from'=>'2026-03-01']+$rhParam,$user));
+$batch=data($rhPay->recalculatePending(req('/x',$month,$user)));
+ok($batch['changed']===1&&$batch['next']===null
+    && (int)DB::table('cis_rh_payroll')->where('id',$marchId)->value('version')===2,'recálculo actualiza a linha pendente');
+$adjusted=['overtime'=>'50']+$march;
+$qEdit=data($rhPay->preview(req('/x',$adjusted,$user)));
+$rhPay->save(req('/x',['signature'=>$qEdit['signature'],'version'=>2]+$adjusted,$user));
+$batch=data($rhPay->recalculatePending(req('/x',$month,$user)));
+ok($batch['changed']===0&&(int)DB::table('cis_rh_payroll')->where('id',$marchId)->value('version')===3,'recálculo preserva lançamentos alterados');
+$rhPay->restore(req('/x',['version'=>3,'confirm'=>true],$user),$marchId);
+$restored=DB::table('cis_rh_payroll')->where('id',$marchId)->first();
+ok($restored->status==='pendente'&&(int)$restored->version===4
+    && json_decode($restored->input,true)['overtime']==='0','reposição recupera a primeira versão');
+$rhPay->finalize(req('/x',['version'=>4,'confirm'=>true],$user),$marchId);
+$rhPay->closePeriod(req('/x',['confirm'=>true]+$month,$user));
+ok(status(fn()=>$rhPay->recalculatePending(req('/x',$month,$user)))===409
+    && (int)DB::table('cis_rh_payroll_periods')->where('period','2026-03-01')->value('closed_by')===(int)$user->id,
+    'fecho mensal impede recálculo e guarda o autor');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");

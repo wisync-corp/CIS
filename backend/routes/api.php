@@ -34,6 +34,10 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('cis/rh/folha')->controller(\App\Http\Controllers\Api\RhPayrollController::class)->group(function () {
         Route::get('/','index')->middleware('throttle:60,1');
         Route::post('previa','preview')->middleware('throttle:30,1');
+        Route::post('mes/abrir','openPeriod')->middleware('throttle:10,1');
+        Route::post('mes/recalcular','recalculatePending')->middleware('throttle:120,1');
+        Route::post('mes/fechar','closePeriod')->middleware('throttle:10,1');
+        Route::post('{id}/repor','restore')->whereNumber('id')->middleware('throttle:20,1');
         Route::post('/','save')->middleware('throttle:20,1');
         Route::post('{id}/finalizar','finalize')->whereNumber('id')->middleware('throttle:20,1');
     });
