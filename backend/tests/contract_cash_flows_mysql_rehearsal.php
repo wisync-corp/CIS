@@ -1699,6 +1699,28 @@ ok($generated['created']===1&&$draft->status==='pendente'&&json_decode($draft->i
 ok(data($rhPay->generate(req('/x',$april,$user)))['created']===0,'repetir a geração não duplica lançamentos');
 ok(status(fn()=>$rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$draft->id))===422,'um lançamento gerado exige primeiro cálculo confirmado');
 
+
+echo "\nDias úteis com calendário de RH\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060006_create_rh_holiday_calendars.php')->up();
+$januaryRh=['period'=>'2027-01'];
+$rhPay->openPeriod(req('/x',$januaryRh,$user));
+$rh->parameter(req('/x',['code'=>'DIAS_TRABALHADOS_MODO','value'=>'dias_uteis','effective_from'=>'2027-01-01']+$rhParam,$user));
+$calendar2026=['year'=>2026,'reason'=>'Calendário fictício','holidays'=>[
+    ['date'=>'2026-12-25','name'=>'Feriado de ensaio'],['date'=>'2026-12-26','name'=>'Feriado ao sábado']]];
+$rh->calendar(req('/x',$calendar2026,$user));
+ok(data($rhPay->generate(req('/x',$januaryRh,$user)))['created']===0,'período entre anos exige os calendários em falta');
+$janFest=['date'=>'2027-01-01','name'=>'Feriado de ensaio'];
+$rh->calendar(req('/x',['year'=>2027,'reason'=>'Calendário geral fictício','holidays'=>[$janFest]],$user));
+$rh->calendar(req('/x',['year'=>2027,'company'=>'Empresa fictícia','reason'=>'Calendário de empresa fictícia',
+    'holidays'=>[$janFest,['date'=>'2027-01-18','name'=>'Feriado da empresa fictícia']]],$user));
+$genCalendar=data($rhPay->generate(req('/x',$januaryRh,$user)));
+$payCalendar=DB::table('cis_rh_payroll')->where('employee_id',$created)->where('period','2027-01-01')->first();
+$calcCalendar=json_decode($payCalendar->calculation,true);
+ok($genCalendar['created']===1 && $calcCalendar['input']['days_worked']===20
+    && count($calcCalendar['rules']['holiday_calendars'])===2
+    && $calcCalendar['rules']['holiday_calendars'][1]['company']==='Empresa fictícia',
+    'período 21–20 exclui feriados em dias úteis, escolhe calendário da empresa e guarda as versões');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

@@ -192,10 +192,11 @@ final class RhPayrollController extends Controller
             ->orderBy('e.id')->limit(26)->get();
         $issues=[];
         $created=0;
+        $calendars=[];
         $batch=$workers->take(25);
         foreach ($batch as $worker) {
             try {
-                $created+=DB::transaction(function () use ($r,$d,$period,$start,$reference,$worker) {
+                $created+=DB::transaction(function () use ($r,$d,$period,$start,$reference,$worker,&$calendars) {
                     $this->lockPeriod($period);
                     if (DB::table('cis_rh_payroll')->where('employee_id',$worker->id)->where('period',$period)->exists()) return 0;
                     $employee=DB::table('cis_rh_employees')->where('id',$worker->id)->first();
@@ -209,17 +210,22 @@ final class RhPayrollController extends Controller
                     $mode=$value('DIAS_TRABALHADOS_MODO');
                     $base=$value('BASE_DIAS_MES');
                     $days=null;
+                    $calendarVersions=[];
                     if ($details['regime']==='mensal') {
                         abort_unless(isset($mode['Valor']),422,'Configure o preenchimento dos dias trabalhados em Definições de RH.');
                         if ($mode['Valor']==='base_mensal'&&$employee->admission<=$start&&$contract->reference_date<=$start
                             && (empty($details['end'])||$details['end']>=$reference)) {
                             abort_unless(isset($base['Valor']),422,'Configure os dias base do mês em Definições de RH.');
                             $days=$base['Valor'];
+                        } elseif ($mode['Valor']==='dias_uteis') {
+                            $from=max($start,$employee->admission,$contract->reference_date);
+                            $to=min($reference,$details['end']??$reference);
+                            [$days,$calendarVersions]=$this->businessDays($from,$to,$employee->company,$calendars);
                         }
                     }
                     $input=['employee_id'=>(int)$employee->id,'period'=>$d['period'],'days_worked'=>$days,'hours_worked'=>null];
                     $snapshot=json_encode(['input'=>$input,'amounts'=>null,'rules'=>['reference'=>$reference,
-                        'contract_id'=>$contract->id,'days_mode'=>$mode,'base_days'=>$days===null?null:$base]],JSON_THROW_ON_ERROR);
+                        'contract_id'=>$contract->id,'days_mode'=>$mode,'base_days'=>$days!==null&&($mode['Valor']??null)==='base_mensal'?$base:null,'holiday_calendars'=>$calendarVersions]],JSON_THROW_ON_ERROR);
                     $id=DB::table('cis_rh_payroll')->insertGetId(['employee_id'=>$employee->id,'period'=>$period,'status'=>'pendente',
                         'input'=>json_encode($input,JSON_THROW_ON_ERROR),'calculation'=>$snapshot,'version'=>1,'created_at'=>now(),'updated_at'=>now()]);
                     $this->event($id,$r,'pendente',1,$snapshot);
@@ -232,6 +238,33 @@ final class RhPayrollController extends Controller
         }
         if ($batch->isEmpty()) DB::transaction(fn ()=>$this->lockPeriod($period));
         return response()->json(['created'=>$created,'issues'=>$issues,'next'=>$workers->count()>25?$batch->last()->id:null]);
+    }
+
+    private function businessDays(string $from,string $to,string $company,array &$cache): array
+    {
+        if ($from>$to) return [0,[]];
+        abort_unless(Schema::hasTable('cis_rh_holiday_calendars'),503,'Instale os calendários de RH na VPS.');
+        $start=CarbonImmutable::createFromFormat('!Y-m-d',$from);
+        $end=CarbonImmutable::createFromFormat('!Y-m-d',$to);
+        $holidays=[];
+        $versions=[];
+        for ($year=$start->year;$year<=$end->year;$year++) {
+            $key=$year.'|'.$company;
+            if (!array_key_exists($key,$cache)) {
+                $query=DB::table('cis_rh_holiday_calendars')->where('year',$year);
+                $override=$company!==''?(clone $query)->where('company',$company)->latest('id')->first():null;
+                $cache[$key]=$override??$query->where('company','')->latest('id')->first();
+            }
+            $calendar=$cache[$key];
+            abort_unless($calendar,422,'Configure um calendário de feriados para '.$year.' nas Definições de RH.');
+            foreach (json_decode($calendar->holidays,true,512,JSON_THROW_ON_ERROR) as $holiday) $holidays[$holiday['date']]=true;
+            $versions[]=['id'=>(int)$calendar->id,'year'=>$year,'company'=>$calendar->company];
+        }
+        $days=0;
+        for ($day=$start;$day<=$end;$day=$day->addDay()) {
+            if (!$day->isWeekend()&&!isset($holidays[$day->toDateString()])) $days++;
+        }
+        return [$days,$versions];
     }
 
     public function openPeriod(Request $r)

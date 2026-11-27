@@ -1,3 +1,4 @@
+import RhHolidayCalendar from './RhHolidayCalendar';
 import {useEffect,useState,type FormEvent} from 'react';
 import {Save,Settings} from 'lucide-react';
 
@@ -14,7 +15,7 @@ export default function RhSettingsDesk({token}:{token:string}){
  const [data,setData]=useState<Data|null>(null),[page,setPage]=useState(1);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const [form,setForm]=useState(empty),[taxDate,setTaxDate]=useState(''),[taxReason,setTaxReason]=useState('');
- const [scales,setScales]=useState<Scale[]>([first]),[tab,setTab]=useState<'parametros'|'irps'>('parametros');
+ const [scales,setScales]=useState<Scale[]>([first]),[tab,setTab]=useState<'parametros'|'irps'|'feriados'>('parametros');
  const [reload,setReload]=useState(0);
  useEffect(()=>{
   const controller=new AbortController();
@@ -39,10 +40,12 @@ export default function RhSettingsDesk({token}:{token:string}){
   <div className="cis-prop-actions">
    <button type="button" aria-pressed={tab==='parametros'} onClick={()=>setTab('parametros')}>Parâmetros</button>
    <button type="button" aria-pressed={tab==='irps'} onClick={()=>setTab('irps')}>Escalões de IRPS</button>
+   <button type="button" aria-pressed={tab==='feriados'} onClick={()=>setTab('feriados')}>Feriados</button>
   </div>
   {error&&<p role="alert" className="cis-table-error">{error}</p>}
   {notice&&<p role="status" className="cis-msg-notice">{notice}</p>}
   {!data&&!error&&<p role="status">A carregar Definições de RH…</p>}
+  {data&&tab==='feriados'&&<RhHolidayCalendar token={token}/>}
   {data&&tab==='parametros'&&<>
    <form className="cis-prop-decision" onSubmit={e=>void write(e,'parametros',{...form,effective_to:form.effective_to||null})}>
     <h4>Registar versão de um parâmetro</h4>
@@ -50,7 +53,7 @@ export default function RhSettingsDesk({token}:{token:string}){
      <label className="cis-profile-field"><span>Parâmetro</span><select required value={form.code} onChange={e=>setForm({...form,code:e.target.value,value:''})}><option value="">Seleccione</option>{Object.entries(data.catalogue).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
      <label className="cis-profile-field"><span>Âmbito</span><select value={form.scope} onChange={e=>setForm({...form,scope:e.target.value,company:'',category:'',employee_code:''})}><option value="global">Geral</option><option value="empresa">Empresa</option><option value="categoria">Categoria</option><option value="colaborador">Colaborador</option></select></label>
      {form.scope!=='global'&&field('company','Empresa')}{form.scope==='categoria'&&field('category','Categoria')}{form.scope==='colaborador'&&field('employee_code','Código de colaborador')}
-     {form.code==='DIAS_TRABALHADOS_MODO'?<label className="cis-profile-field"><span>Preenchimento</span><select required value={form.value} onChange={e=>setForm({...form,value:e.target.value})}><option value="">Seleccione</option><option value="confirmar">Confirmar os dias manualmente</option><option value="base_mensal">Pré-preencher dias base nos períodos completos</option></select></label>:field('value','Valor')}{field('effective_from','Vigente desde','date')}{field('effective_to','Vigente até','date',false)}{field('reason','Justificação')}
+     {form.code==='DIAS_TRABALHADOS_MODO'?<label className="cis-profile-field"><span>Preenchimento</span><select required value={form.value} onChange={e=>setForm({...form,value:e.target.value})}><option value="">Seleccione</option><option value="confirmar">Confirmar os dias manualmente</option><option value="base_mensal">Pré-preencher dias base nos períodos completos</option><option value="dias_uteis">Calcular dias úteis pelo calendário de feriados</option></select></label>:field('value','Valor')}{field('effective_from','Vigente desde','date')}{field('effective_to','Vigente até','date',false)}{field('reason','Justificação')}
     </div>
     <button type="submit" className="cis-edit-action" disabled={busy}><Save size={15}/> Guardar versão</button>
    </form>

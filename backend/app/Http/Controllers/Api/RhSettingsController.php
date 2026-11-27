@@ -72,8 +72,8 @@ final class RhSettingsController extends Controller
         ]);
         $value=trim($data['value']);
         $code=$data['code'];
-        if ($code==='DIAS_TRABALHADOS_MODO' && !in_array($value,['confirmar','base_mensal'],true)) {
-            throw ValidationException::withMessages(['value'=>'Escolha confirmação manual ou dias base do mês.']);
+        if ($code==='DIAS_TRABALHADOS_MODO' && !in_array($value,['confirmar','base_mensal','dias_uteis'],true)) {
+            throw ValidationException::withMessages(['value'=>'Seleccione confirmação manual, dias base ou dias úteis.']);
         }
         $range=match ($code) {
             'BASE_DIAS_MES'=>[1,31], 'BASE_HORAS_DIA'=>[0.01,24],
@@ -174,6 +174,42 @@ final class RhSettingsController extends Controller
         ],json_decode($table->scales,true,512,JSON_THROW_ON_ERROR)):[];
         return ['dataReferencia'=>$date,'contexto'=>['empresa'=>$company,'categoria'=>$category,'codigo'=>$employee],
             'parametros'=>$parameters->all(),'tabelaIRPS'=>$tableId,'escaloes'=>$scales];
+    }
+
+    public function calendars(Request $request)
+    {
+        $this->authorizeSettings($request);
+        abort_unless(Schema::hasTable('cis_rh_holiday_calendars'),503,'Instale os calendários de RH na VPS.');
+        $rows=DB::table('cis_rh_holiday_calendars as c')->leftJoin('users as u','u.id','=','c.created_by')
+            ->orderByDesc('c.id')->paginate(20,['c.*','u.name as author'])->through(function ($row) {
+                $row->holidays=json_decode($row->holidays,true,512,JSON_THROW_ON_ERROR);
+                return $row;
+            });
+        return response()->json($rows)->header('Cache-Control','no-store, private');
+    }
+
+    public function calendar(Request $request)
+    {
+        $this->authorizeSettings($request);
+        abort_unless(Schema::hasTable('cis_rh_holiday_calendars'),503,'Instale os calendários de RH na VPS.');
+        $d=$request->validate([
+            'year'=>['required','integer','between:1900,2200'],
+            'company'=>['nullable','string','max:80'],
+            'reason'=>['required','string','max:255'],
+            'holidays'=>['present','array','max:366'],
+            'holidays.*'=>['array:date,name'],
+            'holidays.*.date'=>['required','date_format:Y-m-d','distinct'],
+            'holidays.*.name'=>['required','string','max:120'],
+        ]);
+        foreach ($d['holidays'] as $holiday) {
+            if (substr($holiday['date'],0,4)!==(string)$d['year']) {
+                throw ValidationException::withMessages(['holidays'=>'Todas as datas devem pertencer ao ano do calendário.']);
+            }
+        }
+        $d['company']=trim($d['company']??'');
+        $d['holidays']=json_encode(array_values($d['holidays']),JSON_THROW_ON_ERROR);
+        $this->insertVersion('cis_rh_holiday_calendars',$d,$request);
+        return response()->json(['saved'=>true],201);
     }
 
     private function insertVersion(string $table,array $data,Request $request): void

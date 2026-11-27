@@ -56,6 +56,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('vigentes','effective')->middleware('throttle:60,1');
         Route::post('parametros','parameter')->middleware('throttle:20,1');
         Route::post('irps','taxTable')->middleware('throttle:20,1');
+        Route::get('calendarios','calendars')->middleware('throttle:60,1');
+        Route::post('calendarios','calendar')->middleware('throttle:20,1');
     });
     Route::prefix('cis/email')->controller(\App\Http\Controllers\Api\CisMailController::class)->group(function () {
         Route::get('contas','accounts')->middleware('throttle:60,1');
