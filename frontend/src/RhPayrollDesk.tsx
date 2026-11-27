@@ -109,7 +109,7 @@ export default function RhPayrollDesk({token}:{token:string}){
   </div>
   {error&&<p role="alert" className="cis-table-error">{error}</p>}{notice&&<p role="status" className="cis-msg-notice">{notice}</p>}
   {progress&&<p role="status" className="cis-msg-notice">{progress}</p>}
-  {!!issues.length&&<ul>{issues.map(x=><li key={x.id}>Lançamento #{x.id} · {x.message}</li>)}</ul>
+  {!!issues.length&&<ul>{issues.map(x=><li key={x.id}>Lançamento #{x.id} · {x.message}</li>)}</ul>}
   {periodStatus&&<div className="cis-prop-actions" aria-label="Operações do mês">
    <strong>{periodStatus==='aberto'?'Mês aberto':periodStatus==='fechado'?'Mês fechado':'Mês por abrir'}</strong>
    {periodStatus==='por_abrir'&&<button type="button" disabled={busy} onClick={()=>void periodAction('abrir')}>Abrir mês</button>}
