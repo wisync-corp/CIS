@@ -4,10 +4,11 @@ import RhReportsDesk from './RhReportsDesk';
 import RhPayrollDesk from './RhPayrollDesk';
 import RhRecordsDesk,{rhSections,type RhSection} from './RhRecordsDesk';
 import RhSettingsDesk from './RhSettingsDesk';
-import {ChevronDown,ChevronRight} from 'lucide-react';
+import {ChevronDown,ChevronRight,PanelLeftClose,PanelLeftOpen} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import logoCompactaClaro from './assets/brand/cis-compacta-claro.svg';
 import logoCompactaClaroTransp from './assets/brand/cis-compacta-claro-transparente.svg';
+import logoSimbolo from './assets/brand/cis-simbolo-claro.svg';
 import {Ban,AlertTriangle,CalendarClock,X as XIcon,CreditCard} from 'lucide-react';
 import BlacklistDesk from './BlacklistDesk';
 import LongDelinquency,{type Candidates} from './LongDelinquency';
@@ -84,7 +85,10 @@ const nav:{label:string;icon:typeof Users;perm?:Perm}[]=[
 export default function Dashboard({token, name, role, permissions, agency, theme, onThemeChange, onLogout}:{token:string;name:string;role:string;permissions:string[];agency?:string|null;theme:ThemeId;onThemeChange:(value:ThemeId)=>void;onLogout:()=>void}){
  const can=(p?:Perm)=>!p||permissions.includes(p);
  const [rhExpanded,setRhExpanded]=useState(false);
- const rhLast=useRef<Record<string,string>>({});
+ const rhLast=useRef<Record<string,string>>({}),rhLastPage=useRef('Visão geral de RH');
+ // Menu recolhido: só ícones, para dar o espaço ao módulo aberto. Preferência guardada neste navegador.
+ const [mini,setMiniRaw]=useState(()=>{try{return localStorage.getItem('cis.menu.recolhido')==='1';}catch{return false;}});
+ const setMini=(v:boolean)=>{setMiniRaw(v);try{localStorage.setItem('cis.menu.recolhido',v?'1':'0');}catch{/* sem armazenamento */}};
  const allowedNav=nav.filter(n=>can(n.perm));
  const [active,setActiveRaw]=useState(()=>allowedNav[0]?.label??'Definições'),[open,setOpen]=useState(false);
  const rhActive=rhSections.find(([,label])=>label===active)?.[0];
@@ -193,11 +197,12 @@ export default function Dashboard({token, name, role, permissions, agency, theme
  const bootCurrent=!avisosOk?'A verificar os avisos de cobrança':!ovReady?'A calcular a visão geral da carteira':!dashDone?dash.text:dashDone.ok?'Tudo pronto. A entrar…':'A entrar (o Dashboard abre quando estiver pronto)';
  useEffect(()=>{if(!booted&&ovReady&&dashDone&&avisosOk){const t=window.setTimeout(()=>setBooted(true),dashDone.ok?450:1400);return()=>window.clearTimeout(t);}},[booted,ovReady,dashDone,avisosOk]);
  return <PermsContext.Provider value={permissions}>{!booted&&<BootScreen name={name} pct={booted?100:bootPct} current={bootCurrent} steps={bootSteps} onSkip={()=>setBooted(true)}/>}<div className="cis-layout" aria-hidden={!booted}>
-  <aside className={'cis-side '+(open?'visible':'')}>
-   <div className="cis-brand"><img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
+  <aside className={'cis-side '+(open?'visible':'')+(mini?' mini':'')}>
+   <div className="cis-brand">{mini?<img className="cis-brand-symbol" src={logoSimbolo} alt="CIS" width={30} height={39}/>:<img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/>}</div>
+   <button type="button" className="cis-side-toggle" onClick={()=>setMini(!mini)} aria-pressed={mini} aria-label={mini?'Expandir o menu':'Recolher o menu'} title={mini?'Expandir o menu':'Recolher o menu'}>{mini?<PanelLeftOpen size={18}/>:<><PanelLeftClose size={18}/><span>Recolher menu</span></>}</button>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
-   <nav aria-label="Navegação principal">{allowedNav.map(({label,icon:Icon})=>label==='Definições de RH'?<div key={label}><button type="button" aria-expanded={rhExpanded} onClick={()=>setRhExpanded(v=>!v)}><Users size={18}/><span>Recursos Humanos</span>{rhExpanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>{rhExpanded&&rhMenu(can('utilizadores')).map(([group,pages])=>{const here=pages.includes(active);return <button type="button" key={group} className={here?'current':''} aria-current={here?'page':undefined}
-  onClick={()=>{setActive(here?active:(rhLast.current[group]&&pages.includes(rhLast.current[group])?rhLast.current[group]:pages[0]));setOpen(false);}}><span>{group}</span></button>;})}</div>:(label==='Folha salarial'||label==='Relatórios de RH'||label==='Integrações de RH'||rhSections.some(([,name])=>name===label))?null:<button type="button" key={label} className={active===label?'current':''} onClick={()=>{setExtractoContract(null);setRemindersMode(0);setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
+   <nav aria-label="Navegação principal">{allowedNav.map(({label,icon:Icon})=>label==='Definições de RH'?<div key={label}><button type="button" aria-expanded={mini?undefined:rhExpanded} title="Recursos Humanos" className={mini&&rhGroupOf(active,can('utilizadores'))?'current':''} onClick={()=>{if(mini){setActive(rhLastPage.current);setOpen(false);}else setRhExpanded(v=>!v);}}><Users size={18}/><span>Recursos Humanos</span>{rhExpanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>{!mini&&rhExpanded&&rhMenu(can('utilizadores')).map(([group,pages])=>{const here=pages.includes(active);return <button type="button" key={group} className={here?'current':''} aria-current={here?'page':undefined}
+  onClick={()=>{setActive(here?active:(rhLast.current[group]&&pages.includes(rhLast.current[group])?rhLast.current[group]:pages[0]));setOpen(false);}}><span>{group}</span></button>;})}</div>:(label==='Folha salarial'||label==='Relatórios de RH'||label==='Integrações de RH'||rhSections.some(([,name])=>name===label))?null:<button type="button" key={label} title={label} className={active===label?'current':''} onClick={()=>{setExtractoContract(null);setRemindersMode(0);setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><button type="button" className={'cis-profile-name cis-profile-open'+(active==='Perfil'?' on':'')} onClick={()=>openProfile('conta')} title="Abrir o meu perfil"><strong>{name}</strong><small>{role}{agency?' · '+agency:''}</small></button><button type="button" className="cis-profile-key" onClick={()=>setPwOpen(true)} title="Alterar a minha palavra-passe" aria-label="Alterar a minha palavra-passe"><KeyRound size={15}/></button><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
@@ -214,9 +219,12 @@ export default function Dashboard({token, name, role, permissions, agency, theme
     </>}
    </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Perfil'&&active!=='Caixa'&&active!=='Simulador'&&active!=='Visão geral'&&<><div className="cis-kicker">{active in RH_SUBTITLES?'CIS · RECURSOS HUMANOS':'CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO'}</div>
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?(homeTab==='dashboard'?'Dashboard de análise: carteira, mutuários e desempenho financeiro.':'Visão integrada da carteira de microcrédito e das operações financeiras.') :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Agenda de cobrança'?'Folha de cobrança do dia: promessas de pagamento, contactos agendados, atrasos sem contacto e lembretes automáticos.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':RH_SUBTITLES[active]??'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Agenda de cobrança'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'||active in RH_SUBTITLES?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
-    {(()=>{const g=rhGroupOf(active,can('utilizadores'));if(!g||g[1].length<2)return null;rhLast.current[g[0]]=active;
-     return <div className="cis-home-tabs rh-tabs" role="tablist" aria-label={'Separadores de '+g[0]}>{g[1].map(page=><button key={page} type="button" role="tab" aria-selected={active===page}
-      className={active===page?'selected':''} onClick={()=>setActive(page)}>{page}</button>)}</div>;})()}
+    {(()=>{const g=rhGroupOf(active,can('utilizadores'));if(!g)return null;rhLast.current[g[0]]=active;rhLastPage.current=active;
+     const groups=mini?<div className="cis-home-tabs rh-tabs rh-group-tabs" role="tablist" aria-label="Grupos de Recursos Humanos">{rhMenu(can('utilizadores')).map(([group,pages])=><button key={group} type="button" role="tab" aria-selected={g[0]===group}
+      className={g[0]===group?'selected':''} onClick={()=>setActive(rhLast.current[group]&&pages.includes(rhLast.current[group])?rhLast.current[group]:pages[0])}>{group}</button>)}</div>:null;
+     if(g[1].length<2)return groups;
+     return <>{groups}<div className="cis-home-tabs rh-tabs" role="tablist" aria-label={'Separadores de '+g[0]}>{g[1].map(page=><button key={page} type="button" role="tab" aria-selected={active===page}
+      className={active===page?'selected':''} onClick={()=>setActive(page)}>{page}</button>)}</div></>;})()}
     {active==='Visão geral'&&<div className="cis-home-head">
      <div><span className="cis-kicker">CIS · {homeTab==='dashboard'?'DASHBOARD DE ANÁLISE':'VISÃO GERAL'}</span><h1>Bem-vindo, {name.split(' ')[0]}</h1></div>
      {hasDash&&<div className="cis-home-tabs" role="tablist" aria-label="Visão geral e Dashboard">
