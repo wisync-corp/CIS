@@ -48,12 +48,15 @@ const noticeTotal=(n:NoticeData|null)=>n?n.atraso+n.cobranca+(n.lista_negra??0):
 const noticeMoney=new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 // Menu de Recursos Humanos agrupado por tarefa (em vez de uma lista longa).
+// Recursos Humanos: o menu lateral mostra só 4 grupos; as páginas de cada grupo são separadores no topo do conteúdo.
+// Assim o RH ocupa pouco espaço no menu e deixa lugar aos outros módulos.
 const rhMenu=(admin:boolean):[string,string[]][]=>[
- ['Resumo',['Visão geral de RH']],
+ ['Visão geral de RH',['Visão geral de RH']],
  ['Pessoas',['Colaboradores','Contratos de trabalho','Adendas','Férias']],
  ['Remuneração',['Folha salarial','Indemnizações','Prestações de indemnização']],
- ['Análise e regras',['Relatórios de RH','Definições de RH',...(admin?['Integrações de RH']:[])]],
+ ['Relatórios e regras',['Relatórios de RH','Definições de RH',...(admin?['Integrações de RH']:[])]],
 ];
+const rhGroupOf=(page:string,admin:boolean)=>rhMenu(admin).find(([,pages])=>pages.includes(page));
 const RH_SUBTITLES:Record<string,string>={
  'Visão geral de RH':'Estado da folha do mês, aprovações em falta e indemnizações por pagar.',
  'Colaboradores':'Cadastro de colaboradores e associação às contas do CIS.',
@@ -81,6 +84,7 @@ const nav:{label:string;icon:typeof Users;perm?:Perm}[]=[
 export default function Dashboard({token, name, role, permissions, agency, theme, onThemeChange, onLogout}:{token:string;name:string;role:string;permissions:string[];agency?:string|null;theme:ThemeId;onThemeChange:(value:ThemeId)=>void;onLogout:()=>void}){
  const can=(p?:Perm)=>!p||permissions.includes(p);
  const [rhExpanded,setRhExpanded]=useState(false);
+ const rhLast=useRef<Record<string,string>>({});
  const allowedNav=nav.filter(n=>can(n.perm));
  const [active,setActiveRaw]=useState(()=>allowedNav[0]?.label??'Definições'),[open,setOpen]=useState(false);
  const rhActive=rhSections.find(([,label])=>label===active)?.[0];
@@ -192,7 +196,8 @@ export default function Dashboard({token, name, role, permissions, agency, theme
   <aside className={'cis-side '+(open?'visible':'')}>
    <div className="cis-brand"><img src={logoCompactaClaroTransp} alt="CIS – Credit Insight Shift" width={170} height={50}/></div>
    <div className="cis-workspace">ESPAÇO DE TRABALHO</div>
-   <nav aria-label="Navegação principal">{allowedNav.map(({label,icon:Icon})=>label==='Definições de RH'?<div key={label}><button type="button" aria-expanded={rhExpanded} onClick={()=>setRhExpanded(v=>!v)}><Users size={18}/><span>Recursos Humanos</span>{rhExpanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>{rhExpanded&&rhMenu(can('utilizadores')).map(([group,names])=><div key={group} role="group" aria-label={group}><div className="rh-nav-group">{group}</div>{names.map(name=><button type="button" key={name} className={active===name?'current':''} aria-current={active===name?'page':undefined} onClick={()=>{setActive(name);setOpen(false);}}><span>{name}</span></button>)}</div>)}</div>:(label==='Folha salarial'||label==='Relatórios de RH'||label==='Integrações de RH'||rhSections.some(([,name])=>name===label))?null:<button type="button" key={label} className={active===label?'current':''} onClick={()=>{setExtractoContract(null);setRemindersMode(0);setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
+   <nav aria-label="Navegação principal">{allowedNav.map(({label,icon:Icon})=>label==='Definições de RH'?<div key={label}><button type="button" aria-expanded={rhExpanded} onClick={()=>setRhExpanded(v=>!v)}><Users size={18}/><span>Recursos Humanos</span>{rhExpanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>{rhExpanded&&rhMenu(can('utilizadores')).map(([group,pages])=>{const here=pages.includes(active);return <button type="button" key={group} className={here?'current':''} aria-current={here?'page':undefined}
+  onClick={()=>{setActive(here?active:(rhLast.current[group]&&pages.includes(rhLast.current[group])?rhLast.current[group]:pages[0]));setOpen(false);}}><span>{group}</span></button>;})}</div>:(label==='Folha salarial'||label==='Relatórios de RH'||label==='Integrações de RH'||rhSections.some(([,name])=>name===label))?null:<button type="button" key={label} className={active===label?'current':''} onClick={()=>{setExtractoContract(null);setRemindersMode(0);setActive(label);setOpen(false)}}><Icon size={18}/><span>{label}</span></button>)}</nav>
    <div className="cis-side-bottom"><div className="secure-mark"><ShieldCheck size={18}/><span>Ambiente de desenvolvimento<br/><b>Acesso protegido</b></span></div><div className="cis-profile"><div className="cis-initial">{name.charAt(0).toUpperCase()}</div><button type="button" className={'cis-profile-name cis-profile-open'+(active==='Perfil'?' on':'')} onClick={()=>openProfile('conta')} title="Abrir o meu perfil"><strong>{name}</strong><small>{role}{agency?' · '+agency:''}</small></button><button type="button" className="cis-profile-key" onClick={()=>setPwOpen(true)} title="Alterar a minha palavra-passe" aria-label="Alterar a minha palavra-passe"><KeyRound size={15}/></button><button type="button" onClick={onLogout} title="Terminar sessão">Sair</button></div></div>
   </aside>
   <div className="cis-stage">
@@ -209,6 +214,9 @@ export default function Dashboard({token, name, role, permissions, agency, theme
     </>}
    </dialog>}{!(active==='Mutuários'&&clientProfileOpen)&&active!=='Perfil'&&active!=='Caixa'&&active!=='Simulador'&&active!=='Visão geral'&&<><div className="cis-kicker">{active in RH_SUBTITLES?'CIS · RECURSOS HUMANOS':'CIS · SISTEMA DE INFORMAÇÃO DE CRÉDITO'}</div>
     <div className="cis-title-row"><div><h1>{active==='Visão geral'?'Bem-vindo ao CIS':active}</h1><p>{active==='Visão geral'?(homeTab==='dashboard'?'Dashboard de análise: carteira, mutuários e desempenho financeiro.':'Visão integrada da carteira de microcrédito e das operações financeiras.') :active==='Caixa'?'Gestão de contas, saldos e movimentos financeiros da instituição.':active==='Mensagens'?'Modelos, envio pelo WhatsApp Web e registo das mensagens enviadas aos mutuários.':active==='Agenda de cobrança'?'Folha de cobrança do dia: promessas de pagamento, contactos agendados, atrasos sem contacto e lembretes automáticos.':active==='Propostas'?'Propostas de crédito: análise do mutuário, aprovação por limites e desembolso só a partir de propostas aprovadas.':active==='Relatórios'?'Relatórios de gestão (cobranças, atrasos, gestores de crédito, evolução, Caixa, novo crédito) e regulatórios para o Banco de Moçambique.':active==='Definições'?'Dados da empresa, regras de crédito, parametrização e preferências do sistema.':RH_SUBTITLES[active]??'Consulta segura dos registos do sistema de microcrédito.'}</p></div><span className="cis-readonly">{active==='Mutuários'||active==='Propostas'||active==='Agenda de cobrança'||active==='Caixa'||active==='Mensagens'||active==='Relatórios'||active==='Definições'||active in RH_SUBTITLES?<><ShieldCheck size={15}/> Acesso protegido</>:<><LockKeyhole size={15}/> Só leitura</>}</span></div></>}
+    {(()=>{const g=rhGroupOf(active,can('utilizadores'));if(!g||g[1].length<2)return null;rhLast.current[g[0]]=active;
+     return <div className="cis-home-tabs rh-tabs" role="tablist" aria-label={'Separadores de '+g[0]}>{g[1].map(page=><button key={page} type="button" role="tab" aria-selected={active===page}
+      className={active===page?'selected':''} onClick={()=>setActive(page)}>{page}</button>)}</div>;})()}
     {active==='Visão geral'&&<div className="cis-home-head">
      <div><span className="cis-kicker">CIS · {homeTab==='dashboard'?'DASHBOARD DE ANÁLISE':'VISÃO GERAL'}</span><h1>Bem-vindo, {name.split(' ')[0]}</h1></div>
      {hasDash&&<div className="cis-home-tabs" role="tablist" aria-label="Visão geral e Dashboard">

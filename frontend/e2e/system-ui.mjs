@@ -11,6 +11,8 @@ const OUT='e2e-report';fs.mkdirSync(OUT,{recursive:true});
 const report={inicio:new Date().toISOString(),funcoes:{}};let problems=0;
 const slug=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
 
+const RH_GROUPS={'Visão geral de RH':['Visão geral de RH'],Pessoas:['Colaboradores','Contratos de trabalho','Adendas','Férias'],
+ 'Remuneração':['Folha salarial','Indemnizações','Prestações de indemnização'],'Relatórios e regras':['Relatórios de RH','Definições de RH','Integrações de RH']};
 const browser=await chromium.launch();
 for(const role of ROLES){
  const r={paginas:[],erros_js:[],api_5xx:[],api_4xx:[],avisos_ecra:[]};report.funcoes[role]=r;
@@ -51,10 +53,15 @@ for(const role of ROLES){
    const expected=['Visão geral de RH','Colaboradores','Contratos de trabalho','Adendas','Férias','Indemnizações',
     'Prestações de indemnização','Folha salarial','Relatórios de RH','Definições de RH','Integrações de RH'];
    for(const name of expected){
-    const item=pg.locator('.cis-side nav').getByRole('button',{name,exact:true});
-    if(await item.count()!==1){r.erros_js.push('Submenu RH em falta: '+name);continue;}
+    // O menu mostra só os grupos de RH; as páginas de cada grupo são separadores no conteúdo.
+    const group=Object.entries(RH_GROUPS).find(([,pages])=>pages.includes(name))?.[0]??name;
+    const side=pg.locator('.cis-side nav').getByRole('button',{name:group,exact:true});
+    if(await side.count()!==1){r.erros_js.push('Grupo de RH em falta no menu: '+group);continue;}
+    const tab=pg.locator('main .rh-tabs').getByRole('tab',{name,exact:true});
+    const item={click:async()=>{await side.click();await pg.waitForTimeout(200);if(group!==name){
+     if(await tab.count()!==1)throw new Error('Separador de RH em falta: '+name);await tab.click();}}};
     const api=pg.waitForResponse(res=>res.url().includes('/api/cis/rh/')&&res.request().method()==='GET',{timeout:15000}).catch(()=>null);
-    await item.click();
+    try{await item.click();}catch(e){r.erros_js.push(String(e.message||e));continue;}
     const response=await api;
     if(!response?.ok())r.erros_js.push('RH '+name+': API sem sucesso'+(response?' ('+response.status()+')':''));
     await settle();await screenErrors('RH › '+name);await shot('rh-'+name);r.paginas.push('RH › '+name);
