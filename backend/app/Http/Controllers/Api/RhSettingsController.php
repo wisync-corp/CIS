@@ -136,10 +136,12 @@ final class RhSettingsController extends Controller
             'category'=>['nullable','string','max:80'],
             'employee_code'=>['nullable','string','max:32'],
         ]);
-        $date=$data['date'];
-        $company=$data['company']??'';
-        $category=$data['category']??'';
-        $employee=$data['employee_code']??'';
+        return response()->json(self::rulesFor($data['date'],$data['company']??'',$data['category']??'',$data['employee_code']??''))
+            ->header('Cache-Control','no-store, private');
+    }
+
+    public static function rulesFor(string $date,string $company,string $category,string $employee): array
+    {
         $parameters=DB::table('cis_rh_parameters')
             ->where('effective_from','<=',$date)
             ->where(fn ($q)=>$q->whereNull('effective_to')->orWhere('effective_to','>=',$date))
@@ -166,8 +168,8 @@ final class RhSettingsController extends Controller
             'Dependentes_2'=>$scale['d2'],'Dependentes_3'=>$scale['d3'],'Dependentes_4_Mais'=>$scale['d4'],
             'Nivel_Aplicacao'=>'Global','Estado'=>'Activo','Vigencia_Inicio'=>$table->effective_from,'Versao'=>$table->id,
         ],json_decode($table->scales,true,512,JSON_THROW_ON_ERROR)):[];
-        return response()->json(['dataReferencia'=>$date,'contexto'=>['empresa'=>$company,'categoria'=>$category,'codigo'=>$employee],
-            'parametros'=>$parameters,'tabelaIRPS'=>$tableId,'escaloes'=>$scales])->header('Cache-Control','no-store, private');
+        return ['dataReferencia'=>$date,'contexto'=>['empresa'=>$company,'categoria'=>$category,'codigo'=>$employee],
+            'parametros'=>$parameters->all(),'tabelaIRPS'=>$tableId,'escaloes'=>$scales];
     }
 
     private function insertVersion(string $table,array $data,Request $request): void

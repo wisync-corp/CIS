@@ -31,6 +31,12 @@ Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::cla
 Route::get('cis/email/oauth/callback',[\App\Http\Controllers\Api\CisMailController::class,'callback'])->middleware('throttle:20,1');
 
 Route::middleware('auth:sanctum')->group(function(){
+    Route::prefix('cis/rh/folha')->controller(\App\Http\Controllers\Api\RhPayrollController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:60,1');
+        Route::post('previa','preview')->middleware('throttle:30,1');
+        Route::post('/','save')->middleware('throttle:20,1');
+        Route::post('{id}/finalizar','finalize')->whereNumber('id')->middleware('throttle:20,1');
+    });
     Route::prefix('cis/rh/registos')->controller(\App\Http\Controllers\Api\RhRecordsController::class)->group(function () {
         Route::get('/','index')->middleware('throttle:90,1');
         Route::get('origens','parents')->middleware('throttle:60,1');

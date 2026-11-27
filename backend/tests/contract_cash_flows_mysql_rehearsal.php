@@ -1596,6 +1596,26 @@ $rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'200']+$baseRh,$user),'
 ok(status(fn()=>$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'101']+$baseRh,$user),'prestacoes'))===422,'RH impede plano acima do valor acordado');
 ok((int)DB::table('cis_rh_record_audit')->where('record_id',$adenda)->value('user_id')===(int)$user->id,'RH audita autor de cada operação');
 
+
+echo "\nFolha salarial no MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060003_create_rh_payroll.php')->up();
+$rhPay=new \App\Http\Controllers\Api\RhPayrollController();
+foreach (['BASE_DIAS_MES'=>'30','BASE_HORAS_DIA'=>'8','INSS_CONDICAO_CANALIZAR'=>'Sim','INSS_TAXA_EMP'=>'0.04',
+    'INSS_EMP_ARRED_CASAS'=>'0','ARRED_CASAS_DEFAULT'=>'2','IRPS_ISENCAO_DEPARTAMENTO'=>'ISPC','IRPS_DEPENDENTES_MAX'=>'4'] as $key=>$value) {
+    $rh->parameter(req('/x',['code'=>$key,'value'=>$value]+$rhParam,$user));
+}
+$prh=['employee_id'=>$created,'period'=>'2026-02','days_worked'=>'30','hours_worked'=>'0','unjustified_absences'=>'0',
+    'overtime'=>'0','allowances'=>'0','bonus'=>'0','other_earnings'=>'0','other_deductions'=>'0','contribute'=>true,
+    'dependents'=>0,'department'=>'ISPC'];
+$payQuote=data($rhPay->preview(req('/x',$prh,$user)));
+ok($payQuote['amounts']['gross']==='1100.00'&&$payQuote['amounts']['net']==='1067.00','folha usa a adenda vigente e os parâmetros de INSS');
+ok(status(fn()=>$rhPay->save(req('/x',['days_worked'=>'29','signature'=>$payQuote['signature']]+$prh,$user)))===409,'folha exige prévia actualizada');
+$payLine=data($rhPay->save(req('/x',['signature'=>$payQuote['signature']]+$prh,$user)))['id'];
+ok(status(fn()=>$rhPay->save(req('/x',['signature'=>$payQuote['signature']]+$prh,$user)))===409,'folha impede lançamento duplicado');
+$rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$payLine);
+ok(status(fn()=>$rhPay->save(req('/x',['version'=>2,'signature'=>$payQuote['signature']]+$prh,$user)))===409
+    && DB::table('cis_rh_payroll_events')->where('payroll_id',$payLine)->count()===2,'folha finalizada fica bloqueada e auditada');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
