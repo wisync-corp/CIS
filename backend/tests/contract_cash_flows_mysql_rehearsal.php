@@ -1578,6 +1578,24 @@ ok(count($rhEarly['parametros'])===1&&count($rhLater['parametros'])===2
     && $rhLater['parametros'][0]['Valor']==='0.04'&&count($rhLater['escaloes'])===1,'RH consulta parâmetros por vigência e âmbito');
 ok((int)DB::table('cis_rh_parameters')->first()->created_by===(int)$user->id,'RH regista a identidade do utilizador');
 
+
+echo "\nRegistos de RH em MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060002_create_rh_records.php')->up();
+$rhRecords=new \App\Http\Controllers\Api\RhRecordsController();
+$employee=['company'=>'Empresa fictícia','code'=>'RH-1','name'=>'Colaborador de ensaio','admission'=>'2026-01-01','status'=>'activo'];
+ok(data($rhRecords->index(req('/x',[],$user)))['totals']['colaboradores']===0,'RH começa vazio');
+$created=data($rhRecords->employee(req('/x',$employee,$user)))['id'];
+ok(status(fn()=>$rhRecords->employee(req('/x',$employee,$user)))===409,'RH recusa códigos duplicados na empresa');
+$other=data($rhRecords->employee(req('/x',['code'=>'RH-2']+$employee,$user)))['id'];
+$baseRh=['employee_id'=>$created,'reference_date'=>'2026-02-01'];
+$contract=data($rhRecords->record(req('/x',['regime'=>'mensal','rate'=>'1000']+$baseRh,$user),'contratos'))['id'];
+ok(status(fn()=>$rhRecords->record(req('/x',['employee_id'=>$other,'parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))===422,'RH rejeita adenda de outro colaborador');
+$adenda=data($rhRecords->record(req('/x',['parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))['id'];
+$ind=data($rhRecords->record(req('/x',['amount'=>'300','text'=>'Acordo fictício']+$baseRh,$user),'indemnizacoes'))['id'];
+$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'200']+$baseRh,$user),'prestacoes');
+ok(status(fn()=>$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'101']+$baseRh,$user),'prestacoes'))===422,'RH impede plano acima do valor acordado');
+ok((int)DB::table('cis_rh_record_audit')->where('record_id',$adenda)->value('user_id')===(int)$user->id,'RH audita autor de cada operação');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
