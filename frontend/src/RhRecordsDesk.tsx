@@ -1,3 +1,4 @@
+import {useCan} from './perms';
 import {useEffect,useState,type FormEvent} from 'react';
 import {Plus,Search} from 'lucide-react';
 
@@ -8,7 +9,8 @@ export const rhSections=[
 ] as const;
 export type RhSection=typeof rhSections[number][0];
 const titles=Object.fromEntries(rhSections);
-type Employee={id:number;name:string;company:string;code:string;admission:string;category:string;status:string};
+type Account={id:number;name:string;email:string;active?:boolean|number};
+type Employee={user?:Account|null;id:number;name:string;company:string;code:string;admission:string;category:string;status:string};
 type Row={id:number;reference_date:string;parent_id:number|null;name:string;company:string;code:string;details:Record<string,string|null>};
 type Page<T>={data:T[];current_page:number;last_page:number};
 type Response={employees:Page<Employee>;records:Page<Row>|null;totals:Partial<Record<RhSection,number>>};
@@ -17,7 +19,55 @@ const mt=(value:string)=>Number(value).toLocaleString('pt-MZ',{minimumFractionDi
 const details=(row:Row)=>Object.entries(row.details).filter(([,v])=>v!=null&&v!=='').map(([key,value])=>names[key]+': '+(['rate','amount'].includes(key)?mt(value!):value)).join(' · ');
 const blank={name:'',company:'',code:'',category:'',admission:'',status:'activo',employee_id:'',parent_id:'',reference_date:'',end:'',regime:'mensal',rate:'',amount:'',text:''};
 
+function RhUserLink({employee,token,onClose,onSaved}:{employee:Employee;token:string;onClose:()=>void;onSaved:()=>void}){
+ const [query,setQuery]=useState(''),[users,setUsers]=useState<Account[]>([]),[userId,setUserId]=useState(employee.user?String(employee.user.id):'');
+ const [error,setError]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
+ const url=API+'/cis/rh/registos/colaboradores/'+employee.id;
+ useEffect(()=>{
+  const ctrl=new AbortController();setLoading(true);setError('');
+  const timeout=window.setTimeout(()=>{
+   fetch(url+'/utilizadores?'+new URLSearchParams({q:query.trim()}),{
+    signal:ctrl.signal,headers:{Authorization:'Bearer '+token,Accept:'application/json'}
+   }).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.message);return d as {users:Account[]};})
+    .then(d=>{if(!ctrl.signal.aborted)setUsers(d.users);})
+    .catch(e=>{if(!ctrl.signal.aborted)setError(e.message);})
+    .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
+  },250);
+  return ()=>{ctrl.abort();window.clearTimeout(timeout);};
+ },[url,token,query]);
+ const current=employee.user?String(employee.user.id):'';
+ async function save(e:FormEvent){
+  e.preventDefault();if(busy||loading||userId===current)return;
+  setBusy(true);setError('');
+  try{
+   const r=await fetch(url+'/utilizador',{method:'PUT',
+    headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},
+    body:JSON.stringify({user_id:userId?Number(userId):null,previous_user_id:employee.user?.id??null})});
+   const d=await r.json();if(!r.ok)throw new Error(d.message||'Não foi possível guardar a associação.');
+   onSaved();
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ return <form className="cis-prop-decision" onSubmit={e=>void save(e)}>
+  <h4>Conta do CIS · {employee.name}</h4>
+  <div className="cis-profile-fields">
+   {employee.status==='activo'&&<label className="cis-profile-field"><span>Pesquisar conta activa</span><input type="search" value={query} maxLength={160} disabled={busy} onChange={e=>{setUserId(current);setQuery(e.target.value);}}/></label>}
+   <label className="cis-profile-field"><span>Conta associada</span><select value={userId} disabled={busy||loading} onChange={e=>setUserId(e.target.value)}>
+    <option value="">Sem associação</option>
+    {employee.user&&<option value={employee.user.id}>{employee.user.name} · {employee.user.email} (actual)</option>}
+    {employee.status==='activo'&&users.map(u=><option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
+   </select></label>
+  </div>
+  {error&&<p role="alert" className="cis-table-error">{error}</p>}
+  {loading&&<p role="status">A pesquisar contas…</p>}
+  {employee.status==='activo'&&!loading&&!error&&!users.length&&<p>Sem contas activas disponíveis para esta pesquisa.</p>}
+  <div className="cis-prop-actions"><button className="primary" type="submit" disabled={busy||loading||userId===current}>Guardar associação</button>
+   <button type="button" disabled={busy} onClick={onClose}>Cancelar</button></div>
+ </form>;
+}
+
 export default function RhRecordsDesk({token,section,onNavigate}:{token:string;section:RhSection;onNavigate:(s:RhSection)=>void}){
+ const can=useCan();
+ const [linking,setLinking]=useState<Employee|null>(null);
  const [data,setData]=useState<Response|null>(null),[error,setError]=useState(''),[status,setStatus]=useState(''),[page,setPage]=useState(1),[rev,setRev]=useState(0);
  const [form,setForm]=useState(blank),[editing,setEditing]=useState(false),[busy,setBusy]=useState(false);
  const [query,setQuery]=useState(''),[search,setSearch]=useState(''),[candidate,setCandidate]=useState(''),[matches,setMatches]=useState<Employee[]>([]),[chosen,setChosen]=useState<Employee|null>(null);
@@ -74,11 +124,13 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
  const pages=worker?data?.employees:data?.records;
  return <section className="cis-panel cis-proposals">
   <div className="cis-prop-head"><div><h3>{titles[section]}</h3></div>
-   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing} onClick={()=>{setForm(blank);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
+   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing||!!linking} onClick={()=>{setForm(blank);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
   </div>
   {error&&<p className="cis-table-error" role="alert">{error}</p>}{status&&<p className="cis-msg-notice" role="status">{status}</p>}
   {!data&&!error&&<p role="status">A carregar…</p>}
   {overview&&data&&<div className="cis-stat-grid">{rhSections.filter(([key])=>key!=='painel').map(([key,title])=><button key={key} type="button" className="cis-panel cis-stat cis-stat-button" onClick={()=>onNavigate(key)}><div className="cis-stat-top">{title}</div><strong>{data.totals[key]??0}</strong></button>)}</div>}
+  {worker&&linking&&<RhUserLink key={linking.id} employee={linking} token={token} onClose={()=>setLinking(null)}
+   onSaved={()=>{setLinking(null);setRev(v=>v+1);setStatus('Associação actualizada.');}}/>}
   {!overview&&editing&&<form className="cis-prop-decision" onSubmit={e=>void save(e)}>
    <div className="cis-profile-fields">{worker?<>{field('name','Nome completo')}{field('company','Empresa')}{field('code','Código')}{field('category','Categoria','text',false)}{field('admission','Admissão','date')}
     <label className="cis-profile-field"><span>Estado</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>
@@ -100,8 +152,8 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
     <input type="search" aria-label="Nome ou código do colaborador" placeholder="Nome ou código do colaborador" value={query} onChange={e=>setQuery(e.target.value)}/><button type="submit"><Search size={15}/> Pesquisar</button>
    </form>
    {!pages?.data.length?<p>Sem registos.</p>:<div className="cis-table-scroll"><table>
-    <thead><tr><th>Colaborador</th><th>Empresa</th><th>Código</th>{worker?<><th>Categoria</th><th>Admissão</th><th>Estado</th></>:<><th>Referência</th><th>Data</th><th>Detalhes</th></>}</tr></thead>
-    <tbody>{worker?data.employees.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>{x.category||'—'}</td><td>{x.admission}</td><td>{x.status==='activo'?'Activo':'Inactivo'}</td></tr>)
+    <thead><tr><th>Colaborador</th><th>Empresa</th><th>Código</th>{worker?<><th>Categoria</th><th>Admissão</th><th>Estado</th>{can('utilizadores')&&<th>Conta do CIS</th>}</>:<><th>Referência</th><th>Data</th><th>Detalhes</th></>}</tr></thead>
+    <tbody>{worker?data.employees.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>{x.category||'—'}</td><td>{x.admission}</td><td>{x.status==='activo'?'Activo':'Inactivo'}</td>{can('utilizadores')&&<td><span>{x.user?.name??'Sem associação'}</span> <button type="button" className="cis-edit-action" disabled={editing||!!linking} onClick={()=>setLinking(x)}>{x.user?'Gerir associação':'Associar'}</button></td>}</tr>)
     :data.records?.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>#{x.id}{x.parent_id?' · origem #'+x.parent_id:''}</td><td>{x.reference_date}</td><td>{details(x)||'—'}</td></tr>)}</tbody>
    </table></div>}
    {(pages?.last_page??0)>1&&<div className="cis-prop-actions"><button type="button" disabled={page===1} onClick={()=>setPage(x=>x-1)}>Anterior</button><span>{page} / {pages?.last_page}</span><button type="button" disabled={page>=(pages?.last_page??1)} onClick={()=>setPage(x=>x+1)}>Seguinte</button></div>}

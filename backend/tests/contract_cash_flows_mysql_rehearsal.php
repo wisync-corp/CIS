@@ -1616,6 +1616,19 @@ $rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$payLine);
 ok(status(fn()=>$rhPay->save(req('/x',['version'=>2,'signature'=>$payQuote['signature']]+$prh,$user)))===409
     && DB::table('cis_rh_payroll_events')->where('payroll_id',$payLine)->count()===2,'folha finalizada fica bloqueada e auditada');
 
+
+echo "\nAssociação entre contas do CIS e colaboradores\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060004_link_rh_employees_to_users.php')->up();
+$linkData=['user_id'=>(int)$user->id,'previous_user_id'=>null];
+$rhRecords->linkUser(req('/x',$linkData,$user),$created);
+ok((int)DB::table('cis_rh_user_links')->where('employee_id',$created)->value('user_id')===(int)$user->id,'RH associa uma conta existente');
+ok(status(fn()=>$rhRecords->linkUser(req('/x',$linkData,$user),$other))===409,'a mesma conta não é associada a dois colaboradores');
+ok(status(fn()=>$rhRecords->linkUser(req('/x',['user_id'=>null,'previous_user_id'=>null],$user),$created))===409,'RH detecta alterações concorrentes da associação');
+$rhRecords->linkUser(req('/x',['user_id'=>null,'previous_user_id'=>(int)$user->id],$user),$created);
+ok(!DB::table('cis_rh_user_links')->where('employee_id',$created)->exists()
+    && DB::table('cis_rh_record_audit')->where('employee_id',$created)->where('action','utilizador_associado')->count()===2,
+    'remoção do vínculo fica auditada e mantém a conta disponível');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

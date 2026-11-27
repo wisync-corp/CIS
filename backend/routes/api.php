@@ -41,6 +41,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/','index')->middleware('throttle:90,1');
         Route::get('origens','parents')->middleware('throttle:60,1');
         Route::post('colaboradores','employee')->middleware('throttle:20,1');
+        Route::get('colaboradores/{employee}/utilizadores','userOptions')->whereNumber('employee')->middleware('throttle:60,1');
+        Route::put('colaboradores/{employee}/utilizador','linkUser')->whereNumber('employee')->middleware('throttle:20,1');
         Route::post('{kind}','record')->where('kind','contratos|adendas|ferias|indemnizacoes|prestacoes')->middleware('throttle:20,1');
     });
     Route::prefix('cis/rh/definicoes')->controller(\App\Http\Controllers\Api\RhSettingsController::class)->group(function () {

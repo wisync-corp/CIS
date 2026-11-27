@@ -32,6 +32,15 @@ final class RhRecordsController extends Controller
             $query->where(fn ($q)=>$q->where('name','like','%'.$search.'%')->orWhere('code','like','%'.$search.'%'));
         }
         $employees=$query->orderBy('name')->orderBy('id')->paginate(25,['id','name','code','company','category','admission','status']);
+        if (Permissions::can($r->user(),'utilizadores') && Schema::hasTable('cis_rh_user_links')) {
+            $links=DB::table('cis_rh_user_links as l')->join('users as u','u.id','=','l.user_id')
+                ->whereIn('l.employee_id',$employees->pluck('id'))
+                ->get(['l.employee_id','u.id','u.name','u.email','u.active'])->keyBy('employee_id');
+            $employees->through(function ($employee) use ($links) {
+                $employee->user=$links[$employee->id]??null;
+                return $employee;
+            });
+        }
         $records=null;
         if (isset($filters['kind'])) {
             $records=DB::table('cis_rh_records as r')->join('cis_rh_employees as e','e.id','=','r.employee_id')
@@ -123,6 +132,64 @@ final class RhRecordsController extends Controller
             return $id;
         });
         return response()->json(['id'=>$id],201);
+    }
+
+    private function canLink(Request $r): void
+    {
+        $this->gate($r);
+        Permissions::require($r->user(),'utilizadores');
+        abort_unless(Schema::hasTable('cis_rh_user_links'),503,'Instale a associação de utilizadores de RH na VPS.');
+    }
+
+    public function userOptions(Request $r,int $employee)
+    {
+        $this->canLink($r);
+        abort_unless(DB::table('cis_rh_employees')->where('id',$employee)->exists(),404,'Colaborador não encontrado.');
+        $d=$r->validate(['q'=>['nullable','string','max:160']]);
+        $q=trim($d['q']??'');
+        $list=DB::table('users as u')->leftJoin('cis_rh_user_links as l','l.user_id','=','u.id')
+            ->where('u.active',true)->whereNull('l.employee_id')
+            ->when($q!=='',fn ($query)=>$query->where(fn ($match)=>$match->where('u.name','like','%'.$q.'%')
+                ->orWhere('u.email','like','%'.$q.'%')))
+            ->orderBy('u.name')->orderBy('u.id')->limit(25)->get(['u.id','u.name','u.email']);
+        return response()->json(['users'=>$list])->header('Cache-Control','no-store, private');
+    }
+
+    public function linkUser(Request $r,int $employee)
+    {
+        $this->canLink($r);
+        $d=$r->validate(['user_id'=>['present','nullable','integer','min:1'],
+            'previous_user_id'=>['present','nullable','integer','min:1']]);
+        $next=$d['user_id']===null?null:(int)$d['user_id'];
+        $expected=$d['previous_user_id']===null?null:(int)$d['previous_user_id'];
+        try {
+            DB::transaction(function () use ($r,$employee,$next,$expected) {
+                $person=DB::table('cis_rh_employees')->where('id',$employee)->lockForUpdate()->first();
+                abort_unless($person,404,'Colaborador não encontrado.');
+                $current=DB::table('cis_rh_user_links')->where('employee_id',$employee)->value('user_id');
+                $previous=$current===null?null:(int)$current;
+                abort_if($previous!==$expected,409,'A associação mudou. Actualize a lista de colaboradores.');
+                if ($previous===$next) return;
+                if ($next===null) {
+                    DB::table('cis_rh_user_links')->where('employee_id',$employee)->delete();
+                } else {
+                    abort_unless($person->status==='activo',422,'Só pode associar uma conta a um colaborador activo.');
+                    $account=DB::table('users')->where('id',$next)->lockForUpdate()->first(['id','active']);
+                    abort_unless($account && $account->active,422,'Seleccione uma conta activa do CIS.');
+                    abort_if(DB::table('cis_rh_user_links')->where('user_id',$next)->exists(),409,
+                        'Esta conta já está associada a outro colaborador.');
+                    if ($previous===null) {
+                        DB::table('cis_rh_user_links')->insert(['employee_id'=>$employee,'user_id'=>$next,'created_at'=>now(),'updated_at'=>now()]);
+                    } else {
+                        DB::table('cis_rh_user_links')->where('employee_id',$employee)->update(['user_id'=>$next,'updated_at'=>now()]);
+                    }
+                }
+                $this->audit($r,$employee,null,'utilizador_associado',['anterior'=>$previous,'novo'=>$next]);
+            },3);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            abort(409,'Esta conta já está associada a outro colaborador.');
+        }
+        return response()->json(['user_id'=>$next]);
     }
 
     private function audit(Request $r,int $employee,?int $record,string $action,array $snapshot): void

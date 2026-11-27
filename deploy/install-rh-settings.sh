@@ -7,3 +7,5 @@ sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/c
   exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060002_create_rh_records.php" --force
 sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml \
   exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060003_create_rh_payroll.php" --force
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml \
+  exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060004_link_rh_employees_to_users.php" --force
