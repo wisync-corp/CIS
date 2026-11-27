@@ -41,7 +41,9 @@ type GeralRow={nr:number;codigo:string;descricao:string;data:string;tipo:'entrad
 type ClienteRow={ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
 type GeralResp={linhas:GeralRow[];pagina:number;por_pagina:number;total_linhas:number;totais:{entradas:string;saidas:string;disponivel:string}};
 type ClientesTot={aberto:string;vencido:string;pago:string;juros_aberto:string;juros_vencido:string;juros_pago:string;n_aberto:number;n_vencido:number;n_pago:number};
-type ClientesResp={linhas:ClienteRow[];pagina:number;por_pagina:number;total_linhas:number;totais:ClientesTot};
+type Desembolso={contrato:string;cliente:string;codigo:string|number|null;desembolso:string;capital:string;prestacoes:number;a_pagar:string;pago:string;em_divida:string;em_atraso:string;estado:'Em curso'|'Em atraso'|'Finalizado';estado_contrato:string};
+type Desembolsos={contratos:Desembolso[];reforcos:{data:string;contrato:string;cliente:string;valor:string}[];totais:{contratos:number;capital:string;reforcos:string;desembolsado:string;em_divida:string}};
+type ClientesResp={linhas:ClienteRow[];pagina:number;por_pagina:number;total_linhas:number;totais:ClientesTot;desembolsos?:Desembolsos};
 type Evidence={titulo:string;emitido_em:string;emitido_por:string|null;periodo:{inicio:string|null;fim:string|null};
  cliente:{nome:string;id:number|null;numeracao?:string;bi?:string;contacto?:string;morada?:string};
  contratos:{contrato:string;capital:string;inicio:string;prestacoes:number;em_divida:string;pago:string;situacao:string}[];
@@ -257,6 +259,17 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e mora {mt(c.juros_pago)}</small></div>
    </div>}
 
+   {mode==='clientes'&&!loading&&(data as ClientesResp|null)?.desembolsos&&(()=>{const d=(data as ClientesResp).desembolsos!;return <section className="cis-disb">
+    <div className="cis-disb-head"><div><h3>Contratos desembolsados</h3><p>{d.totais.contratos} contrato(s){d.reforcos.length?` + ${d.reforcos.length} reforço(s)`:''} · desembolsado <b>{mt(d.totais.desembolsado)} MT</b>{d.reforcos.length?<> (capital {mt(d.totais.capital)} + reforços {mt(d.totais.reforcos)})</>:null} · em dívida hoje {mt(d.totais.em_divida)} MT</p></div>
+     <small>Clique no número para abrir o contrato.</small></div>
+    {d.contratos.length===0?<p className="cis-sub-empty">Sem contratos desembolsados no período.</p>:<div className="cis-table-scroll"><table><thead><tr><th>Contrato</th><th>Mutuário</th><th>Desembolso</th><th className="num">Capital (MT)</th><th className="num">Prestações</th><th className="num">Pago (MT)</th><th className="num">Em dívida (MT)</th><th>Situação</th></tr></thead>
+     <tbody>{d.contratos.map(k=><tr key={k.contrato}><td><button type="button" className="cis-extracto-link" onClick={()=>void openInfo(k.contrato)}>{k.contrato}</button></td><td>{k.cliente}</td><td>{k.desembolso.split('-').reverse().join('/')}</td>
+      <td className="num">{mt(k.capital)}</td><td className="num">{k.prestacoes}</td><td className="num">{mt(k.pago)}</td><td className="num">{mt(k.em_divida)}</td>
+      <td><span className={'cis-days '+(k.estado==='Em atraso'?'bad':k.estado==='Finalizado'?'ok':'')} title={k.estado==='Em atraso'?`${mt(k.em_atraso)} MT em atraso`:undefined}>{k.estado}</span></td></tr>)}</tbody></table></div>}
+    {d.reforcos.length>0&&<><h4>Reforços de crédito</h4><div className="cis-table-scroll"><table><thead><tr><th>Data</th><th>Contrato</th><th>Mutuário</th><th className="num">Valor (MT)</th></tr></thead>
+     <tbody>{d.reforcos.map((r,i)=><tr key={r.contrato+i}><td>{r.data.split('-').reverse().join('/')}</td><td><button type="button" className="cis-extracto-link" onClick={()=>void openInfo(r.contrato)}>{r.contrato}</button></td><td>{r.cliente}</td><td className="num">{mt(r.valor)}</td></tr>)}</tbody></table></div></>}
+    <p className="cis-disb-foot">Em baixo: todas as prestações destes contratos.</p>
+   </section>;})()}
    <div className="cis-extracto-toolbar">
     <button type="button" className="cis-extracto-column-trigger" aria-expanded={columnsOpen}
      aria-controls="cis-extracto-column-panel" onClick={()=>setColumnsOpen(open=>!open)}>

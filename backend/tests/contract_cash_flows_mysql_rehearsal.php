@@ -1559,6 +1559,16 @@ ok(in_array('Agricultura e pecuária',$enc['finalidades'],true) && $enc['mora'][
 $rep=data((new \App\Http\Controllers\Api\ReportController())->show(tap(Request::create('/x','GET',['inicio'=>now($tz)->startOfYear()->toDateString(),'fim'=>$td]),fn($r)=>$r->setUserResolver(static fn()=>$admin)),'finalidades'));
 ok(count($rep['seccoes'][0]['linhas'])>=1 && $rep['titulo']==='Crédito por finalidade e encargos','relatório «Crédito por finalidade e encargos»');
 
+echo "== Extracto: contratos desembolsados do período (cartão «Carteira desembolsada»)\n";
+$xd=tap(Request::create('/x','GET',['base'=>'desembolso','mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$xr=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($xd));
+$ovd=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year]),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+ok(isset($xr['desembolsos']['contratos']) && count($xr['desembolsos']['contratos'])===$ovd['carteira']['contratos_desembolsados_periodo'],'o extracto lista um contrato por linha, tantos quantos o cartão ('.count($xr['desembolsos']['contratos']).')');
+ok(abs((float)$xr['desembolsos']['totais']['desembolsado']-(float)$ovd['carteira']['desembolsado_periodo'])<0.01,'total desembolsado do extracto = cartão da Visão geral ('.$xr['desembolsos']['totais']['desembolsado'].' MT, com reforços)');
+ok(count($xr['desembolsos']['reforcos'])===$ovd['carteira']['reforcos_periodo']['n'],'reforços do período listados à parte');
+$xc=data((new \App\Http\Controllers\Api\ExtractoController())->clientes(tap(Request::create('/x','GET',['base'=>'cobranca']),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+ok(!isset($xc['desembolsos']),'nas outras vistas do extracto a lista não aparece');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

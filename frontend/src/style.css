@@ -2344,3 +2344,11 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-me-tabs{align-self:flex-start}
 .cis-me-actions{display:flex;gap:10px;flex-wrap:wrap}
 .cis-late-company{margin:6px 0 10px;padding:9px 12px;border-radius:10px;background:#F4F2F8;font-size:calc(13px * var(--cis-fs))}
+/* Extracto › contratos desembolsados (cartão «Carteira desembolsada») */
+.cis-disb{margin:0 0 16px;padding:14px 16px;border:1px solid #E4E0EE;border-left:4px solid var(--cis-primary);border-radius:14px;background:#fff}
+.cis-disb-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.cis-disb-head h3{margin:0 0 2px}.cis-disb-head p{margin:0;color:var(--cis-muted,#5b6472)}.cis-disb-head small{color:var(--cis-muted,#5b6472)}
+.cis-disb h4{margin:14px 0 6px}
+.cis-disb-foot{margin:10px 0 0;font-size:calc(12px * var(--cis-fs));color:var(--cis-muted,#5b6472)}
+.cis-extracto-link{border:0;background:transparent;padding:0;font:inherit;font-weight:700;color:var(--cis-primary);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.cis-disb table{font-size:calc(13px * var(--cis-fs))}.cis-disb td,.cis-disb th{white-space:nowrap}
