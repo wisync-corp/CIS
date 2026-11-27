@@ -120,8 +120,6 @@
 .rh-up{color:var(--cis-accent-ink);font-weight:700}
 .rh-down{color:#8A1C1C;font-weight:700}
 
-/* Menu lateral: subgrupos de RH */
-.rh-nav-group{margin:8px 0 2px 14px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;color:var(--cis-sidebar-muted)}
 
 @media(max-width:1100px){.rh-ov-top,.rh-reports-grid{grid-template-columns:minmax(0,1fr)}.rh-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.rh-steps{grid-template-columns:1fr}.rh-kpis{grid-template-columns:1fr}.rh-row-actions{flex-wrap:wrap;justify-content:flex-start}}
@@ -141,3 +139,6 @@
  .cis-table-scroll.rh-scroll{border:0;background:transparent;overflow:visible}
 }
 .rh-row-actions .cis-edit-action{margin-left:0!important}
+/* Separadores das páginas de RH (agrupadas no menu) */
+.rh-tabs{flex-wrap:wrap;margin-bottom:18px}
+@media(max-width:640px){.rh-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;max-width:100%;box-sizing:border-box}.rh-tabs button{white-space:nowrap}}
