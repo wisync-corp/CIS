@@ -33,9 +33,9 @@ final class ContractListController extends Controller
         $diff = DB::raw("DATEDIFF('".$today->toDateString()."', `Data de Cobrança`) as dias");
         $rows = $source->orderBy($due)->orderBy('Ordem')->paginate(20, [
             'Nr do Contracto as contrato', 'Nº da Parcela as parcela', 'Nome do Cliente as mutuário',
-            'Data de Cobrança as vencimento', 'Valor a Pagar as valor', $diff,
+            'Data de Cobrança as vencimento', DB::raw(\App\Support\VariableInterest::dueSql($today->toDateString()).' as valor'), $diff,
         ]);
-        $agg = fn ($q) => (clone $q)->selectRaw("COUNT(*) AS n, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS v, MAX(DATEDIFF(?, `Data de Cobrança`)) AS maxd, MIN(DATEDIFF(?, `Data de Cobrança`)) AS mind", [$today->toDateString(), $today->toDateString()])->first();
+        $agg = fn ($q) => (clone $q)->selectRaw("COUNT(*) AS n, ROUND(SUM(".\App\Support\VariableInterest::dueSql($today->toDateString())."),2) AS v, MAX(DATEDIFF(?, `Data de Cobrança`)) AS maxd, MIN(DATEDIFF(?, `Data de Cobrança`)) AS mind", [$today->toDateString(), $today->toDateString()])->first();
         $a = $agg($late); $c = $agg($upcoming); $b = $agg($blackQ);
         return response()->json([
             'atraso' => (int) $a->n,

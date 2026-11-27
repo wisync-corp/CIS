@@ -38,7 +38,7 @@ const defaults:Record<Mode,string[]>={
  clientes:['codigo','contrato','cliente','parcela','vencimento','dias','forma_pagamento','capital','juros','valor','estado'],
 };
 type GeralRow={nr:number;codigo:string;descricao:string;data:string;tipo:'entrada'|'saida';valor:string;contrato:string|null;cliente:string|null;parcela:string|null;conta:string|null;usuario:string|null};
-type ClienteRow={ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
+type ClienteRow={juros_variavel?:{dias:number;taxa:number;gravado:string}|null;ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
 type GeralResp={linhas:GeralRow[];pagina:number;por_pagina:number;total_linhas:number;totais:{entradas:string;saidas:string;disponivel:string}};
 type ClientesTot={aberto:string;vencido:string;pago:string;juros_aberto:string;juros_vencido:string;juros_pago:string;n_aberto:number;n_vencido:number;n_pago:number};
 type Desembolso={contrato:string;cliente:string;codigo:string|number|null;desembolso:string;capital:string;prestacoes:number;a_pagar:string;pago:string;em_divida:string;em_atraso:string;estado:'Em curso'|'Em atraso'|'Finalizado';estado_contrato:string};
@@ -234,7 +234,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
    <div className="cis-extracto-actions"><button type="button" onClick={()=>onOpenContracts()}><FileText size={15}/> Ir para Contratos e prestações</button></div>
 
-   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.carteira?<> — prestações em aberto dos contratos em curso, sem a lista negra{(data as ClientesResp|null)?.carteira?<>. Capital em carteira: <b>{mt((data as ClientesResp).carteira!.capital)} MT</b> em {(data as ClientesResp).carteira!.contratos} contrato(s), o mesmo valor de «em curso hoje» da Visão geral</>:null}</>:period.lista_negra?' — só mutuários em lista negra, prestações em dívida':period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
+   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.base==='desembolso'&&(data as ClientesResp|null)?.desembolsos?(()=>{const t=(data as ClientesResp).desembolsos!;return <> — prestações dos {t.totais.contratos} contrato(s) desembolsados no período{t.reforcos.length?<> + {t.reforcos.length} reforço(s) de {mt(t.totais.reforcos)} MT</>:null}. Desembolsado: <b>{mt(t.totais.desembolsado)} MT</b>, o mesmo valor do cartão da Visão geral</>;})():period.carteira?<> — prestações em aberto dos contratos em curso, sem a lista negra{(data as ClientesResp|null)?.carteira?<>. Capital em carteira: <b>{mt((data as ClientesResp).carteira!.capital)} MT</b> em {(data as ClientesResp).carteira!.contratos} contrato(s), o mesmo valor de «em curso hoje» da Visão geral</>:null}</>:period.lista_negra?' — só mutuários em lista negra, prestações em dívida':period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
     <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Vencimento de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
@@ -260,17 +260,6 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e mora {mt(c.juros_pago)}</small></div>
    </div>}
 
-   {mode==='clientes'&&!loading&&(data as ClientesResp|null)?.desembolsos&&(()=>{const d=(data as ClientesResp).desembolsos!;return <section className="cis-disb">
-    <div className="cis-disb-head"><div><h3>Contratos desembolsados</h3><p>{d.totais.contratos} contrato(s){d.reforcos.length?` + ${d.reforcos.length} reforço(s)`:''} · desembolsado <b>{mt(d.totais.desembolsado)} MT</b>{d.reforcos.length?<> (capital {mt(d.totais.capital)} + reforços {mt(d.totais.reforcos)})</>:null} · em dívida hoje {mt(d.totais.em_divida)} MT</p></div>
-     <small>Clique no número para abrir o contrato.</small></div>
-    {d.contratos.length===0?<p className="cis-sub-empty">Sem contratos desembolsados no período.</p>:<div className="cis-table-scroll"><table><thead><tr><th>Contrato</th><th>Mutuário</th><th>Desembolso</th><th className="num">Capital (MT)</th><th className="num">Prestações</th><th className="num">Pago (MT)</th><th className="num">Em dívida (MT)</th><th>Situação</th></tr></thead>
-     <tbody>{d.contratos.map(k=><tr key={k.contrato}><td><button type="button" className="cis-extracto-link" onClick={()=>void openInfo(k.contrato)}>{k.contrato}</button></td><td>{k.cliente}</td><td>{k.desembolso.split('-').reverse().join('/')}</td>
-      <td className="num">{mt(k.capital)}</td><td className="num">{k.prestacoes}</td><td className="num">{mt(k.pago)}</td><td className="num">{mt(k.em_divida)}</td>
-      <td><span className={'cis-days '+(k.estado==='Em atraso'?'bad':k.estado==='Finalizado'?'ok':'')} title={k.estado==='Em atraso'?`${mt(k.em_atraso)} MT em atraso`:undefined}>{k.estado}</span></td></tr>)}</tbody></table></div>}
-    {d.reforcos.length>0&&<><h4>Reforços de crédito</h4><div className="cis-table-scroll"><table><thead><tr><th>Data</th><th>Contrato</th><th>Mutuário</th><th className="num">Valor (MT)</th></tr></thead>
-     <tbody>{d.reforcos.map((r,i)=><tr key={r.contrato+i}><td>{r.data.split('-').reverse().join('/')}</td><td><button type="button" className="cis-extracto-link" onClick={()=>void openInfo(r.contrato)}>{r.contrato}</button></td><td>{r.cliente}</td><td className="num">{mt(r.valor)}</td></tr>)}</tbody></table></div></>}
-    <p className="cis-disb-foot">Em baixo: todas as prestações destes contratos.</p>
-   </section>;})()}
    <div className="cis-extracto-toolbar">
     <button type="button" className="cis-extracto-column-trigger" aria-expanded={columnsOpen}
      aria-controls="cis-extracto-column-panel" onClick={()=>setColumnsOpen(open=>!open)}>
@@ -311,7 +300,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
        onClick={()=>void openInfo(row.contrato)} onKeyDown={event=>{if(event.key==='Enter')void openInfo(row.contrato);}}>
        {visible.map(column=><td key={column.key} className={column.format==='money'?'num':undefined}>
         {column.key==='valor'&&'tipo' in row?<span className={row.tipo==='entrada'?'pos':'neg'}>{row.tipo==='entrada'?'+':'−'} {fieldValue(row,column)}</span>
-         :column.key==='estado'&&'situacao' in row?<span className={'cis-extracto-state '+row.situacao}>{row.estado}</span>:fieldValue(row,column)}
+         :column.key==='estado'&&'situacao' in row?<span className={'cis-extracto-state '+row.situacao}>{row.estado}</span>
+         :column.key==='juros'&&'juros_variavel' in row&&row.juros_variavel?<span className="cis-var-int" title={`Juro variável actualizado a hoje: ${String(row.juros_variavel.taxa).replace('.',',')}% × ${row.juros_variavel.dias} dia(s) desde o desembolso. Valor gravado no contrato: ${mt(row.juros_variavel.gravado)} MT.`}>{fieldValue(row,column)}<small>{row.juros_variavel.dias} dias × {String(row.juros_variavel.taxa).replace('.',',')}%</small></span>:fieldValue(row,column)}
        </td>)}
       </tr>;
      })}</tbody>

@@ -1582,6 +1582,20 @@ $cn=collect($cx['linhas'])->pluck('contrato')->unique()->all();
 ok(!DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$cn)->whereIn('Nº de Cliente',$blk?:[0])->exists(),'a carteira em curso não inclui mutuários em lista negra');
 ok(collect($cx['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'só prestações em aberto');
 
+echo "== Juro variável actualizado à data (Extracto = Cobrança = Visão geral)\n";
+$tdv=now($tz)->toDateString();
+$ev=$mk(['Nr do Contracto'=>'VAR-001','Nº'=>9101,'Tipo de Juro'=>'Variável','% de Juro'=>1,'Capital'=>22000,'Amortização'=>22000,'Quantia Creditada'=>22000,
+    'Valor de Juros'=>10780,'Valor a Pagar'=>32780,'Data de Inicio'=>now($tz)->subDays(60)->toDateString(),'Data de Cobrança'=>now($tz)->subDays(11)->toDateString()]);
+$pvq=data($CCx->preview(req('/x',['data_pagamento'=>$tdv,'cobrar_multa'=>false],$admin),'VAR-001',$ev));
+$xq=tap(Request::create('/x','GET',['contrato'=>'VAR-001','mes'=>'todos','ano'=>'todos','base'=>'cobranca']),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$xv=collect(data((new \App\Http\Controllers\Api\ExtractoController())->clientes($xq))['linhas'])->first();
+ok(abs((float)$xv['juros']-13200)<0.01 && abs((float)$pvq['juros']-13200)<0.01,'juro variável a 1%/dia: 22 000 × 1% × 60 dias = 13 200 no Extracto e na cobrança (gravado: 10 780)');
+ok(abs((float)$xv['valor']-35200)<0.01 && ($xv['juros_variavel']['dias']??0)===60,'valor em dívida no Extracto = 22 000 + 13 200 = 35 200, com os dias indicados');
+$ovv=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+DB::connection('mysql_legacy')->table('Contractos')->where('Nr do Contracto','VAR-001')->update(['Estado'=>'Cancelado']);
+$ovw=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+ok(abs(((float)$ovv['carteira']['valor_a_receber']-(float)$ovw['carteira']['valor_a_receber'])-35200)<0.01,'Visão geral: a receber conta o juro variável à data (35 200)');
+
 echo "\nDefinições de RH no MySQL\n";
 (require __DIR__.'/../database/migrations/2026_11_27_060001_create_rh_rules.php')->up();
 $rh=new \App\Http\Controllers\Api\RhSettingsController();

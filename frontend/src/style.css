@@ -2356,3 +2356,4 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-stat-multi .cis-stat-links{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:auto}
 .cis-stat-multi .cis-stat-links button{border:0;background:transparent;padding:0;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:3px}
 .cis-stat-multi .cis-stat-links button:hover{text-decoration:underline}
+.cis-var-int{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.2}.cis-var-int small{font-size:calc(10.5px * var(--cis-fs));color:var(--cis-primary);font-weight:700}

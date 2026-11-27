@@ -58,13 +58,15 @@ final class OverviewController extends Controller
         $pending="`Estado` IN ('Pendente','Pagamento Atrasado')";
         $paid="`Estado` IN ('Pago','Pago em Atraso','Renovado')";
         $principal="GREATEST(0, COALESCE(`Valor a Pagar`,0) - COALESCE(`Valor de Juros`,0))";
+        // Valor a pagar à data: o juro variável é actualizado até hoje (como na cobrança); os outros, o valor gravado.
+        $vap=\App\Support\VariableInterest::dueSql($today);
         $recovered="GREATEST(0, COALESCE(`Valor Pago`,0) - COALESCE(`Valor de Juros`,0) - COALESCE(`Valor de Multa`,0))";
         $p=$contracts()->selectRaw("
             ROUND(SUM(CASE WHEN $pending THEN $principal ELSE 0 END),2) AS capital_carteira,
-            ROUND(SUM(CASE WHEN $pending THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS a_receber,
+            ROUND(SUM(CASE WHEN $pending THEN $vap ELSE 0 END),2) AS a_receber,
             SUM(CASE WHEN $pending THEN 1 ELSE 0 END) AS prestacoes_por_receber,
             SUM(CASE WHEN $pending AND `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS vencidas,
-            ROUND(SUM(CASE WHEN $pending AND `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS vencidas_valor,
+            ROUND(SUM(CASE WHEN $pending AND `Data de Cobrança` < ? THEN $vap ELSE 0 END),2) AS vencidas_valor,
             ROUND(SUM(CASE WHEN $paid THEN COALESCE(`Valor de Juros`,0) ELSE 0 END),2) AS juros,
             ROUND(SUM(CASE WHEN $paid AND $pp THEN COALESCE(`Valor de Juros`,0) ELSE 0 END),2) AS juros_mes,
             ROUND(SUM(CASE WHEN $paid THEN COALESCE(`Valor de Multa`,0) ELSE 0 END),2) AS multas,
@@ -82,9 +84,9 @@ final class OverviewController extends Controller
         $bl=null;
         if ($black) {
             $bl=$contracts()->whereRaw($pending)->whereIn('Nº de Cliente',$black)->selectRaw("
-                ROUND(SUM($principal),2) AS capital, ROUND(SUM(COALESCE(`Valor a Pagar`,0)),2) AS valor, COUNT(*) AS prestacoes,
+                ROUND(SUM($principal),2) AS capital, ROUND(SUM($vap),2) AS valor, COUNT(*) AS prestacoes,
                 SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS vencidas,
-                ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS vencidas_valor,
+                ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN $vap ELSE 0 END),2) AS vencidas_valor,
                 COUNT(DISTINCT `Nr do Contracto`) AS contratos,
                 COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS contratos_atraso,
                 COUNT(DISTINCT `Nº de Cliente`) AS mutuarios",[$today,$today,$today])->first();
@@ -98,10 +100,10 @@ final class OverviewController extends Controller
         [$dc,$dcb]=$period('Data de Cobrança');
         $due=$contracts()->when($black,fn($q)=>$q->whereNotIn('Nº de Cliente',$black))->whereRaw($pending)->whereRaw($dc,$dcb)->selectRaw("
             SUM(CASE WHEN `Data de Cobrança` < ? THEN 1 ELSE 0 END) AS v_n,
-            ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS v_valor,
+            ROUND(SUM(CASE WHEN `Data de Cobrança` < ? THEN $vap ELSE 0 END),2) AS v_valor,
             COUNT(DISTINCT CASE WHEN `Data de Cobrança` < ? THEN `Nr do Contracto` END) AS v_contratos,
             SUM(CASE WHEN `Data de Cobrança` >= ? THEN 1 ELSE 0 END) AS p_n,
-            ROUND(SUM(CASE WHEN `Data de Cobrança` >= ? THEN COALESCE(`Valor a Pagar`,0) ELSE 0 END),2) AS p_valor,
+            ROUND(SUM(CASE WHEN `Data de Cobrança` >= ? THEN $vap ELSE 0 END),2) AS p_valor,
             COUNT(DISTINCT CASE WHEN `Data de Cobrança` >= ? THEN `Nr do Contracto` END) AS p_contratos
         ",[$today,$today,$today,$today,$today,$today])->first();
 
