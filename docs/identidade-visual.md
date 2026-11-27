@@ -14,7 +14,7 @@ Fonte: `CIS_folha_de_marca_v7.png` (CIS – Credit Insight Shift). Os SVG oficia
 
 Regras mantidas: sem sombras, gradientes ou distorção nos logótipos (só `width` com `height:auto`); margem de protecção já incluída nos SVG; os três temas da interface têm menu e painel de login escuros, por isso usam as versões para fundo escuro. O verde de apoio `#8CCB34` é só para a interface, nunca no logótipo.
 
-Pendente: menu lateral recolhido (símbolo isolado) quando existir esse modo; relatórios/documentos impressos (versão fundo claro) quando forem criados.
+Menu lateral recolhido (só ícones): usa `cis-simbolo-claro.svg`, o símbolo isolado extraído sem alterações do `cis-compacta-claro-transparente.svg`. Pendente: relatórios/documentos impressos (versão fundo claro) quando forem criados.
 
 ## Temas da interface — três versões claras de alto contraste
 
