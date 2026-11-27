@@ -58,6 +58,8 @@ final class ExtractoController extends Controller
             'estado'=>['nullable','in:todos,aberta,vencida,paga,em_divida'],
             // Só prestações de mutuários em lista negra (cartão «Crédito em lista negra» da Visão geral).
             'lista_negra'=>['nullable','in:0,1'],
+            // Carteira em curso (cartão «Carteira desembolsada» › em curso hoje): prestações em aberto, sem a lista negra.
+            'carteira'=>['nullable','in:0,1'],
             // Período da Visão geral (mês/ano, «todos» = sem restrição) e data de referência.
             'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
             'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
@@ -285,6 +287,11 @@ final class ExtractoController extends Controller
             if ($mes!=='todos') $q->whereRaw('MONTH(`'.$col.'`) = ?',[(int)$mes]);
         }
         if (($f['lista_negra']??'0')==='1') $q->whereIn('Nº de Cliente',\App\Support\ClientRegistry::blacklistedIds() ?: [0]);
+        if (($f['carteira']??'0')==='1') {
+            $q->whereIn('Estado',['Pendente','Pagamento Atrasado']);
+            $black=\App\Support\ClientRegistry::blacklistedIds();
+            if ($black) $q->where(fn($w)=>$w->whereNull('Nº de Cliente')->orWhereNotIn('Nº de Cliente',$black));
+        }
         if ($f['cliente']!=='') $q->where('Nome do Cliente',$f['cliente']);
         if ($f['contrato']!=='') $q->where('Nr do Contracto',$f['contrato']);
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
@@ -367,7 +374,8 @@ final class ExtractoController extends Controller
             'linhas'=>array_slice($this->sortClientExtract($all,$f),($page-1)*$per,$per),
             'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>count($all),
             'totais'=>$tot,
-        ]+(($f['base']??'cobranca')==='desembolso'?['desembolsos'=>$this->disbursements($db,$raw,$f,$request)]:[]))->header('Cache-Control','no-store, private');
+        ]+(($f['base']??'cobranca')==='desembolso'?['desembolsos'=>$this->disbursements($db,$raw,$f,$request)]:[])
+         +(($f['carteira']??'0')==='1'?['carteira'=>$this->portfolio($raw)]:[]))->header('Cache-Control','no-store, private');
     }
 
     /**
@@ -403,6 +411,32 @@ final class ExtractoController extends Controller
         $cap=$list->sum(fn($c)=>(float)$c['capital']);$rf=$ref->sum(fn($r)=>(float)$r['valor']);
         return ['contratos'=>$list,'reforcos'=>$ref,'totais'=>['contratos'=>$list->count(),'capital'=>self::money($cap),'reforcos'=>self::money($rf),
             'desembolsado'=>self::money($cap+$rf),'em_divida'=>self::money($list->sum(fn($c)=>(float)$c['em_divida']))]];
+    }
+
+    /**
+     * Contratos da carteira em curso (um por linha). Capital em carteira = Valor a Pagar − juros das prestações
+     * em aberto, a mesma conta do cartão «Carteira desembolsada › em curso hoje» da Visão geral.
+     */
+    private function portfolio($raw): array
+    {
+        $today=$this->today();
+        $list=collect($raw)->groupBy('Nr do Contracto')->map(function($rows,$num) use ($today){
+            $late=$rows->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10)<$today);
+            $next=$rows->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10)>=$today)->min('Data de Cobrança');
+            $oldest=$late->min('Data de Cobrança');
+            $days=$oldest?(int)\Carbon\CarbonImmutable::parse(substr((string)$oldest,0,10))->diffInDays(\Carbon\CarbonImmutable::parse($today)):0;
+            return ['contrato'=>(string)$num,'cliente'=>(string)$rows->first()->{'Nome do Cliente'},'codigo'=>$rows->first()->{'Nº de Cliente'},
+                'inicio'=>substr((string)$rows->min('Data de Inicio'),0,10),'capital_inicial'=>self::money($rows->max('Quantia Creditada')),
+                'prestacoes'=>$rows->count(),
+                'capital'=>self::money($rows->sum(fn($r)=>max(0,(float)$r->{'Valor a Pagar'}-(float)($r->{'Valor de Juros'}??0)))),
+                'a_receber'=>self::money($rows->sum(fn($r)=>(float)$r->{'Valor a Pagar'})),
+                'em_atraso'=>self::money($late->sum(fn($r)=>self::owed($r))),'prestacoes_atraso'=>$late->count(),'dias_atraso'=>$days,
+                'proximo_vencimento'=>$next?substr((string)$next,0,10):null,
+                'estado'=>$late->isNotEmpty()?'Em atraso':'Em curso'];
+        })->sortBy([['dias_atraso','desc'],['contrato','asc']])->values();
+        return ['contratos'=>$list,'totais'=>['contratos'=>$list->count(),'em_atraso'=>$list->where('estado','Em atraso')->count(),
+            'capital'=>self::money($list->sum(fn($c)=>(float)$c['capital'])),'a_receber'=>self::money($list->sum(fn($c)=>(float)$c['a_receber'])),
+            'valor_atraso'=>self::money($list->sum(fn($c)=>(float)$c['em_atraso']))]];
     }
 
     /** GET /cis/extractos/contratos?cliente= : contratos de um cliente (como o combo do VBA). */

@@ -2352,3 +2352,7 @@ button.cis-black-strip:hover{border-color:#C9C2DA;box-shadow:0 4px 14px rgba(31,
 .cis-disb-foot{margin:10px 0 0;font-size:calc(12px * var(--cis-fs));color:var(--cis-muted,#5b6472)}
 .cis-extracto-link{border:0;background:transparent;padding:0;font:inherit;font-weight:700;color:var(--cis-primary);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .cis-disb table{font-size:calc(13px * var(--cis-fs))}.cis-disb td,.cis-disb th{white-space:nowrap}
+/* Cartão com duas ligações (Carteira desembolsada: desembolsos do período | carteira em curso) */
+.cis-stat-multi .cis-stat-links{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:auto}
+.cis-stat-multi .cis-stat-links button{border:0;background:transparent;padding:0;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:3px}
+.cis-stat-multi .cis-stat-links button:hover{text-decoration:underline}

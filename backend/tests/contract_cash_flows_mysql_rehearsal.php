@@ -1569,6 +1569,18 @@ ok(count($xr['desembolsos']['reforcos'])===$ovd['carteira']['reforcos_periodo'][
 $xc=data((new \App\Http\Controllers\Api\ExtractoController())->clientes(tap(Request::create('/x','GET',['base'=>'cobranca']),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
 ok(!isset($xc['desembolsos']),'nas outras vistas do extracto a lista não aparece');
 
+echo "== Extracto: contratos da carteira em curso (bate com a Visão geral)\n";
+$cq=tap(Request::create('/x','GET',['carteira'=>'1','mes'=>'todos','ano'=>'todos','base'=>'cobranca','por_pagina'=>200]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$cx=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($cq));
+$ovq=tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$ovc=data((new \App\Http\Controllers\Api\OverviewController())($ovq));
+ok(isset($cx['carteira']) && abs((float)$cx['carteira']['totais']['capital']-(float)$ovc['carteira']['capital_em_carteira'])<0.01,
+  'capital em carteira do extracto = «em curso hoje» da Visão geral ('.$cx['carteira']['totais']['capital'].')');
+$blk=\App\Support\ClientRegistry::blacklistedIds();
+$cn=collect($cx['carteira']['contratos'])->pluck('contrato')->all();
+ok(!DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$cn)->whereIn('Nº de Cliente',$blk?:[0])->exists(),'a carteira em curso não inclui mutuários em lista negra');
+ok(collect($cx['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'só prestações em aberto');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

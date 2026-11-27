@@ -43,7 +43,8 @@ type GeralResp={linhas:GeralRow[];pagina:number;por_pagina:number;total_linhas:n
 type ClientesTot={aberto:string;vencido:string;pago:string;juros_aberto:string;juros_vencido:string;juros_pago:string;n_aberto:number;n_vencido:number;n_pago:number};
 type Desembolso={contrato:string;cliente:string;codigo:string|number|null;desembolso:string;capital:string;prestacoes:number;a_pagar:string;pago:string;em_divida:string;em_atraso:string;estado:'Em curso'|'Em atraso'|'Finalizado';estado_contrato:string};
 type Desembolsos={contratos:Desembolso[];reforcos:{data:string;contrato:string;cliente:string;valor:string}[];totais:{contratos:number;capital:string;reforcos:string;desembolsado:string;em_divida:string}};
-type ClientesResp={linhas:ClienteRow[];pagina:number;por_pagina:number;total_linhas:number;totais:ClientesTot;desembolsos?:Desembolsos};
+type Carteira={contratos:{contrato:string;cliente:string;codigo:string|number|null;inicio:string;capital_inicial:string;prestacoes:number;capital:string;a_receber:string;em_atraso:string;prestacoes_atraso:number;dias_atraso:number;proximo_vencimento:string|null;estado:'Em curso'|'Em atraso'}[];totais:{contratos:number;em_atraso:number;capital:string;a_receber:string;valor_atraso:string}};
+type ClientesResp={linhas:ClienteRow[];pagina:number;por_pagina:number;total_linhas:number;totais:ClientesTot;desembolsos?:Desembolsos;carteira?:Carteira};
 type Evidence={titulo:string;emitido_em:string;emitido_por:string|null;periodo:{inicio:string|null;fim:string|null};
  cliente:{nome:string;id:number|null;numeracao?:string;bi?:string;contacto?:string;morada?:string};
  contratos:{contrato:string;capital:string;inicio:string;prestacoes:number;em_divida:string;pago:string;situacao:string}[];
@@ -116,7 +117,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
  const params=(extra:Record<string,string>={})=>{const p=new URLSearchParams({direccao:direction,ordenar:sortField});
   if(inicio)p.set('inicio',inicio);if(fim)p.set('fim',fim);if(cliente)p.set('cliente',cliente);if(contrato)p.set('contrato',contrato);
-  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period?.lista_negra)p.set('lista_negra','1');if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
+  if(mode==='geral'){if(tipo!=='todos')p.set('tipo',tipo);if(contaId)p.set('conta_id',contaId);}else{if(estado!=='todos')p.set('estado',estado);if(period?.lista_negra)p.set('lista_negra','1');if(period?.carteira)p.set('carteira','1');if(period){p.set('mes',period.mes);p.set('ano',period.ano);p.set('base',period.base);}}
   if(agencia)p.set('agencia',agencia);
   Object.entries(extra).forEach(([k,v])=>p.set(k,v));return p;};
  const datesOk=!(inicio&&fim&&fim<inicio);
@@ -233,7 +234,7 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
 
    <div className="cis-extracto-actions"><button type="button" onClick={()=>onOpenContracts()}><FileText size={15}/> Ir para Contratos e prestações</button></div>
 
-   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.lista_negra?' — só mutuários em lista negra, prestações em dívida':period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
+   {period&&mode==='clientes'&&<div className="cis-extracto-preset" role="status"><CalendarDays size={15}/><span>Filtro da Visão geral: <b>{period.rotulo}</b>{period.carteira?' — prestações em aberto de todos os contratos em curso, sem a lista negra':period.lista_negra?' — só mutuários em lista negra, prestações em dívida':period.base==='desembolso'?' — contratos desembolsados no período':period.base==='pagamento'?' — por data de pagamento':' — por data de vencimento'}</span><button type="button" onClick={clearPeriod}><X size={14}/> Remover</button></div>}
    <div className="cis-extracto-filters">
     <label><span><CalendarDays size={14}/> {mode==='geral'?'Operação de':period?.base==='pagamento'?'Pagamento de':period?.base==='desembolso'?'Desembolso de':'Vencimento de'}</span><input type="date" value={inicio} max={fim||undefined} onChange={e=>{setInicio(e.target.value);setPage(1);}}/></label>
     <label>até<input type="date" value={fim} min={inicio||undefined} onChange={e=>{setFim(e.target.value);setPage(1);}}/></label>
@@ -259,6 +260,15 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
     <div><span>Total pago · {c.n_pago}</span><strong className="pos">{mt(c.pago)} MT</strong><small>Juros e mora {mt(c.juros_pago)}</small></div>
    </div>}
 
+   {mode==='clientes'&&!loading&&(data as ClientesResp|null)?.carteira&&(()=>{const d=(data as ClientesResp).carteira!;const dd=(v:string|null)=>v?v.split('-').reverse().join('/'):'—';return <section className="cis-disb">
+    <div className="cis-disb-head"><div><h3>Contratos da carteira em curso</h3><p>{d.totais.contratos} contrato(s) · capital em carteira <b>{mt(d.totais.capital)} MT</b> · a receber {mt(d.totais.a_receber)} MT{d.totais.em_atraso?<> · {d.totais.em_atraso} em atraso ({mt(d.totais.valor_atraso)} MT)</>:null}</p></div>
+     <small>Clique no número para abrir o contrato.</small></div>
+    {d.contratos.length===0?<p className="cis-sub-empty">Sem contratos em curso.</p>:<div className="cis-table-scroll"><table><thead><tr><th>Contrato</th><th>Mutuário</th><th>Início</th><th className="num">Prestações em aberto</th><th className="num">Capital em carteira (MT)</th><th className="num">A receber (MT)</th><th className="num">Em atraso (MT)</th><th>Próximo vencimento</th><th>Situação</th></tr></thead>
+     <tbody>{d.contratos.map(k=><tr key={k.contrato}><td><button type="button" className="cis-extracto-link" onClick={()=>void openInfo(k.contrato)}>{k.contrato}</button></td><td>{k.cliente}</td><td>{dd(k.inicio)}</td>
+      <td className="num">{k.prestacoes}</td><td className="num">{mt(k.capital)}</td><td className="num">{mt(k.a_receber)}</td><td className="num">{Number(k.em_atraso)>0?mt(k.em_atraso):'—'}</td><td>{dd(k.proximo_vencimento)}</td>
+      <td><span className={'cis-days '+(k.estado==='Em atraso'?(k.dias_atraso>90?'black':'bad'):'ok')}>{k.estado==='Em atraso'?`${k.dias_atraso} dia(s) em atraso`:'Em dia'}</span></td></tr>)}</tbody></table></div>}
+    <p className="cis-disb-foot">Em baixo: as prestações em aberto destes contratos.</p>
+   </section>;})()}
    {mode==='clientes'&&!loading&&(data as ClientesResp|null)?.desembolsos&&(()=>{const d=(data as ClientesResp).desembolsos!;return <section className="cis-disb">
     <div className="cis-disb-head"><div><h3>Contratos desembolsados</h3><p>{d.totais.contratos} contrato(s){d.reforcos.length?` + ${d.reforcos.length} reforço(s)`:''} · desembolsado <b>{mt(d.totais.desembolsado)} MT</b>{d.reforcos.length?<> (capital {mt(d.totais.capital)} + reforços {mt(d.totais.reforcos)})</>:null} · em dívida hoje {mt(d.totais.em_divida)} MT</p></div>
      <small>Clique no número para abrir o contrato.</small></div>
