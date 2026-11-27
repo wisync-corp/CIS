@@ -46,6 +46,21 @@ for(const role of ROLES){
  for(const label of menus.map(s=>s.trim()).filter(Boolean)){
   await pg.locator('.cis-side nav button',{hasText:label}).first().click();await settle();await closeDialogs();
   r.paginas.push(label);await screenErrors(label);await shot(label);
+  if(label==='Recursos Humanos'){
+   const rh=pg.getByRole('button',{name:'Recursos Humanos',exact:true});
+   const expected=['Visão geral de RH','Colaboradores','Contratos de trabalho','Adendas','Férias','Indemnizações',
+    'Prestações de indemnização','Folha salarial','Relatórios de RH','Definições de RH','Integrações de RH'];
+   for(const name of expected){
+    const item=pg.locator('.cis-side nav').getByRole('button',{name,exact:true});
+    if(await item.count()!==1){r.erros_js.push('Submenu RH em falta: '+name);continue;}
+    const api=pg.waitForResponse(res=>res.url().includes('/api/cis/rh/')&&res.request().method()==='GET',{timeout:15000}).catch(()=>null);
+    await item.click();
+    const response=await api;
+    if(!response?.ok())r.erros_js.push('RH '+name+': API sem sucesso'+(response?' ('+response.status()+')':''));
+    await settle();await screenErrors('RH › '+name);await shot('rh-'+name);r.paginas.push('RH › '+name);
+    if(await rh.getAttribute('aria-expanded')!=='true')await rh.click();
+   }
+  }
   // Separadores da página (ex.: Visão geral | Dashboard, Mutuários | Lista negra, avisos)
   const tabs=pg.locator('main [role=tablist]:not([aria-label="Tipo de aviso"]) [role=tab]');
   const nt=await tabs.count();

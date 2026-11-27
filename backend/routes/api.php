@@ -30,7 +30,48 @@ Route::get('streamlit/dados',[\App\Http\Controllers\Api\StreamlitController::cla
 
 Route::get('cis/email/oauth/callback',[\App\Http\Controllers\Api\CisMailController::class,'callback'])->middleware('throttle:20,1');
 
+Route::get('cis/rh/api/v1/colaboradores',[\App\Http\Controllers\Api\RhIntegrationController::class,'employees'])->middleware('throttle:60,1');
+
 Route::middleware('auth:sanctum')->group(function(){
+    Route::prefix('cis/rh/integracoes')->controller(\App\Http\Controllers\Api\RhIntegrationController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:60,1');
+        Route::post('/','issue')->middleware('throttle:10,1');
+        Route::post('{id}/revogar','revoke')->whereNumber('id')->middleware('throttle:10,1');
+    });
+    Route::get('cis/rh/relatorios',[\App\Http\Controllers\Api\RhReportsController::class,'index'])->middleware('throttle:60,1');
+    Route::prefix('cis/rh/folha')->controller(\App\Http\Controllers\Api\RhPayrollController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:60,1');
+        Route::post('previa','preview')->middleware('throttle:30,1');
+        Route::get('mes/candidatos','candidates')->middleware('throttle:60,1');
+        Route::post('mes/abrir','openPeriod')->middleware('throttle:10,1');
+        Route::post('mes/gerar','generate')->middleware('throttle:120,1');
+        Route::post('mes/recalcular','recalculatePending')->middleware('throttle:120,1');
+        Route::post('mes/fechar','closePeriod')->middleware('throttle:10,1');
+        Route::post('{id}/repor','restore')->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('/','save')->middleware('throttle:20,1');
+        Route::post('{id}/finalizar','finalize')->whereNumber('id')->middleware('throttle:20,1');
+    });
+    Route::prefix('cis/rh/registos')->controller(\App\Http\Controllers\Api\RhRecordsController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:90,1');
+        Route::get('origens','parents')->middleware('throttle:60,1');
+        Route::post('colaboradores','employee')->middleware('throttle:20,1');
+        Route::post('indemnizacoes/previa','quoteIndemnity')->middleware('throttle:30,1');
+        Route::post('indemnizacoes/plano','createIndemnityPlan')->middleware('throttle:20,1');
+        Route::post('prestacoes/{id}/pagar','payIndemnityInstallment')->whereNumber('id')->middleware('throttle:20,1');
+        Route::put('termos/{id}','updateTerms')->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('termos/{id}/decisao','decideTerms')->whereNumber('id')->middleware('throttle:20,1');
+        Route::get('colaboradores/{employee}/utilizadores','userOptions')->whereNumber('employee')->middleware('throttle:60,1');
+        Route::put('colaboradores/{employee}/utilizador','linkUser')->whereNumber('employee')->middleware('throttle:20,1');
+        Route::post('{kind}','record')->where('kind','contratos|adendas|ferias|indemnizacoes|prestacoes')->middleware('throttle:20,1');
+    });
+    Route::prefix('cis/rh/definicoes')->controller(\App\Http\Controllers\Api\RhSettingsController::class)->group(function () {
+        Route::get('/','index')->middleware('throttle:60,1');
+        Route::get('vigentes','effective')->middleware('throttle:60,1');
+        Route::post('parametros','parameter')->middleware('throttle:20,1');
+        Route::post('irps','taxTable')->middleware('throttle:20,1');
+        Route::get('calendarios','calendars')->middleware('throttle:60,1');
+        Route::post('calendarios','calendar')->middleware('throttle:20,1');
+    });
     Route::prefix('cis/email')->controller(\App\Http\Controllers\Api\CisMailController::class)->group(function () {
         Route::get('contas','accounts')->middleware('throttle:60,1');
         Route::post('contas','save')->middleware('throttle:20,1');

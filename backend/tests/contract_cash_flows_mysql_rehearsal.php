@@ -1559,6 +1559,7 @@ ok(in_array('Agricultura e pecuária',$enc['finalidades'],true) && $enc['mora'][
 $rep=data((new \App\Http\Controllers\Api\ReportController())->show(tap(Request::create('/x','GET',['inicio'=>now($tz)->startOfYear()->toDateString(),'fim'=>$td]),fn($r)=>$r->setUserResolver(static fn()=>$admin)),'finalidades'));
 ok(count($rep['seccoes'][0]['linhas'])>=1 && $rep['titulo']==='Crédito por finalidade e encargos','relatório «Crédito por finalidade e encargos»');
 
+
 echo "== Extracto: contratos desembolsados do período (cartão «Carteira desembolsada»)\n";
 $xd=tap(Request::create('/x','GET',['base'=>'desembolso','mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
 $xr=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($xd));
@@ -1594,6 +1595,223 @@ $ovv=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::crea
 DB::connection('mysql_legacy')->table('Contractos')->where('Nr do Contracto','VAR-001')->update(['Estado'=>'Cancelado']);
 $ovw=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
 ok(abs(((float)$ovv['carteira']['valor_a_receber']-(float)$ovw['carteira']['valor_a_receber'])-35200)<0.01,'Visão geral: a receber conta o juro variável à data (35 200)');
+
+echo "\nDefinições de RH no MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060001_create_rh_rules.php')->up();
+$rh=new \App\Http\Controllers\Api\RhSettingsController();
+ok(data($rh->index(req('/x',[],$user)))['parameters']['total']===0,'RH começa sem dados copiados');
+$rhParam=['code'=>'INSS_TAXA_COLAB','scope'=>'global','value'=>'0.03','effective_from'=>'2026-01-01','reason'=>'Cenário fictício'];
+$rh->parameter(req('/x',$rhParam,$user));
+$rh->parameter(req('/x',['scope'=>'empresa','company'=>'Empresa fictícia','value'=>'0.04','effective_from'=>'2026-07-01']+$rhParam,$user));
+ok(status(fn()=>$rh->parameter(req('/x',$rhParam,$user)))===409,'RH impede duas versões no mesmo âmbito e data');
+$bracket=['lower'=>'0.00','upper'=>null,'coefficient'=>'0.01','d0'=>'0','d1'=>'0','d2'=>'0','d3'=>'0','d4'=>'0'];
+$rhTax=['effective_from'=>'2026-01-01','reason'=>'Tabela fictícia','scales'=>[$bracket]];
+ok(status(fn()=>$rh->taxTable(req('/x',['scales'=>[['lower'=>'1.00']+$bracket]]+$rhTax,$user)))===422,'RH rejeita escalão com lacuna');
+$rh->taxTable(req('/x',$rhTax,$user));
+$rhEarly=data($rh->effective(req('/x',['date'=>'2026-06-20','company'=>'Empresa fictícia'],$user)));
+$rhLater=data($rh->effective(req('/x',['date'=>'2026-08-20','company'=>'Empresa fictícia'],$user)));
+ok(count($rhEarly['parametros'])===1&&count($rhLater['parametros'])===2
+    && $rhLater['parametros'][0]['Valor']==='0.04'&&count($rhLater['escaloes'])===1,'RH consulta parâmetros por vigência e âmbito');
+ok((int)DB::table('cis_rh_parameters')->first()->created_by===(int)$user->id,'RH regista a identidade do utilizador');
+
+
+echo "\nRegistos de RH em MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060002_create_rh_records.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_27_060007_add_rh_contract_review.php')->up();
+$rhRecords=new \App\Http\Controllers\Api\RhRecordsController();
+$employee=['company'=>'Empresa fictícia','code'=>'RH-1','name'=>'Colaborador de ensaio','admission'=>'2026-01-01','status'=>'activo'];
+ok(data($rhRecords->index(req('/x',[],$user)))['totals']['colaboradores']===0,'RH começa vazio');
+$created=data($rhRecords->employee(req('/x',$employee,$user)))['id'];
+ok(status(fn()=>$rhRecords->employee(req('/x',$employee,$user)))===409,'RH recusa códigos duplicados na empresa');
+$other=data($rhRecords->employee(req('/x',['code'=>'RH-2']+$employee,$user)))['id'];
+$baseRh=['employee_id'=>$created,'reference_date'=>'2026-02-01'];
+$contract=data($rhRecords->record(req('/x',['regime'=>'mensal','rate'=>'1000']+$baseRh,$user),'contratos'))['id'];
+ok(status(fn()=>$rhRecords->record(req('/x',['employee_id'=>$other,'parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))===422,'RH rejeita adenda de outro colaborador');
+$adenda=data($rhRecords->record(req('/x',['parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))['id'];
+$rhApprove=['revision'=>1,'decision'=>'aprovar'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',$rhApprove,$user),$adenda))===422,'adenda exige contrato aprovado');
+$rhRecords->decideTerms(req('/x',$rhApprove,$user),$contract);
+$rhRecords->decideTerms(req('/x',$rhApprove,$user),$adenda);
+ok(status(fn()=>$rhRecords->updateTerms(req('/x',['revision'=>2,'reference_date'=>'2026-02-01','regime'=>'mensal','rate'=>'1200'],$user),$contract))===409,
+    'contrato aprovado não admite alteração directa');
+$rhPending=data($rhRecords->record(req('/x',['parent_id'=>$contract,'rate'=>'9000','text'=>'Termos de ensaio ainda pendentes']+$baseRh,$user),'adendas'))['id'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',$rhApprove,$user),$rhPending))===422,'não aprova duas adendas no mesmo dia');
+$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'rejeitar','note'=>'Corrigir a data'],$user),$rhPending);
+$rhRecords->updateTerms(req('/x',['revision'=>2,'reference_date'=>'2027-03-01','rate'=>'9000','text'=>'Nova revisão'],$user),$rhPending);
+ok(DB::table('cis_rh_records')->where('id',$rhPending)->value('review_status')==='pendente','editar registo rejeitado devolve à revisão');
+
+$ind=data($rhRecords->record(req('/x',['amount'=>'300','text'=>'Acordo fictício']+$baseRh,$user),'indemnizacoes'))['id'];
+$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'200']+$baseRh,$user),'prestacoes');
+ok(status(fn()=>$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'101']+$baseRh,$user),'prestacoes'))===422,'RH impede plano acima do valor acordado');
+ok((int)DB::table('cis_rh_record_audit')->where('record_id',$adenda)->value('user_id')===(int)$user->id,'RH audita autor de cada operação');
+
+
+echo "\nFolha salarial no MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060003_create_rh_payroll.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_27_060005_create_rh_payroll_periods.php')->up();
+$rhPay=new \App\Http\Controllers\Api\RhPayrollController();
+$rhPay->openPeriod(req('/x',['period'=>'2026-02'],$user));
+foreach (['BASE_DIAS_MES'=>'30','BASE_HORAS_DIA'=>'8','INSS_CONDICAO_CANALIZAR'=>'Sim','INSS_TAXA_EMP'=>'0.04',
+    'INSS_EMP_ARRED_CASAS'=>'0','ARRED_CASAS_DEFAULT'=>'2','IRPS_ISENCAO_DEPARTAMENTO'=>'ISPC','IRPS_DEPENDENTES_MAX'=>'4'] as $key=>$value) {
+    $rh->parameter(req('/x',['code'=>$key,'value'=>$value]+$rhParam,$user));
+}
+$prh=['employee_id'=>$created,'period'=>'2026-02','days_worked'=>'30','hours_worked'=>'0','unjustified_absences'=>'0',
+    'overtime'=>'0','allowances'=>'0','bonus'=>'0','other_earnings'=>'0','other_deductions'=>'0','contribute'=>true,
+    'dependents'=>0,'department'=>'ISPC'];
+$payQuote=data($rhPay->preview(req('/x',$prh,$user)));
+ok($payQuote['amounts']['gross']==='1100.00'&&$payQuote['amounts']['net']==='1067.00','folha usa a adenda vigente e os parâmetros de INSS');
+ok(status(fn()=>$rhPay->save(req('/x',['days_worked'=>'29','signature'=>$payQuote['signature']]+$prh,$user)))===409,'folha exige prévia actualizada');
+$payLine=data($rhPay->save(req('/x',['signature'=>$payQuote['signature']]+$prh,$user)))['id'];
+ok(status(fn()=>$rhPay->save(req('/x',['signature'=>$payQuote['signature']]+$prh,$user)))===409,'folha impede lançamento duplicado');
+$rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$payLine);
+ok(status(fn()=>$rhPay->save(req('/x',['version'=>2,'signature'=>$payQuote['signature']]+$prh,$user)))===409
+    && DB::table('cis_rh_payroll_events')->where('payroll_id',$payLine)->count()===2,'folha finalizada fica bloqueada e auditada');
+
+
+echo "\nAssociação entre contas do CIS e colaboradores\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060004_link_rh_employees_to_users.php')->up();
+$linkData=['user_id'=>(int)$user->id,'previous_user_id'=>null];
+$rhRecords->linkUser(req('/x',$linkData,$user),$created);
+ok((int)DB::table('cis_rh_user_links')->where('employee_id',$created)->value('user_id')===(int)$user->id,'RH associa uma conta existente');
+ok(status(fn()=>$rhRecords->linkUser(req('/x',$linkData,$user),$other))===409,'a mesma conta não é associada a dois colaboradores');
+ok(status(fn()=>$rhRecords->linkUser(req('/x',['user_id'=>null,'previous_user_id'=>null],$user),$created))===409,'RH detecta alterações concorrentes da associação');
+$rhRecords->linkUser(req('/x',['user_id'=>null,'previous_user_id'=>(int)$user->id],$user),$created);
+ok(!DB::table('cis_rh_user_links')->where('employee_id',$created)->exists()
+    && DB::table('cis_rh_record_audit')->where('employee_id',$created)->where('action','utilizador_associado')->count()===2,
+    'remoção do vínculo fica auditada e mantém a conta disponível');
+
+
+echo "\nOperações mensais da folha\n";
+$month=['period'=>'2026-03'];
+$rhPay->openPeriod(req('/x',$month,$user));
+$candidates=collect(data($rhPay->candidates(req('/x',$month,$user)))['data'])->keyBy('id');
+ok(($candidates[$created]['eligible']??null)===true && ($candidates[$other]['eligible']??null)===false,
+    'folha identifica elegibilidade pelo contrato e explica exclusões');
+$march=$month+$prh;
+$qMarch=data($rhPay->preview(req('/x',$march,$user)));
+$marchId=data($rhPay->save(req('/x',['signature'=>$qMarch['signature']]+$march,$user)))['id'];
+ok(!collect(data($rhPay->candidates(req('/x',$month,$user)))['data'])->pluck('id')->contains($created),
+    'conferência exclui colaboradores que já têm lançamento no mês');
+ok(status(fn()=>$rhPay->closePeriod(req('/x',['confirm'=>true]+$month,$user)))===422,'mês exige lançamentos finalizados');
+$rh->parameter(req('/x',['value'=>'0.05','effective_from'=>'2026-03-01']+$rhParam,$user));
+$batch=data($rhPay->recalculatePending(req('/x',$month,$user)));
+ok($batch['changed']===1&&$batch['next']===null
+    && (int)DB::table('cis_rh_payroll')->where('id',$marchId)->value('version')===2,'recálculo actualiza a linha pendente');
+$adjusted=['overtime'=>'50']+$march;
+$qEdit=data($rhPay->preview(req('/x',$adjusted,$user)));
+$rhPay->save(req('/x',['signature'=>$qEdit['signature'],'version'=>2]+$adjusted,$user));
+$batch=data($rhPay->recalculatePending(req('/x',$month,$user)));
+ok($batch['changed']===0&&(int)DB::table('cis_rh_payroll')->where('id',$marchId)->value('version')===3,'recálculo preserva lançamentos alterados');
+$rhPay->restore(req('/x',['version'=>3,'confirm'=>true],$user),$marchId);
+$restored=DB::table('cis_rh_payroll')->where('id',$marchId)->first();
+ok($restored->status==='pendente'&&(int)$restored->version===4
+    && json_decode($restored->input,true)['overtime']==='0','reposição recupera a primeira versão');
+$rhPay->finalize(req('/x',['version'=>4,'confirm'=>true],$user),$marchId);
+$rhPay->closePeriod(req('/x',['confirm'=>true]+$month,$user));
+ok(status(fn()=>$rhPay->recalculatePending(req('/x',$month,$user)))===409
+    && (int)DB::table('cis_rh_payroll_periods')->where('period','2026-03-01')->value('closed_by')===(int)$user->id,
+    'fecho mensal impede recálculo e guarda o autor');
+
+
+echo "\nGeração de lançamentos a partir das Definições\n";
+$april=['period'=>'2026-04'];
+$rhPay->openPeriod(req('/x',$april,$user));
+$missing=data($rhPay->generate(req('/x',$april,$user)));
+ok($missing['created']===0,'mensalistas sem regra vigente ficam por resolver');
+$rh->parameter(req('/x',['code'=>'DIAS_TRABALHADOS_MODO','value'=>'base_mensal','effective_from'=>'2026-04-01']+$rhParam,$user));
+$generated=data($rhPay->generate(req('/x',$april,$user)));
+$draft=DB::table('cis_rh_payroll')->where('employee_id',$created)->where('period','2026-04-01')->first();
+ok($generated['created']===1&&$draft->status==='pendente'&&json_decode($draft->input,true)['days_worked']==='30'
+    && json_decode($draft->calculation,true)['amounts']===null,'geração usa dias base em período completo mas aguarda conferência');
+ok(data($rhPay->generate(req('/x',$april,$user)))['created']===0,'repetir a geração não duplica lançamentos');
+ok(status(fn()=>$rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$draft->id))===422,'um lançamento gerado exige primeiro cálculo confirmado');
+
+
+echo "\nDias úteis com calendário de RH\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060006_create_rh_holiday_calendars.php')->up();
+$januaryRh=['period'=>'2027-01'];
+$rhPay->openPeriod(req('/x',$januaryRh,$user));
+$rh->parameter(req('/x',['code'=>'DIAS_TRABALHADOS_MODO','value'=>'dias_uteis','effective_from'=>'2027-01-01']+$rhParam,$user));
+$calendar2026=['year'=>2026,'reason'=>'Calendário fictício','holidays'=>[
+    ['date'=>'2026-12-25','name'=>'Feriado de ensaio'],['date'=>'2026-12-26','name'=>'Feriado ao sábado']]];
+$rh->calendar(req('/x',$calendar2026,$user));
+ok(data($rhPay->generate(req('/x',$januaryRh,$user)))['created']===0,'período entre anos exige os calendários em falta');
+$janFest=['date'=>'2027-01-01','name'=>'Feriado de ensaio'];
+$rh->calendar(req('/x',['year'=>2027,'reason'=>'Calendário geral fictício','holidays'=>[$janFest]],$user));
+$rh->calendar(req('/x',['year'=>2027,'company'=>'Empresa fictícia','reason'=>'Calendário de empresa fictícia',
+    'holidays'=>[$janFest,['date'=>'2027-01-18','name'=>'Feriado da empresa fictícia']]],$user));
+$genCalendar=data($rhPay->generate(req('/x',$januaryRh,$user)));
+$payCalendar=DB::table('cis_rh_payroll')->where('employee_id',$created)->where('period','2027-01-01')->first();
+$calcCalendar=json_decode($payCalendar->calculation,true);
+ok($genCalendar['created']===1 && $calcCalendar['input']['days_worked']===20
+    && count($calcCalendar['rules']['holiday_calendars'])===2
+    && $calcCalendar['rules']['holiday_calendars'][1]['company']==='Empresa fictícia',
+    'período 21–20 exclui feriados em dias úteis, escolhe calendário da empresa e guarda as versões');
+
+
+echo "\nPagamentos de indemnizações\n";
+$indPart=(int)DB::table('cis_rh_records')->where('parent_id',$ind)->where('kind','prestacoes')->value('id');
+$installmentPayment=['revision'=>1,'confirm'=>true,'paid_on'=>'2026-02-06','reference'=>'REC-TESTE'];
+$rhRecords->payIndemnityInstallment(req('/x',$installmentPayment,$user),$indPart);
+ok(status(fn()=>$rhRecords->payIndemnityInstallment(req('/x',$installmentPayment,$user),$indPart))===409,
+    'indemnização bloqueia pagamento duplicado');
+$summary=collect(data($rhRecords->index(req('/x',['kind'=>'indemnizacoes'],$user)))['records']['data'])->firstWhere('id',$ind);
+ok($summary['payment_totals']===['planned'=>20000,'paid'=>20000,'balance'=>10000]
+    && DB::table('cis_rh_record_audit')->where('record_id',$indPart)->where('action','prestacao_paga')->exists(),
+    'saldo da indemnização considera apenas prestações pagas e tem auditoria');
+
+
+echo "\nFérias e plano de indemnizações\n";
+$leave=['employee_id'=>$created,'reference_date'=>'2026-03-10','end'=>'2026-03-15'];
+$l1=data($rhRecords->record(req('/x',$leave,$user),'ferias'))['id'];
+$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'aprovar'],$user),$l1);
+$l2=data($rhRecords->record(req('/x',['reference_date'=>'2026-03-15','end'=>'2026-03-17']+$leave,$user),'ferias'))['id'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'aprovar'],$user),$l2))===422,'férias aprovadas não se sobrepõem');
+$planIn=['employee_id'=>$created,'reference_date'=>'2027-02-01','salary_base'=>'1000',
+    'months'=>3,'due_day'=>31,'first_month'=>'2027-02','text'=>'Plano fictício'];
+$plan=data($rhRecords->quoteIndemnity(req('/x',$planIn,$user)));
+ok($plan['years']===1&&$plan['total_cents']===100000&&$plan['installments'][0]['date']==='2027-02-28'
+    && $plan['installments'][2]['cents']===33334,'plano respeita anos completos, o fim do mês e os cêntimos');
+$planReq=['signature'=>$plan['signature'],'confirm'=>true]+$planIn;
+$planId=data($rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))['id'];
+ok(DB::table('cis_rh_records')->where('parent_id',$planId)->count()===3
+    && status(fn()=>$rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))===409,'plano guarda todas as prestações e impede duplicados');
+
+
+echo "\nRelatórios de RH\n";
+$rhReport=new \App\Http\Controllers\Api\RhReportsController();
+$rhFebruary=data($rhReport->index(req('/x',['period'=>'2026-02','company'=>'Empresa fictícia'],$user)));
+ok($rhFebruary['current']['finalized']===1 && $rhFebruary['current']['net']==='1067.00'
+    && $rhFebruary['previous']['total']===0 && count($rhFebruary['rows']['data'])===1,
+    'mapa e comparativo contam salários finalizados no mês e empresa');
+ok($rhFebruary['indemnities']['balance']==='100.00'&&(float)$rhFebruary['indemnities']['paid']===200.0,
+    'relatório de indemnização considera apenas pagamentos à data de referência');
+$emptyRh=data($rhReport->index(req('/x',['period'=>'2026-02','company'=>'Outra empresa fictícia'],$user)));
+ok($emptyRh['employees']===0 && $emptyRh['current']['total']===0 && $emptyRh['indemnities']['balance']==='0.00',
+    'o filtro de empresa aplica-se a todas as secções do relatório');
+
+
+echo "\nIntegrações do cadastro RH\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060009_create_rh_integrations.php')->up();
+$rhApi=new \App\Http\Controllers\Api\RhIntegrationController();
+$rhRecords->employee(req('/x',['company'=>'Outra empresa fictícia','code'=>'OUT-1']+$employee,$user));
+$issued=data($rhApi->issue(req('/x',['name'=>'Sistema de ensaio','company'=>'Empresa fictícia','valid_days'=>10],$user)));
+$adminIntegrations=data($rhApi->index(req('/x',[],$user)));
+ok(!isset($adminIntegrations['accounts']['data'][0]['token_hash'])&&
+    DB::table('cis_rh_integrations')->where('id',$issued['id'])->value('token_hash')===hash('sha256',$issued['token']),
+    'credencial de RH só é revelada na criação e é guardada por hash');
+$readRh=fn (array $query=[])=>Request::create('/x','GET',$query,[],[],['HTTP_AUTHORIZATION'=>'Bearer '.$issued['token']]);
+$readPage=data($rhApi->employees($readRh(['limit'=>1,'company'=>'Outra empresa fictícia'])));
+ok(count($readPage['data'])===1&&$readPage['data'][0]['company']==='Empresa fictícia'
+    && array_keys($readPage['data'][0])===['id','code','name','company','category','status']
+    && $readPage['next']!==null,'credencial RH é limitada à empresa e ao cadastro mínimo');
+$readNext=data($rhApi->employees($readRh(['after'=>$readPage['next']])));
+ok(count($readNext['data'])===1&&$readNext['data'][0]['company']==='Empresa fictícia'&&$readNext['next']===null,
+    'paginação mantém o âmbito da conta técnica');
+$rhApi->revoke(req('/x',[],$user),$issued['id']);
+ok(status(fn()=>$rhApi->employees($readRh()))===401
+    && DB::table('cis_rh_integration_events')->where('integration_id',$issued['id'])->where('operation','ler_colaboradores')->count()===2,
+    'revogação bloqueia leituras e mantém auditoria por origem');
 
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
