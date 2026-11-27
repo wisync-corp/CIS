@@ -55,6 +55,22 @@ final class RhRecordsController extends Controller
                     return $row;
                 });
         }
+        if (($filters['kind']??null)==='indemnizacoes' && $records) {
+            $parts=DB::table('cis_rh_records')->where('kind','prestacoes')->whereIn('parent_id',$records->pluck('id'))
+                ->get(['parent_id','details'])->groupBy('parent_id');
+            $records->through(function ($row) use ($parts) {
+                $planned=0;$paid=0;
+                foreach ($parts->get($row->id,collect()) as $part) {
+                    $details=json_decode($part->details,true,512,JSON_THROW_ON_ERROR);
+                    $amount=(int)round((float)$details['amount']*100);
+                    $planned+=$amount;
+                    if (isset($details['paid_on'])) $paid+=$amount;
+                }
+                $row->payment_totals=['planned'=>$planned,'paid'=>$paid,
+                    'balance'=>(int)round((float)$row->details['amount']*100)-$paid];
+                return $row;
+            });
+        }
         return response()->json(['employees'=>$employees,'records'=>$records,'totals'=>[
             'colaboradores'=>DB::table('cis_rh_employees')->count(),
             ...DB::table('cis_rh_records')->selectRaw('kind, COUNT(*) AS total')->groupBy('kind')->pluck('total','kind')->all(),
@@ -200,6 +216,29 @@ final class RhRecordsController extends Controller
         $end=json_decode($parent->details,true,512,JSON_THROW_ON_ERROR)['end']??null;
         abort_if($date<$parent->reference_date||($end&&$date>$end),422,'A data da adenda tem de estar dentro da vigência do contrato.');
         abort_if($approving&&$parent->review_status!=='aprovado',422,'Aprove primeiro o contrato associado.');
+    }
+
+    public function payIndemnityInstallment(Request $r,int $id)
+    {
+        $this->gate($r);
+        $data=$r->validate(['revision'=>['required','integer','min:1'],'paid_on'=>['required','date_format:Y-m-d'],
+            'reference'=>['required','string','min:4','max:120'],'confirm'=>['required','accepted']]);
+        abort_if($data['paid_on']>now('Africa/Maputo')->toDateString(),422,'A data de pagamento não pode ser futura.');
+        DB::transaction(function () use ($r,$id,$data) {
+            $row=DB::table('cis_rh_records')->where('id',$id)->where('kind','prestacoes')->lockForUpdate()->first();
+            abort_unless($row,404,'Prestação de indemnização não encontrada.');
+            $details=json_decode($row->details,true,512,JSON_THROW_ON_ERROR);
+            abort_if(isset($details['paid_on'])||(int)$row->revision!==(int)$data['revision'],
+                409,'A prestação já foi paga ou alterada. Actualize a lista.');
+            abort_if((float)$details['amount']<=0,422,'A prestação não tem um montante positivo a liquidar.');
+            $parent=DB::table('cis_rh_records')->where('id',$row->parent_id)->where('kind','indemnizacoes')->first();
+            abort_unless($parent&&$data['paid_on']>=$parent->reference_date,422,'Confirme a data da indemnização antes de registar o pagamento.');
+            $paid=$details+['paid_on'=>$data['paid_on'],'payment_reference'=>trim($data['reference'])];
+            DB::table('cis_rh_records')->where('id',$id)->update(['details'=>json_encode($paid,JSON_THROW_ON_ERROR),
+                'revision'=>(int)$row->revision+1,'updated_at'=>now()]);
+            $this->audit($r,(int)$row->employee_id,$id,'prestacao_paga',['anterior'=>$details,'novo'=>$paid]);
+        },3);
+        return response()->json(['saved'=>true]);
     }
 
     private function canLink(Request $r): void

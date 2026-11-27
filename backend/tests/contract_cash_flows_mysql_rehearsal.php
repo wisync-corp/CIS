@@ -1748,6 +1748,18 @@ ok($genCalendar['created']===1 && $calcCalendar['input']['days_worked']===20
     && $calcCalendar['rules']['holiday_calendars'][1]['company']==='Empresa fictícia',
     'período 21–20 exclui feriados em dias úteis, escolhe calendário da empresa e guarda as versões');
 
+
+echo "\nPagamentos de indemnizações\n";
+$indPart=(int)DB::table('cis_rh_records')->where('parent_id',$ind)->where('kind','prestacoes')->value('id');
+$installmentPayment=['revision'=>1,'confirm'=>true,'paid_on'=>'2026-02-06','reference'=>'REC-TESTE'];
+$rhRecords->payIndemnityInstallment(req('/x',$installmentPayment,$user),$indPart);
+ok(status(fn()=>$rhRecords->payIndemnityInstallment(req('/x',$installmentPayment,$user),$indPart))===409,
+    'indemnização bloqueia pagamento duplicado');
+$summary=collect(data($rhRecords->index(req('/x',['kind'=>'indemnizacoes'],$user)))['records']['data'])->firstWhere('id',$ind);
+ok($summary['payment_totals']===['planned'=>20000,'paid'=>20000,'balance'=>10000]
+    && DB::table('cis_rh_record_audit')->where('record_id',$indPart)->where('action','prestacao_paga')->exists(),
+    'saldo da indemnização considera apenas prestações pagas e tem auditoria');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
