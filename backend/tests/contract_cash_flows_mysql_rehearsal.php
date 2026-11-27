@@ -1559,6 +1559,25 @@ ok(in_array('Agricultura e pecuária',$enc['finalidades'],true) && $enc['mora'][
 $rep=data((new \App\Http\Controllers\Api\ReportController())->show(tap(Request::create('/x','GET',['inicio'=>now($tz)->startOfYear()->toDateString(),'fim'=>$td]),fn($r)=>$r->setUserResolver(static fn()=>$admin)),'finalidades'));
 ok(count($rep['seccoes'][0]['linhas'])>=1 && $rep['titulo']==='Crédito por finalidade e encargos','relatório «Crédito por finalidade e encargos»');
 
+
+echo "\nDefinições de RH no MySQL\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060001_create_rh_rules.php')->up();
+$rh=new \App\Http\Controllers\Api\RhSettingsController();
+ok(data($rh->index(req('/x',[],$user)))['parameters']['total']===0,'RH começa sem dados copiados');
+$rhParam=['code'=>'INSS_TAXA_COLAB','scope'=>'global','value'=>'0.03','effective_from'=>'2026-01-01','reason'=>'Cenário fictício'];
+$rh->parameter(req('/x',$rhParam,$user));
+$rh->parameter(req('/x',['scope'=>'empresa','company'=>'Empresa fictícia','value'=>'0.04','effective_from'=>'2026-07-01']+$rhParam,$user));
+ok(status(fn()=>$rh->parameter(req('/x',$rhParam,$user)))===409,'RH impede duas versões no mesmo âmbito e data');
+$bracket=['lower'=>'0.00','upper'=>null,'coefficient'=>'0.01','d0'=>'0','d1'=>'0','d2'=>'0','d3'=>'0','d4'=>'0'];
+$rhTax=['effective_from'=>'2026-01-01','reason'=>'Tabela fictícia','scales'=>[$bracket]];
+ok(status(fn()=>$rh->taxTable(req('/x',['scales'=>[['lower'=>'1.00']+$bracket]]+$rhTax,$user)))===422,'RH rejeita escalão com lacuna');
+$rh->taxTable(req('/x',$rhTax,$user));
+$rhEarly=data($rh->effective(req('/x',['date'=>'2026-06-20','company'=>'Empresa fictícia'],$user)));
+$rhLater=data($rh->effective(req('/x',['date'=>'2026-08-20','company'=>'Empresa fictícia'],$user)));
+ok(count($rhEarly['parametros'])===1&&count($rhLater['parametros'])===2
+    && $rhLater['parametros'][0]['Valor']==='0.04'&&count($rhLater['escaloes'])===1,'RH consulta parâmetros por vigência e âmbito');
+ok((int)DB::table('cis_rh_parameters')->first()->created_by===(int)$user->id,'RH regista a identidade do utilizador');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
