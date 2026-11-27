@@ -188,7 +188,10 @@ final class RhPayrollController extends Controller
                     unset($input['regime'],$input['rate'],$input['contract_id'],$input['amendment_id']);
                     $result=$this->calculate($input);
                     $snapshot=json_encode($result,JSON_THROW_ON_ERROR);
-                    if ($result==json_decode($row->calculation,true,512,JSON_THROW_ON_ERROR)) return 'skipped';
+                    $previous=json_decode($row->calculation,true,512,JSON_THROW_ON_ERROR);
+                    $comparable=$result;
+                    unset($previous['signature'],$comparable['signature']);
+                    if ($comparable==$previous) return 'skipped';
                     $version=(int)$row->version+1;
                     DB::table('cis_rh_payroll')->where('id',$id)->update(['version'=>$version,
                         'input'=>json_encode($result['input'],JSON_THROW_ON_ERROR),'calculation'=>$snapshot,'updated_at'=>now()]);
