@@ -18,7 +18,7 @@ const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ago
 const nowMaputo=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Maputo',year:'numeric',month:'numeric'}).formatToParts(new Date());return {y:p.find(x=>x.type==='year')!.value,m:p.find(x=>x.type==='month')!.value};};
 const periodLabel=(m:string,y:string)=>m==='todos'&&y==='todos'?'todo o período':m==='todos'?'o ano '+y:y==='todos'?MONTHS[Number(m)-1].toLowerCase()+' (todos os anos)':MONTHS[Number(m)-1].toLowerCase()+' de '+y;
 
-export type ExtractoPreset={mes:string;ano:string;base:'cobranca'|'pagamento'|'desembolso';estado:'todos'|'aberta'|'vencida'|'paga'|'em_divida';rotulo:string;lista_negra?:boolean};
+export type ExtractoPreset={mes:string;ano:string;base:'cobranca'|'pagamento'|'desembolso';estado:'todos'|'aberta'|'vencida'|'paga'|'em_divida';rotulo:string;lista_negra?:boolean;carteira?:boolean};
 export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{token:string;onNavigate:(page:string)=>void;onOpenExtracto?:(p:ExtractoPreset)=>void;onLoaded?:()=>void}){
  const [data,setData]=useState<Data|null>(null);
  const [error,setError]=useState('');
@@ -43,12 +43,13 @@ export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{tok
  const per=periodLabel(mes,ano);
  const years=Array.from(new Set([...(data?.periodo?.anos??[]),Number(nowMaputo().y)])).sort((a,b)=>b-a);
  const stats=[
-  {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s)${c.reforcos_periodo?.n?` + ${c.reforcos_periodo.n} reforço(s)`:''} em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período',go:{base:'desembolso',estado:'todos'} as const},
+  {name:'Carteira desembolsada',icon:Landmark,value:mt(c?.desembolsado_periodo),hint:c?`${c.contratos_desembolsados_periodo} contrato(s)${c.reforcos_periodo?.n?` + ${c.reforcos_periodo.n} reforço(s)`:''} em ${per} · em curso hoje ${mt(c.capital_em_carteira)}`:'Capital desembolsado no período',go:{base:'desembolso',estado:'todos'} as const,
+   extra:{label:'Carteira em curso',title:'Abrir o extracto com os contratos da carteira em curso (todas as datas)',preset:{mes:'todos',ano:'todos',base:'cobranca',estado:'todos',carteira:true,rotulo:'Carteira em curso · hoje'}}},
   {name:'Juros efectivamente recebidos',icon:ArrowUpRight,value:mt(r?.juros_mes),hint:r?`Em ${per} · total geral ${mt(r.juros)}`:'Separados da amortização',go:{base:'pagamento',estado:'paga'} as const},
   {name:'Juros de mora recebidos',icon:ArrowDownRight,value:mt(r?.multas_mes),hint:r?`Em ${per} · total geral ${mt(r.multas)}`:'Por atraso no pagamento',go:{base:'pagamento',estado:'paga'} as const},
   {name:'Prestações em atraso',icon:CalendarDays,value:c?String(c.vencidas_periodo):'—',hint:c?`${mt(c.valor_vencido_periodo)} em atraso · ${c.contratos_vencidos_periodo} contrato(s) · vencimento em ${per}`:'Vencimento anterior a hoje',alert:!!c&&c.vencidas_periodo>0,go:{base:'cobranca',estado:'vencida'} as const},
   {name:'Prestações em curso',icon:Clock,value:c?String(c.pendentes_periodo):'—',hint:c?`${mt(c.valor_pendente_periodo)} a receber · ${c.contratos_pendentes_periodo} contrato(s) · vencimento em ${per}`:'Ainda dentro do prazo',go:{base:'cobranca',estado:'aberta'} as const}
- ] as {name:string;icon:typeof Landmark;value:string;hint:string;alert?:boolean;go?:Omit<ExtractoPreset,'mes'|'ano'|'rotulo'>}[];
+ ] as {name:string;icon:typeof Landmark;value:string;hint:string;alert?:boolean;go?:Omit<ExtractoPreset,'mes'|'ano'|'rotulo'>;extra?:{label:string;title:string;preset:ExtractoPreset}}[];
  const ln=data?.lista_negra;
  const ledger:[string,string,string|undefined][]=[
   ['Capital','Desembolsado no período',c?.desembolsado_periodo],
@@ -73,7 +74,11 @@ export default function Overview({token,onNavigate,onOpenExtracto,onLoaded}:{tok
     <><b>{cx?.disponivel?<>Saldo da Caixa: {mt(cx.saldo_total)}</>:'Caixa'}</b>
     <p>{loading&&!data?'A calcular indicadores…':cx?.disponivel?<>{cx.contas.map(a=>a.code+' '+mt(a.saldo)).join(' · ')} — em {per}: entradas {mt(cx.entradas_mes)}, saídas {mt(cx.saidas_mes)}{Number(cx.desembolsos_mes)>0?<>, desembolsos {mt(cx.desembolsos_mes)}</>:null}.</>:'Saldos das contas indisponíveis: verifique a página Caixa.'}</p></>}
   </div><button type="button" className="cis-overview-refresh" onClick={()=>setRefresh(v=>v+1)} disabled={loading} aria-label="Actualizar indicadores"><RefreshCw size={15}/>{data?' '+data.actualizado_em.slice(11):''}</button></section>
-  <div className="cis-stat-grid">{stats.map(({name,icon:Icon,value,hint,alert,go})=>{const body=<><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>{loading&&!data?'…':value}</strong><small>{hint}</small>{onOpenExtracto&&<em className="cis-stat-link">Ver no extracto <ArrowUpRight size={13}/></em>}</>;
+  <div className="cis-stat-grid">{stats.map(({name,icon:Icon,value,hint,alert,go,extra})=>{
+   // Cartão com dois destinos (ex.: desembolsos do período e carteira em curso): duas ligações, não um botão inteiro.
+   if(onOpenExtracto&&go&&extra)return <article className={'cis-stat cis-stat-multi'+(alert?' cis-stat-alert':'')} key={name}><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>{loading&&!data?'…':value}</strong><small>{hint}</small>
+    <span className="cis-stat-links"><button type="button" className="cis-stat-link" title={`Abrir o extracto: ${name.toLowerCase()} em ${per}`} onClick={()=>onOpenExtracto({mes,ano,...go,rotulo:`${name} · ${per}`})}>Desembolsos de {per} <ArrowUpRight size={13}/></button><button type="button" className="cis-stat-link" title={extra.title} onClick={()=>onOpenExtracto(extra.preset)}>{extra.label} <ArrowUpRight size={13}/></button></span></article>;
+   const body=<><div className="cis-stat-top"><span>{name}</span><Icon size={18}/></div><strong>{loading&&!data?'…':value}</strong><small>{hint}</small>{onOpenExtracto&&<em className="cis-stat-link">Ver no extracto <ArrowUpRight size={13}/></em>}</>;
    return onOpenExtracto&&go?<button type="button" className={'cis-stat cis-stat-button'+(alert?' cis-stat-alert':'')} key={name} title={`Abrir o extracto: ${name.toLowerCase()} em ${per}`} onClick={()=>onOpenExtracto({mes,ano,...go,rotulo:`${name} · ${per}`})}>{body}</button>
     :<article className={'cis-stat'+(alert?' cis-stat-alert':'')} key={name}>{body}</article>;})}</div>
   {ln&&ln.mutuarios>0&&(()=>{const inner=<><span className="cis-black-ico"><Ban size={20}/></span>

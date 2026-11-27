@@ -58,6 +58,8 @@ final class ExtractoController extends Controller
             'estado'=>['nullable','in:todos,aberta,vencida,paga,em_divida'],
             // Só prestações de mutuários em lista negra (cartão «Crédito em lista negra» da Visão geral).
             'lista_negra'=>['nullable','in:0,1'],
+            // Carteira em curso (cartão «Carteira desembolsada» › em curso hoje): prestações em aberto, sem a lista negra.
+            'carteira'=>['nullable','in:0,1'],
             // Período da Visão geral (mês/ano, «todos» = sem restrição) e data de referência.
             'mes'=>['nullable','regex:/^(todos|[1-9]|1[0-2])$/'],
             'ano'=>['nullable','regex:/^(todos|(19|20)\d{2})$/'],
@@ -285,6 +287,11 @@ final class ExtractoController extends Controller
             if ($mes!=='todos') $q->whereRaw('MONTH(`'.$col.'`) = ?',[(int)$mes]);
         }
         if (($f['lista_negra']??'0')==='1') $q->whereIn('Nº de Cliente',\App\Support\ClientRegistry::blacklistedIds() ?: [0]);
+        if (($f['carteira']??'0')==='1') {
+            $q->whereIn('Estado',['Pendente','Pagamento Atrasado']);
+            $black=\App\Support\ClientRegistry::blacklistedIds();
+            if ($black) $q->where(fn($w)=>$w->whereNull('Nº de Cliente')->orWhereNotIn('Nº de Cliente',$black));
+        }
         if ($f['cliente']!=='') $q->where('Nome do Cliente',$f['cliente']);
         if ($f['contrato']!=='') $q->where('Nr do Contracto',$f['contrato']);
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
@@ -359,14 +366,59 @@ final class ExtractoController extends Controller
     {
         $f=$this->filters($request);
         $db=DB::connection('mysql_legacy');
-        [$all,$tot]=$this->summarise($this->clientRows($db,$f,$request),$this->today(),$f['estado']??'todos');
+        $raw=$this->clientRows($db,$f,$request);
+        [$all,$tot]=$this->summarise($raw,$this->today(),$f['estado']??'todos');
         $per=(int)($f['por_pagina']??50);
         $page=max(1,(int)($f['page']??1));
         return response()->json([
             'linhas'=>array_slice($this->sortClientExtract($all,$f),($page-1)*$per,$per),
             'pagina'=>$page,'por_pagina'=>$per,'total_linhas'=>count($all),
             'totais'=>$tot,
-        ])->header('Cache-Control','no-store, private');
+        ]+(($f['base']??'cobranca')==='desembolso'?['desembolsos'=>$this->disbursements($db,$raw,$f,$request)]:[])
+         +(($f['carteira']??'0')==='1'?['carteira'=>$this->portfolio($raw)]:[]))->header('Cache-Control','no-store, private');
+    }
+
+    /**
+     * Contratos desembolsados no período (um por linha, como o cartão «Carteira desembolsada» da Visão geral)
+     * e reforços de crédito («Aumento de Crédito» na Caixa) do mesmo período: o total bate com o cartão.
+     */
+    private function disbursements($db,$raw,array $f,Request $request): array
+    {
+        $today=$this->today();
+        $list=collect($raw)->groupBy('Nr do Contracto')->map(function($rows,$num) use ($today){
+            $live=$rows->filter(fn($r)=>$r->Estado!=='Renovado');
+            $open=$rows->whereIn('Estado',['Pendente','Pagamento Atrasado']);
+            $late=$open->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10)<$today);
+            $last=$rows->sortBy('Ordem')->last();
+            return ['contrato'=>(string)$num,'cliente'=>(string)$rows->first()->{'Nome do Cliente'},'codigo'=>$rows->first()->{'Nº de Cliente'},
+                'desembolso'=>substr((string)$rows->min('Data de Inicio'),0,10),'capital'=>self::money($rows->max('Quantia Creditada')),
+                'prestacoes'=>$live->count(),'a_pagar'=>self::money($live->sum(fn($r)=>(float)$r->{'Valor a Pagar'})),
+                'pago'=>self::money($rows->sum(fn($r)=>(float)$r->{'Valor Pago'})),
+                'em_divida'=>self::money($open->sum(fn($r)=>self::owed($r))),'em_atraso'=>self::money($late->sum(fn($r)=>self::owed($r))),
+                'estado'=>$open->isEmpty()?'Finalizado':($late->isNotEmpty()?'Em atraso':'Em curso'),
+                'estado_contrato'=>(string)($last->{'Estado do Contrato'}??'')];
+        })->sortBy([['desembolso','asc'],['contrato','asc']])->values();
+        $rq=$db->table('Extracto');\App\Support\Branches::restrictExtracto($rq,$request->user(),$request->query('agencia'));
+        $rq->where('Tipo de Movimento','Saídas')->where('Descrição','like','%Aumento de Crédito%')->where('Data da Operação','<=',$today);
+        if ($f['inicio']??null) $rq->where('Data da Operação','>=',$f['inicio']);
+        if ($f['fim']??null) $rq->where('Data da Operação','<=',$f['fim']);
+        if (($f['ano']??'todos')!=='todos') $rq->whereRaw('YEAR(`Data da Operação`) = ?',[(int)$f['ano']]);
+        if (($f['mes']??'todos')!=='todos') $rq->whereRaw('MONTH(`Data da Operação`) = ?',[(int)$f['mes']]);
+        if ($f['cliente']!=='') $rq->where('Cliente',$f['cliente']);
+        if ($f['contrato']!=='') $rq->where('Contracto',$f['contrato']);
+        $ref=$rq->orderBy('Data da Operação')->orderBy('Nr')->get(['Data da Operação as d','Contracto','Cliente','Valor'])
+            ->map(fn($r)=>['data'=>substr((string)$r->d,0,10),'contrato'=>(string)$r->Contracto,'cliente'=>(string)$r->Cliente,'valor'=>self::money($r->Valor)])->values();
+        $cap=$list->sum(fn($c)=>(float)$c['capital']);$rf=$ref->sum(fn($r)=>(float)$r['valor']);
+        return ['contratos'=>$list,'reforcos'=>$ref,'totais'=>['contratos'=>$list->count(),'capital'=>self::money($cap),'reforcos'=>self::money($rf),
+            'desembolsado'=>self::money($cap+$rf),'em_divida'=>self::money($list->sum(fn($c)=>(float)$c['em_divida']))]];
+    }
+
+    /** Carteira em curso: só os totais que ligam o extracto ao cartão da Visão geral (capital = Valor a Pagar − juros). */
+    private function portfolio($raw): array
+    {
+        $rows=collect($raw);
+        return ['contratos'=>$rows->pluck('Nr do Contracto')->unique()->count(),
+            'capital'=>self::money($rows->sum(fn($r)=>max(0,(float)$r->{'Valor a Pagar'}-(float)($r->{'Valor de Juros'}??0))))];
     }
 
     /** GET /cis/extractos/contratos?cliente= : contratos de um cliente (como o combo do VBA). */

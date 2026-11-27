@@ -1560,6 +1560,28 @@ $rep=data((new \App\Http\Controllers\Api\ReportController())->show(tap(Request::
 ok(count($rep['seccoes'][0]['linhas'])>=1 && $rep['titulo']==='Crédito por finalidade e encargos','relatório «Crédito por finalidade e encargos»');
 
 
+echo "== Extracto: contratos desembolsados do período (cartão «Carteira desembolsada»)\n";
+$xd=tap(Request::create('/x','GET',['base'=>'desembolso','mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$xr=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($xd));
+$ovd=data((new \App\Http\Controllers\Api\OverviewController())(tap(Request::create('/x','GET',['mes'=>(string)now($tz)->month,'ano'=>(string)now($tz)->year]),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+ok(isset($xr['desembolsos']['contratos']) && count($xr['desembolsos']['contratos'])===$ovd['carteira']['contratos_desembolsados_periodo'],'o extracto lista um contrato por linha, tantos quantos o cartão ('.count($xr['desembolsos']['contratos']).')');
+ok(abs((float)$xr['desembolsos']['totais']['desembolsado']-(float)$ovd['carteira']['desembolsado_periodo'])<0.01,'total desembolsado do extracto = cartão da Visão geral ('.$xr['desembolsos']['totais']['desembolsado'].' MT, com reforços)');
+ok(count($xr['desembolsos']['reforcos'])===$ovd['carteira']['reforcos_periodo']['n'],'reforços do período listados à parte');
+$xc=data((new \App\Http\Controllers\Api\ExtractoController())->clientes(tap(Request::create('/x','GET',['base'=>'cobranca']),fn($r)=>$r->setUserResolver(static fn()=>$admin))));
+ok(!isset($xc['desembolsos']),'nas outras vistas do extracto a lista não aparece');
+
+echo "== Extracto: contratos da carteira em curso (bate com a Visão geral)\n";
+$cq=tap(Request::create('/x','GET',['carteira'=>'1','mes'=>'todos','ano'=>'todos','base'=>'cobranca','por_pagina'=>200]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$cx=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($cq));
+$ovq=tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
+$ovc=data((new \App\Http\Controllers\Api\OverviewController())($ovq));
+ok(isset($cx['carteira']) && abs((float)$cx['carteira']['capital']-(float)$ovc['carteira']['capital_em_carteira'])<0.01,
+  'capital em carteira do extracto = «em curso hoje» da Visão geral ('.$cx['carteira']['capital'].')');
+$blk=\App\Support\ClientRegistry::blacklistedIds();
+$cn=collect($cx['linhas'])->pluck('contrato')->unique()->all();
+ok(!DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$cn)->whereIn('Nº de Cliente',$blk?:[0])->exists(),'a carteira em curso não inclui mutuários em lista negra');
+ok(collect($cx['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'só prestações em aberto');
+
 echo "\nDefinições de RH no MySQL\n";
 (require __DIR__.'/../database/migrations/2026_11_27_060001_create_rh_rules.php')->up();
 $rh=new \App\Http\Controllers\Api\RhSettingsController();
