@@ -14,10 +14,10 @@ type Employee={user?:Account|null;id:number;name:string;company:string;code:stri
 type Row={payment_totals?:{planned:number;paid:number;balance:number};review_status?:'pendente'|'aprovado'|'rejeitado'|null;revision?:number;decision_note?:string|null;id:number;reference_date:string;parent_id:number|null;name:string;company:string;code:string;details:Record<string,string|null>};
 type Page<T>={data:T[];current_page:number;last_page:number};
 type Response={employees:Page<Employee>;records:Page<Row>|null;totals:Partial<Record<RhSection,number>>};
-const names:Record<string,string>={paid_on:'Pago em',payment_reference:'Comprovativo',end:'Data final',regime:'Regime',rate:'Valor unitário (MT)',amount:'Montante (MT)',text:'Descrição'};
+const names:Record<string,string>={salary_base:'Vencimento base (MT)',years:'Anos completos',paid_on:'Pago em',payment_reference:'Comprovativo',end:'Data final',regime:'Regime',rate:'Valor unitário (MT)',amount:'Montante (MT)',text:'Descrição'};
 const mt=(value:string)=>Number(value).toLocaleString('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2})+' MT';
-const details=(row:Row)=>Object.entries(row.details).filter(([,v])=>v!=null&&v!=='').map(([key,value])=>names[key]+': '+(['rate','amount'].includes(key)?mt(value!):value)).join(' · ');
-const blank={name:'',company:'',code:'',category:'',admission:'',status:'activo',employee_id:'',parent_id:'',reference_date:'',end:'',regime:'mensal',rate:'',amount:'',text:''};
+const details=(row:Row)=>Object.entries(row.details).filter(([key,v])=>key!=='plan_signature'&&v!=null&&v!=='').map(([key,value])=>names[key]+': '+(['rate','amount','salary_base'].includes(key)?mt(value!):value)).join(' · ');
+const blank={name:'',company:'',code:'',category:'',admission:'',status:'activo',employee_id:'',parent_id:'',reference_date:'',end:'',regime:'mensal',rate:'',amount:'',text:'',salary_base:'',months:'1',due_day:'',first_month:''};
 
 function RhUserLink({employee,token,onClose,onSaved}:{employee:Employee;token:string;onClose:()=>void;onSaved:()=>void}){
  const [query,setQuery]=useState(''),[users,setUsers]=useState<Account[]>([]),[userId,setUserId]=useState(employee.user?String(employee.user.id):'');
@@ -76,8 +76,8 @@ function TermsReview({row,section,token,mode,onClose,onSaved}:{row:Row;section:R
   setBusy(true);setError('');
   try{
    const base=API+'/cis/rh/registos/termos/'+row.id;
-   const body=editing?{revision:row.revision,reference_date:date,rate,
-    ...(section==='contratos'?{regime,end:end||null}:{text:note})}:{revision:row.revision,decision:mode,note:note||null};
+   const body=editing?{revision:row.revision,reference_date:date,...(section==='ferias'?{}:{rate}),
+    ...(section==='contratos'?{regime,end:end||null}:section==='ferias'?{end,text:note||null}:{text:note})}:{revision:row.revision,decision:mode,note:note||null};
    const r=await fetch(base+(editing?'':'/decisao'),{method:editing?'PUT':'POST',
     headers:{Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});
    const d=await r.json();if(!r.ok)throw new Error(Object.values(d.errors??{}).flat().join(' ')||d.message);
@@ -89,12 +89,13 @@ function TermsReview({row,section,token,mode,onClose,onSaved}:{row:Row;section:R
   {!editing&&<p>Referência {row.reference_date} · {details(row)}</p>}
   <div className="cis-profile-fields">
    {editing&&<><label className="cis-profile-field"><span>Data de referência</span><input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label>
-    <label className="cis-profile-field"><span>Valor unitário (MT)</span><input type="number" min="0" step="0.01" required value={rate} onChange={e=>setRate(e.target.value)}/></label>
+    {section!=='ferias'&&<label className="cis-profile-field"><span>Valor unitário (MT)</span><input type="number" min="0" step="0.01" required value={rate} onChange={e=>setRate(e.target.value)}/></label>}
+    {section==='ferias'&&<label className="cis-profile-field"><span>Data final</span><input type="date" required value={end} onChange={e=>setEnd(e.target.value)}/></label>}
     {section==='contratos'&&<><label className="cis-profile-field"><span>Data final</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
      <label className="cis-profile-field"><span>Regime</span><select value={regime} onChange={e=>setRegime(e.target.value)}><option value="mensal">Mensal</option><option value="diario">Diário</option><option value="hora">Hora</option></select></label></>}
    </>}
-   {(!editing||section==='adendas')&&<label className="cis-profile-field"><span>{editing?'Descrição':mode==='rejeitar'?'Motivo da rejeição':'Nota da decisão (opcional)'}</span>
-    <textarea required={editing||mode==='rejeitar'} maxLength={editing?2000:255} value={note} onChange={e=>setNote(e.target.value)}/></label>}
+   {(!editing||section==='adendas'||section==='ferias')&&<label className="cis-profile-field"><span>{editing?'Descrição':mode==='rejeitar'?'Motivo da rejeição':'Nota da decisão (opcional)'}</span>
+    <textarea required={(editing&&section==='adendas')||mode==='rejeitar'} maxLength={editing?2000:255} value={note} onChange={e=>setNote(e.target.value)}/></label>}
   </div>
   {error&&<p role="alert" className="cis-table-error">{error}</p>}
   <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy}>{editing?'Guardar revisão':'Confirmar decisão'}</button><button type="button" disabled={busy} onClick={onClose}>Cancelar</button></div>
@@ -130,6 +131,7 @@ function InstallmentPayment({row,token,onClose,onSaved}:{row:Row;token:string;on
 
 export default function RhRecordsDesk({token,section,onNavigate}:{token:string;section:RhSection;onNavigate:(s:RhSection)=>void}){
  const can=useCan();
+ const [plan,setPlan]=useState<{signature:string;years:number;total_cents:number;installments:{date:string;cents:number}[]}|null>(null);
  const [payment,setPayment]=useState<Row|null>(null);
  const [review,setReview]=useState<{row:Row;mode:'editar'|'aprovar'|'rejeitar'}|null>(null);
  const [linking,setLinking]=useState<Employee|null>(null);
@@ -138,7 +140,7 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
  const [query,setQuery]=useState(''),[search,setSearch]=useState(''),[candidate,setCandidate]=useState(''),[matches,setMatches]=useState<Employee[]>([]),[chosen,setChosen]=useState<Employee|null>(null);
  const [parents,setParents]=useState<{id:number;reference_date:string}[]>([]);
  const worker=section==='colaboradores',overview=section==='painel';
- const reviewed=section==='contratos'||section==='adendas';
+ const reviewed=section==='contratos'||section==='adendas'||section==='ferias';
  const parentKind=section==='adendas'?'contratos':section==='prestacoes'?'indemnizacoes':'';
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  useEffect(()=>{
@@ -171,7 +173,7 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
   return ()=>c.abort();
  },[token,parentKind,chosen]);
  const field=(key:keyof typeof blank,label:string,type='text',required=true)=><label className="cis-profile-field"><span>{label}</span><input type={type} required={required}
-  {...(type==='number'?{min:'0',step:'0.01'}:{})} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>;
+  {...(type==='number'?{min:'0',step:'0.01'}:{})} value={form[key]} onChange={e=>{setForm({...form,[key]:e.target.value});setPlan(null);}}/></label>;
  async function save(e:FormEvent){
   e.preventDefault();if(busy||(!worker&&!chosen))return;
   const d=worker?{name:form.name,company:form.company,code:form.code,category:form.category,admission:form.admission,status:form.status}
@@ -182,15 +184,18 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
    ...(['indemnizacoes','prestacoes'].includes(section)?{amount:form.amount,text:form.text}:{})};
   setError('');setStatus('');setBusy(true);
   try{
-   const r=await fetch(API+'/cis/rh/registos/'+section,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(d)});
+   const calculating=section==='indemnizacoes';
+   const payload=calculating?{employee_id:chosen?.id,reference_date:form.reference_date,text:form.text,salary_base:form.salary_base,months:Number(form.months),due_day:Number(form.due_day),first_month:form.first_month,...(plan?{signature:plan.signature,confirm:true}:{})}:d;
+   const r=await fetch(API+'/cis/rh/registos/'+section+(calculating?(plan?'/plano':'/previa'):''),{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(payload)});
    const y=await r.json();if(!r.ok)throw new Error(Object.values(y.errors??{}).flat().join(' ')||y.message||'Não foi possível guardar.');
-   setEditing(false);setStatus('Registo guardado.');setPage(1);setRev(x=>x+1);
+   if(calculating&&!plan){setPlan(y);return;}
+   setPlan(null);setEditing(false);setStatus('Registo guardado.');setPage(1);setRev(x=>x+1);
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const pages=worker?data?.employees:data?.records;
  return <section className="cis-panel cis-proposals">
   <div className="cis-prop-head"><div><h3>{titles[section]}</h3></div>
-   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing||!!linking||!!review||!!payment} onClick={()=>{setForm(blank);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
+   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing||!!linking||!!review||!!payment} onClick={()=>{setForm(blank);setPlan(null);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
   </div>
   {error&&<p className="cis-table-error" role="alert">{error}</p>}{status&&<p className="cis-msg-notice" role="status">{status}</p>}
   {!data&&!error&&<p role="status">A carregar…</p>}
@@ -204,17 +209,20 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
    <div className="cis-profile-fields">{worker?<>{field('name','Nome completo')}{field('company','Empresa')}{field('code','Código')}{field('category','Categoria','text',false)}{field('admission','Admissão','date')}
     <label className="cis-profile-field"><span>Estado</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>
    </>:<>
-    <label className="cis-profile-field"><span>Colaborador</span><input value={candidate} required placeholder="Pesquise por nome ou código" onChange={e=>{setCandidate(e.target.value);setChosen(null);setForm({...form,parent_id:''});}}/></label>
+    <label className="cis-profile-field"><span>Colaborador</span><input value={candidate} required placeholder="Pesquise por nome ou código" onChange={e=>{setCandidate(e.target.value);setChosen(null);setPlan(null);setForm({...form,parent_id:''});}}/></label>
     {!chosen&&matches.length>0&&<div className="cis-prop-actions">{matches.map(x=><button type="button" key={x.id} onClick={()=>{setChosen(x);setCandidate(x.name+' · '+x.code+' · '+x.company);}}>{x.name} · {x.code} · {x.company}</button>)}</div>}
     {parentKind&&chosen&&<label className="cis-profile-field"><span>{parentKind==='contratos'?'Contrato associado':'Indemnização associada'}</span><select required value={form.parent_id} onChange={e=>setForm({...form,parent_id:e.target.value})}><option value="">Seleccione</option>{parents.map(x=><option key={x.id} value={x.id}>#{x.id} · {x.reference_date}</option>)}</select></label>}
     {field('reference_date',section==='prestacoes'?'Data prevista':'Data de referência','date')}
     {['contratos','ferias'].includes(section)&&field('end','Data final','date',section==='ferias')}
     {section==='contratos'&&<label className="cis-profile-field"><span>Regime de pagamento</span><select value={form.regime} onChange={e=>setForm({...form,regime:e.target.value})}><option value="mensal">Mensal</option><option value="diario">Diário</option><option value="hora">Hora</option></select></label>}
     {['contratos','adendas'].includes(section)&&field('rate','Valor unitário (MT)','number')}
-    {['indemnizacoes','prestacoes'].includes(section)&&field('amount','Montante (MT)','number')}
+    {section==='prestacoes'&&field('amount','Montante (MT)','number')}
+    {section==='indemnizacoes'&&<>{field('salary_base','Vencimento base (MT)','number')}{field('months','Número de prestações','number')}{field('due_day','Dia de vencimento','number')}{field('first_month','Primeiro mês','month')}</>}
     {section!=='contratos'&&field('text','Descrição','text',['adendas','indemnizacoes'].includes(section))}
    </>}</div>
-   <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy||(!worker&&!chosen)}>Guardar</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancelar</button></div>
+   {section==='indemnizacoes'&&plan&&<div className="cis-table-scroll"><strong>{plan.years} ano(s) completos · Total {mt(String(plan.total_cents/100))}</strong>
+    <table><thead><tr><th>Vencimento</th><th>Valor</th></tr></thead><tbody>{plan.installments.map(row=><tr key={row.date}><td>{row.date}</td><td>{mt(String(row.cents/100))}</td></tr>)}</tbody></table></div>}
+   <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy||(!worker&&!chosen)}>{section==='indemnizacoes'?(plan?'Guardar plano':'Calcular prévia'):'Guardar'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancelar</button></div>
   </form>}
   {!overview&&data&&<>
    <form className="cis-prop-actions" onSubmit={e=>{e.preventDefault();setPage(1);setSearch(query.trim());}}>

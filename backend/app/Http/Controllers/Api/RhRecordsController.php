@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 final class RhRecordsController extends Controller
 {
     private const KINDS=['contratos','adendas','ferias','indemnizacoes','prestacoes'];
-    private const REVIEWED=['contratos','adendas'];
+    private const REVIEWED=['contratos','adendas','ferias'];
     private const MONEY=['required','numeric','min:0','max:9999999999','decimal:0,2'];
 
     private function gate(Request $r): void
@@ -160,13 +160,13 @@ final class RhRecordsController extends Controller
     {
         $this->gate($r);
         $kind=DB::table('cis_rh_records')->where('id',$id)->value('kind');
-        abort_unless(in_array($kind,self::REVIEWED,true),404,'Contrato ou adenda não encontrado.');
+        abort_unless(in_array($kind,self::REVIEWED,true),404,'Registo de RH não encontrado.');
         $d=$r->validate(['revision'=>['required','integer','min:1'],
             'reference_date'=>['required','date_format:Y-m-d'],...self::detailRules($kind)]);
         DB::transaction(function () use ($r,$id,$d) {
             $row=DB::table('cis_rh_records')->where('id',$id)->lockForUpdate()->first();
             abort_unless($row,404);
-            abort_if($row->review_status==='aprovado',409,'Um contrato aprovado só pode ser alterado por adenda.');
+            abort_if($row->review_status==='aprovado',409,'O registo aprovado fica bloqueado para edição.');
             abort_if((int)$row->revision!==(int)$d['revision'],409,'O registo mudou. Actualize a lista.');
             $details=array_diff_key($d,array_flip(['revision','reference_date']));
             if ($row->kind==='adendas') $this->checkAmendment($row,$d['reference_date'],false);
@@ -187,12 +187,19 @@ final class RhRecordsController extends Controller
             'note'=>['required_if:decision,rejeitar','nullable','string','max:255']]);
         DB::transaction(function () use ($r,$id,$d) {
             $person=DB::table('cis_rh_records')->where('id',$id)->value('employee_id');
-            abort_unless($person,404,'Contrato ou adenda não encontrado.');
+            abort_unless($person,404,'Registo de RH não encontrado.');
             DB::table('cis_rh_employees')->where('id',$person)->lockForUpdate()->first();
             $row=DB::table('cis_rh_records')->where('id',$id)->lockForUpdate()->first();
-            abort_unless($row&&in_array($row->kind,self::REVIEWED,true),404,'Contrato ou adenda não encontrado.');
+            abort_unless($row&&in_array($row->kind,self::REVIEWED,true),404,'Registo de RH não encontrado.');
             abort_unless($row->review_status==='pendente'&&(int)$row->revision===(int)$d['revision'],409,'O registo já foi alterado ou decidido.');
             $approved=$d['decision']==='aprovar';
+            if ($approved && $row->kind==='ferias') {
+                $end=json_decode($row->details,true,512,JSON_THROW_ON_ERROR)['end'];
+                $others=DB::table('cis_rh_records')->where('employee_id',$person)->where('kind','ferias')
+                    ->where('review_status','aprovado')->where('reference_date','<=',$end)->pluck('details');
+                abort_if($others->contains(fn ($json)=>json_decode($json,true,512,JSON_THROW_ON_ERROR)['end']>=$row->reference_date),
+                    422,'O período sobrepõe-se a férias já aprovadas.');
+            }
             if ($approved && $row->kind==='adendas') {
                 $this->checkAmendment($row,$row->reference_date,true);
                 abort_if(DB::table('cis_rh_records')->where('parent_id',$row->parent_id)->where('kind','adendas')
@@ -216,6 +223,76 @@ final class RhRecordsController extends Controller
         $end=json_decode($parent->details,true,512,JSON_THROW_ON_ERROR)['end']??null;
         abort_if($date<$parent->reference_date||($end&&$date>$end),422,'A data da adenda tem de estar dentro da vigência do contrato.');
         abort_if($approving&&$parent->review_status!=='aprovado',422,'Aprove primeiro o contrato associado.');
+    }
+
+    private function indemnityPlan(Request $r): array
+    {
+        $d=$r->validate([
+            'employee_id'=>['required','integer','exists:cis_rh_employees,id'],
+            'reference_date'=>['required','date_format:Y-m-d'],
+            'salary_base'=>self::MONEY,
+            'months'=>['required','integer','between:1,120'],
+            'due_day'=>['required','integer','between:1,31'],
+            'first_month'=>['required','date_format:Y-m'],
+            'text'=>['required','string','max:500'],
+        ]);
+        $employee=DB::table('cis_rh_employees')->where('id',$d['employee_id'])->first();
+        abort_unless($employee,422,'Colaborador indisponível.');
+        $start=\Carbon\CarbonImmutable::parse($employee->admission);
+        $reference=\Carbon\CarbonImmutable::parse($d['reference_date']);
+        abort_if($reference->lessThan($start),422,'A referência não pode anteceder a admissão.');
+        $years=$reference->year-$start->year-((int)$reference->format('md')<(int)$start->format('md')?1:0);
+        $base=(int)round((float)$d['salary_base']*100);
+        $total=$base*$years;
+        abort_if($total<(int)$d['months']||$total>999999999900,422,'O total deve permitir prestações positivas e caber no limite monetário.');
+        $monthly=intdiv($total,(int)$d['months']);
+        $first=\Carbon\CarbonImmutable::parse($d['first_month'].'-01');
+        $plan=[];
+        for ($i=0;$i<(int)$d['months'];$i++) {
+            $month=$first->addMonthsNoOverflow($i);
+            $date=$month->day(min((int)$d['due_day'],$month->daysInMonth))->toDateString();
+            abort_if($date<$d['reference_date'],422,'A prestação não pode vencer antes da data de referência.');
+            $plan[]=['date'=>$date,'cents'=>$i+1===(int)$d['months']?$total-$monthly*$i:$monthly];
+        }
+        $output=['input'=>$d,'years'=>$years,'base_cents'=>$base,'total_cents'=>$total,'installments'=>$plan,
+            'admission'=>$employee->admission];
+        return $output+['signature'=>hash_hmac('sha256',json_encode($output,JSON_THROW_ON_ERROR),(string)config('app.key'))];
+    }
+
+    public function quoteIndemnity(Request $r)
+    {
+        $this->gate($r);
+        return response()->json($this->indemnityPlan($r))->header('Cache-Control','no-store, private');
+    }
+
+    public function createIndemnityPlan(Request $r)
+    {
+        $this->gate($r);
+        $sig=$r->validate(['signature'=>['required','string','size:64'],'confirm'=>['required','accepted']])['signature'];
+        $id=DB::transaction(function () use ($r,$sig) {
+            $plan=$this->indemnityPlan($r);
+            abort_unless(hash_equals($plan['signature'],$sig),409,'Reveja a prévia. As condições mudaram.');
+            $input=$plan['input'];
+            $employee=(int)$input['employee_id'];
+            DB::table('cis_rh_employees')->where('id',$employee)->lockForUpdate()->first();
+            abort_if(DB::table('cis_rh_records')->where('employee_id',$employee)->where('kind','indemnizacoes')
+                ->where('reference_date',$input['reference_date'])->where('details->plan_signature',$sig)->exists(),
+                409,'Este plano já foi guardado.');
+            $amount=fn (int $cents)=>number_format($cents/100,2,'.','');
+            $parent=['amount'=>$amount($plan['total_cents']),'salary_base'=>$amount($plan['base_cents']),
+                'years'=>$plan['years'],'text'=>$input['text'],'plan_signature'=>$sig];
+            $meta=['employee_id'=>$employee,'created_at'=>now(),'updated_at'=>now()];
+            $id=DB::table('cis_rh_records')->insertGetId($meta+['kind'=>'indemnizacoes','reference_date'=>$input['reference_date'],
+                'details'=>json_encode($parent,JSON_THROW_ON_ERROR)]);
+            foreach ($plan['installments'] as $index=>$row) {
+                $child=['amount'=>$amount($row['cents']),'text'=>'Prestação '.($index+1)];
+                DB::table('cis_rh_records')->insert($meta+['kind'=>'prestacoes','parent_id'=>$id,
+                    'reference_date'=>$row['date'],'details'=>json_encode($child,JSON_THROW_ON_ERROR)]);
+            }
+            $this->audit($r,$employee,$id,'plano_indemnizacao',$plan);
+            return $id;
+        },3);
+        return response()->json(['id'=>$id],201);
     }
 
     public function payIndemnityInstallment(Request $r,int $id)

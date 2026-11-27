@@ -1760,6 +1760,23 @@ ok($summary['payment_totals']===['planned'=>20000,'paid'=>20000,'balance'=>10000
     && DB::table('cis_rh_record_audit')->where('record_id',$indPart)->where('action','prestacao_paga')->exists(),
     'saldo da indemnização considera apenas prestações pagas e tem auditoria');
 
+
+echo "\nFérias e plano de indemnizações\n";
+$leave=['employee_id'=>$created,'reference_date'=>'2026-03-10','end'=>'2026-03-15'];
+$l1=data($rhRecords->record(req('/x',$leave,$user),'ferias'))['id'];
+$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'aprovar'],$user),$l1);
+$l2=data($rhRecords->record(req('/x',['reference_date'=>'2026-03-15','end'=>'2026-03-17']+$leave,$user),'ferias'))['id'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'aprovar'],$user),$l2))===422,'férias aprovadas não se sobrepõem');
+$planIn=['employee_id'=>$created,'reference_date'=>'2027-02-01','salary_base'=>'1000',
+    'months'=>3,'due_day'=>31,'first_month'=>'2027-02','text'=>'Plano fictício'];
+$plan=data($rhRecords->quoteIndemnity(req('/x',$planIn,$user)));
+ok($plan['years']===1&&$plan['total_cents']===100000&&$plan['installments'][0]['date']==='2027-02-28'
+    && $plan['installments'][2]['cents']===33334,'plano respeita anos completos, o fim do mês e os cêntimos');
+$planReq=['signature'=>$plan['signature'],'confirm'=>true]+$planIn;
+$planId=data($rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))['id'];
+ok(DB::table('cis_rh_records')->where('parent_id',$planId)->count()===3
+    && status(fn()=>$rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))===409,'plano guarda todas as prestações e impede duplicados');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

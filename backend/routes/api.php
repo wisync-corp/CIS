@@ -47,6 +47,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/','index')->middleware('throttle:90,1');
         Route::get('origens','parents')->middleware('throttle:60,1');
         Route::post('colaboradores','employee')->middleware('throttle:20,1');
+        Route::post('indemnizacoes/previa','quoteIndemnity')->middleware('throttle:30,1');
+        Route::post('indemnizacoes/plano','createIndemnityPlan')->middleware('throttle:20,1');
         Route::post('prestacoes/{id}/pagar','payIndemnityInstallment')->whereNumber('id')->middleware('throttle:20,1');
         Route::put('termos/{id}','updateTerms')->whereNumber('id')->middleware('throttle:20,1');
         Route::post('termos/{id}/decisao','decideTerms')->whereNumber('id')->middleware('throttle:20,1');
