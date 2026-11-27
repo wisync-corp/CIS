@@ -258,9 +258,15 @@ final class ExtractoController extends Controller
         };
     }
 
-    /** Valor em dívida de uma prestação em aberto: Valor a Pagar (+ multa já lançada). */
+    /**
+     * Valor em dívida de uma prestação em aberto: Valor a Pagar (+ multa já lançada).
+     * Juro variável: actualizado à data de hoje (capital × taxa × dias desde o desembolso), como na cobrança.
+     */
     private static function owed(object $r): float
     {
+        if (isset($r->{'Tipo de Juro'}) && \App\Support\VariableInterest::isVariable($r) && in_array($r->Estado??'',['Pendente','Pagamento Atrasado'],true)) {
+            return \App\Support\VariableInterest::toDate($r,now('Africa/Maputo')->toDateString())['valor']+(float)($r->{'Valor de Multa'}??0);
+        }
         return (float)$r->{'Valor a Pagar'}+(float)($r->{'Valor de Multa'}??0);
     }
 
@@ -297,7 +303,8 @@ final class ExtractoController extends Controller
         // `M. Pagamento` tem um ponto: selecção em SQL explícito (o Laravel lê-o como tabela.coluna).
         $cols=['Ordem','Nº','Nr do Contracto','Nome do Cliente','Nº de Cliente','Nº da Parcela','Data de Inicio',
             'Data de Cobrança','Dias','M. Pagamento','Quantia Creditada','Valor de Juros','Valor de Multa',
-            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado','Estado do Contrato'];
+            'Valor a Pagar','Valor Pago','Data de Pagamento','Estado','Estado do Contrato',
+            'Tipo de Juro','% de Juro','Capital','Amortização','Estratégia de Cálculo'];
         return $q->selectRaw(implode(',',array_map(fn($c)=>'`'.$c.'`',$cols)))
             ->orderBy('Data de Cobrança',$f['direccao']??'asc')->orderBy('Nr do Contracto')->orderBy('Nº da Parcela')->orderBy('Ordem')->get();
     }
@@ -312,6 +319,8 @@ final class ExtractoController extends Controller
             if ($estado==='em_divida') { if (!in_array($sit,['aberta','vencida'],true)) continue; }
             elseif ($estado && $estado!=='todos' && $sit!==$estado) continue;
             $juros=(float)$r->{'Valor de Juros'};$multa=(float)($r->{'Valor de Multa'}??0);
+            $varToday=in_array($sit,['aberta','vencida'],true)&&\App\Support\VariableInterest::isVariable($r)?\App\Support\VariableInterest::toDate($r,$today):null;
+            if ($varToday) $juros=$varToday['juros'];
             if ($sit==='aberta') { $tot['aberto']+=self::owed($r); $tot['juros_aberto']+=$juros; $tot['n_aberto']++; }
             if ($sit==='vencida') { $tot['vencido']+=self::owed($r); $tot['juros_vencido']+=$juros+$multa; $tot['n_vencido']++; }
             if ($sit==='paga') { $tot['pago']+=(float)$r->{'Valor Pago'}; $tot['juros_pago']+=$juros+$multa; $tot['n_pago']++; }
@@ -326,9 +335,10 @@ final class ExtractoController extends Controller
                     : (int)$r->Dias,
                 'forma_pagamento'=>$r->{'M. Pagamento'},
                 'capital'=>self::money($r->{'Quantia Creditada'}),
-                'valor_previsto'=>self::money($r->{'Valor a Pagar'}),
+                'valor_previsto'=>self::money($varToday?$varToday['valor']:$r->{'Valor a Pagar'}),
                 'valor_recebido'=>$sit==='paga'?self::money($r->{'Valor Pago'}):null,
                 'juros'=>self::money($juros),'multa'=>self::money($multa),
+                'juros_variavel'=>$varToday?['dias'=>$varToday['dias'],'taxa'=>(float)$r->{'% de Juro'},'gravado'=>self::money($r->{'Valor de Juros'})]:null,
                 'valor'=>self::money(in_array($sit,['aberta','vencida'],true)?self::owed($r):$r->{'Valor Pago'}),
                 'data_pagamento'=>$r->{'Data de Pagamento'}?substr((string)$r->{'Data de Pagamento'},0,10):null,
                 'situacao'=>$sit,'estado'=>self::stateLabel($r,$sit),'contrato_abatido'=>$r->{'Estado do Contrato'}==='Abatido',
