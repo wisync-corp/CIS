@@ -1603,6 +1603,7 @@ ok((int)DB::table('cis_rh_parameters')->first()->created_by===(int)$user->id,'RH
 
 echo "\nRegistos de RH em MySQL\n";
 (require __DIR__.'/../database/migrations/2026_11_27_060002_create_rh_records.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_27_060007_add_rh_contract_review.php')->up();
 $rhRecords=new \App\Http\Controllers\Api\RhRecordsController();
 $employee=['company'=>'Empresa fictícia','code'=>'RH-1','name'=>'Colaborador de ensaio','admission'=>'2026-01-01','status'=>'activo'];
 ok(data($rhRecords->index(req('/x',[],$user)))['totals']['colaboradores']===0,'RH começa vazio');
@@ -1613,6 +1614,18 @@ $baseRh=['employee_id'=>$created,'reference_date'=>'2026-02-01'];
 $contract=data($rhRecords->record(req('/x',['regime'=>'mensal','rate'=>'1000']+$baseRh,$user),'contratos'))['id'];
 ok(status(fn()=>$rhRecords->record(req('/x',['employee_id'=>$other,'parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))===422,'RH rejeita adenda de outro colaborador');
 $adenda=data($rhRecords->record(req('/x',['parent_id'=>$contract,'rate'=>'1100','text'=>'Alteração']+$baseRh,$user),'adendas'))['id'];
+$rhApprove=['revision'=>1,'decision'=>'aprovar'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',$rhApprove,$user),$adenda))===422,'adenda exige contrato aprovado');
+$rhRecords->decideTerms(req('/x',$rhApprove,$user),$contract);
+$rhRecords->decideTerms(req('/x',$rhApprove,$user),$adenda);
+ok(status(fn()=>$rhRecords->updateTerms(req('/x',['revision'=>2,'reference_date'=>'2026-02-01','regime'=>'mensal','rate'=>'1200'],$user),$contract))===409,
+    'contrato aprovado não admite alteração directa');
+$rhPending=data($rhRecords->record(req('/x',['parent_id'=>$contract,'rate'=>'9000','text'=>'Termos de ensaio ainda pendentes']+$baseRh,$user),'adendas'))['id'];
+ok(status(fn()=>$rhRecords->decideTerms(req('/x',$rhApprove,$user),$rhPending))===422,'não aprova duas adendas no mesmo dia');
+$rhRecords->decideTerms(req('/x',['revision'=>1,'decision'=>'rejeitar','note'=>'Corrigir a data'],$user),$rhPending);
+$rhRecords->updateTerms(req('/x',['revision'=>2,'reference_date'=>'2027-03-01','rate'=>'9000','text'=>'Nova revisão'],$user),$rhPending);
+ok(DB::table('cis_rh_records')->where('id',$rhPending)->value('review_status')==='pendente','editar registo rejeitado devolve à revisão');
+
 $ind=data($rhRecords->record(req('/x',['amount'=>'300','text'=>'Acordo fictício']+$baseRh,$user),'indemnizacoes'))['id'];
 $rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'200']+$baseRh,$user),'prestacoes');
 ok(status(fn()=>$rhRecords->record(req('/x',['parent_id'=>$ind,'amount'=>'101']+$baseRh,$user),'prestacoes'))===422,'RH impede plano acima do valor acordado');

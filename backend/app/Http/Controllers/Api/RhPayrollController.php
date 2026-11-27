@@ -44,7 +44,7 @@ final class RhPayrollController extends Controller
             ->whereNotExists(fn ($q)=>$q->selectRaw('1')->from('cis_rh_payroll as p')
                 ->whereColumn('p.employee_id','e.id')->where('p.period',$period))
             ->orderBy('e.name')->orderBy('e.id')->paginate(30,['e.id','e.name','e.code','e.company','e.status']);
-        $contracts=DB::table('cis_rh_records')->where('kind','contratos')
+        $contracts=DB::table('cis_rh_records')->where('kind','contratos')->where('review_status','aprovado')
             ->whereIn('employee_id',$employees->pluck('id'))->where('reference_date','<=',$end)
             ->get(['employee_id','details'])->filter(fn ($row)=>self::contractOverlaps($row,$start))->groupBy('employee_id');
         $employees->through(function ($employee) use ($contracts) {
@@ -52,7 +52,7 @@ final class RhPayrollController extends Controller
             $employee->eligible=$employee->status==='activo'&&$count===1;
             $employee->reason=match (true) {
                 $employee->status!=='activo'=>'Cadastro inactivo.',
-                $count===0=>'Sem contrato aplicável ao período.',
+                $count===0=>'Sem contrato aprovado aplicável ao período.',
                 $count>1=>'Mais de um contrato aplicável ao período.',
                 default=>null,
             };
@@ -91,7 +91,7 @@ final class RhPayrollController extends Controller
     private function applicableContract(object $employee,string $start,string $reference): object
     {
         abort_if($employee->admission>$reference,422,'A admissão é posterior ao período da folha.');
-        $contracts=DB::table('cis_rh_records')->where('employee_id',$employee->id)->where('kind','contratos')
+        $contracts=DB::table('cis_rh_records')->where('employee_id',$employee->id)->where('kind','contratos')->where('review_status','aprovado')
             ->where('reference_date','<=',$reference)->orderByDesc('reference_date')->get()
             ->filter(fn ($row)=>self::contractOverlaps($row,$start))->values();
         abort_unless($contracts->count()===1,422,'O período exige um único contrato aplicável. Confira os contratos do colaborador.');
@@ -105,7 +105,7 @@ final class RhPayrollController extends Controller
         [,$start,$reference]=self::periodDates($input['period']);
         $contract=$this->applicableContract($employee,$start,$reference);
         $details=json_decode($contract->details,true,512,JSON_THROW_ON_ERROR);
-        $amendments=DB::table('cis_rh_records')->where('parent_id',$contract->id)->where('kind','adendas')
+        $amendments=DB::table('cis_rh_records')->where('parent_id',$contract->id)->where('kind','adendas')->where('review_status','aprovado')
             ->where('reference_date','<=',$reference)->orderByDesc('reference_date')->orderByDesc('id')->limit(2)->get();
         abort_if($amendments->count()===2 && $amendments[0]->reference_date===$amendments[1]->reference_date,
             422,'Há duas adendas para a mesma data. Confirme qual se aplica.');

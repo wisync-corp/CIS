@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 final class RhRecordsController extends Controller
 {
     private const KINDS=['contratos','adendas','ferias','indemnizacoes','prestacoes'];
+    private const REVIEWED=['contratos','adendas'];
     private const MONEY=['required','numeric','min:0','max:9999999999','decimal:0,2'];
 
     private function gate(Request $r): void
@@ -48,7 +49,7 @@ final class RhRecordsController extends Controller
                 ->when($search!=='',fn ($q)=>$q->where(fn ($match)=>$match
                     ->where('e.name','like','%'.$search.'%')->orWhere('e.code','like','%'.$search.'%')))
                 ->orderByDesc('r.reference_date')->orderByDesc('r.id')
-                ->paginate(25,['r.id','r.employee_id','r.parent_id','r.reference_date','r.details','e.name','e.company','e.code'])
+                ->paginate(25,['r.id','r.employee_id','r.parent_id','r.reference_date','r.details','r.review_status','r.revision','r.decision_note','e.name','e.company','e.code'])
                 ->through(function ($row) {
                     $row->details=json_decode($row->details,true,512,JSON_THROW_ON_ERROR);
                     return $row;
@@ -95,19 +96,11 @@ final class RhRecordsController extends Controller
         $this->gate($r);
         abort_unless(in_array($kind,self::KINDS,true),404);
         $parentKind=match ($kind) {'adendas'=>'contratos','prestacoes'=>'indemnizacoes',default=>null};
-        $fields=match ($kind) {
-            'contratos'=>['end'=>['nullable','date_format:Y-m-d','after_or_equal:reference_date'],
-                'regime'=>['required','in:mensal,diario,hora'],'rate'=>self::MONEY],
-            'adendas'=>['text'=>['required','string','max:2000'],'rate'=>self::MONEY],
-            'ferias'=>['end'=>['required','date_format:Y-m-d','after_or_equal:reference_date'],'text'=>['nullable','string','max:500']],
-            'indemnizacoes'=>['amount'=>self::MONEY,'text'=>['required','string','max:500']],
-            'prestacoes'=>['amount'=>self::MONEY,'text'=>['nullable','string','max:500']],
-        };
         $d=$r->validate([
             'employee_id'=>['required','integer','exists:cis_rh_employees,id'],
             'parent_id'=>[$parentKind?'required':'prohibited','nullable','integer'],
             'reference_date'=>['required','date_format:Y-m-d'],
-            ...$fields,
+            ...self::detailRules($kind),
         ]);
         $id=DB::transaction(function () use ($r,$kind,$parentKind,$d) {
             $employee=(int)$d['employee_id'];
@@ -127,11 +120,86 @@ final class RhRecordsController extends Controller
             $details=array_diff_key($d,array_flip(['employee_id','parent_id','reference_date']));
             $id=DB::table('cis_rh_records')->insertGetId(['employee_id'=>$employee,'parent_id'=>$parent,'kind'=>$kind,
                 'reference_date'=>$d['reference_date'],'details'=>json_encode($details,JSON_THROW_ON_ERROR),
+                'review_status'=>in_array($kind,self::REVIEWED,true)?'pendente':null,
                 'created_at'=>now(),'updated_at'=>now()]);
             $this->audit($r,$employee,$id,$kind.'_criado',$d);
             return $id;
         });
         return response()->json(['id'=>$id],201);
+    }
+
+    private static function detailRules(string $kind): array
+    {
+        return match ($kind) {
+            'contratos'=>['end'=>['nullable','date_format:Y-m-d','after_or_equal:reference_date'],
+                'regime'=>['required','in:mensal,diario,hora'],'rate'=>self::MONEY],
+            'adendas'=>['text'=>['required','string','max:2000'],'rate'=>self::MONEY],
+            'ferias'=>['end'=>['required','date_format:Y-m-d','after_or_equal:reference_date'],'text'=>['nullable','string','max:500']],
+            'indemnizacoes'=>['amount'=>self::MONEY,'text'=>['required','string','max:500']],
+            'prestacoes'=>['amount'=>self::MONEY,'text'=>['nullable','string','max:500']],
+        };
+    }
+
+    public function updateTerms(Request $r,int $id)
+    {
+        $this->gate($r);
+        $kind=DB::table('cis_rh_records')->where('id',$id)->value('kind');
+        abort_unless(in_array($kind,self::REVIEWED,true),404,'Contrato ou adenda não encontrado.');
+        $d=$r->validate(['revision'=>['required','integer','min:1'],
+            'reference_date'=>['required','date_format:Y-m-d'],...self::detailRules($kind)]);
+        DB::transaction(function () use ($r,$id,$d) {
+            $row=DB::table('cis_rh_records')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($row,404);
+            abort_if($row->review_status==='aprovado',409,'Um contrato aprovado só pode ser alterado por adenda.');
+            abort_if((int)$row->revision!==(int)$d['revision'],409,'O registo mudou. Actualize a lista.');
+            $details=array_diff_key($d,array_flip(['revision','reference_date']));
+            if ($row->kind==='adendas') $this->checkAmendment($row,$d['reference_date'],false);
+            $new=['reference_date'=>$d['reference_date'],'details'=>json_encode($details,JSON_THROW_ON_ERROR),
+                'review_status'=>'pendente','revision'=>(int)$row->revision+1,'decided_by'=>null,'decided_at'=>null,
+                'decision_note'=>null,'updated_at'=>now()];
+            DB::table('cis_rh_records')->where('id',$id)->update($new);
+            $this->audit($r,(int)$row->employee_id,$id,'termos_editados',['anterior'=>(array)$row,'novo'=>$new]);
+        },3);
+        return response()->json(['status'=>'pendente']);
+    }
+
+    public function decideTerms(Request $r,int $id)
+    {
+        $this->gate($r);
+        Permissions::require($r->user(),'utilizadores');
+        $d=$r->validate(['revision'=>['required','integer','min:1'],'decision'=>['required','in:aprovar,rejeitar'],
+            'note'=>['required_if:decision,rejeitar','nullable','string','max:255']]);
+        DB::transaction(function () use ($r,$id,$d) {
+            $person=DB::table('cis_rh_records')->where('id',$id)->value('employee_id');
+            abort_unless($person,404,'Contrato ou adenda não encontrado.');
+            DB::table('cis_rh_employees')->where('id',$person)->lockForUpdate()->first();
+            $row=DB::table('cis_rh_records')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($row&&in_array($row->kind,self::REVIEWED,true),404,'Contrato ou adenda não encontrado.');
+            abort_unless($row->review_status==='pendente'&&(int)$row->revision===(int)$d['revision'],409,'O registo já foi alterado ou decidido.');
+            $approved=$d['decision']==='aprovar';
+            if ($approved && $row->kind==='adendas') {
+                $this->checkAmendment($row,$row->reference_date,true);
+                abort_if(DB::table('cis_rh_records')->where('parent_id',$row->parent_id)->where('kind','adendas')
+                    ->where('reference_date',$row->reference_date)->where('review_status','aprovado')->exists(),
+                    422,'Já existe uma adenda aprovada para este contrato e data.');
+            }
+            $new=['review_status'=>$approved?'aprovado':'rejeitado','revision'=>(int)$row->revision+1,
+                'decided_by'=>$r->user()->id,'decided_at'=>now(),'decision_note'=>$d['note']??null,'updated_at'=>now()];
+            DB::table('cis_rh_records')->where('id',$id)->update($new);
+            $this->audit($r,(int)$person,$id,$approved?'termos_aprovados':'termos_rejeitados',
+                ['anterior'=>(array)$row,'novo'=>$new]);
+        },3);
+        return response()->json(['saved'=>true]);
+    }
+
+    private function checkAmendment(object $row,string $date,bool $approving): void
+    {
+        $parent=DB::table('cis_rh_records')->where('id',$row->parent_id)->where('kind','contratos')
+            ->where('employee_id',$row->employee_id)->lockForUpdate()->first();
+        abort_unless($parent,422,'Contrato associado indisponível.');
+        $end=json_decode($parent->details,true,512,JSON_THROW_ON_ERROR)['end']??null;
+        abort_if($date<$parent->reference_date||($end&&$date>$end),422,'A data da adenda tem de estar dentro da vigência do contrato.');
+        abort_if($approving&&$parent->review_status!=='aprovado',422,'Aprove primeiro o contrato associado.');
     }
 
     private function canLink(Request $r): void
