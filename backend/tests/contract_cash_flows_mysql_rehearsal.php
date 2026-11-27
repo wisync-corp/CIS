@@ -1574,10 +1574,10 @@ $cq=tap(Request::create('/x','GET',['carteira'=>'1','mes'=>'todos','ano'=>'todos
 $cx=data((new \App\Http\Controllers\Api\ExtractoController())->clientes($cq));
 $ovq=tap(Request::create('/x','GET',[]),fn($r)=>$r->setUserResolver(static fn()=>$admin));
 $ovc=data((new \App\Http\Controllers\Api\OverviewController())($ovq));
-ok(isset($cx['carteira']) && abs((float)$cx['carteira']['totais']['capital']-(float)$ovc['carteira']['capital_em_carteira'])<0.01,
-  'capital em carteira do extracto = «em curso hoje» da Visão geral ('.$cx['carteira']['totais']['capital'].')');
+ok(isset($cx['carteira']) && abs((float)$cx['carteira']['capital']-(float)$ovc['carteira']['capital_em_carteira'])<0.01,
+  'capital em carteira do extracto = «em curso hoje» da Visão geral ('.$cx['carteira']['capital'].')');
 $blk=\App\Support\ClientRegistry::blacklistedIds();
-$cn=collect($cx['carteira']['contratos'])->pluck('contrato')->all();
+$cn=collect($cx['linhas'])->pluck('contrato')->unique()->all();
 ok(!DB::connection('mysql_legacy')->table('Contractos')->whereIn('Nr do Contracto',$cn)->whereIn('Nº de Cliente',$blk?:[0])->exists(),'a carteira em curso não inclui mutuários em lista negra');
 ok(collect($cx['linhas'])->every(fn($r)=>in_array($r['situacao'],['aberta','vencida'],true)),'só prestações em aberto');
 

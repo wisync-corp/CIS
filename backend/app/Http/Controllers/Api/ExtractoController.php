@@ -413,30 +413,12 @@ final class ExtractoController extends Controller
             'desembolsado'=>self::money($cap+$rf),'em_divida'=>self::money($list->sum(fn($c)=>(float)$c['em_divida']))]];
     }
 
-    /**
-     * Contratos da carteira em curso (um por linha). Capital em carteira = Valor a Pagar − juros das prestações
-     * em aberto, a mesma conta do cartão «Carteira desembolsada › em curso hoje» da Visão geral.
-     */
+    /** Carteira em curso: só os totais que ligam o extracto ao cartão da Visão geral (capital = Valor a Pagar − juros). */
     private function portfolio($raw): array
     {
-        $today=$this->today();
-        $list=collect($raw)->groupBy('Nr do Contracto')->map(function($rows,$num) use ($today){
-            $late=$rows->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10)<$today);
-            $next=$rows->filter(fn($r)=>substr((string)$r->{'Data de Cobrança'},0,10)>=$today)->min('Data de Cobrança');
-            $oldest=$late->min('Data de Cobrança');
-            $days=$oldest?(int)\Carbon\CarbonImmutable::parse(substr((string)$oldest,0,10))->diffInDays(\Carbon\CarbonImmutable::parse($today)):0;
-            return ['contrato'=>(string)$num,'cliente'=>(string)$rows->first()->{'Nome do Cliente'},'codigo'=>$rows->first()->{'Nº de Cliente'},
-                'inicio'=>substr((string)$rows->min('Data de Inicio'),0,10),'capital_inicial'=>self::money($rows->max('Quantia Creditada')),
-                'prestacoes'=>$rows->count(),
-                'capital'=>self::money($rows->sum(fn($r)=>max(0,(float)$r->{'Valor a Pagar'}-(float)($r->{'Valor de Juros'}??0)))),
-                'a_receber'=>self::money($rows->sum(fn($r)=>(float)$r->{'Valor a Pagar'})),
-                'em_atraso'=>self::money($late->sum(fn($r)=>self::owed($r))),'prestacoes_atraso'=>$late->count(),'dias_atraso'=>$days,
-                'proximo_vencimento'=>$next?substr((string)$next,0,10):null,
-                'estado'=>$late->isNotEmpty()?'Em atraso':'Em curso'];
-        })->sortBy([['dias_atraso','desc'],['contrato','asc']])->values();
-        return ['contratos'=>$list,'totais'=>['contratos'=>$list->count(),'em_atraso'=>$list->where('estado','Em atraso')->count(),
-            'capital'=>self::money($list->sum(fn($c)=>(float)$c['capital'])),'a_receber'=>self::money($list->sum(fn($c)=>(float)$c['a_receber'])),
-            'valor_atraso'=>self::money($list->sum(fn($c)=>(float)$c['em_atraso']))]];
+        $rows=collect($raw);
+        return ['contratos'=>$rows->pluck('Nr do Contracto')->unique()->count(),
+            'capital'=>self::money($rows->sum(fn($r)=>max(0,(float)$r->{'Valor a Pagar'}-(float)($r->{'Valor de Juros'}??0))))];
     }
 
     /** GET /cis/extractos/contratos?cliente= : contratos de um cliente (como o combo do VBA). */
