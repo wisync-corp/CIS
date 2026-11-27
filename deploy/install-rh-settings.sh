@@ -19,3 +19,5 @@ sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/c
   exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060008_queue_existing_rh_leave_review.php" --force
 sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml \
   exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060009_create_rh_integrations.php" --force
+sudo docker compose --env-file deploy/.env -f deploy/mysql-only.yaml -f deploy/compose.preview.yaml \
+  exec -T api-preview php artisan migrate --path="database/migrations/2026_11_27_060010_add_rh_employee_profile.php" --force
