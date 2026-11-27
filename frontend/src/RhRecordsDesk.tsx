@@ -1,6 +1,8 @@
 import {useCan} from './perms';
-import {useEffect,useState,type FormEvent} from 'react';
-import {Plus,Search} from 'lucide-react';
+import {useEffect,useState,type FormEvent,type ReactNode} from 'react';
+import {Plus} from 'lucide-react';
+import RhOverview from './rh/RhOverview';
+import {Badge,Chips,Empty,Pager,Person,SearchBar,daysBetween,date,money} from './rh/ui';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 export const rhSections=[
@@ -129,7 +131,10 @@ function InstallmentPayment({row,token,onClose,onSaved}:{row:Row;token:string;on
  </form>;
 }
 
-export default function RhRecordsDesk({token,section,onNavigate}:{token:string;section:RhSection;onNavigate:(s:RhSection)=>void}){
+const NEW_LABEL:Record<RhSection,string>={painel:'',colaboradores:'Novo colaborador',contratos:'Novo contrato',adendas:'Nova adenda',ferias:'Registar férias',indemnizacoes:'Nova indemnização',prestacoes:'Nova prestação'};
+type Filter='todos'|'pendente'|'aprovado'|'rejeitado'|'activo'|'inactivo'|'por_pagar'|'paga';
+export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:string;section:RhSection;onNavigate:(s:RhSection)=>void;onOpen?:(page:'Folha salarial'|'Relatórios de RH')=>void}){
+ const [filter,setFilter]=useState<Filter>('todos');
  const can=useCan();
  const [plan,setPlan]=useState<{signature:string;years:number;total_cents:number;installments:{date:string;cents:number}[]}|null>(null);
  const [payment,setPayment]=useState<Row|null>(null);
@@ -193,13 +198,50 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const pages=worker?data?.employees:data?.records;
+ if(overview)return <section className="cis-panel cis-proposals">{error&&<p className="cis-table-error" role="alert">{error}</p>}
+  {!data&&!error&&<p role="status">A carregar…</p>}
+  {data&&<RhOverview token={token} totals={data.totals} onNavigate={onNavigate} onOpen={p=>onOpen?.(p)}/>}</section>;
+ const busyRow=editing||!!linking||!!review||!!payment;
+
+ const reviewOf=(x:Row)=>x.review_status??'pendente';
+ const records=data?.records?.data??[],employees=data?.employees.data??[];
+ const statusOf=(x:Row|Employee):Filter=>worker?(x as Employee).status as Filter:section==='prestacoes'?((x as Row).details.paid_on?'paga':'por_pagar'):reviewOf(x as Row);
+ const list:(Row|Employee)[]=worker?employees:records;
+ const shown=filter==='todos'?list:list.filter(x=>statusOf(x)===filter);
+ const count=(f:Filter)=>list.filter(x=>statusOf(x)===f).length;
+ const chips:{id:Filter;label:string;n:number}[]=worker?[{id:'todos',label:'Todos',n:list.length},{id:'activo',label:'Activos',n:count('activo')},{id:'inactivo',label:'Inactivos',n:count('inactivo')}]
+  :reviewed?[{id:'todos',label:'Todos',n:list.length},{id:'pendente',label:'Pendentes',n:count('pendente')},{id:'aprovado',label:'Aprovados',n:count('aprovado')},{id:'rejeitado',label:'Rejeitados',n:count('rejeitado')}]
+  :section==='prestacoes'?[{id:'todos',label:'Todas',n:list.length},{id:'por_pagar',label:'Por pagar',n:count('por_pagar')},{id:'paga',label:'Pagas',n:count('paga')}]:[];
+ const reviewCell=(x:Row)=><><Badge state={reviewOf(x)}/>{x.decision_note&&<span className="rh-note">{x.decision_note}</span>}</>;
+ const reviewActions=(x:Row)=><div className="rh-row-actions">{x.review_status!=='aprovado'&&<button type="button" className="cis-edit-action" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'editar'})}>Editar</button>}
+  {reviewOf(x)==='pendente'&&can('utilizadores')&&<><button type="button" className="cis-edit-action" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'aprovar'})}>Aprovar</button>
+   <button type="button" className="cis-edit-action" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'rejeitar'})}>Rejeitar</button></>}</div>;
+ type Col={h:string;v:(x:Row&Employee)=>ReactNode;num?:boolean;wrap?:boolean};
+ const cols:Col[]=worker?[
+  {h:'Categoria',v:x=>x.category||'—'},{h:'Admissão',v:x=>date(x.admission)},{h:'Estado',v:x=><Badge state={x.status}/>},
+  ...(can('utilizadores')?[{h:'Conta do CIS',v:(x:Employee)=><div className="rh-row-actions" style={{justifyContent:'flex-start'}}><span className={x.user?'':'muted'}>{x.user?.name??'Sem conta associada'}</span>
+   <button type="button" className="cis-edit-action" disabled={editing||!!linking} onClick={()=>setLinking(x)}>{x.user?'Alterar':'Associar'}</button></div>}]:[])]
+ :section==='contratos'?[
+  {h:'Início',v:x=>date(x.reference_date)},{h:'Fim',v:x=>x.details.end?date(x.details.end):<span className="muted">Sem termo</span>},
+  {h:'Regime',v:x=>({mensal:'Mensal',diario:'Diário',hora:'Hora'} as Record<string,string>)[x.details.regime??'']??x.details.regime??'—'},
+  {h:'Valor unitário',v:x=>money(x.details.rate),num:true},{h:'Estado',v:reviewCell},{h:'',v:reviewActions}]
+ :section==='adendas'?[
+  {h:'Contrato',v:x=>x.parent_id?'#'+x.parent_id:'—'},{h:'Efeito a partir de',v:x=>date(x.reference_date)},{h:'Novo valor',v:x=>money(x.details.rate),num:true},
+  {h:'Descrição',v:x=>x.details.text||'—',wrap:true},{h:'Estado',v:reviewCell},{h:'',v:reviewActions}]
+ :section==='ferias'?[
+  {h:'De',v:x=>date(x.reference_date)},{h:'Até',v:x=>date(x.details.end)},{h:'Dias',v:x=>daysBetween(x.reference_date,x.details.end)??'—',num:true},
+  {h:'Observação',v:x=>x.details.text||'—',wrap:true},{h:'Estado',v:reviewCell},{h:'',v:reviewActions}]
+ :section==='indemnizacoes'?[
+  {h:'Data',v:x=>date(x.reference_date)},{h:'Anos',v:x=>x.details.years??'—',num:true},{h:'Motivo',v:x=>x.details.text||'—',wrap:true},
+  {h:'Planeado',v:x=>money((x.payment_totals?.planned??0)/100),num:true},{h:'Pago',v:x=>money((x.payment_totals?.paid??0)/100),num:true},
+  {h:'Saldo',v:x=>(x.payment_totals?.balance??0)>0?<strong>{money((x.payment_totals?.balance??0)/100)}</strong>:<Badge tone="ok">Liquidada</Badge>,num:true}]
+ :[
+  {h:'Indemnização',v:x=>x.parent_id?'#'+x.parent_id:'—'},{h:'Data prevista',v:x=>date(x.reference_date)},{h:'Montante',v:x=>money(x.details.amount),num:true},
+  {h:'Pagamento',v:x=>x.details.paid_on?<><Badge state="paga"/><span className="rh-note">{date(x.details.paid_on)}{x.details.payment_reference?' · '+x.details.payment_reference:''}</span></>
+   :<button type="button" className="cis-edit-action" disabled={editing||!!payment} onClick={()=>setPayment(x)}>Registar pagamento</button>}];
  return <section className="cis-panel cis-proposals">
-  <div className="cis-prop-head"><div><h3>{titles[section]}</h3></div>
-   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing||!!linking||!!review||!!payment} onClick={()=>{setForm(blank);setPlan(null);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
-  </div>
   {error&&<p className="cis-table-error" role="alert">{error}</p>}{status&&<p className="cis-msg-notice" role="status">{status}</p>}
   {!data&&!error&&<p role="status">A carregar…</p>}
-  {overview&&data&&<div className="cis-stat-grid">{rhSections.filter(([key])=>key!=='painel').map(([key,title])=><button key={key} type="button" className="cis-panel cis-stat cis-stat-button" onClick={()=>onNavigate(key)}><div className="cis-stat-top">{title}</div><strong>{data.totals[key]??0}</strong></button>)}</div>}
   {worker&&linking&&<RhUserLink key={linking.id} employee={linking} token={token} onClose={()=>setLinking(null)}
    onSaved={()=>{setLinking(null);setRev(v=>v+1);setStatus('Associação actualizada.');}}/>}
   {payment&&<InstallmentPayment key={payment.id} row={payment} token={token} onClose={()=>setPayment(null)} onSaved={()=>{setPayment(null);setRev(v=>v+1);setStatus('Pagamento registado em RH.');}}/>}
@@ -224,25 +266,20 @@ export default function RhRecordsDesk({token,section,onNavigate}:{token:string;s
     <table><thead><tr><th>Vencimento</th><th>Valor</th></tr></thead><tbody>{plan.installments.map(row=><tr key={row.date}><td>{row.date}</td><td>{mt(String(row.cents/100))}</td></tr>)}</tbody></table></div>}
    <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy||(!worker&&!chosen)}>{section==='indemnizacoes'?(plan?'Guardar plano':'Calcular prévia'):'Guardar'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancelar</button></div>
   </form>}
-  {!overview&&data&&<>
-   <form className="cis-prop-actions" onSubmit={e=>{e.preventDefault();setPage(1);setSearch(query.trim());}}>
-    <input type="search" aria-label="Nome ou código do colaborador" placeholder="Nome ou código do colaborador" value={query} onChange={e=>setQuery(e.target.value)}/><button type="submit"><Search size={15}/> Pesquisar</button>
-   </form>
-   {!pages?.data.length?<p>Sem registos.</p>:<div className="cis-table-scroll"><table>
-    <thead><tr><th>Colaborador</th><th>Empresa</th><th>Código</th>{worker?<><th>Categoria</th><th>Admissão</th><th>Estado</th>{can('utilizadores')&&<th>Conta do CIS</th>}</>:<><th>Referência</th><th>Data</th><th>Detalhes</th>{section==='prestacoes'&&<th>Pagamento</th>}{section==='indemnizacoes'&&<><th>Planeado</th><th>Pago</th><th>Saldo</th></>}{reviewed&&<><th>Estado</th><th>Acções</th></>}</>}</tr></thead>
-    <tbody>{worker?data.employees.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>{x.category||'—'}</td><td>{x.admission}</td><td>{x.status==='activo'?'Activo':'Inactivo'}</td>{can('utilizadores')&&<td><span>{x.user?.name??'Sem associação'}</span> <button type="button" className="cis-edit-action" disabled={editing||!!linking} onClick={()=>setLinking(x)}>{x.user?'Gerir associação':'Associar'}</button></td>}</tr>)
-    :data.records?.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>#{x.id}{x.parent_id?' · origem #'+x.parent_id:''}</td><td>{x.reference_date}</td><td>{details(x)||'—'}</td>{section==='prestacoes'&&<td>{x.details.paid_on?'Paga':<button type="button" className="cis-edit-action" disabled={editing||!!payment}
-      onClick={()=>setPayment(x)}>Registar pagamento</button>}</td>}
-     {section==='indemnizacoes'&&<><td>{mt(String((x.payment_totals?.planned??0)/100))}</td><td>{mt(String((x.payment_totals?.paid??0)/100))}</td><td>{mt(String((x.payment_totals?.balance??0)/100))}</td></>}
-     {reviewed&&<>
-     <td>{x.review_status==='aprovado'?'Aprovado':x.review_status==='rejeitado'?'Rejeitado':'Pendente'}{x.decision_note&&<small>{x.decision_note}</small>}</td>
-     <td><div className="cis-prop-actions">{x.review_status!=='aprovado'&&<button type="button" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'editar'})}>Editar</button>}
-      {x.review_status==='pendente'&&can('utilizadores')&&<><button type="button" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'aprovar'})}>Aprovar</button>
-       <button type="button" disabled={!!review||editing} onClick={()=>setReview({row:x,mode:'rejeitar'})}>Rejeitar</button></>}
-     </div></td>
-    </>}</tr>)}</tbody>
+  {data&&<>
+   <div className="rh-toolbar">
+    <SearchBar value={query} onChange={setQuery} onSubmit={()=>{setPage(1);setSearch(query.trim());}} placeholder="Pesquisar por nome ou código do colaborador"/>
+    <div className="rh-toolbar-end">{chips.length>0&&<Chips label="Filtrar por estado" items={chips} value={filter} onChange={setFilter}/>}
+     <button className="rh-primary" type="button" disabled={!data||busyRow} onClick={()=>{setForm(blank);setPlan(null);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> {NEW_LABEL[section]}</button></div>
+   </div>
+   {(pages?.last_page??0)>1&&filter!=='todos'&&<p className="rh-note">O filtro aplica-se à página apresentada.</p>}
+   {!pages?.data.length?<Empty title={search?'Nenhum resultado para «'+search+'».':'Ainda não há registos.'} text={search?'Verifique o nome ou o código.':'Use «'+NEW_LABEL[section]+'» para criar o primeiro.'}/>
+   :!shown.length?<Empty title="Nenhum registo com este estado nesta página."/>
+   :<div className="cis-table-scroll rh-scroll"><table className="rh-table rh-cards">
+    <thead><tr><th>Colaborador</th>{cols.map(c=><th key={c.h} className={c.num?'num':undefined}>{c.h}</th>)}</tr></thead>
+    <tbody>{shown.map(x=><tr key={x.id}><td><Person name={x.name} code={x.code} company={x.company}/></td>{cols.map(c=><td key={c.h} data-label={c.h} className={c.num?'num':c.wrap?'wrap':'nowrap'}>{c.v(x as never)}</td>)}</tr>)}</tbody>
    </table></div>}
-   {(pages?.last_page??0)>1&&<div className="cis-prop-actions"><button type="button" disabled={page===1} onClick={()=>setPage(x=>x-1)}>Anterior</button><span>{page} / {pages?.last_page}</span><button type="button" disabled={page>=(pages?.last_page??1)} onClick={()=>setPage(x=>x+1)}>Seguinte</button></div>}
+   <Pager page={page} last={pages?.last_page??1} onPage={setPage}/>
   </>}
  </section>;
 }
