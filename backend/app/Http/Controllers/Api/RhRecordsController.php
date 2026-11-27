@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Support\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Schema;
 
 final class RhRecordsController extends Controller
@@ -85,26 +86,119 @@ final class RhRecordsController extends Controller
             ->where('kind',$d['kind'])->orderByDesc('reference_date')->get(['id','reference_date']));
     }
 
+    private function employeeData(Request $r,bool $editing=false): array
+    {
+        $d=$r->validate([
+            'company'=>[$editing?'prohibited':'required','string','max:80'],'code'=>[$editing?'prohibited':'required','string','max:32'],
+            'name'=>['required','string','max:160'],'category'=>['nullable','string','max:80'],
+            'admission'=>['required','date_format:Y-m-d'],'status'=>['required','in:activo,inactivo'],
+            'profile'=>['sometimes','array:short_name,sex,birth,civil,nationality,birthplace,dependents,document_type,document_number,issued,expiry,issue_place,nuit,inss,phone,email,locality,district,postal,bank,bank_code,account,company_account,establishment,department,profession,contract_type,professional_status,retirement,departure,departure_reason,pay_regime,base_salary,contribute'],
+            'profile.short_name'=>['nullable','string','max:60'],
+            'profile.sex'=>['nullable','in:Masculino,Feminino'],
+            'profile.birth'=>['nullable','date_format:Y-m-d','before_or_equal:today'],
+            'profile.civil'=>['nullable','string','max:120'],
+            'profile.nationality'=>['nullable','string','max:120'],
+            'profile.birthplace'=>['nullable','string','max:80'],
+            'profile.dependents'=>['nullable','integer','min:0','max:100'],
+            'profile.document_type'=>['nullable','string','max:120'],
+            'profile.document_number'=>['nullable','string','max:30'],
+            'profile.issued'=>['nullable','date_format:Y-m-d'],
+            'profile.expiry'=>['nullable','date_format:Y-m-d','after_or_equal:profile.issued'],
+            'profile.issue_place'=>['nullable','string','max:80'],
+            'profile.nuit'=>['nullable','regex:/^\d{9}$/D'],
+            'profile.inss'=>['nullable','string','max:30'],
+            'profile.phone'=>['nullable','regex:/^\+?[\d\s]{7,16}$/D'],
+            'profile.email'=>['nullable','email:rfc','max:160'],
+            'profile.locality'=>['nullable','string','max:120'],
+            'profile.district'=>['nullable','string','max:120'],
+            'profile.postal'=>['nullable','string','max:20'],
+            'profile.bank'=>['nullable','string','max:120'],
+            'profile.bank_code'=>['nullable','string','max:20'],
+            'profile.account'=>['nullable','string','max:40'],
+            'profile.company_account'=>['nullable','string','max:40'],
+            'profile.establishment'=>['nullable','string','max:20'],
+            'profile.department'=>['nullable','string','max:120'],
+            'profile.profession'=>['nullable','string','max:120'],
+            'profile.contract_type'=>['nullable','string','max:120'],
+            'profile.professional_status'=>['nullable','string','max:120'],
+            'profile.retirement'=>['nullable','string','max:120'],
+            'profile.departure'=>['nullable','date_format:Y-m-d','after_or_equal:admission'],
+            'profile.departure_reason'=>['nullable','string','max:120'],
+            'profile.pay_regime'=>['nullable','in:Mensal,Hora,Diário'],
+            'profile.base_salary'=>['nullable','numeric','min:0','max:9999999999','decimal:0,2'],
+            'profile.contribute'=>['nullable','in:Sim,Não'],
+            'revision'=>[$editing?'required':'prohibited','integer','min:1'],
+        ]);
+        $d['category']=$d['category']??'';
+        if (isset($d['profile']['pay_regime'])&&$d['profile']['pay_regime']!=='Mensal') $d['profile']['base_salary']=null;
+        return $d;
+    }
+
+    private function profileAvailable(): void
+    {
+        abort_unless(Schema::hasColumn('cis_rh_employees','profile_encrypted'),503,'Instale a actualização do cadastro de RH na VPS.');
+    }
+
     public function employee(Request $r)
     {
         $this->gate($r);
-        $d=$r->validate([
-            'company'=>['required','string','max:80'],'code'=>['required','string','max:32'],
-            'name'=>['required','string','max:160'],'category'=>['nullable','string','max:80'],
-            'admission'=>['required','date_format:Y-m-d'],'status'=>['required','in:activo,inactivo'],
-        ]);
-        $d['category']=$d['category']??'';
+        $d=$this->employeeData($r);
+        if (isset($d['profile'])) $this->profileAvailable();
+        $profile=$d['profile']??null;
+        unset($d['profile']);
         try {
-            $id=DB::transaction(function () use ($d,$r) {
-                $id=DB::table('cis_rh_employees')->insertGetId($d+['created_at'=>now(),'updated_at'=>now()]);
-                $this->audit($r,$id,null,'colaborador_criado',$d);
+            $id=DB::transaction(function () use ($d,$r,$profile) {
+                $row=$d+['created_at'=>now(),'updated_at'=>now()];
+                if ($profile!==null) $row['profile_encrypted']=Crypt::encryptString(json_encode($profile,JSON_THROW_ON_ERROR));
+                $id=DB::table('cis_rh_employees')->insertGetId($row);
+                $this->audit($r,$id,null,'colaborador_criado',$d+['campos_ficha'=>array_keys($profile??[])]);
                 return $id;
             });
         } catch (\Illuminate\Database\UniqueConstraintViolationException) {
             abort(409,'O código de colaborador já existe nesta empresa.');
         }
-
         return response()->json(['id'=>$id],201);
+    }
+
+    public function employeeProfile(Request $r,int $id)
+    {
+        $this->gate($r);
+        $this->profileAvailable();
+        $row=DB::table('cis_rh_employees')->where('id',$id)->first();
+        abort_unless($row,404,'Colaborador não encontrado.');
+        $profile=$row->profile_encrypted?json_decode(Crypt::decryptString($row->profile_encrypted),true,512,JSON_THROW_ON_ERROR):[];
+        unset($row->profile_encrypted);
+        $contracts=DB::table('cis_rh_records')->where('employee_id',$id)->whereIn('kind',['contratos','adendas'])
+            ->orderByDesc('reference_date')->orderByDesc('id')->get(['id','kind','parent_id','reference_date','review_status','details'])
+            ->map(function ($contract) {
+                $contract->details=json_decode($contract->details,true,512,JSON_THROW_ON_ERROR);
+                return $contract;
+            });
+        return response()->json(['employee'=>$row,'profile'=>(object)$profile,'contracts'=>$contracts])->header('Cache-Control','no-store, private');
+    }
+
+    public function updateEmployee(Request $r,int $id)
+    {
+        $this->gate($r);
+        $this->profileAvailable();
+        $d=$this->employeeData($r,true);
+        DB::transaction(function () use ($r,$id,$d) {
+            $row=DB::table('cis_rh_employees')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($row,404,'Colaborador não encontrado.');
+            abort_if((int)$row->profile_revision!==(int)$d['revision'],409,'A ficha foi alterada entretanto. Volte a abri-la.');
+            $old=$row->profile_encrypted?json_decode(Crypt::decryptString($row->profile_encrypted),true,512,JSON_THROW_ON_ERROR):[];
+            $profile=array_replace($old,$d['profile']??[]);
+            $base=array_diff_key($d,array_flip(['profile','revision']));
+            $revision=(int)$row->profile_revision+1;
+            DB::table('cis_rh_employees')->where('id',$id)->update($base+[
+                'profile_encrypted'=>Crypt::encryptString(json_encode($profile,JSON_THROW_ON_ERROR)),
+                'profile_revision'=>$revision,'updated_at'=>now(),
+            ]);
+            $changed=array_keys(array_filter($profile,fn ($value,$key)=>($old[$key]??null)!==$value,ARRAY_FILTER_USE_BOTH));
+            $this->audit($r,$id,null,'colaborador_editado',['anterior'=>array_intersect_key((array)$row,$base),
+                'novo'=>$base,'campos_ficha'=>$changed,'revisao'=>$revision]);
+        },3);
+        return response()->json(['saved'=>true]);
     }
 
     public function record(Request $r,string $kind)

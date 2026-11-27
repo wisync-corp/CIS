@@ -1,3 +1,4 @@
+import RhEmployeeProfile from './RhEmployeeProfile';
 import {useCan} from './perms';
 import {useEffect,useState,type FormEvent,type ReactNode} from 'react';
 import {Plus} from 'lucide-react';
@@ -138,6 +139,7 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
  const can=useCan();
  const [plan,setPlan]=useState<{signature:string;years:number;total_cents:number;installments:{date:string;cents:number}[]}|null>(null);
  const [payment,setPayment]=useState<Row|null>(null);
+ const [employeeProfile,setEmployeeProfile]=useState<{id:number|null}|null>(null);
  const [review,setReview]=useState<{row:Row;mode:'editar'|'aprovar'|'rejeitar'}|null>(null);
  const [linking,setLinking]=useState<Employee|null>(null);
  const [data,setData]=useState<Response|null>(null),[error,setError]=useState(''),[status,setStatus]=useState(''),[page,setPage]=useState(1),[rev,setRev]=useState(0);
@@ -219,8 +221,9 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
  type Col={h:string;v:(x:Row&Employee)=>ReactNode;num?:boolean;wrap?:boolean};
  const cols:Col[]=worker?[
   {h:'Categoria',v:x=>x.category||'—'},{h:'Admissão',v:x=>date(x.admission)},{h:'Estado',v:x=><Badge state={x.status}/>},
+  {h:'Ficha',v:x=><button type="button" className="cis-edit-action" disabled={busyRow||!!employeeProfile} onClick={()=>setEmployeeProfile({id:x.id})}>Abrir ficha</button>},
   ...(can('utilizadores')?[{h:'Conta do CIS',v:(x:Employee)=><div className="rh-row-actions" style={{justifyContent:'flex-start'}}><span className={x.user?'':'muted'}>{x.user?.name??'Sem conta associada'}</span>
-   <button type="button" className="cis-edit-action" disabled={editing||!!linking} onClick={()=>setLinking(x)}>{x.user?'Alterar':'Associar'}</button></div>}]:[])]
+   <button type="button" className="cis-edit-action" disabled={editing||!!linking||!!employeeProfile} onClick={()=>setLinking(x)}>{x.user?'Alterar':'Associar'}</button></div>}]:[])]
  :section==='contratos'?[
   {h:'Início',v:x=>date(x.reference_date)},{h:'Fim',v:x=>x.details.end?date(x.details.end):<span className="muted">Sem termo</span>},
   {h:'Regime',v:x=>({mensal:'Mensal',diario:'Diário',hora:'Hora'} as Record<string,string>)[x.details.regime??'']??x.details.regime??'—'},
@@ -242,6 +245,8 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
  return <section className="cis-panel cis-proposals">
   {error&&<p className="cis-table-error" role="alert">{error}</p>}{status&&<p className="cis-msg-notice" role="status">{status}</p>}
   {!data&&!error&&<p role="status">A carregar…</p>}
+  {worker&&employeeProfile&&<RhEmployeeProfile key={employeeProfile.id??'novo'} token={token} id={employeeProfile.id} onClose={()=>setEmployeeProfile(null)}
+   onSaved={()=>{setEmployeeProfile(null);setPage(1);setRev(v=>v+1);setStatus('Ficha guardada.');}}/>}
   {worker&&linking&&<RhUserLink key={linking.id} employee={linking} token={token} onClose={()=>setLinking(null)}
    onSaved={()=>{setLinking(null);setRev(v=>v+1);setStatus('Associação actualizada.');}}/>}
   {payment&&<InstallmentPayment key={payment.id} row={payment} token={token} onClose={()=>setPayment(null)} onSaved={()=>{setPayment(null);setRev(v=>v+1);setStatus('Pagamento registado em RH.');}}/>}
@@ -270,7 +275,7 @@ export default function RhRecordsDesk({token,section,onNavigate,onOpen}:{token:s
    <div className="rh-toolbar">
     <SearchBar value={query} onChange={setQuery} onSubmit={()=>{setPage(1);setSearch(query.trim());}} placeholder="Pesquisar por nome ou código do colaborador"/>
     <div className="rh-toolbar-end">{chips.length>0&&<Chips label="Filtrar por estado" items={chips} value={filter} onChange={setFilter}/>}
-     <button className="rh-primary" type="button" disabled={!data||busyRow} onClick={()=>{setForm(blank);setPlan(null);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> {NEW_LABEL[section]}</button></div>
+     <button className="rh-primary" type="button" disabled={!data||busyRow||!!employeeProfile} onClick={()=>{if(worker){setEmployeeProfile({id:null});setError('');setStatus('');return;}setForm(blank);setPlan(null);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> {NEW_LABEL[section]}</button></div>
    </div>
    {(pages?.last_page??0)>1&&filter!=='todos'&&<p className="rh-note">O filtro aplica-se à página apresentada.</p>}
    {!pages?.data.length?<Empty title={search?'Nenhum resultado para «'+search+'».':'Ainda não há registos.'} text={search?'Verifique o nome ou o código.':'Use «'+NEW_LABEL[section]+'» para criar o primeiro.'}/>

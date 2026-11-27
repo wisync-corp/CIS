@@ -1813,6 +1813,23 @@ ok(status(fn()=>$rhApi->employees($readRh()))===401
     && DB::table('cis_rh_integration_events')->where('integration_id',$issued['id'])->where('operation','ler_colaboradores')->count()===2,
     'revogação bloqueia leituras e mantém auditoria por origem');
 
+
+echo "\nFicha de cadastro RH\n";
+(require __DIR__.'/../database/migrations/2026_11_27_060010_add_rh_employee_profile.php')->up();
+$catalogueEmployee=['company'=>'Empresa fictícia','code'=>'RH-FICHA','name'=>'Ficha de ensaio','admission'=>'2026-01-01','status'=>'activo',
+    'profile'=>['nuit'=>'123456789','account'=>'000123','department'=>'Secção fictícia','pay_regime'=>'Mensal','base_salary'=>'1500.00']];
+$ce=data($rhRecords->employee(req('/x',$catalogueEmployee,$user)))['id'];
+$cp=data($rhRecords->employeeProfile(req('/x',[],$user),$ce));
+ok($cp['profile']['account']==='000123'&&!str_contains(DB::table('cis_rh_employees')->where('id',$ce)->value('profile_encrypted'),'000123'),
+    'ficha preserva zeros iniciais e guarda dados bancários cifrados');
+$oldProfile=data($rhRecords->employeeProfile(req('/x',[],$user),$created));
+ok($oldProfile['employee']['profile_revision']===1&&$oldProfile['profile']===[],'fichas existentes continuam disponíveis');
+$changeProfile=array_diff_key($catalogueEmployee,array_flip(['company','code','profile']))+['revision'=>1,'profile'=>['department'=>'Nova secção fictícia']];
+$rhRecords->updateEmployee(req('/x',$changeProfile,$user),$ce);
+ok(status(fn()=>$rhRecords->updateEmployee(req('/x',$changeProfile,$user),$ce))===409
+    && data($rhRecords->employeeProfile(req('/x',[],$user),$ce))['profile']['nuit']==='123456789',
+    'edição preserva campos não enviados e rejeita revisão desactualizada');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
