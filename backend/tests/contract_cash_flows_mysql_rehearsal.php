@@ -1777,6 +1777,19 @@ $planId=data($rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))['id'];
 ok(DB::table('cis_rh_records')->where('parent_id',$planId)->count()===3
     && status(fn()=>$rhRecords->createIndemnityPlan(req('/x',$planReq,$user)))===409,'plano guarda todas as prestações e impede duplicados');
 
+
+echo "\nRelatórios de RH\n";
+$rhReport=new \App\Http\Controllers\Api\RhReportsController();
+$rhFebruary=data($rhReport->index(req('/x',['period'=>'2026-02','company'=>'Empresa fictícia'],$user)));
+ok($rhFebruary['current']['finalized']===1 && $rhFebruary['current']['net']==='1067.00'
+    && $rhFebruary['previous']['total']===0 && count($rhFebruary['rows']['data'])===1,
+    'mapa e comparativo contam salários finalizados no mês e empresa');
+ok($rhFebruary['indemnities']['balance']==='100.00'&&(float)$rhFebruary['indemnities']['paid']===200.0,
+    'relatório de indemnização considera apenas pagamentos à data de referência');
+$emptyRh=data($rhReport->index(req('/x',['period'=>'2026-02','company'=>'Outra empresa fictícia'],$user)));
+ok($emptyRh['employees']===0 && $emptyRh['current']['total']===0 && $emptyRh['indemnities']['balance']==='0.00',
+    'o filtro de empresa aplica-se a todas as secções do relatório');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);
