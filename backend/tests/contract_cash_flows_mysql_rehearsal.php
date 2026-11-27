@@ -1657,9 +1657,14 @@ ok(!DB::table('cis_rh_user_links')->where('employee_id',$created)->exists()
 echo "\nOperações mensais da folha\n";
 $month=['period'=>'2026-03'];
 $rhPay->openPeriod(req('/x',$month,$user));
+$candidates=collect(data($rhPay->candidates(req('/x',$month,$user)))['data'])->keyBy('id');
+ok(($candidates[$created]['eligible']??null)===true && ($candidates[$other]['eligible']??null)===false,
+    'folha identifica elegibilidade pelo contrato e explica exclusões');
 $march=$month+$prh;
 $qMarch=data($rhPay->preview(req('/x',$march,$user)));
 $marchId=data($rhPay->save(req('/x',['signature'=>$qMarch['signature']]+$march,$user)))['id'];
+ok(!collect(data($rhPay->candidates(req('/x',$month,$user)))['data'])->pluck('id')->contains($created),
+    'conferência exclui colaboradores que já têm lançamento no mês');
 ok(status(fn()=>$rhPay->closePeriod(req('/x',['confirm'=>true]+$month,$user)))===422,'mês exige lançamentos finalizados');
 $rh->parameter(req('/x',['value'=>'0.05','effective_from'=>'2026-03-01']+$rhParam,$user));
 $batch=data($rhPay->recalculatePending(req('/x',$month,$user)));

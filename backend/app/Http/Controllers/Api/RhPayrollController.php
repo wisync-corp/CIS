@@ -35,6 +35,44 @@ final class RhPayrollController extends Controller
         return response()->json($rows->toArray()+['period_status'=>!$period?'por_abrir':($period->closed_at?'fechado':'aberto')])->header('Cache-Control','no-store, private');
     }
 
+    public function candidates(Request $r)
+    {
+        $this->gate($r);
+        $d=$r->validate(['period'=>['required','date_format:Y-m']]);
+        [$period,$start,$end]=self::periodDates($d['period']);
+        $employees=DB::table('cis_rh_employees as e')->where('e.admission','<=',$end)
+            ->whereNotExists(fn ($q)=>$q->selectRaw('1')->from('cis_rh_payroll as p')
+                ->whereColumn('p.employee_id','e.id')->where('p.period',$period))
+            ->orderBy('e.name')->orderBy('e.id')->paginate(30,['e.id','e.name','e.code','e.company','e.status']);
+        $contracts=DB::table('cis_rh_records')->where('kind','contratos')
+            ->whereIn('employee_id',$employees->pluck('id'))->where('reference_date','<=',$end)
+            ->get(['employee_id','details'])->filter(fn ($row)=>self::contractOverlaps($row,$start))->groupBy('employee_id');
+        $employees->through(function ($employee) use ($contracts) {
+            $count=$contracts->get($employee->id,collect())->count();
+            $employee->eligible=$employee->status==='activo'&&$count===1;
+            $employee->reason=match (true) {
+                $employee->status!=='activo'=>'Cadastro inactivo.',
+                $count===0=>'Sem contrato aplicável ao período.',
+                $count>1=>'Mais de um contrato aplicável ao período.',
+                default=>null,
+            };
+            return $employee;
+        });
+        return response()->json($employees)->header('Cache-Control','no-store, private');
+    }
+
+    private static function periodDates(string $month): array
+    {
+        $cut=CarbonImmutable::createFromFormat('!Y-m-d',$month.'-20');
+        return [$month.'-01',$cut->subMonthNoOverflow()->addDay()->toDateString(),$cut->toDateString()];
+    }
+
+    private static function contractOverlaps(object $row,string $start): bool
+    {
+        $end=json_decode($row->details,true,512,JSON_THROW_ON_ERROR)['end']??null;
+        return !$end || $end>=$start;
+    }
+
     private function inputs(Request $r): array
     {
         $money=['required','numeric','min:0','max:9999999999','decimal:0,2'];
@@ -54,16 +92,11 @@ final class RhPayrollController extends Controller
     {
         $employee=DB::table('cis_rh_employees')->where('id',$input['employee_id'])->first();
         abort_unless($employee,404,'Colaborador não encontrado.');
-        $cut=CarbonImmutable::createFromFormat('!Y-m-d',$input['period'].'-20');
-        $reference=$cut->toDateString();
-        $start=$cut->subMonthNoOverflow()->addDay()->toDateString();
+        [,$start,$reference]=self::periodDates($input['period']);
         abort_if($employee->admission>$reference,422,'A admissão é posterior ao período da folha.');
         $contracts=DB::table('cis_rh_records')->where('employee_id',$employee->id)->where('kind','contratos')
             ->where('reference_date','<=',$reference)->orderByDesc('reference_date')->get()
-            ->filter(function ($row) use ($start) {
-                $end=json_decode($row->details,true,512,JSON_THROW_ON_ERROR)['end']??null;
-                return !$end || $end>=$start;
-            })->values();
+            ->filter(fn ($row)=>self::contractOverlaps($row,$start))->values();
         abort_unless($contracts->count()===1,422,'O período exige um único contrato aplicável. Confira os contratos do colaborador.');
         $contract=$contracts->first();
         $details=json_decode($contract->details,true,512,JSON_THROW_ON_ERROR);

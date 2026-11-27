@@ -4,6 +4,7 @@ import {Calculator,CheckCircle2,Save} from 'lucide-react';
 const API=import.meta.env.VITE_API_URL||'/api';
 type Preview={input:Record<string,string|number|boolean>;amounts:Record<string,string>;rules:{reference:string;tax_table:string|null};signature:string};
 type Line={id:number;employee_id:number;name:string;code:string;company:string;status:string;version:number;input:Preview['input'];calculation:Preview};
+type Candidate=Employee&{eligible:boolean;reason:string|null};
 type Employee={id:number;name:string;code:string;company:string};
 const numbers={
  days_worked:'Dias trabalhados',hours_worked:'Horas trabalhadas',unjustified_absences:'Faltas injustificadas',
@@ -23,6 +24,7 @@ export default function RhPayrollDesk({token}:{token:string}){
  const [periodStatus,setPeriodStatus]=useState<'por_abrir'|'aberto'|'fechado'|null>(null);
  const [monthConfirm,setMonthConfirm]=useState(false),[restoreRow,setRestoreRow]=useState<Line|null>(null),[progress,setProgress]=useState('');
  const [issues,setIssues]=useState<{id:number;message:string}[]>([]);
+ const [checking,setChecking]=useState(false),[candidatePage,setCandidatePage]=useState(1),[candidates,setCandidates]=useState<{data:Candidate[];last_page:number}|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  useEffect(()=>{
@@ -44,6 +46,17 @@ export default function RhPayrollDesk({token}:{token:string}){
   },300);
   return ()=>{c.abort();window.clearTimeout(timer);};
  },[token,search,employee]);
+ useEffect(()=>{
+  if(!checking||periodStatus!=='aberto')return;
+  const controller=new AbortController();setCandidates(null);
+  const qs=new URLSearchParams({period,page:String(candidatePage)});
+  fetch(API+'/cis/rh/folha/mes/candidatos?'+qs,{
+   signal:controller.signal,headers:{Authorization:'Bearer '+token,Accept:'application/json'}
+  }).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message);return body;})
+   .then(body=>{if(!controller.signal.aborted)setCandidates(body);})
+   .catch(e=>{if(!controller.signal.aborted)setError(e.message);});
+  return ()=>controller.abort();
+ },[token,period,periodStatus,checking,candidatePage,reload]);
  const reset=()=>{setEdit(null);setEmployee(null);setSearch('');setForm(blank);setPreview(null);setClosing(null);};
  async function call(path:string,body:unknown){
   const r=await fetch(API+'/cis/rh/folha'+path,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -105,7 +118,7 @@ export default function RhPayrollDesk({token}:{token:string}){
  }
  return <section className="cis-panel cis-proposals">
   <div className="cis-prop-head"><div><h3>Folha salarial</h3><p>Lançamentos por colaborador para o período de 21 a 20.</p></div>
-   <label className="cis-profile-field"><span>Mês de referência</span><input type="month" value={period} disabled={busy} onChange={e=>{setPeriod(e.target.value);setPage(1);reset();setError('');setNotice('');setIssues([]);setMonthConfirm(false);setRestoreRow(null);}}/></label>
+   <label className="cis-profile-field"><span>Mês de referência</span><input type="month" value={period} disabled={busy} onChange={e=>{setPeriod(e.target.value);setPage(1);reset();setError('');setNotice('');setIssues([]);setMonthConfirm(false);setRestoreRow(null);setChecking(false);setCandidatePage(1);}}/></label>
   </div>
   {error&&<p role="alert" className="cis-table-error">{error}</p>}{notice&&<p role="status" className="cis-msg-notice">{notice}</p>}
   {progress&&<p role="status" className="cis-msg-notice">{progress}</p>}
@@ -114,7 +127,19 @@ export default function RhPayrollDesk({token}:{token:string}){
    <strong>{periodStatus==='aberto'?'Mês aberto':periodStatus==='fechado'?'Mês fechado':'Mês por abrir'}</strong>
    {periodStatus==='por_abrir'&&<button type="button" disabled={busy} onClick={()=>void periodAction('abrir')}>Abrir mês</button>}
    {periodStatus==='aberto'&&<><button type="button" disabled={busy} onClick={()=>void recalculate()}>Recalcular pendentes</button>
+    <button type="button" disabled={busy} aria-expanded={checking} onClick={()=>{setCandidatePage(1);setChecking(x=>!x);}}>Conferir colaboradores</button>
     <button type="button" disabled={busy} onClick={()=>setMonthConfirm(true)}>Fechar mês</button></>}
+  </div>}
+  {checking&&periodStatus==='aberto'&&<div className="cis-prop-decision">
+   <h4>Colaboradores sem lançamento no mês</h4>
+   {candidates?<>{candidates.data.length===0?<p>Sem colaboradores por conferir.</p>:<div className="cis-table-scroll"><table>
+    <thead><tr><th>Colaborador</th><th>Empresa</th><th>Situação</th><th>Acção</th></tr></thead>
+    <tbody>{candidates.data.map(e=><tr key={e.id}><td>{e.name} · {e.code}</td><td>{e.company}</td>
+     <td>{e.eligible?'Aguarda dados de presença':e.reason}</td><td>{e.eligible&&<button type="button" className="cis-edit-action" disabled={busy}
+      onClick={()=>{reset();setEmployee(e);setSearch(e.name+' · '+e.code);setChecking(false);}}>Preparar lançamento</button>}</td></tr>)}</tbody>
+   </table></div>}
+   {candidates.last_page>1&&<div className="cis-prop-actions"><button type="button" disabled={candidatePage===1} onClick={()=>setCandidatePage(x=>x-1)}>Anterior</button>
+    <span>{candidatePage} / {candidates.last_page}</span><button type="button" disabled={candidatePage===candidates.last_page} onClick={()=>setCandidatePage(x=>x+1)}>Seguinte</button></div>}</>:!error&&<p role="status">A conferir contratos e lançamentos…</p>}
   </div>}
   {monthConfirm&&<div className="cis-prop-decision"><p>Fechar a folha de {period}? Todos os lançamentos têm de estar finalizados.</p>
    <div className="cis-prop-actions"><button type="button" className="primary" disabled={busy} onClick={()=>void periodAction('fechar')}>Confirmar fecho mensal</button><button type="button" disabled={busy} onClick={()=>setMonthConfirm(false)}>Cancelar</button></div>
