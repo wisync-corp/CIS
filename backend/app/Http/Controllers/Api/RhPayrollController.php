@@ -88,17 +88,22 @@ final class RhPayrollController extends Controller
         ]);
     }
 
-    private function calculate(array $input): array
+    private function applicableContract(object $employee,string $start,string $reference): object
     {
-        $employee=DB::table('cis_rh_employees')->where('id',$input['employee_id'])->first();
-        abort_unless($employee,404,'Colaborador não encontrado.');
-        [,$start,$reference]=self::periodDates($input['period']);
         abort_if($employee->admission>$reference,422,'A admissão é posterior ao período da folha.');
         $contracts=DB::table('cis_rh_records')->where('employee_id',$employee->id)->where('kind','contratos')
             ->where('reference_date','<=',$reference)->orderByDesc('reference_date')->get()
             ->filter(fn ($row)=>self::contractOverlaps($row,$start))->values();
         abort_unless($contracts->count()===1,422,'O período exige um único contrato aplicável. Confira os contratos do colaborador.');
-        $contract=$contracts->first();
+        return $contracts->first();
+    }
+
+    private function calculate(array $input): array
+    {
+        $employee=DB::table('cis_rh_employees')->where('id',$input['employee_id'])->first();
+        abort_unless($employee,404,'Colaborador não encontrado.');
+        [,$start,$reference]=self::periodDates($input['period']);
+        $contract=$this->applicableContract($employee,$start,$reference);
         $details=json_decode($contract->details,true,512,JSON_THROW_ON_ERROR);
         $amendments=DB::table('cis_rh_records')->where('parent_id',$contract->id)->where('kind','adendas')
             ->where('reference_date','<=',$reference)->orderByDesc('reference_date')->orderByDesc('id')->limit(2)->get();
@@ -136,8 +141,9 @@ final class RhPayrollController extends Controller
                 $result=$this->calculate($input);
                 abort_unless(hash_equals($result['signature'],$checks['signature']),409,'O cálculo mudou. Reveja uma nova prévia.');
                 $version=($existing?(int)$existing->version:0)+1;
+                $wasCalculated=$existing && is_array(json_decode($existing->calculation,true,512,JSON_THROW_ON_ERROR)['amounts']??null);
                 $row=['input'=>json_encode($result['input'],JSON_THROW_ON_ERROR),
-                    'calculation'=>json_encode($result,JSON_THROW_ON_ERROR),'status'=>$existing?'alterado':'pendente',
+                    'calculation'=>json_encode($result,JSON_THROW_ON_ERROR),'status'=>$wasCalculated?'alterado':'pendente',
                     'version'=>$version,'updated_at'=>now()];
                 if ($existing) {
                     $id=(int)$existing->id;
@@ -166,11 +172,66 @@ final class RhPayrollController extends Controller
             $row=DB::table('cis_rh_payroll')->where('id',$id)->lockForUpdate()->first();
             abort_unless($row,404,'Lançamento não encontrado.');
             abort_if($row->status==='finalizado'||(int)$row->version!==(int)$d['version'],409,'O estado do lançamento mudou.');
+            abort_unless(is_array(json_decode($row->calculation,true,512,JSON_THROW_ON_ERROR)['amounts']??null),
+                422,'Confirme os dados e calcule o lançamento antes de finalizar.');
             $version=(int)$row->version+1;
             DB::table('cis_rh_payroll')->where('id',$id)->update(['status'=>'finalizado','version'=>$version,'updated_at'=>now()]);
             $this->event($id,$r,'finalizado',$version,$row->calculation);
         });
         return response()->json(['id'=>$id,'status'=>'finalizado']);
+    }
+
+    public function generate(Request $r)
+    {
+        $this->gate($r);
+        $d=$r->validate(['period'=>['required','date_format:Y-m'],'after'=>['nullable','integer','min:0']]);
+        [$period,$start,$reference]=self::periodDates($d['period']);
+        $workers=DB::table('cis_rh_employees as e')->where('e.status','activo')->where('e.admission','<=',$reference)
+            ->where('e.id','>',$d['after']??0)->whereNotExists(fn ($q)=>$q->selectRaw('1')->from('cis_rh_payroll as p')
+                ->whereColumn('p.employee_id','e.id')->where('p.period',$period))
+            ->orderBy('e.id')->limit(26)->get();
+        $issues=[];
+        $created=0;
+        $batch=$workers->take(25);
+        foreach ($batch as $worker) {
+            try {
+                $created+=DB::transaction(function () use ($r,$d,$period,$start,$reference,$worker) {
+                    $this->lockPeriod($period);
+                    if (DB::table('cis_rh_payroll')->where('employee_id',$worker->id)->where('period',$period)->exists()) return 0;
+                    $employee=DB::table('cis_rh_employees')->where('id',$worker->id)->first();
+                    if (!$employee||$employee->status!=='activo') return 0;
+                    $contract=$this->applicableContract($employee,$start,$reference);
+                    $details=json_decode($contract->details,true,512,JSON_THROW_ON_ERROR);
+                    $rules=RhSettingsController::rulesFor($reference,$employee->company,$employee->category,$employee->code);
+                    $effective=collect($rules['parametros'])->sortByDesc(fn ($row)=>array_search(
+                        strtolower($row['Nivel_Aplicacao']),['global','empresa','categoria','colaborador'],true));
+                    $value=fn ($key)=>$effective->firstWhere('Codigo_Parametro',$key);
+                    $mode=$value('DIAS_TRABALHADOS_MODO');
+                    $base=$value('BASE_DIAS_MES');
+                    $days=null;
+                    if ($details['regime']==='mensal') {
+                        abort_unless(isset($mode['Valor']),422,'Configure o preenchimento dos dias trabalhados em Definições de RH.');
+                        if ($mode['Valor']==='base_mensal'&&$employee->admission<=$start&&$contract->reference_date<=$start
+                            && (empty($details['end'])||$details['end']>=$reference)) {
+                            abort_unless(isset($base['Valor']),422,'Configure os dias base do mês em Definições de RH.');
+                            $days=$base['Valor'];
+                        }
+                    }
+                    $input=['employee_id'=>(int)$employee->id,'period'=>$d['period'],'days_worked'=>$days,'hours_worked'=>null];
+                    $snapshot=json_encode(['input'=>$input,'amounts'=>null,'rules'=>['reference'=>$reference,
+                        'contract_id'=>$contract->id,'days_mode'=>$mode,'base_days'=>$days===null?null:$base]],JSON_THROW_ON_ERROR);
+                    $id=DB::table('cis_rh_payroll')->insertGetId(['employee_id'=>$employee->id,'period'=>$period,'status'=>'pendente',
+                        'input'=>json_encode($input,JSON_THROW_ON_ERROR),'calculation'=>$snapshot,'version'=>1,'created_at'=>now(),'updated_at'=>now()]);
+                    $this->event($id,$r,'pendente',1,$snapshot);
+                    return 1;
+                },3);
+            } catch (HttpExceptionInterface $e) {
+                if ($e->getStatusCode()!==422) throw $e;
+                $issues[]=['id'=>$worker->id,'message'=>$e->getMessage()];
+            }
+        }
+        if ($batch->isEmpty()) DB::transaction(fn ()=>$this->lockPeriod($period));
+        return response()->json(['created'=>$created,'issues'=>$issues,'next'=>$workers->count()>25?$batch->last()->id:null]);
     }
 
     public function openPeriod(Request $r)
@@ -217,6 +278,7 @@ final class RhPayrollController extends Controller
                     $this->lockPeriod($period);
                     $row=DB::table('cis_rh_payroll')->where('id',$id)->lockForUpdate()->first();
                     if (!$row || $row->status!=='pendente') return 'skipped';
+                    if (!is_array(json_decode($row->calculation,true,512,JSON_THROW_ON_ERROR)['amounts']??null)) return 'skipped';
                     $input=json_decode($row->input,true,512,JSON_THROW_ON_ERROR);
                     unset($input['regime'],$input['rate'],$input['contract_id'],$input['amendment_id']);
                     $result=$this->calculate($input);

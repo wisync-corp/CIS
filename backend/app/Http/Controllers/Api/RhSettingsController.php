@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 final class RhSettingsController extends Controller
 {
     private const PARAMETERS = [
+        'DIAS_TRABALHADOS_MODO'=>'Preenchimento dos dias trabalhados dos mensalistas',
         'BASE_DIAS_MES'=>'Dias base do mês',
         'BASE_HORAS_DIA'=>'Horas base do dia',
         'VALOR_HORA'=>'Valor por hora',
@@ -71,6 +72,9 @@ final class RhSettingsController extends Controller
         ]);
         $value=trim($data['value']);
         $code=$data['code'];
+        if ($code==='DIAS_TRABALHADOS_MODO' && !in_array($value,['confirmar','base_mensal'],true)) {
+            throw ValidationException::withMessages(['value'=>'Escolha confirmação manual ou dias base do mês.']);
+        }
         $range=match ($code) {
             'BASE_DIAS_MES'=>[1,31], 'BASE_HORAS_DIA'=>[0.01,24],
             'INSS_TAXA_COLAB','INSS_TAXA_EMP'=>[0,1],
@@ -155,7 +159,7 @@ final class RhSettingsController extends Controller
             ->unique(fn ($p)=>$p->code.'|'.$p->scope)->values()
             ->map(fn ($p)=>[
                 'Codigo_Parametro'=>$p->code,'Valor'=>$p->value,
-                'Tipo_Valor'=>in_array($p->code,['INSS_CONDICAO_CANALIZAR','IRPS_ISENCAO_DEPARTAMENTO'],true)?'Texto':'Decimal',
+                'Tipo_Valor'=>in_array($p->code,['INSS_CONDICAO_CANALIZAR','IRPS_ISENCAO_DEPARTAMENTO','DIAS_TRABALHADOS_MODO'],true)?'Texto':'Decimal',
                 'Nivel_Aplicacao'=>$p->scope,'Empresa'=>$p->company,'Categoria'=>$p->category,
                 'Codigo_Colaborador'=>$p->employee_code,'Vigencia_Inicio'=>$p->effective_from,
                 'Vigencia_Fim'=>$p->effective_to,'Versao'=>$p->id,'Estado'=>'Activo',

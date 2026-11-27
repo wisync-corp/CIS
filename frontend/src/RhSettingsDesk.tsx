@@ -47,10 +47,10 @@ export default function RhSettingsDesk({token}:{token:string}){
    <form className="cis-prop-decision" onSubmit={e=>void write(e,'parametros',{...form,effective_to:form.effective_to||null})}>
     <h4>Registar versão de um parâmetro</h4>
     <div className="cis-profile-fields">
-     <label className="cis-profile-field"><span>Parâmetro</span><select required value={form.code} onChange={e=>setForm({...form,code:e.target.value})}><option value="">Seleccione</option>{Object.entries(data.catalogue).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
+     <label className="cis-profile-field"><span>Parâmetro</span><select required value={form.code} onChange={e=>setForm({...form,code:e.target.value,value:''})}><option value="">Seleccione</option>{Object.entries(data.catalogue).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
      <label className="cis-profile-field"><span>Âmbito</span><select value={form.scope} onChange={e=>setForm({...form,scope:e.target.value,company:'',category:'',employee_code:''})}><option value="global">Geral</option><option value="empresa">Empresa</option><option value="categoria">Categoria</option><option value="colaborador">Colaborador</option></select></label>
      {form.scope!=='global'&&field('company','Empresa')}{form.scope==='categoria'&&field('category','Categoria')}{form.scope==='colaborador'&&field('employee_code','Código de colaborador')}
-     {field('value','Valor')}{field('effective_from','Vigente desde','date')}{field('effective_to','Vigente até','date',false)}{field('reason','Justificação')}
+     {form.code==='DIAS_TRABALHADOS_MODO'?<label className="cis-profile-field"><span>Preenchimento</span><select required value={form.value} onChange={e=>setForm({...form,value:e.target.value})}><option value="">Seleccione</option><option value="confirmar">Confirmar os dias manualmente</option><option value="base_mensal">Pré-preencher dias base nos períodos completos</option></select></label>:field('value','Valor')}{field('effective_from','Vigente desde','date')}{field('effective_to','Vigente até','date',false)}{field('reason','Justificação')}
     </div>
     <button type="submit" className="cis-edit-action" disabled={busy}><Save size={15}/> Guardar versão</button>
    </form>

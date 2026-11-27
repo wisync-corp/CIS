@@ -1685,6 +1685,20 @@ ok(status(fn()=>$rhPay->recalculatePending(req('/x',$month,$user)))===409
     && (int)DB::table('cis_rh_payroll_periods')->where('period','2026-03-01')->value('closed_by')===(int)$user->id,
     'fecho mensal impede recálculo e guarda o autor');
 
+
+echo "\nGeração de lançamentos a partir das Definições\n";
+$april=['period'=>'2026-04'];
+$rhPay->openPeriod(req('/x',$april,$user));
+$missing=data($rhPay->generate(req('/x',$april,$user)));
+ok($missing['created']===0,'mensalistas sem regra vigente ficam por resolver');
+$rh->parameter(req('/x',['code'=>'DIAS_TRABALHADOS_MODO','value'=>'base_mensal','effective_from'=>'2026-04-01']+$rhParam,$user));
+$generated=data($rhPay->generate(req('/x',$april,$user)));
+$draft=DB::table('cis_rh_payroll')->where('employee_id',$created)->where('period','2026-04-01')->first();
+ok($generated['created']===1&&$draft->status==='pendente'&&json_decode($draft->input,true)['days_worked']==='30'
+    && json_decode($draft->calculation,true)['amounts']===null,'geração usa dias base em período completo mas aguarda conferência');
+ok(data($rhPay->generate(req('/x',$april,$user)))['created']===0,'repetir a geração não duplica lançamentos');
+ok(status(fn()=>$rhPay->finalize(req('/x',['version'=>1,'confirm'=>true],$user),$draft->id))===422,'um lançamento gerado exige primeiro cálculo confirmado');
+
 } catch (\Throwable $e) {
     fwrite(STDERR,"ERRO NÃO ESPERADO: ".get_class($e).': '.$e->getMessage()."\n".$e->getTraceAsString()."\n");
     exit(2);

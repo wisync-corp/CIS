@@ -3,7 +3,7 @@ import {Calculator,CheckCircle2,Save} from 'lucide-react';
 
 const API=import.meta.env.VITE_API_URL||'/api';
 type Preview={input:Record<string,string|number|boolean>;amounts:Record<string,string>;rules:{reference:string;tax_table:string|null};signature:string};
-type Line={id:number;employee_id:number;name:string;code:string;company:string;status:string;version:number;input:Preview['input'];calculation:Preview};
+type Line={id:number;employee_id:number;name:string;code:string;company:string;status:string;version:number;input:Preview['input'];calculation:Omit<Preview,'amounts'>&{amounts:Preview['amounts']|null}};
 type Candidate=Employee&{eligible:boolean;reason:string|null};
 type Employee={id:number;name:string;code:string;company:string};
 const numbers={
@@ -88,6 +88,21 @@ export default function RhPayrollDesk({token}:{token:string}){
   try{await call('/mes/'+action,{period,...(action==='fechar'?{confirm:true}:{})});setMonthConfirm(false);reset();setReload(v=>v+1);setNotice(action==='abrir'?'Mês aberto.':'Mês fechado.');}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
+ async function generate(){
+  if(busy||periodStatus!=='aberto')return;
+  setBusy(true);setError('');setNotice('');setIssues([]);setProgress('A preparar lançamentos…');
+  let next:number|null=0,total=0;
+  const errors:{id:number;message:string}[]=[];
+  try{
+   while(next!==null){
+    const batch=await call('/mes/gerar',{period,after:next});
+    total+=batch.created;errors.push(...batch.issues);next=batch.next;
+    setProgress(total+' lançamento(s) preparados.');
+   }
+   setNotice(total+' lançamento(s) por conferir · '+errors.length+' colaborador(es) por resolver.');
+  }catch(e){setError((e as Error).message);}
+  finally{setIssues(errors);setProgress('');setReload(v=>v+1);setBusy(false);}
+ }
  async function recalculate(){
   if(busy||periodStatus!=='aberto')return;
   setBusy(true);setError('');setNotice('');setIssues([]);setProgress('A carregar os lançamentos pendentes…');
@@ -113,7 +128,7 @@ export default function RhPayrollDesk({token}:{token:string}){
   setEdit(row);setEmployee({id:row.employee_id,name:row.name,code:row.code,company:row.company});setSearch(row.name+' · '+row.code);
   const values={...blank};for(const k of Object.keys(blank) as (keyof typeof blank)[]){
    if(k==='contribute')values.contribute=Boolean(row.input[k]);
-   else values[k]=String(row.input[k]??blank[k]);
+   else values[k]=String(row.input[k]??(!row.calculation.amounts&&k==='hours_worked'?'':blank[k]));
   }setForm(values);setPreview(null);setClosing(null);
  }
  return <section className="cis-panel cis-proposals">
@@ -126,7 +141,7 @@ export default function RhPayrollDesk({token}:{token:string}){
   {periodStatus&&<div className="cis-prop-actions" aria-label="Operações do mês">
    <strong>{periodStatus==='aberto'?'Mês aberto':periodStatus==='fechado'?'Mês fechado':'Mês por abrir'}</strong>
    {periodStatus==='por_abrir'&&<button type="button" disabled={busy} onClick={()=>void periodAction('abrir')}>Abrir mês</button>}
-   {periodStatus==='aberto'&&<><button type="button" disabled={busy} onClick={()=>void recalculate()}>Recalcular pendentes</button>
+   {periodStatus==='aberto'&&<><button type="button" disabled={busy} onClick={()=>void generate()}>Gerar lançamentos</button><button type="button" disabled={busy} onClick={()=>void recalculate()}>Recalcular pendentes</button>
     <button type="button" disabled={busy} aria-expanded={checking} onClick={()=>{setCandidatePage(1);setChecking(x=>!x);}}>Conferir colaboradores</button>
     <button type="button" disabled={busy} onClick={()=>setMonthConfirm(true)}>Fechar mês</button></>}
   </div>}
@@ -163,11 +178,11 @@ export default function RhPayrollDesk({token}:{token:string}){
    <button className="cis-edit-action" type="button" disabled={busy} onClick={()=>void save()}><Save size={15}/> Guardar lançamento</button>
   </div>}
   {!rows.length?<p>Sem lançamentos neste mês.</p>:<div className="cis-table-scroll"><table><thead><tr><th>Colaborador</th><th>Empresa</th><th>Estado</th><th>Vencimento base</th><th>Salário líquido</th><th>Acções</th></tr></thead>
-   <tbody>{rows.map(row=><tr key={row.id}><td>{row.name} · {row.code}</td><td>{row.company}</td><td>{row.status}</td><td>{money(row.calculation.amounts.base)}</td><td>{money(row.calculation.amounts.net)}</td>
-    <td>{periodStatus==='aberto'&&row.status!=='finalizado'&&<div className="cis-prop-actions"><button type="button" disabled={busy} onClick={()=>loadEdit(row)}>Editar</button><button type="button" disabled={busy} onClick={()=>setClosing(row)}><CheckCircle2 size={15}/> Finalizar</button>{row.status==='alterado'&&<button type="button" disabled={busy} onClick={()=>setRestoreRow(row)}>Repor inicial</button>}</div>}</td></tr>)}</tbody></table></div>}
+   <tbody>{rows.map(row=><tr key={row.id}><td>{row.name} · {row.code}</td><td>{row.company}</td><td>{row.calculation.amounts?row.status:'Por conferir'}</td><td>{row.calculation.amounts?money(row.calculation.amounts.base):'—'}</td><td>{row.calculation.amounts?money(row.calculation.amounts.net):'—'}</td>
+    <td>{periodStatus==='aberto'&&row.status!=='finalizado'&&<div className="cis-prop-actions"><button type="button" disabled={busy} onClick={()=>loadEdit(row)} >{row.calculation.amounts?'Editar':'Conferir e calcular'}</button>{row.calculation.amounts&&<button type="button" disabled={busy} onClick={()=>setClosing(row)}><CheckCircle2 size={15}/> Finalizar</button>}{row.status==='alterado'&&<button type="button" disabled={busy} onClick={()=>setRestoreRow(row)}>Repor inicial</button>}</div>}</td></tr>)}</tbody></table></div>}
   {lastPage>1&&<div className="cis-prop-actions"><button type="button" disabled={page===1} onClick={()=>setPage(v=>v-1)}>Anterior</button><span>{page} / {lastPage}</span><button type="button" disabled={page===lastPage} onClick={()=>setPage(v=>v+1)}>Seguinte</button></div>}
   {restoreRow&&<div className="cis-prop-decision"><p>Repor os valores da primeira versão de {restoreRow.name}?</p><div className="cis-prop-actions"><button className="primary" type="button" disabled={busy} onClick={()=>void restore()}>Confirmar reposição</button><button type="button" disabled={busy} onClick={()=>setRestoreRow(null)}>Cancelar</button></div></div>}
-  {closing&&<div className="cis-prop-decision"><h4>Finalizar lançamento de {closing.name}</h4><p>Salário líquido {money(closing.calculation.amounts.net)}. O lançamento ficará fechado para edição.</p>
+  {closing&&<div className="cis-prop-decision"><h4>Finalizar lançamento de {closing.name}</h4><p>Salário líquido {closing.calculation.amounts?money(closing.calculation.amounts.net):'—'}. O lançamento ficará fechado para edição.</p>
    <div className="cis-prop-actions"><button type="button" className="primary" disabled={busy} onClick={()=>void finalize()}>Confirmar fecho</button><button type="button" disabled={busy} onClick={()=>setClosing(null)}>Cancelar</button></div></div>}
  </section>;
 }

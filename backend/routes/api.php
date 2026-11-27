@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('previa','preview')->middleware('throttle:30,1');
         Route::get('mes/candidatos','candidates')->middleware('throttle:60,1');
         Route::post('mes/abrir','openPeriod')->middleware('throttle:10,1');
+        Route::post('mes/gerar','generate')->middleware('throttle:120,1');
         Route::post('mes/recalcular','recalculatePending')->middleware('throttle:120,1');
         Route::post('mes/fechar','closePeriod')->middleware('throttle:10,1');
         Route::post('{id}/repor','restore')->whereNumber('id')->middleware('throttle:20,1');
