@@ -1,0 +1,110 @@
+import {useEffect,useState,type FormEvent} from 'react';
+import {Plus,Search} from 'lucide-react';
+
+const API=import.meta.env.VITE_API_URL||'/api';
+export const rhSections=[
+ ['painel','Visão geral de RH'],['colaboradores','Colaboradores'],['contratos','Contratos de trabalho'],['adendas','Adendas'],
+ ['ferias','Férias'],['indemnizacoes','Indemnizações'],['prestacoes','Prestações de indemnização'],
+] as const;
+export type RhSection=typeof rhSections[number][0];
+const titles=Object.fromEntries(rhSections);
+type Employee={id:number;name:string;company:string;code:string;admission:string;category:string;status:string};
+type Row={id:number;reference_date:string;parent_id:number|null;name:string;company:string;code:string;details:Record<string,string|null>};
+type Page<T>={data:T[];current_page:number;last_page:number};
+type Response={employees:Page<Employee>;records:Page<Row>|null;totals:Partial<Record<RhSection,number>>};
+const names:Record<string,string>={end:'Data final',regime:'Regime',rate:'Valor unitário (MT)',amount:'Montante (MT)',text:'Descrição'};
+const mt=(value:string)=>Number(value).toLocaleString('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2})+' MT';
+const details=(row:Row)=>Object.entries(row.details).filter(([,v])=>v!=null&&v!=='').map(([key,value])=>names[key]+': '+(['rate','amount'].includes(key)?mt(value!):value)).join(' · ');
+const blank={name:'',company:'',code:'',category:'',admission:'',status:'activo',employee_id:'',parent_id:'',reference_date:'',end:'',regime:'mensal',rate:'',amount:'',text:''};
+
+export default function RhRecordsDesk({token,section,onNavigate}:{token:string;section:RhSection;onNavigate:(s:RhSection)=>void}){
+ const [data,setData]=useState<Response|null>(null),[error,setError]=useState(''),[status,setStatus]=useState(''),[page,setPage]=useState(1),[rev,setRev]=useState(0);
+ const [form,setForm]=useState(blank),[editing,setEditing]=useState(false),[busy,setBusy]=useState(false);
+ const [query,setQuery]=useState(''),[search,setSearch]=useState(''),[candidate,setCandidate]=useState(''),[matches,setMatches]=useState<Employee[]>([]),[chosen,setChosen]=useState<Employee|null>(null);
+ const [parents,setParents]=useState<{id:number;reference_date:string}[]>([]);
+ const worker=section==='colaboradores',overview=section==='painel';
+ const parentKind=section==='adendas'?'contratos':section==='prestacoes'?'indemnizacoes':'';
+ const headers={Authorization:'Bearer '+token,Accept:'application/json'};
+ useEffect(()=>{
+  const c=new AbortController();setData(null);
+  const params=new URLSearchParams({page:String(page),q:search,...(!worker&&!overview?{kind:section}:{})});
+  fetch(API+'/cis/rh/registos?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(async r=>{const y=await r.json();if(!r.ok)throw new Error(y.message||'Não foi possível carregar o RH.');return y as Response;})
+   .then(y=>{if(!c.signal.aborted)setData(y);}).catch(e=>{if(!c.signal.aborted)setError(e.message);});
+  return ()=>c.abort();
+ },[token,section,worker,overview,page,search,rev]);
+ useEffect(()=>{
+  if(!editing||worker||!candidate.trim()||chosen){setMatches([]);return;}
+  const c=new AbortController();
+  const timer=window.setTimeout(()=>{
+   fetch(API+'/cis/rh/registos?'+new URLSearchParams({q:candidate.trim()}),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+    .then(async r=>{const y=await r.json();if(!r.ok)throw new Error(y.message);return y as Response;})
+    .then(y=>{if(!c.signal.aborted)setMatches(y.employees.data);})
+    .catch(e=>{if(!c.signal.aborted)setError(e.message);});
+  },300);
+  return ()=>{c.abort();window.clearTimeout(timer);};
+ },[token,worker,editing,candidate,chosen]);
+ useEffect(()=>{
+  setParents([]);
+  if(!parentKind||!chosen)return;
+  const c=new AbortController();
+  fetch(API+'/cis/rh/registos/origens?'+new URLSearchParams({employee_id:String(chosen.id),kind:parentKind}),{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:c.signal})
+   .then(async r=>{const y=await r.json();if(!r.ok)throw new Error(y.message);return y;})
+   .then(y=>{if(!c.signal.aborted)setParents(y);})
+   .catch(e=>{if(!c.signal.aborted)setError(e.message);});
+  return ()=>c.abort();
+ },[token,parentKind,chosen]);
+ const field=(key:keyof typeof blank,label:string,type='text',required=true)=><label className="cis-profile-field"><span>{label}</span><input type={type} required={required}
+  {...(type==='number'?{min:'0',step:'0.01'}:{})} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>;
+ async function save(e:FormEvent){
+  e.preventDefault();if(busy||(!worker&&!chosen))return;
+  const d=worker?{name:form.name,company:form.company,code:form.code,category:form.category,admission:form.admission,status:form.status}
+   :{employee_id:chosen?.id,reference_date:form.reference_date,...(parentKind?{parent_id:Number(form.parent_id)}:{}),
+   ...(section==='contratos'?{end:form.end||null,rate:form.rate,regime:form.regime}:{}),
+   ...(section==='adendas'?{text:form.text,rate:form.rate}:{}),
+   ...(section==='ferias'?{end:form.end,text:form.text}:{}),
+   ...(['indemnizacoes','prestacoes'].includes(section)?{amount:form.amount,text:form.text}:{})};
+  setError('');setStatus('');setBusy(true);
+  try{
+   const r=await fetch(API+'/cis/rh/registos/'+section,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(d)});
+   const y=await r.json();if(!r.ok)throw new Error(Object.values(y.errors??{}).flat().join(' ')||y.message||'Não foi possível guardar.');
+   setEditing(false);setStatus('Registo guardado.');setPage(1);setRev(x=>x+1);
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ const pages=worker?data?.employees:data?.records;
+ return <section className="cis-panel cis-proposals">
+  <div className="cis-prop-head"><div><h3>{titles[section]}</h3></div>
+   {!overview&&<button className="cis-edit-action" type="button" disabled={!data||editing} onClick={()=>{setForm(blank);setCandidate('');setChosen(null);setError('');setStatus('');setEditing(true);}}><Plus size={16}/> Novo registo</button>}
+  </div>
+  {error&&<p className="cis-table-error" role="alert">{error}</p>}{status&&<p className="cis-msg-notice" role="status">{status}</p>}
+  {!data&&!error&&<p role="status">A carregar…</p>}
+  {overview&&data&&<div className="cis-stat-grid">{rhSections.filter(([key])=>key!=='painel').map(([key,title])=><button key={key} type="button" className="cis-panel cis-stat cis-stat-button" onClick={()=>onNavigate(key)}><div className="cis-stat-top">{title}</div><strong>{data.totals[key]??0}</strong></button>)}</div>}
+  {!overview&&editing&&<form className="cis-prop-decision" onSubmit={e=>void save(e)}>
+   <div className="cis-profile-fields">{worker?<>{field('name','Nome completo')}{field('company','Empresa')}{field('code','Código')}{field('category','Categoria','text',false)}{field('admission','Admissão','date')}
+    <label className="cis-profile-field"><span>Estado</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>
+   </>:<>
+    <label className="cis-profile-field"><span>Colaborador</span><input value={candidate} required placeholder="Pesquise por nome ou código" onChange={e=>{setCandidate(e.target.value);setChosen(null);setForm({...form,parent_id:''});}}/></label>
+    {!chosen&&matches.length>0&&<div className="cis-prop-actions">{matches.map(x=><button type="button" key={x.id} onClick={()=>{setChosen(x);setCandidate(x.name+' · '+x.code+' · '+x.company);}}>{x.name} · {x.code} · {x.company}</button>)}</div>}
+    {parentKind&&chosen&&<label className="cis-profile-field"><span>{parentKind==='contratos'?'Contrato associado':'Indemnização associada'}</span><select required value={form.parent_id} onChange={e=>setForm({...form,parent_id:e.target.value})}><option value="">Seleccione</option>{parents.map(x=><option key={x.id} value={x.id}>#{x.id} · {x.reference_date}</option>)}</select></label>}
+    {field('reference_date',section==='prestacoes'?'Data prevista':'Data de referência','date')}
+    {['contratos','ferias'].includes(section)&&field('end','Data final','date',section==='ferias')}
+    {section==='contratos'&&<label className="cis-profile-field"><span>Regime de pagamento</span><select value={form.regime} onChange={e=>setForm({...form,regime:e.target.value})}><option value="mensal">Mensal</option><option value="diario">Diário</option><option value="hora">Hora</option></select></label>}
+    {['contratos','adendas'].includes(section)&&field('rate','Valor unitário (MT)','number')}
+    {['indemnizacoes','prestacoes'].includes(section)&&field('amount','Montante (MT)','number')}
+    {section!=='contratos'&&field('text','Descrição','text',['adendas','indemnizacoes'].includes(section))}
+   </>}</div>
+   <div className="cis-prop-actions"><button type="submit" className="primary" disabled={busy||(!worker&&!chosen)}>Guardar</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancelar</button></div>
+  </form>}
+  {!overview&&data&&<>
+   <form className="cis-prop-actions" onSubmit={e=>{e.preventDefault();setPage(1);setSearch(query.trim());}}>
+    <input type="search" aria-label="Nome ou código do colaborador" placeholder="Nome ou código do colaborador" value={query} onChange={e=>setQuery(e.target.value)}/><button type="submit"><Search size={15}/> Pesquisar</button>
+   </form>
+   {!pages?.data.length?<p>Sem registos.</p>:<div className="cis-table-scroll"><table>
+    <thead><tr><th>Colaborador</th><th>Empresa</th><th>Código</th>{worker?<><th>Categoria</th><th>Admissão</th><th>Estado</th></>:<><th>Referência</th><th>Data</th><th>Detalhes</th></>}</tr></thead>
+    <tbody>{worker?data.employees.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>{x.category||'—'}</td><td>{x.admission}</td><td>{x.status==='activo'?'Activo':'Inactivo'}</td></tr>)
+    :data.records?.data.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.company}</td><td>{x.code}</td><td>#{x.id}{x.parent_id?' · origem #'+x.parent_id:''}</td><td>{x.reference_date}</td><td>{details(x)||'—'}</td></tr>)}</tbody>
+   </table></div>}
+   {(pages?.last_page??0)>1&&<div className="cis-prop-actions"><button type="button" disabled={page===1} onClick={()=>setPage(x=>x-1)}>Anterior</button><span>{page} / {pages?.last_page}</span><button type="button" disabled={page>=(pages?.last_page??1)} onClick={()=>setPage(x=>x+1)}>Seguinte</button></div>}
+  </>}
+ </section>;
+}
