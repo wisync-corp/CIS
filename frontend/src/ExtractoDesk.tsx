@@ -38,7 +38,7 @@ const defaults:Record<Mode,string[]>={
  clientes:['codigo','contrato','cliente','parcela','vencimento','dias','forma_pagamento','capital','juros','valor','estado'],
 };
 type GeralRow={nr:number;codigo:string;descricao:string;data:string;tipo:'entrada'|'saida';valor:string;contrato:string|null;cliente:string|null;parcela:string|null;conta:string|null;usuario:string|null};
-type ClienteRow={ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
+type ClienteRow={juros_variavel?:{dias:number;taxa:number;gravado:string}|null;ordem:number;codigo:string;contrato:string;cliente:string;parcela:number|string;inicio:string;vencimento:string;dias:number;forma_pagamento:string|null;capital:string;juros:string;multa:string;valor:string;data_pagamento:string|null;situacao:'aberta'|'vencida'|'paga'|'outra';estado:string};
 type GeralResp={linhas:GeralRow[];pagina:number;por_pagina:number;total_linhas:number;totais:{entradas:string;saidas:string;disponivel:string}};
 type ClientesTot={aberto:string;vencido:string;pago:string;juros_aberto:string;juros_vencido:string;juros_pago:string;n_aberto:number;n_vencido:number;n_pago:number};
 type Desembolso={contrato:string;cliente:string;codigo:string|number|null;desembolso:string;capital:string;prestacoes:number;a_pagar:string;pago:string;em_divida:string;em_atraso:string;estado:'Em curso'|'Em atraso'|'Finalizado';estado_contrato:string};
@@ -300,7 +300,8 @@ export default function ExtractoDesk({token,role,preset,onClearPreset,onOpenCont
        onClick={()=>void openInfo(row.contrato)} onKeyDown={event=>{if(event.key==='Enter')void openInfo(row.contrato);}}>
        {visible.map(column=><td key={column.key} className={column.format==='money'?'num':undefined}>
         {column.key==='valor'&&'tipo' in row?<span className={row.tipo==='entrada'?'pos':'neg'}>{row.tipo==='entrada'?'+':'−'} {fieldValue(row,column)}</span>
-         :column.key==='estado'&&'situacao' in row?<span className={'cis-extracto-state '+row.situacao}>{row.estado}</span>:fieldValue(row,column)}
+         :column.key==='estado'&&'situacao' in row?<span className={'cis-extracto-state '+row.situacao}>{row.estado}</span>
+         :column.key==='juros'&&'juros_variavel' in row&&row.juros_variavel?<span className="cis-var-int" title={`Juro variável actualizado a hoje: ${String(row.juros_variavel.taxa).replace('.',',')}% × ${row.juros_variavel.dias} dia(s) desde o desembolso. Valor gravado no contrato: ${mt(row.juros_variavel.gravado)} MT.`}>{fieldValue(row,column)}<small>{row.juros_variavel.dias} dias × {String(row.juros_variavel.taxa).replace('.',',')}%</small></span>:fieldValue(row,column)}
        </td>)}
       </tr>;
      })}</tbody>
